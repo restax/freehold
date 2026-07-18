@@ -1,0 +1,50 @@
+import Link from "next/link";
+
+export const metadata = { title: "Privacy policy · Freehold" };
+
+export default function PrivacyPage() {
+  return (
+    <main className="mx-auto max-w-2xl px-4 py-14 sm:px-6">
+      <Link href="/" className="font-serif text-lg font-semibold text-brand-700">
+        Freehold
+      </Link>
+      <h1 className="mt-6 text-3xl font-semibold tracking-tight">Privacy policy</h1>
+      <p className="mt-2 text-sm text-stone-500">Pre-launch draft. Last updated July 18, 2026.</p>
+      <div className="mt-6 flex max-w-prose flex-col gap-4 text-sm leading-relaxed text-stone-700">
+        <p>
+          Freehold Cloud stores the data you put into it: transactions, contacts, documents, and
+          workspace settings. We use it to run the service for you and for nothing else. We do not
+          sell it, share it with advertisers, or train AI models on it.
+        </p>
+        <p>
+          Contract extraction sends the document you upload to Anthropic's Claude API to read it.
+          Anthropic does not train on this data under the API terms we operate under.
+        </p>
+        <p>
+          Credentials you store in the vault are encrypted before they reach the database. We cannot
+          read them.
+        </p>
+        <p>
+          Payments are processed by Stripe; we never see your card number. We use no third-party
+          advertising or analytics trackers.
+        </p>
+        <p>
+          You can export your data or delete your workspace at any time, and deletion is permanent.
+          If you self-host Freehold, none of this applies: your data lives on your own server and
+          never reaches us.
+        </p>
+        <p>
+          Questions: open an issue on{" "}
+          <a
+            href="https://github.com/restax/freehold"
+            className="text-brand-700 hover:text-brand-600"
+          >
+            GitHub
+          </a>{" "}
+          or email us. This policy will be finalized with counsel before Freehold Cloud takes paid
+          customers.
+        </p>
+      </div>
+    </main>
+  );
+}
