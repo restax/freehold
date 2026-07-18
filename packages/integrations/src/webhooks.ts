@@ -55,35 +55,52 @@ export interface DeliveryResult {
   endpointId: string;
   ok: boolean;
   status?: number;
+  attempts: number;
   error?: string;
 }
 
-/** Deliver one event to many endpoints. Never throws; failures are reported. */
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Deliver one event to many endpoints. Never throws; failures are reported.
+ * Each endpoint gets up to `attempts` tries with backoff; the signature is
+ * re-stamped per attempt so timestamp tolerance holds across retries.
+ */
 export async function deliverWebhooks(
   targets: WebhookTarget[],
   event: string,
   data: unknown,
+  options: { attempts?: number; backoffMs?: number[] } = {},
 ): Promise<DeliveryResult[]> {
+  const attempts = options.attempts ?? 3;
+  const backoffMs = options.backoffMs ?? [1000, 5000];
   const payload: WebhookEvent = { event, createdAt: new Date().toISOString(), data };
   const body = JSON.stringify(payload);
-  const timestamp = Math.floor(Date.now() / 1000);
   return Promise.all(
     targets.map(async (target): Promise<DeliveryResult> => {
-      try {
-        const res = await fetch(target.url, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "freehold-signature": signWebhook(target.secret, timestamp, body),
-            "freehold-event": event,
-          },
-          body,
-          signal: AbortSignal.timeout(5000),
-        });
-        return { endpointId: target.id, ok: res.ok, status: res.status };
-      } catch (err) {
-        return { endpointId: target.id, ok: false, error: String(err) };
+      let last: DeliveryResult = { endpointId: target.id, ok: false, attempts: 0 };
+      for (let attempt = 1; attempt <= attempts; attempt++) {
+        if (attempt > 1) await sleep(backoffMs[Math.min(attempt - 2, backoffMs.length - 1)] ?? 0);
+        const timestamp = Math.floor(Date.now() / 1000);
+        try {
+          const res = await fetch(target.url, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "freehold-signature": signWebhook(target.secret, timestamp, body),
+              "freehold-event": event,
+            },
+            body,
+            signal: AbortSignal.timeout(5000),
+          });
+          last = { endpointId: target.id, ok: res.ok, status: res.status, attempts: attempt };
+          // Retry server errors and timeouts; don't retry 4xx (bad endpoint config).
+          if (res.ok || (res.status >= 400 && res.status < 500)) return last;
+        } catch (err) {
+          last = { endpointId: target.id, ok: false, attempts: attempt, error: String(err) };
+        }
       }
+      return last;
     }),
   );
 }

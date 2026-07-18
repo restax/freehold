@@ -38,8 +38,8 @@ The single list of everything open across stages. Items move to ~~struck~~ with 
 - [ ] Vendor presets: header aliases cover the major legacy platforms' export shapes; still need verification against real export samples
 - [ ] Gmail / Outlook send + log
 - [x] Public API v1 (API keys, transactions/contacts/tasks) + signed webhooks (transaction.created, task.completed) *(2026-07-18)*
-- [ ] API reference docs page (endpoints, auth, webhook signature verification example)
-- [ ] Webhook delivery retries with backoff (v1 is single-attempt best-effort)
+- [x] API reference docs page at /docs/api (endpoints, auth, webhook signature verification example) *(2026-07-18)*
+- [x] Webhook delivery retries with backoff (3 attempts, 4xx not retried, re-stamped signatures) *(2026-07-18)*
 - [ ] Zapier app
 - [ ] Twenty CRM two-way sync
 - [x] Client invoicing: tenant invoices client via Stripe (hosted payment page, paid-status webhook) *(2026-07-18; live-verified with a paid test invoice)*

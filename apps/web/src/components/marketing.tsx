@@ -87,6 +87,11 @@ export function MarketingFooter() {
                 Pricing
               </Link>
             </li>
+            <li>
+              <Link href="/docs/api" className="transition-colors hover:text-stone-900">
+                API reference
+              </Link>
+            </li>
           </ul>
         </nav>
         <nav aria-label="Open source">
