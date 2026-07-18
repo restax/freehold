@@ -51,7 +51,7 @@ Everything a working TC needs day-to-day lives in the Apache-2.0 core. The small
 
 ## Getting started
 
-**Self-host (one machine, one command):**
+**Self-host (one machine, one command)** — full walkthrough in [docs/SELF-HOSTING.md](docs/SELF-HOSTING.md):
 
 ```bash
 cp .env.example .env            # set BETTER_AUTH_SECRET: openssl rand -base64 32

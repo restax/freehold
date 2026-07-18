@@ -4,8 +4,8 @@ The single list of everything open across stages. Items move to ~~struck~~ with 
 
 ## Launch blockers (Stage 06 exit: repo public, demo live, first outside signups)
 
-- [ ] **CLA final legal text** in [CLA.md](CLA.md) + signing gate verified — required before the repo goes public
-- [ ] **Self-hosting guide** — real step-by-step docs (the pricing page's "Self-hosting guide" button needs a destination)
+- [x] **CLA final legal text** in [CLA.md](CLA.md) (Apache ICLA V2.2 adaptation with dual-license grant); signing gate workflow already in place *(2026-07-18)*
+- [x] **Self-hosting guide** at [SELF-HOSTING.md](SELF-HOSTING.md); site buttons and footer now link to it *(2026-07-18)*
 - [ ] **Seeded demo instance** — fictional brokerage strangers can explore
 - [ ] **Launch posts** — Show HN, Product Hunt, r/selfhosted drafts
 - [ ] **Push repo to github.com/restax/freehold** (Paul: GitHub auth)

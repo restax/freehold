@@ -148,7 +148,7 @@ export default function PricingPage() {
             </p>
           </div>
           <a
-            href="https://github.com/restax/freehold"
+            href="https://github.com/restax/freehold/blob/main/docs/SELF-HOSTING.md"
             className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 shadow-xs transition hover:border-stone-400 hover:bg-stone-50 active:scale-[0.98]"
           >
             Self-hosting guide

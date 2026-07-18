@@ -99,7 +99,7 @@ export function MarketingFooter() {
           <ul className="mt-3 flex flex-col gap-2 text-sm text-stone-500">
             <li>
               <a
-                href="https://github.com/restax/freehold"
+                href="https://github.com/restax/freehold/blob/main/docs/SELF-HOSTING.md"
                 className="transition-colors hover:text-stone-900"
               >
                 Self-hosting

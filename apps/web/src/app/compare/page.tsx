@@ -117,7 +117,10 @@ export default function ComparePage() {
                 the server it needs. Your only real costs are electricity and pennies per contract
                 for your own AI key.
               </p>
-              <a href="https://github.com/restax/freehold" className="mt-auto pt-5">
+              <a
+                href="https://github.com/restax/freehold/blob/main/docs/SELF-HOSTING.md"
+                className="mt-auto pt-5"
+              >
                 <span className="block rounded-lg bg-stone-900 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-stone-700 active:scale-[0.98]">
                   Self-hosting guide
                 </span>
