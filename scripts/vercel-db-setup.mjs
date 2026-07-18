@@ -18,7 +18,9 @@ const owner = process.env.STORAGE_DATABASE_URL_UNPOOLED;
 const appPassword = process.env.FREEHOLD_APP_DB_PASSWORD;
 
 if (!owner || !appPassword) {
-  console.log("vercel-db-setup: STORAGE_DATABASE_URL_UNPOOLED or FREEHOLD_APP_DB_PASSWORD not set, skipping");
+  console.log(
+    "vercel-db-setup: STORAGE_DATABASE_URL_UNPOOLED or FREEHOLD_APP_DB_PASSWORD not set, skipping",
+  );
   process.exit(0);
 }
 
@@ -50,10 +52,16 @@ if (migrate.status !== 0) {
   process.exit(migrate.status ?? 1);
 }
 
-await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO freehold_app`);
+await client.query(
+  `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO freehold_app`,
+);
 await client.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO freehold_app`);
-await client.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO freehold_app`);
-await client.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO freehold_app`);
+await client.query(
+  `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO freehold_app`,
+);
+await client.query(
+  `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO freehold_app`,
+);
 await client.end();
 console.log("vercel-db-setup: migrations deployed, grants applied");
 
