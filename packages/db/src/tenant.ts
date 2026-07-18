@@ -17,8 +17,14 @@ export async function withTenant<T>(
   tenantId: string,
   fn: (tx: TenantTx) => Promise<T>,
 ): Promise<T> {
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
-    return fn(tx);
-  });
+  return prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
+      return fn(tx);
+    },
+    // Prisma's defaults (5s timeout) suit local databases; over a managed
+    // Postgres with real network latency, multi-statement transactions like
+    // sample-data seeding can overrun them from a cold start.
+    { maxWait: 5_000, timeout: 15_000 },
+  );
 }

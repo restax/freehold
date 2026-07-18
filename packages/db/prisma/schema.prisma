@@ -461,6 +461,7 @@ model Task {
   notes         String?
   dueDate       DateTime?    @map("due_date") @db.Date
   status        TaskStatus   @default(OPEN)
+  completedAt   DateTime?    @map("completed_at")
   assigneeId    String?
   assignee      User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   sortOrder     Int          @default(0) @map("sort_order")

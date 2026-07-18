@@ -1,4 +1,5 @@
 import { TaskStatus, TransactionStatus, withTenant } from "@freehold/db";
+import { CalendarCheck, CheckCircle, Sun, Warning } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { StatusBadge, statusDot } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
@@ -17,33 +18,215 @@ const PIPELINE: TransactionStatus[] = [
   TransactionStatus.CLOSED,
 ];
 
+function dayKey(d: Date): string {
+  return fmtDate(d);
+}
+
+function dayLabel(d: Date, todayKey: string): string {
+  const key = dayKey(d);
+  if (key === todayKey) return "Today";
+  const tomorrow = new Date(Date.now() + 24 * 3600 * 1000);
+  if (key === dayKey(tomorrow)) return "Tomorrow";
+  return d.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
+}
+
 export default async function DashboardPage() {
   const { tenantId } = await requireTenant();
-  const soon = new Date();
-  soon.setUTCDate(soon.getUTCDate() + 14);
+  const now = new Date();
+  const todayKey = dayKey(now);
+  const soon = new Date(now);
+  soon.setUTCDate(soon.getUTCDate() + 7);
+  const weekAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000);
 
-  const { counts, upcoming, recent } = await withTenant(tenantId, async (tx) => ({
-    counts: await tx.transaction.groupBy({ by: ["status"], _count: { _all: true } }),
-    upcoming: await tx.task.findMany({
-      where: { status: TaskStatus.OPEN, dueDate: { lte: soon } },
-      orderBy: { dueDate: "asc" },
-      take: 12,
-      include: { transaction: { select: { id: true, propertyAddress: true } } },
+  const { counts, openTasks, closings, doneThisWeek, recent } = await withTenant(
+    tenantId,
+    async (tx) => ({
+      counts: await tx.transaction.groupBy({ by: ["status"], _count: { _all: true } }),
+      openTasks: await tx.task.findMany({
+        where: { status: TaskStatus.OPEN, dueDate: { lte: soon } },
+        orderBy: { dueDate: "asc" },
+        take: 30,
+        include: { transaction: { select: { id: true, propertyAddress: true } } },
+      }),
+      closings: await tx.transaction.findMany({
+        where: {
+          closeDate: { gte: now, lte: soon },
+          status: { notIn: ["CLOSED", "CANCELLED"] },
+        },
+        orderBy: { closeDate: "asc" },
+        select: { id: true, propertyAddress: true, closeDate: true },
+      }),
+      doneThisWeek: await tx.task.findMany({
+        where: { status: TaskStatus.DONE, completedAt: { gte: weekAgo } },
+        orderBy: { completedAt: "desc" },
+        take: 15,
+        include: { transaction: { select: { id: true, propertyAddress: true } } },
+      }),
+      recent: await tx.transaction.findMany({
+        orderBy: { updatedAt: "desc" },
+        take: 5,
+        include: { client: { select: { name: true } } },
+      }),
     }),
-    recent: await tx.transaction.findMany({
-      orderBy: { updatedAt: "desc" },
-      take: 5,
-      include: { client: { select: { name: true } } },
-    }),
-  }));
+  );
 
   const countFor = (s: TransactionStatus) => counts.find((c) => c.status === s)?._count._all ?? 0;
-  const today = fmtDate(new Date());
+
+  const overdue = openTasks.filter((t) => t.dueDate && dayKey(t.dueDate) < todayKey);
+  const dueToday = openTasks.filter((t) => t.dueDate && dayKey(t.dueDate) === todayKey);
+  const upcoming = openTasks.filter((t) => t.dueDate && dayKey(t.dueDate) > todayKey);
+
+  // Agenda for the next 6 days after today: tasks + closings grouped per day.
+  const agendaDays: Array<{
+    date: Date;
+    tasks: typeof upcoming;
+    closings: typeof closings;
+  }> = [];
+  for (let i = 1; i <= 6; i++) {
+    const date = new Date(now.getTime() + i * 24 * 3600 * 1000);
+    const key = dayKey(date);
+    const dayTasks = upcoming.filter((t) => t.dueDate && dayKey(t.dueDate) === key);
+    const dayClosings = closings.filter((c) => c.closeDate && dayKey(c.closeDate) === key);
+    if (dayTasks.length > 0 || dayClosings.length > 0) {
+      agendaDays.push({ date, tasks: dayTasks, closings: dayClosings });
+    }
+  }
+  const todayClosings = closings.filter((c) => c.closeDate && dayKey(c.closeDate) === todayKey);
+
+  const heading = now.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+
+  function TaskRow({ t, tone }: { t: (typeof openTasks)[number]; tone: "red" | "default" }) {
+    return (
+      <li className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0">
+        <form action={toggleTask}>
+          <input type="hidden" name="id" value={t.id} />
+          <input type="hidden" name="transactionId" value={t.transactionId ?? ""} />
+          <button
+            type="submit"
+            title="Mark done"
+            className="h-5 w-5 rounded border border-stone-300 transition-colors hover:border-brand-600"
+          />
+        </form>
+        <span
+          className={`whitespace-nowrap text-sm tabular-nums ${
+            tone === "red" ? "font-medium text-red-600" : "text-stone-500"
+          }`}
+        >
+          {fmtDate(t.dueDate)}
+        </span>
+        <span className="text-sm">{t.title}</span>
+        {t.transaction && (
+          <Link
+            href={`/dashboard/transactions/${t.transaction.id}`}
+            className="ml-auto truncate text-sm text-brand-600 hover:underline"
+          >
+            {t.transaction.propertyAddress}
+          </Link>
+        )}
+      </li>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">Dashboard</h1>
+      <div>
+        <p className="text-sm text-stone-500">{heading}</p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Your day</h1>
+      </div>
 
+      {/* Today */}
+      <section className={card}>
+        <h2 className="mb-3 flex items-center gap-2 font-medium">
+          <Sun size={18} weight="fill" className="text-brand-600" aria-hidden />
+          Today
+        </h2>
+
+        {todayClosings.map((c) => (
+          <Link
+            key={c.id}
+            href={`/dashboard/transactions/${c.id}`}
+            className="mb-2 flex items-center gap-2.5 rounded-lg bg-brand-50 px-3 py-2.5 text-sm font-medium text-brand-800 transition-colors hover:bg-brand-100"
+          >
+            <CalendarCheck size={17} weight="fill" className="text-brand-700" aria-hidden />
+            Closing day — {c.propertyAddress}
+          </Link>
+        ))}
+
+        {overdue.length > 0 && (
+          <div className="mb-3">
+            <h3 className="mb-1 flex items-center gap-1.5 text-sm font-medium text-red-600">
+              <Warning size={15} weight="fill" aria-hidden />
+              Overdue
+            </h3>
+            <ul className="flex flex-col">
+              {overdue.map((t) => (
+                <TaskRow key={t.id} t={t} tone="red" />
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {dueToday.length > 0 ? (
+          <ul className="flex flex-col">
+            {dueToday.map((t) => (
+              <TaskRow key={t.id} t={t} tone="default" />
+            ))}
+          </ul>
+        ) : (
+          overdue.length === 0 &&
+          todayClosings.length === 0 && (
+            <p className="text-sm text-stone-500">Nothing due today. Enjoy the quiet.</p>
+          )
+        )}
+      </section>
+
+      {/* Week agenda */}
+      <section className={card}>
+        <h2 className="mb-3 font-medium">Next 7 days</h2>
+        {agendaDays.length === 0 ? (
+          <p className="text-sm text-stone-500">No deadlines or closings on the horizon.</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {agendaDays.map(({ date, tasks, closings: dayClosings }) => (
+              <div key={dayKey(date)} className="flex gap-4">
+                <div className="w-24 shrink-0 pt-1.5">
+                  <p className="text-sm font-medium">{dayLabel(date, todayKey)}</p>
+                  <p className="text-xs tabular-nums text-stone-400">{dayKey(date)}</p>
+                </div>
+                <div className="min-w-0 flex-1 border-l-2 border-stone-100 pl-4">
+                  {dayClosings.map((c) => (
+                    <Link
+                      key={c.id}
+                      href={`/dashboard/transactions/${c.id}`}
+                      className="mb-1 flex items-center gap-2 rounded-lg bg-brand-50 px-2.5 py-1.5 text-sm font-medium text-brand-800 transition-colors hover:bg-brand-100"
+                    >
+                      <CalendarCheck
+                        size={15}
+                        weight="fill"
+                        className="text-brand-700"
+                        aria-hidden
+                      />
+                      Closing — {c.propertyAddress}
+                    </Link>
+                  ))}
+                  <ul className="flex flex-col">
+                    {tasks.map((t) => (
+                      <TaskRow key={t.id} t={t} tone="default" />
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Pipeline */}
       <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-stone-200/70 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_8px_rgb(41_37_36/0.04)] sm:grid-cols-4">
         {PIPELINE.map((s, i) => (
           <Link
@@ -69,14 +252,17 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      <section className={card}>
-        <h2 className="mb-3 font-medium">Tasks due soon</h2>
-        {upcoming.length === 0 ? (
-          <p className="text-sm text-stone-500">Nothing due in the next 14 days.</p>
-        ) : (
+      {/* Done this week */}
+      {doneThisWeek.length > 0 && (
+        <section className={card}>
+          <h2 className="mb-1 flex items-center gap-2 font-medium">
+            <CheckCircle size={18} weight="fill" className="text-brand-600" aria-hidden />
+            Done this week
+          </h2>
+          <p className="mb-2 text-xs text-stone-400">Click a check to undo.</p>
           <ul className="flex flex-col">
-            {upcoming.map((t) => {
-              const overdue = t.dueDate && fmtDate(t.dueDate) < today;
+            {doneThisWeek.map((t) => {
+              const doneToday = t.completedAt && dayKey(t.completedAt) === todayKey;
               return (
                 <li
                   key={t.id}
@@ -87,20 +273,20 @@ export default async function DashboardPage() {
                     <input type="hidden" name="transactionId" value={t.transactionId ?? ""} />
                     <button
                       type="submit"
-                      title="Mark done"
-                      className="h-5 w-5 rounded border border-stone-300 hover:border-brand-600"
-                    />
+                      title="Undo — reopen this task"
+                      className="flex h-5 w-5 items-center justify-center rounded border border-brand-600 bg-brand-600 text-xs text-white transition hover:bg-brand-700"
+                    >
+                      ✓
+                    </button>
                   </form>
-                  <span
-                    className={`whitespace-nowrap text-sm tabular-nums ${overdue ? "font-medium text-red-600" : "text-stone-500"}`}
-                  >
-                    {fmtDate(t.dueDate)}
+                  <span className="whitespace-nowrap text-sm tabular-nums text-stone-400">
+                    {doneToday ? "today" : fmtDate(t.completedAt)}
                   </span>
-                  <span className="text-sm">{t.title}</span>
+                  <span className="text-sm text-stone-400 line-through">{t.title}</span>
                   {t.transaction && (
                     <Link
                       href={`/dashboard/transactions/${t.transaction.id}`}
-                      className="ml-auto truncate text-sm text-brand-600 hover:underline"
+                      className="ml-auto truncate text-sm text-stone-400 hover:text-brand-600 hover:underline"
                     >
                       {t.transaction.propertyAddress}
                     </Link>
@@ -109,9 +295,10 @@ export default async function DashboardPage() {
               );
             })}
           </ul>
-        )}
-      </section>
+        </section>
+      )}
 
+      {/* Recent transactions */}
       <section className={card}>
         <h2 className="mb-3 font-medium">Recent transactions</h2>
         {recent.length === 0 ? (

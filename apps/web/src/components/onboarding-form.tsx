@@ -24,9 +24,15 @@ export function OnboardingForm() {
       setBusy(false);
       return;
     }
-    await authClient.organization.setActive({ organizationId: data.id });
-    if (withSample) {
-      await seedSampleData(data.id);
+    // The workspace exists from here on — never strand the user on this
+    // screen because an optional step (activation, sample seeding) failed.
+    try {
+      await authClient.organization.setActive({ organizationId: data.id });
+      if (withSample) {
+        await seedSampleData(data.id);
+      }
+    } catch {
+      // Sample data is sugar; the dashboard works without it.
     }
     router.push("/dashboard");
     router.refresh();

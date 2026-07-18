@@ -54,49 +54,49 @@ export async function seedTenantData(tenantId: string, userId: string) {
       },
     });
 
-    const [buyer, buyerAgent, lender, title] = await Promise.all([
-      tx.contact.create({
-        data: {
-          tenantId,
-          name: "Jordan Bell (Sample)",
-          category: "Buyer",
-          email: "jordan@example.com",
-          phone: "555-0101",
-          isSample: true,
-        },
-      }),
-      tx.contact.create({
-        data: {
-          tenantId,
-          name: "Casey Rivera (Sample)",
-          category: "Agent",
-          email: "casey@sunriserealty.example",
-          phone: "555-0102",
-          rating: 5,
-          isSample: true,
-        },
-      }),
-      tx.contact.create({
-        data: {
-          tenantId,
-          name: "Morgan Lee (Sample)",
-          category: "Lender",
-          email: "morgan@lender.example",
-          phone: "555-0103",
-          isSample: true,
-        },
-      }),
-      tx.contact.create({
-        data: {
-          tenantId,
-          name: "Alexis Chen (Sample)",
-          category: "Title",
-          email: "alexis@titleco.example",
-          phone: "555-0104",
-          isSample: true,
-        },
-      }),
-    ]);
+    // Sequential on purpose: concurrent queries on one interactive
+    // transaction client are a known Prisma footgun.
+    const buyer = await tx.contact.create({
+      data: {
+        tenantId,
+        name: "Jordan Bell (Sample)",
+        category: "Buyer",
+        email: "jordan@example.com",
+        phone: "555-0101",
+        isSample: true,
+      },
+    });
+    const buyerAgent = await tx.contact.create({
+      data: {
+        tenantId,
+        name: "Casey Rivera (Sample)",
+        category: "Agent",
+        email: "casey@sunriserealty.example",
+        phone: "555-0102",
+        rating: 5,
+        isSample: true,
+      },
+    });
+    const lender = await tx.contact.create({
+      data: {
+        tenantId,
+        name: "Morgan Lee (Sample)",
+        category: "Lender",
+        email: "morgan@lender.example",
+        phone: "555-0103",
+        isSample: true,
+      },
+    });
+    const title = await tx.contact.create({
+      data: {
+        tenantId,
+        name: "Alexis Chen (Sample)",
+        category: "Title",
+        email: "alexis@titleco.example",
+        phone: "555-0104",
+        isSample: true,
+      },
+    });
 
     const plan = await tx.actionPlan.create({
       data: {

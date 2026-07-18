@@ -44,7 +44,10 @@ export async function toggleTask(formData: FormData) {
     const nowDone = task.status !== TaskStatus.DONE;
     await tx.task.update({
       where: { id },
-      data: { status: nowDone ? TaskStatus.DONE : TaskStatus.OPEN },
+      data: {
+        status: nowDone ? TaskStatus.DONE : TaskStatus.OPEN,
+        completedAt: nowDone ? new Date() : null,
+      },
     });
     return nowDone ? task.title : null;
   });
