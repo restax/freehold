@@ -3,9 +3,10 @@
 import { withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { str } from "@/lib/forms";
+import { deleteObject, putObject } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
 
-const MAX_BYTES = 10 * 1024 * 1024; // 10 MB — interim Postgres storage until Stage 03 (S3)
+const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
 export async function uploadDocument(formData: FormData) {
   const { tenantId } = await requireTenant();
@@ -14,16 +15,21 @@ export async function uploadDocument(formData: FormData) {
   if (!transactionId || !(file instanceof File) || file.size === 0) return;
   if (file.size > MAX_BYTES) return;
 
-  const data = Buffer.from(await file.arrayBuffer());
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const filename = file.name || "document.pdf";
+  const contentType = file.type || "application/octet-stream";
+  const stored = await putObject(tenantId, filename, bytes, contentType);
+
   await withTenant(tenantId, (tx) =>
     tx.document.create({
       data: {
         tenantId,
         transactionId,
-        filename: file.name || "document.pdf",
-        contentType: file.type || "application/octet-stream",
+        filename,
+        contentType,
         sizeBytes: file.size,
-        data,
+        data: stored.data,
+        storageKey: stored.storageKey,
       },
     }),
   );
@@ -35,6 +41,9 @@ export async function deleteDocument(formData: FormData) {
   const id = str(formData, "id");
   const transactionId = str(formData, "transactionId");
   if (!id) return;
-  await withTenant(tenantId, (tx) => tx.document.delete({ where: { id } }));
+  const doc = await withTenant(tenantId, (tx) =>
+    tx.document.delete({ where: { id }, select: { storageKey: true, data: true } }),
+  );
+  await deleteObject({ storageKey: doc.storageKey, data: null });
   revalidatePath(`/dashboard/transactions/${transactionId}`);
 }

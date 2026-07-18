@@ -239,9 +239,9 @@ Transactions (custom fields, unlimited), contacts, clients, dashboards/saved vie
 Upload → Claude extraction → citation/confidence confirmation screen → dates instantiate deadline tasks. BYO Anthropic key path working.
 **Exit:** a real signed contract produces correct, page-cited dates on a transaction with zero unconfirmed fields. *Built: PDF upload (Postgres bytes — interim until Stage 03 storage), structured-outputs extraction (`claude-opus-4-8` default, `FREEHOLD_AI_MODEL` override), field-by-field review with page cites/quotes/confidence (low-confidence unchecked by default), apply → columns/dated tasks/custom fields, graceful no-key failure state. Sample contract at `apps/web/public/sample-contract.pdf`. Interim choices tracked: synchronous extraction call (BullMQ job later), bytes-in-Postgres (S3 in Stage 03).*
 
-### Stage 03 — Documents + e-signature adapters *(~4 wk)*
+### Stage 03 — Documents + e-signature adapters *(~4 wk)* ✅ *core shipped 2026-07-18*
 S3-abstraction storage + presigned flows; document templates + merge-to-PDF; envelope interface with Documenso (bundled, arm's-length) and DocuSign adapters; Dotloop adapter next; per-client provider preference.
-**Exit:** two clients of one tenant sign through two different providers.
+**Exit:** two clients of one tenant sign through two different providers. *Built: storage abstraction (S3-compatible driver verified live against MinIO with auto bucket creation; Postgres-bytes fallback stays the zero-config default; MinIO added to the compose bundle), merge-field templates rendered to PDF (verified end-to-end), envelope layer with per-client provider preference — MANUAL provider (wet-ink/outside tracking) verified through the full sent→completed lifecycle; Documenso and DocuSign adapters ship config-gated and **await first live exercise with real credentials** (flagged in code). Dotloop adapter deferred. Exit criterion amended honestly: two-provider signing awaits provider credentials (Paul deferring key-based testing).*
 
 ### Stage 04 — Portals, roles, credential vault *(~4 wk)*
 Branded client/buyer/seller portals with selective sharing; full RBAC; credential vault with envelope encryption, reveal audit, Bitwarden-format import/export.

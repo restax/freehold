@@ -2,9 +2,16 @@ import { PartyRole, TransactionSide, TransactionStatus, withTenant } from "@free
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { deleteDocument, uploadDocument } from "@/lib/actions/documents";
+import {
+  deleteEnvelope,
+  markEnvelopeSigned,
+  refreshEnvelope,
+  sendForSignature,
+} from "@/lib/actions/esign";
 import { runExtraction } from "@/lib/actions/extractions";
 import { addParty, removeParty } from "@/lib/actions/parties";
 import { applyActionPlan, createTask, deleteTask, toggleTask } from "@/lib/actions/tasks";
+import { generateDocument } from "@/lib/actions/templates";
 import {
   deleteTransaction,
   removeCustomField,
@@ -44,21 +51,26 @@ export default async function TransactionDetailPage({
           orderBy: { createdAt: "desc" },
           include: { _count: { select: { fields: true } } },
         },
+        envelopes: {
+          orderBy: { createdAt: "desc" },
+          include: { document: { select: { filename: true } } },
+        },
       },
     });
     if (!txn) return null;
-    const [contacts, clients, plans] = await Promise.all([
+    const [contacts, clients, plans, templates] = await Promise.all([
       tx.contact.findMany({ orderBy: { name: "asc" } }),
       tx.client.findMany({ orderBy: { name: "asc" } }),
       tx.actionPlan.findMany({
         orderBy: { name: "asc" },
         include: { _count: { select: { tasks: true } } },
       }),
+      tx.docTemplate.findMany({ orderBy: { name: "asc" } }),
     ]);
-    return { txn, contacts, clients, plans };
+    return { txn, contacts, clients, plans, templates };
   });
   if (!data) notFound();
-  const { txn, contacts, clients, plans } = data;
+  const { txn, contacts, clients, plans, templates } = data;
 
   const customFields = (txn.customFields as Record<string, string> | null) ?? {};
   const today = fmtDate(new Date());
@@ -402,6 +414,36 @@ export default async function TransactionDetailPage({
                     delete
                   </button>
                 </form>
+                <details className="w-full">
+                  <summary className="cursor-pointer text-xs text-brand-600">
+                    Send for signature
+                  </summary>
+                  <form
+                    action={sendForSignature}
+                    className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
+                  >
+                    <input type="hidden" name="documentId" value={doc.id} />
+                    <label className={label}>
+                      Signer 1 name *
+                      <input name="signer1Name" required className={input} />
+                    </label>
+                    <label className={label}>
+                      Signer 1 email *
+                      <input name="signer1Email" type="email" required className={input} />
+                    </label>
+                    <label className={label}>
+                      Signer 2 name
+                      <input name="signer2Name" className={input} />
+                    </label>
+                    <label className={label}>
+                      Signer 2 email
+                      <input name="signer2Email" type="email" className={input} />
+                    </label>
+                    <button type="submit" className={btnGhost}>
+                      Send
+                    </button>
+                  </form>
+                </details>
               </li>
             ))}
           </ul>
@@ -422,6 +464,84 @@ export default async function TransactionDetailPage({
             Upload
           </button>
         </form>
+        {templates.length > 0 && (
+          <form action={generateDocument} className="mb-4 flex flex-wrap items-end gap-2">
+            <input type="hidden" name="transactionId" value={txn.id} />
+            <label className={label}>
+              Generate from template
+              <select name="templateId" className={input} defaultValue={templates[0]?.id}>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="submit" className={btnGhost}>
+              Generate PDF
+            </button>
+          </form>
+        )}
+        {txn.envelopes.length > 0 && (
+          <div className="mb-4">
+            <h3 className="mb-1 text-sm font-medium text-stone-600">Signature envelopes</h3>
+            <ul className="flex flex-col">
+              {txn.envelopes.map((env) => {
+                const signers = (env.signers as Array<{ name: string; email: string }>) ?? [];
+                return (
+                  <li
+                    key={env.id}
+                    className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
+                  >
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs ${
+                        env.status === "COMPLETED"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : env.status === "SENT"
+                            ? "bg-amber-100 text-amber-800"
+                            : env.status === "ERROR" || env.status === "DECLINED"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-stone-200 text-stone-600"
+                      }`}
+                    >
+                      {env.status.toLowerCase()}
+                    </span>
+                    <span className="font-medium">{env.document.filename}</span>
+                    <span className="text-stone-500">
+                      {env.provider.toLowerCase()} · {signers.map((s) => s.name).join(", ")}
+                    </span>
+                    {env.error && <span className="text-xs text-red-600">{env.error}</span>}
+                    <span className="ml-auto flex items-center gap-2">
+                      {env.provider === "MANUAL" && env.status === "SENT" && (
+                        <form action={markEnvelopeSigned}>
+                          <input type="hidden" name="id" value={env.id} />
+                          <button type="submit" className={btnGhost}>
+                            Mark signed
+                          </button>
+                        </form>
+                      )}
+                      {env.provider !== "MANUAL" && env.externalId && (
+                        <form action={refreshEnvelope}>
+                          <input type="hidden" name="id" value={env.id} />
+                          <button type="submit" className={btnGhost}>
+                            Refresh status
+                          </button>
+                        </form>
+                      )}
+                      <form action={deleteEnvelope}>
+                        <input type="hidden" name="id" value={env.id} />
+                        <input type="hidden" name="transactionId" value={txn.id} />
+                        <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
+                          delete
+                        </button>
+                      </form>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
         {txn.extractions.length > 0 && (
           <div>
             <h3 className="mb-1 text-sm font-medium text-stone-600">Extraction runs</h3>

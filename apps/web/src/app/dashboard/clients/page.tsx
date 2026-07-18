@@ -1,7 +1,7 @@
-import { ClientType, withTenant } from "@freehold/db";
-import { createClient, deleteClient } from "@/lib/actions/clients";
+import { ClientType, EsignProvider, withTenant } from "@freehold/db";
+import { createClient, deleteClient, updateClientEsign } from "@/lib/actions/clients";
 import { requireTenant } from "@/lib/tenant";
-import { btn, card, input, label, td, th } from "@/lib/ui";
+import { btn, btnGhost, card, input, label, td, th } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +11,12 @@ const TYPE_LABEL: Record<string, string> = {
   TITLE: "Title company",
   LENDER: "Lender",
   OTHER: "Other",
+};
+
+const ESIGN_LABEL: Record<string, string> = {
+  MANUAL: "Manual / outside Freehold",
+  DOCUMENSO: "Documenso",
+  DOCUSIGN: "DocuSign",
 };
 
 export default async function ClientsPage() {
@@ -56,6 +62,17 @@ export default async function ClientsPage() {
             Phone
             <input name="phone" className={input} />
           </label>
+          <label className={label}>
+            E-sign provider
+            <select name="esignProvider" className={input} defaultValue="">
+              <option value="">Tenant default</option>
+              {Object.values(EsignProvider).map((p) => (
+                <option key={p} value={p}>
+                  {ESIGN_LABEL[p]}
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="flex items-end">
             <button type="submit" className={btn}>
               Add client
@@ -75,6 +92,7 @@ export default async function ClientsPage() {
                 <th className={th}>Type</th>
                 <th className={th}>Email</th>
                 <th className={th}>Phone</th>
+                <th className={th}>E-sign</th>
                 <th className={th}>Transactions</th>
                 <th className={th} />
               </tr>
@@ -86,6 +104,26 @@ export default async function ClientsPage() {
                   <td className={td}>{TYPE_LABEL[c.type]}</td>
                   <td className={td}>{c.email ?? "—"}</td>
                   <td className={td}>{c.phone ?? "—"}</td>
+                  <td className={td}>
+                    <form action={updateClientEsign} className="flex items-center gap-1">
+                      <input type="hidden" name="id" value={c.id} />
+                      <select
+                        name="esignProvider"
+                        defaultValue={c.esignProvider ?? ""}
+                        className={`${input} px-2 py-1 text-xs`}
+                      >
+                        <option value="">Tenant default</option>
+                        {Object.values(EsignProvider).map((p) => (
+                          <option key={p} value={p}>
+                            {ESIGN_LABEL[p]}
+                          </option>
+                        ))}
+                      </select>
+                      <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                        Save
+                      </button>
+                    </form>
+                  </td>
                   <td className={td}>{c._count.transactions}</td>
                   <td className={td}>
                     <form action={deleteClient}>

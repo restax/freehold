@@ -8,6 +8,7 @@ export type {
   Client,
   Contact,
   ContractExtraction,
+  DocTemplate,
   Document,
   ExtractionField,
   Invitation,
@@ -15,6 +16,7 @@ export type {
   Organization,
   Organization as Tenant,
   Session,
+  SignatureEnvelope,
   Task,
   Transaction,
   TransactionParty,
@@ -40,6 +42,10 @@ export const TransactionSide = PrismaPkg.TransactionSide;
 export type TransactionSide = PrismaPkg.TransactionSide;
 export const TransactionStatus = PrismaPkg.TransactionStatus;
 export type TransactionStatus = PrismaPkg.TransactionStatus;
+export const EnvelopeStatus = PrismaPkg.EnvelopeStatus;
+export type EnvelopeStatus = PrismaPkg.EnvelopeStatus;
+export const EsignProvider = PrismaPkg.EsignProvider;
+export type EsignProvider = PrismaPkg.EsignProvider;
 export const ExtractionStatus = PrismaPkg.ExtractionStatus;
 export type ExtractionStatus = PrismaPkg.ExtractionStatus;
 export const FieldConfidence = PrismaPkg.FieldConfidence;

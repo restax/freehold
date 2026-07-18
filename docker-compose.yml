@@ -32,6 +32,20 @@ services:
       timeout: 5s
       retries: 10
 
+  storage:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY:-freehold}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY:-freehold-storage}
+    volumes:
+      - storagedata:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   migrate:
     build:
       context: .
@@ -61,12 +75,18 @@ services:
       REDIS_URL: redis://redis:6379
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env (openssl rand -base64 32)}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      STORAGE_ENDPOINT: http://storage:9000
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-freehold-documents}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-freehold}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-freehold-storage}
     ports:
       - "3000:3000"
     depends_on:
       migrate:
         condition: service_completed_successfully
       redis:
+        condition: service_healthy
+      storage:
         condition: service_healthy
 
   api:
@@ -86,3 +106,4 @@ services:
 
 volumes:
   pgdata:
+  storagedata:

@@ -1,4 +1,5 @@
 import { withTenant } from "@freehold/db";
+import { getObjectBytes } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
@@ -10,11 +11,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const doc = await withTenant(tenantId, (tx) =>
     tx.document.findUnique({
       where: { id },
-      select: { filename: true, contentType: true, data: true },
+      select: { filename: true, contentType: true, data: true, storageKey: true },
     }),
   );
   if (!doc) return new Response("Not found", { status: 404 });
-  return new Response(new Uint8Array(doc.data), {
+  const bytes = await getObjectBytes(doc);
+  return new Response(new Uint8Array(bytes), {
     headers: {
       "Content-Type": doc.contentType,
       "Content-Disposition": `inline; filename="${doc.filename.replace(/[^\w.\- ]/g, "_")}"`,

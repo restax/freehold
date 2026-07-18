@@ -105,6 +105,8 @@ model Organization {
   documents       Document[]
   extractions     ContractExtraction[]
   extractionFields ExtractionField[]
+  templates       DocTemplate[]
+  envelopes       SignatureEnvelope[]
 
   @@map("organization")
 }
@@ -152,18 +154,20 @@ enum ClientType {
 /// serve. Transactions, vault credentials, portal branding, and invoicing all
 /// attach here in later stages.
 model Client {
-  id           String        @id @default(uuid())
-  tenantId     String        @map("tenant_id")
-  tenant       Organization  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  type         ClientType    @default(AGENT)
-  name         String
-  email        String?
-  phone        String?
-  notes        String?
-  isSample     Boolean       @default(false)
-  transactions Transaction[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id            String         @id @default(uuid())
+  tenantId      String         @map("tenant_id")
+  tenant        Organization   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type          ClientType     @default(AGENT)
+  name          String
+  email         String?
+  phone         String?
+  notes         String?
+  /// Per-client e-signature provider; null = tenant default (FREEHOLD_ESIGN_DEFAULT env, else MANUAL).
+  esignProvider EsignProvider? @map("esign_provider")
+  isSample      Boolean        @default(false)
+  transactions  Transaction[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   @@index([tenantId])
   @@map("client")
@@ -255,6 +259,7 @@ model Transaction {
   tasks           Task[]
   documents       Document[]
   extractions     ContractExtraction[]
+  envelopes       SignatureEnvelope[]
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
@@ -358,9 +363,10 @@ enum FieldValueType {
   MONEY
 }
 
-/// Uploaded file attached to a transaction. Bytes live in Postgres for now —
-/// an explicit interim choice until Stage 03 moves storage behind the
-/// S3-compatible interface. Capped at upload time (10 MB).
+/// Uploaded or generated file attached to a transaction. Bytes live either in
+/// object storage (`storageKey`, when STORAGE_ENDPOINT is configured) or
+/// inline in Postgres (`data`, the zero-config default). Exactly one of the
+/// two is set. Capped at upload time (10 MB).
 model Document {
   id            String               @id @default(uuid())
   tenantId      String               @map("tenant_id")
@@ -370,8 +376,10 @@ model Document {
   filename      String
   contentType   String               @map("content_type")
   sizeBytes     Int                  @map("size_bytes")
-  data          Bytes
+  data          Bytes?
+  storageKey    String?              @map("storage_key")
   extractions   ContractExtraction[]
+  envelopes     SignatureEnvelope[]
   createdAt     DateTime             @default(now())
 
   @@index([tenantId])
@@ -398,6 +406,66 @@ model ContractExtraction {
   @@index([tenantId])
   @@index([transactionId])
   @@map("contract_extraction")
+}
+
+// --- Stage 03: document templates + e-signature envelopes ---
+
+enum EsignProvider {
+  MANUAL
+  DOCUMENSO
+  DOCUSIGN
+}
+
+enum EnvelopeStatus {
+  DRAFT
+  SENT
+  COMPLETED
+  DECLINED
+  ERROR
+}
+
+/// Reusable merge-field document template. Body is plain text with
+/// {{merge.fields}}; rendering produces a PDF attached to a transaction.
+model DocTemplate {
+  id          String       @id @default(uuid())
+  tenantId    String       @map("tenant_id")
+  tenant      Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  body        String
+  isSample    Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([tenantId])
+  @@map("doc_template")
+}
+
+/// One signature request for a document, through whichever provider the
+/// client (or tenant default) uses. Provider adapters live in
+/// packages/integrations; MANUAL tracks signatures collected outside any
+/// e-sign service (wet ink, provider portals we don't yet integrate).
+model SignatureEnvelope {
+  id            String         @id @default(uuid())
+  tenantId      String         @map("tenant_id")
+  tenant        Organization   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  documentId    String
+  document      Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  transactionId String
+  transaction   Transaction    @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  provider      EsignProvider
+  externalId    String?        @map("external_id")
+  status        EnvelopeStatus @default(DRAFT)
+  signers       Json
+  error         String?
+  sentAt        DateTime?      @map("sent_at")
+  completedAt   DateTime?      @map("completed_at")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([tenantId])
+  @@index([transactionId])
+  @@map("signature_envelope")
 }
 
 /// A single extracted value with its provenance: page number, verbatim quote,

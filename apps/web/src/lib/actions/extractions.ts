@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { flattenExtraction, transactionUpdateFor } from "@/lib/ai/contract-schema";
 import { EXTRACTION_MODEL, extractContract } from "@/lib/ai/extract";
 import { str } from "@/lib/forms";
+import { getObjectBytes } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
 
 /**
@@ -22,7 +23,7 @@ export async function runExtraction(formData: FormData) {
   const created = await withTenant(tenantId, async (tx) => {
     const doc = await tx.document.findUniqueOrThrow({
       where: { id: documentId },
-      select: { id: true, transactionId: true, data: true, contentType: true },
+      select: { id: true, transactionId: true, data: true, storageKey: true, contentType: true },
     });
     const extraction = await tx.contractExtraction.create({
       data: {
@@ -38,7 +39,7 @@ export async function runExtraction(formData: FormData) {
 
   const { extraction, doc } = created;
   try {
-    const result = await extractContract(Buffer.from(doc.data));
+    const result = await extractContract(await getObjectBytes(doc));
     const rows = flattenExtraction(result);
     await withTenant(tenantId, async (tx) => {
       await tx.extractionField.createMany({
