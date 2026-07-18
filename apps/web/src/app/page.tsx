@@ -8,15 +8,10 @@ import {
   Signature,
   UsersThree,
 } from "@phosphor-icons/react/dist/ssr";
-import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Badge } from "@/components/badges";
 import { getSession } from "@/lib/session";
-import brokerageDusk from "../../public/marketing/brokerage-dusk.jpg";
-import closingKeys from "../../public/marketing/closing-keys.jpg";
-import movingDay from "../../public/marketing/moving-day.jpg";
-import tcAtWork from "../../public/marketing/tc-at-work.jpg";
 
 export const metadata = {
   title: "Freehold: the most complete TC system in the world",
@@ -288,14 +283,22 @@ export default async function LandingPage() {
               once, run it on every file.
             </p>
           </div>
-          <div className="relative min-h-44 overflow-hidden rounded-xl border border-stone-200/70">
-            <Image
-              src={closingKeys}
-              alt="House keys resting on a signed closing document"
-              fill
-              sizes="(min-width: 1024px) 33vw, 100vw"
-              className="object-cover"
-            />
+          <div className="flex flex-col justify-center rounded-xl border border-brand-600/15 bg-gradient-to-br from-brand-50 to-white p-6">
+            <p className="text-xs font-medium uppercase tracking-widest text-brand-700">
+              Acme Realty Group
+            </p>
+            <p className="mt-1 font-serif text-lg font-semibold tracking-tight">412 Maple Avenue</p>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-stone-200/70">
+              <div className="h-full w-[40%] rounded-full bg-brand-600" />
+            </div>
+            <p className="mt-1 text-xs tabular-nums text-stone-500">4 of 10 steps done</p>
+            <ul className="mt-2 flex flex-col text-sm text-stone-600">
+              <li className="border-b border-stone-200/60 py-1 text-stone-400 line-through">
+                Earnest money deposited
+              </li>
+              <li className="border-b border-stone-200/60 py-1">Home inspection</li>
+              <li className="py-1">Clear to close</li>
+            </ul>
           </div>
           {BENTO.map(({ icon: Icon, title, body, cls }) => (
             <div key={title} className={`rounded-xl p-6 ${cls}`}>
@@ -310,14 +313,35 @@ export default async function LandingPage() {
       {/* Keep the workflow. Drop the invoice. */}
       <section className="border-y border-stone-200/70 bg-white">
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:py-24">
-          <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-stone-200/70">
-            <Image
-              src={movingDay}
-              alt="Moving boxes on the doorstep of a home with a green front door"
-              fill
-              sizes="(min-width: 1024px) 50vw, 100vw"
-              className="object-cover"
-            />
+          <div className="flex items-center justify-center rounded-xl border border-stone-200/70 bg-[radial-gradient(70%_70%_at_30%_20%,#ecf7f2_0%,#f5f5f4_100%)] p-8">
+            <div className="w-full max-w-sm rounded-xl border border-stone-200/70 bg-white p-5 shadow-[0_1px_2px_rgb(41_37_36/0.06),0_12px_32px_rgb(41_37_36/0.1)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium">412 Maple Avenue</p>
+                  <p className="text-sm text-stone-500">Buy side · $385,000</p>
+                </div>
+                <Badge tone="progress">Under contract</Badge>
+              </div>
+              <ul className="mt-4 flex flex-col text-sm">
+                {[
+                  ["Jul 20", "Earnest money deposit due"],
+                  ["Jul 25", "Inspection notice deadline"],
+                  ["Aug 4", "Financing contingency deadline"],
+                  ["Aug 14", "Closing"],
+                ].map(([date, title]) => (
+                  <li
+                    key={title}
+                    className="flex items-center gap-3 border-b border-stone-100 py-1.5 last:border-0"
+                  >
+                    <span className="h-4 w-4 shrink-0 rounded border border-stone-300" />
+                    <span className="w-12 shrink-0 whitespace-nowrap tabular-nums text-stone-500">
+                      {date}
+                    </span>
+                    <span>{title}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
           <div>
             <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
@@ -364,19 +388,11 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* Built for the people who run closings (dark photo section) */}
-      <section className="relative overflow-hidden">
-        <Image
-          src={tcAtWork}
-          alt="A transaction coordinator reviewing paperwork at a desk"
-          fill
-          sizes="100vw"
-          className="object-cover"
-        />
-        <div aria-hidden className="absolute inset-0 bg-stone-900/60" />
+      {/* Built for the people who run closings (dark color-block section) */}
+      <section className="relative overflow-hidden bg-stone-900">
         <div
           aria-hidden
-          className="absolute inset-0 bg-gradient-to-r from-stone-900/80 via-stone-900/50 to-transparent"
+          className="absolute inset-0 bg-[radial-gradient(70%_100%_at_80%_0%,#094536_0%,transparent_60%)]"
         />
         <div className="relative mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
           <h2 className="max-w-md text-3xl font-semibold tracking-tight text-white md:text-4xl">
@@ -591,15 +607,6 @@ export default async function LandingPage() {
             </a>
           </div>
           <div className="flex flex-col gap-4">
-            <div className="relative aspect-[21/9] overflow-hidden rounded-xl border border-stone-200/70">
-              <Image
-                src={brokerageDusk}
-                alt="A brokerage office interior at dusk"
-                fill
-                sizes="(min-width: 1024px) 50vw, 100vw"
-                className="object-cover"
-              />
-            </div>
             <div className="rounded-xl border border-stone-200/70 bg-white p-5">
               <h3 className="text-sm font-medium">Isolated instances</h3>
               <p className="mt-1 text-sm leading-relaxed text-stone-600">
