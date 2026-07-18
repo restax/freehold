@@ -36,7 +36,7 @@ The single list of everything open across stages. Items move to ~~struck~~ with 
 - [x] Import framework: CSV parser + header auto-mapping + dry-run preview *(2026-07-18)*
 - [x] Generic CSV import for contacts and transactions (UI at /dashboard/import, sample CSV included) *(2026-07-18)*
 - [ ] Vendor presets: header aliases cover the major legacy platforms' export shapes; still need verification against real export samples
-- [ ] Gmail / Outlook send + log
+- [ ] Gmail / Google Calendar tenant connections: each TC connects their own account (send email as themselves, push deadlines to their calendar). Requires one Freehold-owned Google Cloud OAuth app (client ID/secret; self-hosters register their own). Gmail send scope is restricted: Google app verification review needed before public production — start early. Outlook/Microsoft equivalent after.
 - [x] Public API v1 (API keys, transactions/contacts/tasks) + signed webhooks (transaction.created, task.completed) *(2026-07-18)*
 - [x] API reference docs page at /docs/api (endpoints, auth, webhook signature verification example) *(2026-07-18)*
 - [x] Webhook delivery retries with backoff (3 attempts, 4xx not retried, re-stamped signatures) *(2026-07-18)*
