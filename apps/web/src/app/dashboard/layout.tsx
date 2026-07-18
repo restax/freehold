@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import { DashboardNav } from "@/components/dashboard-nav";
 import { SignOutButton } from "@/components/sign-out-button";
 import { getSession, listTenants } from "@/lib/session";
 
@@ -26,25 +26,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="flex min-h-screen">
       <aside className="flex w-56 flex-col border-r border-stone-200 bg-white px-4 py-6">
-        <div className="mb-1 text-lg font-semibold tracking-tight text-brand-700">Freehold</div>
+        <div className="mb-1 font-serif text-2xl font-semibold tracking-tight text-brand-700">
+          Freehold
+        </div>
         <div className="mb-6 truncate text-sm text-stone-500">{active?.name}</div>
-        <nav className="flex flex-col gap-1">
-          {NAV.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className="rounded-lg px-3 py-2 text-sm text-stone-700 hover:bg-stone-100"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <DashboardNav items={NAV} />
         <div className="mt-auto flex flex-col gap-2 border-t border-stone-200 pt-4">
           <span className="truncate text-xs text-stone-400">{session.user.email}</span>
           <SignOutButton />
         </div>
       </aside>
-      <main className="flex-1 px-8 py-6">{children}</main>
+      <main className="flex-1 px-8 py-8">
+        <div className="mx-auto max-w-6xl">{children}</div>
+      </main>
     </div>
   );
 }

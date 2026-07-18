@@ -73,7 +73,9 @@ export default async function DashboardPage() {
                       className="h-5 w-5 rounded border border-stone-300 hover:border-brand-600"
                     />
                   </form>
-                  <span className={`text-sm ${overdue ? "font-medium text-red-600" : ""}`}>
+                  <span
+                    className={`whitespace-nowrap text-sm tabular-nums ${overdue ? "font-medium text-red-600" : "text-stone-500"}`}
+                  >
                     {fmtDate(t.dueDate)}
                   </span>
                   <span className="text-sm">{t.title}</span>

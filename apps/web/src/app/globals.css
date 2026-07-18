@@ -2,10 +2,32 @@
 
 @theme {
   --color-brand-50: #ecf7f2;
+  --color-brand-100: #d9eee3;
   --color-brand-600: #0f6b4f;
   --color-brand-700: #0b5540;
+  --color-brand-800: #094536;
+}
+
+@theme inline {
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-fraunces), Georgia, serif;
 }
 
 body {
-  @apply bg-stone-50 text-stone-900 antialiased;
+  @apply bg-stone-50 font-sans text-stone-900 antialiased;
+}
+
+/* Brand voice: page titles carry the serif; sizes/weights stay per-page. */
+h1 {
+  font-family: var(--font-serif);
+  letter-spacing: -0.015em;
+}
+
+::selection {
+  background: var(--color-brand-100);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand-600);
+  outline-offset: 2px;
 }
