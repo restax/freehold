@@ -2,7 +2,12 @@ import { withTenant } from "@freehold/db";
 import Link from "next/link";
 import { Badge, type BadgeTone } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
-import { createInvoice, invoicingAllowed, invoicingEnabled, voidInvoice } from "@/lib/actions/invoices";
+import {
+  createInvoice,
+  invoicingAllowed,
+  invoicingEnabled,
+  voidInvoice,
+} from "@/lib/actions/invoices";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
 import { btn, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";

@@ -58,6 +58,7 @@ export async function createInvoice(formData: FormData) {
     customer: customer.id,
     collection_method: "send_invoice",
     days_until_due: 30,
+    currency: "usd",
     metadata: { freeholdTenantId: tenantId },
   });
   await stripe.invoiceItems.create({
@@ -90,7 +91,7 @@ export async function voidInvoice(formData: FormData) {
   if (!isAdmin) return;
   const id = str(formData, "id");
   const invoice = await withTenant(tenantId, (tx) => tx.invoice.findUnique({ where: { id } }));
-  if (!invoice || invoice.status !== "SENT") return;
+  if (invoice?.status !== "SENT") return;
   if (invoice.stripeInvoiceId && (await invoicingEnabled())) {
     await stripeClient()
       .invoices.voidInvoice(invoice.stripeInvoiceId)

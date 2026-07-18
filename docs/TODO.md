@@ -42,7 +42,8 @@ The single list of everything open across stages. Items move to ~~struck~~ with 
 - [ ] Webhook delivery retries with backoff (v1 is single-attempt best-effort)
 - [ ] Zapier app
 - [ ] Twenty CRM two-way sync
-- [ ] Stripe Connect: tenant invoices their client, gets paid
+- [x] Client invoicing: tenant invoices client via Stripe (hosted payment page, paid-status webhook) *(2026-07-18; live-verified with a paid test invoice)*
+- [ ] Per-tenant Stripe Connect accounts for Cloud invoicing (v1 uses the configured platform/self-host key)
 
 ## Later stages (per PLAN.md)
 
