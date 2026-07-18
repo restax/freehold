@@ -8,7 +8,7 @@ The flagship AI feature: upload a purchase contract and Freehold extracts every 
 
 See [`docs/PLAN.md`](docs/PLAN.md) for the full architecture and staged build plan (or [`docs/plan.html`](docs/plan.html) — same content, styled; open it in a browser).
 
-**Status:** pre-alpha — Stage 00 (foundations) is in: auth (email/password, OAuth-ready), three-level tenancy (tenant → client → user) with Postgres row-level security, Docker Compose bundle, CI, and the CLA gate. Signup → workspace creation → dashboard shell works end-to-end. Stage 01 (transactions + CRM) is next.
+**Status:** pre-alpha — Stages 00–01 are in. Foundations (auth, tenant → client → user tenancy with enforced Postgres row-level security, Docker Compose bundle, CI, CLA gate) plus core transaction management: transactions with custom fields, contacts, clients, parties, tasks, and action plans whose template tasks anchor to contract/close dates and auto-compute deadlines when applied. Pipeline dashboard, removable sample data, onboarding wizard. Deferred within Stage 01 (tracked in the plan): merge-field email templates/SMTP sending, saved views, role-based task auto-assignment. Stage 02 (contract-extraction AI — the wedge) is next.
 
 ## Stack
 

@@ -5,10 +5,11 @@ import { getSession, listTenants } from "@/lib/session";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/dashboard#transactions", label: "Transactions" },
-  { href: "/dashboard#contacts", label: "Contacts" },
-  { href: "/dashboard#clients", label: "Clients" },
-  { href: "/dashboard#settings", label: "Settings" },
+  { href: "/dashboard/transactions", label: "Transactions" },
+  { href: "/dashboard/contacts", label: "Contacts" },
+  { href: "/dashboard/clients", label: "Clients" },
+  { href: "/dashboard/action-plans", label: "Action plans" },
+  { href: "/dashboard/settings", label: "Settings" },
 ];
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {

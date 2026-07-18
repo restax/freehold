@@ -13,9 +13,11 @@ services:
     environment:
       POSTGRES_USER: freehold
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-freehold}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:-freehold_app}
       POSTGRES_DB: freehold
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U freehold"]
       interval: 5s
@@ -54,7 +56,8 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
     environment:
-      DATABASE_URL: postgresql://freehold:${POSTGRES_PASSWORD:-freehold}@db:5432/freehold
+      # App connects as the non-superuser role so row-level security applies.
+      DATABASE_URL: postgresql://freehold_app:${POSTGRES_APP_PASSWORD:-freehold_app}@db:5432/freehold
       REDIS_URL: redis://redis:6379
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env (openssl rand -base64 32)}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
@@ -71,7 +74,7 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
-      DATABASE_URL: postgresql://freehold:${POSTGRES_PASSWORD:-freehold}@db:5432/freehold
+      DATABASE_URL: postgresql://freehold_app:${POSTGRES_APP_PASSWORD:-freehold_app}@db:5432/freehold
       REDIS_URL: redis://redis:6379
     ports:
       - "3001:3001"

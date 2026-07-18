@@ -3,11 +3,13 @@
 import { tenantSlug } from "@freehold/db/slug";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { seedSampleData } from "@/lib/actions/sample-data";
 import { authClient } from "@/lib/auth-client";
 
 export function OnboardingForm() {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [withSample, setWithSample] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -23,6 +25,9 @@ export function OnboardingForm() {
       return;
     }
     await authClient.organization.setActive({ organizationId: data.id });
+    if (withSample) {
+      await seedSampleData(data.id);
+    }
     router.push("/dashboard");
     router.refresh();
   }
@@ -44,6 +49,15 @@ export function OnboardingForm() {
           Workspace URL name: <code>{tenantSlug(name)}</code>
         </p>
       )}
+      <label className="flex items-center gap-2 text-sm text-stone-700">
+        <input
+          type="checkbox"
+          checked={withSample}
+          onChange={(e) => setWithSample(e.target.checked)}
+          className="h-4 w-4 accent-brand-600"
+        />
+        Start with sample data (a demo transaction, checklist, and contacts — removable in Settings)
+      </label>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button
         type="submit"

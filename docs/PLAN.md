@@ -231,9 +231,9 @@ Sequential; each stage is deployed and demoable before the next. Assumes a small
 Monorepo + CI; auth (email/password + OAuth); three-level tenancy (tenant → client → user) with RLS; Docker Compose dev/self-host bundle from day one; `/ee` folder + commercial license header; **CLA Assistant configured before the repo goes public** (Apache ICLA-style template — Paul's explicit reminder); health page skeleton.
 **Exit:** signup → empty dashboard on Compose and on a dev cloud deploy.
 
-### Stage 01 — Core transaction management + CRM *(~5 wk)*
+### Stage 01 — Core transaction management + CRM *(~5 wk)* ✅ *core shipped 2026-07-18*
 Transactions (custom fields, unlimited), contacts, clients, dashboards/saved views, action plans + task templates with role auto-assignment, merge-field email templates (SMTP abstraction), seed data + onboarding wizard.
-**Exit:** a TC runs one real transaction end-to-end.
+**Exit:** a TC runs one real transaction end-to-end. *Verified: transaction → parties → applied action plan with computed deadlines → task completion → pipeline dashboard; RLS tenant isolation proven live (app connects as non-superuser role). Deferred within stage: merge-field email templates/SMTP sending, saved views, role-based auto-assignment (template field exists; tasks assign to the applying user).*
 
 ### Stage 02 — Contract extraction (the wedge) *(~3 wk)*
 Upload → Claude extraction → citation/confidence confirmation screen → dates instantiate deadline tasks. BYO Anthropic key path working.

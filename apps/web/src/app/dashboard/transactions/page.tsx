@@ -1,0 +1,174 @@
+import { TransactionSide, TransactionStatus, withTenant } from "@freehold/db";
+import Link from "next/link";
+import { createTransaction } from "@/lib/actions/transactions";
+import { fmtDate, fmtMoney, SIDE_LABEL, STATUS_BADGE, STATUS_LABEL } from "@/lib/format";
+import { requireTenant } from "@/lib/tenant";
+import { btn, btnGhost, card, input, label, td, th } from "@/lib/ui";
+
+export const dynamic = "force-dynamic";
+
+const STATUSES = Object.values(TransactionStatus);
+const SIDES = Object.values(TransactionSide);
+
+export default async function TransactionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
+  const { tenantId } = await requireTenant();
+  const { status } = await searchParams;
+  const statusFilter = STATUSES.includes(status as TransactionStatus)
+    ? (status as TransactionStatus)
+    : undefined;
+
+  const { transactions, clients } = await withTenant(tenantId, async (tx) => ({
+    transactions: await tx.transaction.findMany({
+      where: statusFilter ? { status: statusFilter } : {},
+      orderBy: { updatedAt: "desc" },
+      include: { client: { select: { name: true } }, _count: { select: { tasks: true } } },
+    }),
+    clients: await tx.client.findMany({ orderBy: { name: "asc" } }),
+  }));
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Transactions</h1>
+        <form className="flex items-center gap-2">
+          <select name="status" defaultValue={statusFilter ?? ""} className={input}>
+            <option value="">All statuses</option>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {STATUS_LABEL[s]}
+              </option>
+            ))}
+          </select>
+          <button type="submit" className={btnGhost}>
+            Filter
+          </button>
+        </form>
+      </div>
+
+      <details className={card}>
+        <summary className="cursor-pointer font-medium text-brand-700">New transaction</summary>
+        <form action={createTransaction} className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <label className={`${label} sm:col-span-2`}>
+            Property address *
+            <input
+              name="propertyAddress"
+              required
+              className={input}
+              placeholder="412 Maple Avenue"
+            />
+          </label>
+          <label className={label}>
+            Client
+            <select name="clientId" className={input} defaultValue="">
+              <option value="">—</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={label}>
+            City
+            <input name="city" className={input} />
+          </label>
+          <label className={label}>
+            State
+            <input name="state" className={input} maxLength={2} />
+          </label>
+          <label className={label}>
+            ZIP
+            <input name="zip" className={input} />
+          </label>
+          <label className={label}>
+            Status
+            <select name="status" className={input} defaultValue="UNDER_CONTRACT">
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABEL[s]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={label}>
+            Side
+            <select name="side" className={input} defaultValue="BUY_SIDE">
+              {SIDES.map((s) => (
+                <option key={s} value={s}>
+                  {SIDE_LABEL[s]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={label}>
+            Purchase price ($)
+            <input name="purchasePrice" inputMode="numeric" className={input} />
+          </label>
+          <label className={label}>
+            Contract date
+            <input name="contractDate" type="date" className={input} />
+          </label>
+          <label className={label}>
+            Close date
+            <input name="closeDate" type="date" className={input} />
+          </label>
+          <div className="flex items-end">
+            <button type="submit" className={btn}>
+              Create transaction
+            </button>
+          </div>
+        </form>
+      </details>
+
+      <section className={card}>
+        {transactions.length === 0 ? (
+          <p className="text-sm text-stone-500">
+            No transactions{statusFilter ? " with this status" : ""} yet.
+          </p>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr>
+                <th className={th}>Property</th>
+                <th className={th}>Client</th>
+                <th className={th}>Status</th>
+                <th className={th}>Side</th>
+                <th className={th}>Close date</th>
+                <th className={th}>Price</th>
+                <th className={th}>Tasks</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((t) => (
+                <tr key={t.id}>
+                  <td className={td}>
+                    <Link
+                      href={`/dashboard/transactions/${t.id}`}
+                      className="text-brand-600 hover:underline"
+                    >
+                      {t.propertyAddress}
+                    </Link>
+                  </td>
+                  <td className={td}>{t.client?.name ?? "—"}</td>
+                  <td className={td}>
+                    <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_BADGE[t.status]}`}>
+                      {STATUS_LABEL[t.status]}
+                    </span>
+                  </td>
+                  <td className={td}>{SIDE_LABEL[t.side]}</td>
+                  <td className={td}>{fmtDate(t.closeDate)}</td>
+                  <td className={td}>{fmtMoney(t.purchasePrice)}</td>
+                  <td className={td}>{t._count.tasks}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+    </div>
+  );
+}
