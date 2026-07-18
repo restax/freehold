@@ -19,6 +19,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm --filter @freehold/db exec prisma generate
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
