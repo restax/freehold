@@ -1,0 +1,85 @@
+# Freehold self-host bundle — the supported way to run Freehold on one machine.
+#
+#   cp .env.example .env      # set BETTER_AUTH_SECRET (openssl rand -base64 32)
+#   docker compose up -d
+#   open http://localhost:3000
+#
+# For local development (just Postgres + Redis, apps run with pnpm dev):
+#   docker compose -f docker-compose.dev.yml up -d
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: freehold
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-freehold}
+      POSTGRES_DB: freehold
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U freehold"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command:
+      [
+        "node_modules/.bin/prisma",
+        "migrate",
+        "deploy",
+        "--schema",
+        "packages/db/prisma/schema.prisma",
+      ]
+    environment:
+      DATABASE_URL: postgresql://freehold:${POSTGRES_PASSWORD:-freehold}@db:5432/freehold
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://freehold:${POSTGRES_PASSWORD:-freehold}@db:5432/freehold
+      REDIS_URL: redis://redis:6379
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env (openssl rand -base64 32)}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://freehold:${POSTGRES_PASSWORD:-freehold}@db:5432/freehold
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3001:3001"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:

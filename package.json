@@ -1,0 +1,26 @@
+{
+  "name": "freehold",
+  "private": true,
+  "version": "0.0.0",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "pnpm --filter @freehold/db generate",
+    "db:migrate": "pnpm --filter @freehold/db migrate:dev",
+    "db:deploy": "pnpm --filter @freehold/db migrate:deploy"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.4",
+    "turbo": "^2.10.5",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Freehold — Build Plan v2</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1a1f24; --muted: #5c6670; --line: #e3e7ea;
+    --accent: #0f6b4f; --accent-soft: #eaf4f0; --code-bg: #f5f7f8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14181b; --fg: #e6e9eb; --muted: #9aa4ad; --line: #2b3237;
+      --accent: #5cc2a0; --accent-soft: #1c2a25; --code-bg: #1d2327;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 3rem 1.5rem 6rem; }
+  h1 { font-size: 2.1rem; line-height: 1.2; margin: 0 0 1rem; letter-spacing: -0.02em; }
+  h2 { font-size: 1.45rem; margin: 2.8rem 0 0.8rem; padding-top: 1.2rem; border-top: 1px solid var(--line); letter-spacing: -0.01em; }
+  h3 { font-size: 1.1rem; margin: 1.8rem 0 0.6rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  em { color: var(--muted); }
+  code { background: var(--code-bg); border-radius: 4px; padding: 0.12em 0.35em; font-size: 0.88em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 1rem; overflow-x: auto; }
+  pre code { background: none; padding: 0; font-size: 0.85rem; line-height: 1.5; }
+  .tablewrap, table { max-width: 100%; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; display: block; overflow-x: auto; font-size: 0.92rem; }
+  th, td { border: 1px solid var(--line); padding: 0.5rem 0.7rem; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  blockquote { margin: 1rem 0; padding: 0.6rem 1rem; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; }
+  hr { border: none; border-top: 1px solid var(--line); margin: 2rem 0; }
+  .mermaid { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 1rem; overflow-x: auto; text-align: center; }
+  img { max-width: 100%; }
+</style>
+</head>
+<body>
+<main>
+<h1>Freehold — Build Plan v2</h1>
+<p><em>Working name <strong>Freehold</strong> (fallback: FreeholdTC), chosen 2026-07-18 — no software/TC-space collision found; <code>freehold.app</code> and <code>freeholdtc.com</code> unregistered at time of check, not yet purchased. Supersedes the v1 &quot;Keystone&quot; plan. A styled copy lives at <a href="plan.html"><code>plan.html</code></a>.</em></p>
+<p>An AI-enabled transaction management and CRM platform for real estate brokerages and transaction coordinators — one system of record for listings, contracts, contacts, and closings. <strong>Fully open source (Apache-2.0), unlimited when self-hosted. Revenue comes from Freehold Cloud (the hosted version, the primary offering) plus services and a template/integration marketplace — not from license enforcement.</strong></p>
+<p><strong>Stack at a glance:</strong> Next.js · Node/TypeScript · PostgreSQL + Prisma (row-level tenancy) · Redis + BullMQ · S3-compatible storage · Claude API · Apache-2.0 core with a commercial <code>/ee</code> folder · Revenue = cloud hosting + services + marketplace.</p>
+<h2>Contents</h2>
+<ul>
+<li><a href="#what-changed-from-v1">What changed from v1</a></li>
+<li><a href="#business-model">Business model</a></li>
+<li><a href="#system-architecture">System architecture</a></li>
+<li><a href="#tenancy-model">Tenancy model</a></li>
+<li><a href="#core-modules">Core modules</a></li>
+<li><a href="#the-ai-wedge-contract-extraction">The AI wedge: contract extraction</a></li>
+<li><a href="#credential-vault">Credential vault</a></li>
+<li><a href="#integrations--e-signature">Integrations &amp; e-signature</a></li>
+<li><a href="#template-library--marketplace">Template library &amp; marketplace</a></li>
+<li><a href="#backups-retention--compliance">Backups, retention &amp; compliance</a></li>
+<li><a href="#communications-sms--voice">Communications (SMS / voice)</a></li>
+<li><a href="#build-stages">Build stages</a></li>
+<li><a href="#repo-layout">Repo layout</a></li>
+<li><a href="#pricing-proposed-defaults">Pricing (proposed defaults)</a></li>
+<li><a href="#open-decisions">Open decisions</a></li>
+</ul>
+<h2>What changed from v1</h2>
+<p>Recorded so the reasoning isn&#39;t lost. Paul&#39;s decision 2026-07-18: <em>&quot;I realize I really want to offer this as open source and provide the cloud hosting.&quot;</em></p>
+<table>
+<thead>
+<tr>
+<th>v1 (Keystone)</th>
+<th>v2 (Freehold)</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Open-core with metered Gateway enforcing AI/voice capacity</td>
+<td><strong>Fully open source; self-host is unlimited, bring-your-own API keys</strong></td>
+<td>Enforcement machinery (trial clocks, license keys, quota gates) is dropped — cloud hosting is the honest monetization and the one every comparable OSS company earns most from</td>
+</tr>
+<tr>
+<td>Closed plugin marketplace as second revenue layer</td>
+<td><strong>Integration directory + TC template library</strong> (content marketplace with revenue share)</td>
+<td>Vendors and offerings churn constantly; integrations are the natural &quot;plugin&quot;. Checklist packs authored by veteran TCs are a marketplace whose sellers aren&#39;t developers</td>
+</tr>
+<tr>
+<td>Transaction-volume caps considered for self-host</td>
+<td><strong>No caps anywhere on self-host.</strong> Limits exist only as Cloud plan tiers</td>
+<td>A cap in Apache-2.0 code is both technically and <em>legally</em> strippable, and draws &quot;fake open source&quot; blowback at launch</td>
+</tr>
+<tr>
+<td>3 closed companion repos (gateway, registry, plugins)</td>
+<td><strong>One public monorepo with <code>/ee</code> commercial folder + one private infra repo</strong></td>
+<td>Cal.com pattern; a fraction of the maintenance surface for a small team</td>
+</tr>
+<tr>
+<td>Voice IVR as a core staged build</td>
+<td><strong>Webhook &quot;comms bridge&quot; surface; voice ships later as an attachable service</strong> (a pattern the maintainers have shipped before)</td>
+<td>Paul already built the voice stack once; core just needs a clean attachment point</td>
+</tr>
+<tr>
+<td>No hosted offering specified</td>
+<td><strong>Freehold Cloud is the primary offering</strong></td>
+<td>Non-technical TCs should never self-host; hosting is the main revenue line</td>
+</tr>
+</tbody></table>
+<p>Kept from v1: the stack, shared-DB row-level tenancy, Documenso at arm&#39;s length (AGPL isolation), Stripe + Stripe Connect, staged sequential build, opt-out telemetry disclosed in the README.</p>
+<h2>Business model</h2>
+<p>Four revenue lines, none of which require restricting the open-source version:</p>
+<ol>
+<li><strong>Freehold Cloud</strong> (primary). Managed hosting: sign up like any SaaS, no servers. Free tier: <strong>up to 10 active transactions/month and 2 users</strong>. Paid plans are per-seat monthly with usage-based AI fair-use included; seats and upgrades purchased directly in the admin panel. Hitting a free-tier limit never locks data: existing transactions stay readable and exportable; creating <em>new</em> ones requires upgrading.</li>
+<li><strong>Services.</strong> &quot;We set it up for you&quot; (managed self-host setup) and white-glove data migration from incumbent platforms.</li>
+<li><strong>Marketplace.</strong> Paid template/checklist packs with author revenue share; possibly paid premium integrations later. See <a href="#template-library--marketplace">Template library &amp; marketplace</a>.</li>
+<li><strong>Advertising / directory</strong> (later). Curated directory of real-estate law firms and vendors; sponsored placement. Low build cost, real niche value — sequenced after launch.</li>
+</ol>
+<p>The self-hosted version is genuinely unlimited and free forever. Conversion to Cloud is driven by convenience, not coercion: an <strong>admin-homescreen news/updates panel</strong> fed from a central feed carries release notes and Cloud promotions into every install (cached, fails silent, no tracking beyond the disclosed opt-out telemetry ping).</p>
+<h2>System architecture</h2>
+<pre><code class="language-mermaid">flowchart LR
+  subgraph instance[&quot;Freehold instance (Cloud tenant or self-hosted Compose bundle)&quot;]
+    FE[&quot;Next.js app&quot;]
+    BE[&quot;API — Node/TS\nPostgres + RLS, Redis&quot;]
+    OBJ[&quot;S3-compatible storage&quot;]
+    VAULT[&quot;Credential vault\n(envelope-encrypted)&quot;]
+    ESIGN[&quot;E-sign adapters\nDocumenso · DocuSign · Dotloop&quot;]
+    BRIDGE[&quot;Comms bridge\n(webhook surface: SMS, voice)&quot;]
+    FE &lt;--&gt; BE
+    BE &lt;--&gt; OBJ
+    BE &lt;--&gt; VAULT
+    BE &lt;--&gt; ESIGN
+    BE &lt;--&gt; BRIDGE
+  end
+
+  subgraph providers[&quot;Providers (tenant&#39;s own keys on self-host; ours on Cloud)&quot;]
+    CLAUDE[&quot;Claude API&quot;]
+    SMSP[&quot;Twilio / Vonage&quot;]
+    SMTP[&quot;SMTP / Resend&quot;]
+    S3[&quot;S3 / R2 / Drive / OneDrive\n(backup destinations)&quot;]
+  end
+
+  subgraph hub[&quot;Freehold Hub (central, lightweight)&quot;]
+    NEWS[&quot;News/updates feed&quot;]
+    MKT[&quot;Marketplace + template index&quot;]
+    TEL[&quot;Opt-out telemetry&quot;]
+  end
+
+  subgraph cloud[&quot;Freehold Cloud (private infra repo + /ee)&quot;]
+    BILL[&quot;Stripe billing, plans, seats&quot;]
+  end
+
+  BE --&gt; CLAUDE
+  BE --&gt; SMSP
+  BE --&gt; SMTP
+  BE --&gt; S3
+  BE -. &quot;cached feed pull&quot; .-&gt; NEWS
+  BE -. &quot;browse/install&quot; .-&gt; MKT
+  BE -. &quot;daily ping (opt-out)&quot; .-&gt; TEL
+  BE -. &quot;Cloud tenants only&quot; .-&gt; BILL
+</code></pre>
+<h3>Stack rationale</h3>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Choice</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Frontend + API</td>
+<td>Next.js (App Router), Node/TS API</td>
+<td>Runs on Vercel/Railway for Cloud <strong>and</strong> in a plain Docker container for self-host — no platform lock-in in core</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>PostgreSQL + Prisma, <code>tenant_id</code> + Postgres Row-Level Security</td>
+<td>Shared DB, revisit only for enterprise hard-isolation asks</td>
+</tr>
+<tr>
+<td>Queue/jobs</td>
+<td>Redis + BullMQ</td>
+<td>Imports, document rendering, email sends, backup jobs</td>
+</tr>
+<tr>
+<td>Object storage</td>
+<td><strong>S3-compatible interface</strong>; bundled default for self-host, S3/R2 on Cloud</td>
+<td>MinIO&#39;s community edition was hollowed out in 2025 — treat storage as a contract, not a vendor; pick bundled default (SeaweedFS is Apache-2.0) at implementation</td>
+</tr>
+<tr>
+<td>Email</td>
+<td>SMTP abstraction; Resend adapter on Cloud</td>
+<td>Resend is SaaS-only (not self-hostable), so self-host configures any SMTP</td>
+</tr>
+<tr>
+<td>Auth</td>
+<td>Self-host-friendly (email/password + OAuth), no third-party-SaaS dependency to log in</td>
+<td>Rules out Clerk/Auth0-only paths</td>
+</tr>
+<tr>
+<td>AI</td>
+<td>Claude API (Sonnet for extraction/reasoning, Haiku for high-volume parsing)</td>
+<td>Cloud: included with fair-use credits. Self-host: bring your own Anthropic key</td>
+</tr>
+<tr>
+<td>E-signature</td>
+<td>Adapter interface: Documenso (arm&#39;s-length service, AGPL-isolated) + DocuSign + Dotloop</td>
+<td>Concurrent use per client — see <a href="#integrations--e-signature">Integrations &amp; e-signature</a></td>
+</tr>
+<tr>
+<td>SMS/voice</td>
+<td>BYO Twilio or Vonage keys through the comms bridge</td>
+<td>See <a href="#communications-sms--voice">Communications</a></td>
+</tr>
+<tr>
+<td>Payments</td>
+<td>Stripe (Cloud billing) + Stripe Connect Express (tenant invoices their clients)</td>
+<td>TCs bill per transaction — invoicing their agents/brokerages is core product, not just plumbing</td>
+</tr>
+</tbody></table>
+<h3>Distribution channels</h3>
+<ol>
+<li><strong>Freehold Cloud</strong> — primary; nothing to install.</li>
+<li><strong>Docker Compose bundle</strong> — one file, one command, one machine: web + API + Postgres + Redis + storage + Documenso. The <em>only</em> supported self-host path at launch (no &quot;make a Vercel account and a Railway account and wire them together&quot;).</li>
+<li><strong>One-click templates</strong> (Railway, Coolify, Elestio) — post-launch conveniences built on the same images.</li>
+</ol>
+<h2>Tenancy model</h2>
+<p>Decided 2026-07-18 — this is a three-level model, and it reshapes the v1 schema:</p>
+<ul>
+<li><strong>Tenant</strong> — the paying customer: a broker running their book, a title company, or a solo TC business. Root of row-level isolation, owner of billing.</li>
+<li><strong>Client</strong> <em>(new first-class entity)</em> — who the tenant serves: an agent, a brokerage, a lender. Transactions belong to a client; credential-vault entries, e-sign provider preference, portal branding, and invoicing all attach at the client level. This is the entity v1 was missing.</li>
+<li><strong>User</strong> — the tenant&#39;s staff (and client-scoped portal users), with roles: owner, admin, TC, assistant, client-viewer.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Entity</th>
+<th>Key fields</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Tenant</td>
+<td>id, name, plan_tier</td>
+<td>Isolation root</td>
+</tr>
+<tr>
+<td>Client</td>
+<td>id, tenant_id, type (agent/brokerage/title/lender), branding, esign_provider_pref</td>
+<td>The tenant&#39;s customer</td>
+</tr>
+<tr>
+<td>User</td>
+<td>id, tenant_id, client_id?, role, email</td>
+<td>client_id set for portal-only users</td>
+</tr>
+<tr>
+<td>Contact</td>
+<td>id, tenant_id, owner_id, category, rating, touch_date</td>
+<td>CRM record</td>
+</tr>
+<tr>
+<td>Transaction</td>
+<td>id, tenant_id, client_id, status, property_address, close_date, custom_fields</td>
+<td>Central object</td>
+</tr>
+<tr>
+<td>Task / ActionPlan</td>
+<td>as v1</td>
+<td>Generated from templates; template packs come from the library</td>
+</tr>
+<tr>
+<td>Document</td>
+<td>id, transaction_id, storage_key, extraction_id?, signature_status</td>
+<td></td>
+</tr>
+<tr>
+<td>ContractExtraction</td>
+<td>id, document_id, fields[] (value, page_ref, confidence, confirmed_by)</td>
+<td>The wedge — see below</td>
+</tr>
+<tr>
+<td>Credential</td>
+<td>id, tenant_id, client_id, system (MLS/lender portal/…), enc_blob, audit[]</td>
+<td>See <a href="#credential-vault">Credential vault</a></td>
+</tr>
+<tr>
+<td>BackupTarget</td>
+<td>id, tenant_id, provider (gdrive/onedrive/s3/…), config</td>
+<td>Client-owned destinations</td>
+</tr>
+<tr>
+<td>Invoice / ConnectAccount</td>
+<td>tenant_id, client_id, stripe ids</td>
+<td>Tenant→client billing</td>
+</tr>
+</tbody></table>
+<h2>Core modules</h2>
+<p>Everything in the feature-parity set (drawn from the leading legacy TC platforms) is core and open source — the boundary question from v1 is gone:</p>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Module</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Transaction management (unlimited, custom fields, docs, tasks, merge-field email)</td>
+<td><code>transactions</code></td>
+<td>Core</td>
+</tr>
+<tr>
+<td>CRM (categories, ratings, ownership, touch dates, mass email)</td>
+<td><code>crm</code></td>
+<td>Core</td>
+</tr>
+<tr>
+<td>Dashboards (saved views, filters, custom columns)</td>
+<td><code>dashboards</code></td>
+<td>Core</td>
+</tr>
+<tr>
+<td>Workflows / action plans (prebuilt + custom, role auto-assignment)</td>
+<td><code>workflows</code></td>
+<td>Core</td>
+</tr>
+<tr>
+<td>Analytics &amp; reporting (pipeline, individual/team, client-facing)</td>
+<td><code>reporting</code></td>
+<td>Core</td>
+</tr>
+<tr>
+<td>Team management (roles, ownership)</td>
+<td><code>iam</code></td>
+<td>Core</td>
+</tr>
+<tr>
+<td>Client portal (branded views, selective sharing)</td>
+<td><code>portal</code></td>
+<td>Core</td>
+</tr>
+<tr>
+<td>Open REST API + webhooks + Zapier</td>
+<td><code>public-api</code></td>
+<td>Core</td>
+</tr>
+<tr>
+<td>Importers framework + per-vendor importers</td>
+<td><code>importers</code></td>
+<td>Core</td>
+</tr>
+<tr>
+<td>MLS adapter interface (RESO Web API)</td>
+<td><code>mls</code></td>
+<td>Core surface; per-MLS adapters land over time</td>
+</tr>
+<tr>
+<td>Credential vault</td>
+<td><code>vault</code></td>
+<td>Core</td>
+</tr>
+<tr>
+<td>Backup engine → client-owned storage</td>
+<td><code>backups</code></td>
+<td>Core</td>
+</tr>
+<tr>
+<td>Audit trail + retention policies</td>
+<td><code>compliance</code></td>
+<td>Core</td>
+</tr>
+<tr>
+<td>Contract extraction AI</td>
+<td><code>ai-extract</code></td>
+<td>Core code; needs an Anthropic key (yours on self-host, included on Cloud)</td>
+</tr>
+</tbody></table>
+<p>First-run experience (decided, priority from start): seed data with a fake brokerage and transactions (one-click removable), an onboarding wizard on first boot, an admin <strong>system health</strong> page (self-host support becomes &quot;send a screenshot of your health page&quot;), and painless upgrades — automatic DB migrations on update plus an &quot;update available&quot; banner.</p>
+<h2>The AI wedge: contract extraction</h2>
+<p>The single feature that makes someone switch (Paul: <em>&quot;read a real estate contract accurately and get the key dates and figures into the system without guessing&quot;</em>):</p>
+<ul>
+<li>Upload a purchase contract PDF → Claude extracts parties, property, price, deposits, and every deadline-bearing date (inspection, financing, appraisal, closing…).</li>
+<li><strong>No guessing, structurally:</strong> every extracted field carries a page/snippet citation and a confidence level; a confirmation screen shows field ↔ source side-by-side; nothing enters the record until a human confirms. Low-confidence fields are flagged, never silently filled.</li>
+<li>Confirmed dates auto-populate the transaction and instantiate the action plan&#39;s deadline tasks.</li>
+<li>Same pipeline later powers amendment diffing (&quot;what changed in this addendum?&quot;) and missing-document flags.</li>
+</ul>
+<h2>Credential vault</h2>
+<p>TCs log into third-party systems (MLS, lender portals, e-sign accounts) <em>as their clients</em>. Storing those credentials safely is a real, underserved need — and core.</p>
+<p><strong>Research result (2026-07):</strong> open-source team password management exists and is mature — <a href="https://www.passbolt.com">Passbolt</a> (AGPL, team-first per-resource sharing), <a href="https://github.com/dani-garcia/vaultwarden">Vaultwarden</a> (AGPL, Bitwarden-compatible), <a href="https://psono.com">Psono</a> (Apache-2.0, team/audit oriented). Decision: <strong>build a native vault module in core</strong> rather than embedding one of these — the workflow here is &quot;credentials attached to a client record with role-gated reveal and an audit trail&quot;, which is a CRM feature, not a general password manager. Bitwarden-format import/export keeps us compatible with what TCs may already use; Psono&#39;s Apache-2.0 code is available to borrow from if needed.</p>
+<p>Design:</p>
+<ul>
+<li>Envelope encryption: per-tenant data keys wrapping per-credential blobs; KMS-managed master key on Cloud, master-key env var on self-host. Credentials are never stored or logged in plaintext.</li>
+<li>Role-gated <strong>reveal-on-click</strong>, with every reveal written to the audit trail (who, when, which client&#39;s credential).</li>
+<li>⚠️ <strong>Compliance flag (needs Paul&#39;s sign-off):</strong> most MLS terms of service prohibit credential sharing, and automated login with stored credentials (scraping) would compound the exposure. Launch posture: the vault <em>stores and audits</em> credentials with the client&#39;s consent — it does <strong>not</strong> log in anywhere automatically. Any future automation goes through official APIs (RESO) instead. The consent language and a disclaimer belong in the ToS.</li>
+</ul>
+<h2>Integrations &amp; e-signature</h2>
+<p>Integration targets (from direct experience with the leading legacy TC platforms):</p>
+<table>
+<thead>
+<tr>
+<th>Integration</th>
+<th>Tier</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Gmail / Outlook (send + log correspondence)</td>
+<td>Core</td>
+<td>Table stakes</td>
+</tr>
+<tr>
+<td>Stripe / Stripe Connect</td>
+<td>Core</td>
+<td>Platform + tenant→client invoicing</td>
+</tr>
+<tr>
+<td>Zapier + open REST API + webhooks</td>
+<td>Core</td>
+<td>The universal escape hatch</td>
+</tr>
+<tr>
+<td>Twenty CRM two-way sync</td>
+<td>Core</td>
+<td>Twenty is <strong>AGPL-3.0</strong> — integrate via its GraphQL/REST API, never embed its code in the Apache-2.0 core. Freehold keeps its own native CRM as system of record; sync is for tenants who live in Twenty</td>
+</tr>
+<tr>
+<td>Dotloop, DocuSign</td>
+<td>Core adapters</td>
+<td>Both as e-sign/doc sources; see below</td>
+</tr>
+<tr>
+<td>SkySlope, Follow Up Boss</td>
+<td>Adapter, post-launch</td>
+<td>Import first, sync later</td>
+</tr>
+<tr>
+<td>MLS (per-MLS RESO adapters)</td>
+<td>Core surface, adapters over time</td>
+<td></td>
+</tr>
+<tr>
+<td>Podium / MessageDesk / Avochato / Aircall</td>
+<td>Guidance + webhook recipes first</td>
+<td>Native adapters only if demand shows</td>
+</tr>
+</tbody></table>
+<p><strong>E-signature: concurrent adapters.</strong> Different client brokerages mandate different systems, so provider choice is <strong>per client, not per tenant</strong>: Documenso (open source, bundled at arm&#39;s length — AGPL isolated behind its API), DocuSign, and Dotloop adapters behind one envelope interface. A tenant can run one client&#39;s closings through Dotloop and another&#39;s through Documenso simultaneously. Envelope status, signed PDFs, and audit trails land identically on the transaction regardless of provider.</p>
+<p><strong>Importers.</strong> One framework, many sources: generic CSV templates from day one, then per-vendor importers (the major legacy TC platforms) built incrementally. The sales line: <em>&quot;if your system can export, we can import it.&quot;</em> White-glove migration offered as a paid service.</p>
+<h2>Template library &amp; marketplace</h2>
+<p>The marketplace&#39;s sellers are <strong>TCs, not developers</strong> — this is the v2 reframe and likely a bigger asset than the software plugins v1 planned:</p>
+<ul>
+<li>Action-plan/checklist packs: &quot;Texas residential buy-side, 74 tasks&quot;, &quot;Florida condo listing-side&quot;, authored by veteran TCs. Free packs seed the library; paid packs carry an author <strong>revenue share</strong> (default 70/30 author/platform — confirm).</li>
+<li>Distribution through the Hub&#39;s marketplace index; one-click install into any instance (Cloud or self-hosted).</li>
+<li>Quality: launch curated (hand-reviewed packs), open submissions later. State-specific accuracy matters here — reviews and versioning from day one.</li>
+<li>The same rail later carries integration listings and the law-firm/vendor directory with sponsored placement.</li>
+</ul>
+<h2>Backups, retention &amp; compliance</h2>
+<p>Decided as a headline core feature, not a Stage-10 afterthought:</p>
+<ul>
+<li><strong>Client-owned backups:</strong> nightly encrypted export (DB + documents) pushed to storage the <em>tenant</em> controls — Google Drive, OneDrive, S3, Dropbox. Freehold Cloud is never the only copy of a brokerage&#39;s records. Restore tooling included and tested.</li>
+<li><strong>Retention policies:</strong> states require brokers to keep complete transaction files for 3–7 years; per-tenant retention windows with legal-hold override.</li>
+<li><strong>Tamper-evident audit trail:</strong> every material change (dates, money, documents, credential reveals) is append-only logged. This is a selling point in this niche — brokerages get audited.</li>
+</ul>
+<h2>Communications (SMS / voice)</h2>
+<ul>
+<li><strong>SMS:</strong> tenants bring their own Twilio or Vonage keys (both supported). Freehold ships the workflows (task reminders, reply-&quot;done&quot;-to-close, status notifications), compliance helpers (opt-in/opt-out handling, quiet hours, A2P 10DLC registration guidance), a per-tenant <strong>public compliance one-pager URL</strong> (doubles as light marketing), and an in-app disclaimer that texting clients requires their consent. Because keys are tenant-owned, A2P/TCPA registration and liability sit with the tenant — Freehold provides rails and guidance, not carriage.</li>
+<li><strong>Voice:</strong> not core at launch. The <strong>comms bridge</strong> exposes a documented webhook surface (post a structured transaction-update event with auth); a voice-agent service (Deepgram + ElevenLabs + Claude) attaches to it as a separate deployable. Paul has built this stack before; it lands as an attachable add-on once the bridge exists.</li>
+</ul>
+<h2>Build stages</h2>
+<p>Sequential; each stage is deployed and demoable before the next. Assumes a small team; ~9–10 months to GA.</p>
+<h3>Stage 00 — Foundations <em>(~2 wk)</em></h3>
+<p>Monorepo + CI; auth (email/password + OAuth); three-level tenancy (tenant → client → user) with RLS; Docker Compose dev/self-host bundle from day one; <code>/ee</code> folder + commercial license header; <strong>CLA Assistant configured before the repo goes public</strong> (Apache ICLA-style template — Paul&#39;s explicit reminder); health page skeleton.
+<strong>Exit:</strong> signup → empty dashboard on Compose and on a dev cloud deploy.</p>
+<h3>Stage 01 — Core transaction management + CRM <em>(~5 wk)</em></h3>
+<p>Transactions (custom fields, unlimited), contacts, clients, dashboards/saved views, action plans + task templates with role auto-assignment, merge-field email templates (SMTP abstraction), seed data + onboarding wizard.
+<strong>Exit:</strong> a TC runs one real transaction end-to-end.</p>
+<h3>Stage 02 — Contract extraction (the wedge) <em>(~3 wk)</em></h3>
+<p>Upload → Claude extraction → citation/confidence confirmation screen → dates instantiate deadline tasks. BYO Anthropic key path working.
+<strong>Exit:</strong> a real signed contract produces correct, page-cited dates on a transaction with zero unconfirmed fields.</p>
+<h3>Stage 03 — Documents + e-signature adapters <em>(~4 wk)</em></h3>
+<p>S3-abstraction storage + presigned flows; document templates + merge-to-PDF; envelope interface with Documenso (bundled, arm&#39;s-length) and DocuSign adapters; Dotloop adapter next; per-client provider preference.
+<strong>Exit:</strong> two clients of one tenant sign through two different providers.</p>
+<h3>Stage 04 — Portals, roles, credential vault <em>(~4 wk)</em></h3>
+<p>Branded client/buyer/seller portals with selective sharing; full RBAC; credential vault with envelope encryption, reveal audit, Bitwarden-format import/export.
+<strong>Exit:</strong> a client views their closing via portal link; a TC retrieves a stored MLS credential with the reveal audited.</p>
+<h3>Stage 05 — Freehold Cloud + billing <em>(~4 wk)</em></h3>
+<p>Multi-tenant cloud deployment, signup, Stripe subscriptions; free tier (10 active transactions/mo, 2 users) with upgrade-in-admin seat purchase; graceful at-limit behavior (read/export always; new-transaction creation gated). Hub v1: news feed + opt-out telemetry.
+<strong>Exit:</strong> a stranger can sign up, use the free tier, and upgrade with a card.</p>
+<h3>Stage 06 — Launch <em>(~3 wk, its own deliverable — decided)</em></h3>
+<p>Public demo instance with seeded brokerage; docs site + separate self-hosting guide site; honest Cloud-vs-self-host comparison page; README/screenshots as launch assets; Show HN / Product Hunt / r/selfhosted launch plan executed.
+<strong>Exit:</strong> repo public, demo live, first outside signups.</p>
+<h3>Stage 07 — Importers + integrations round 1 <em>(~4 wk)</em></h3>
+<p>Import framework + CSV templates; first vendor importers (major legacy-platform exports); Gmail/Outlook send+log; public API + webhooks + Zapier; Twenty CRM two-way sync; Stripe Connect tenant→client invoicing.
+<strong>Exit:</strong> a real book of business imported from a competitor export; a tenant invoices a client and gets paid.</p>
+<h3>Stage 08 — Template library <em>(~3 wk)</em></h3>
+<p>Marketplace index on the Hub; pack format (versioned, state-tagged); one-click install; curated launch set; paid packs + author revenue share via Stripe Connect.
+<strong>Exit:</strong> a veteran TC&#39;s paid checklist pack sells and installs on a stranger&#39;s instance.</p>
+<h3>Stage 09 — Comms round <em>(~3 wk)</em></h3>
+<p>BYO Twilio/Vonage SMS with compliance helpers + public compliance page; reply-to-close task flow; comms-bridge webhook surface documented; voice-agent add-on attaches as the reference add-on.
+<strong>Exit:</strong> an SMS &quot;done&quot; closes a task; a phoned-in update lands as a structured event via the bridge.</p>
+<h3>Stage 10 — Hardening + GA <em>(~4 wk)</em></h3>
+<p>Backup engine → client-owned destinations with restore drills; retention policies + audit trail completion; security review (third-party pen test when budget allows — see <a href="#open-decisions">Open decisions</a>); load testing; MLS adapter #1 against a RESO sandbox.
+<strong>Exit:</strong> GA — a brokerage can trust it with real contracts and PII.</p>
+<h2>Repo layout</h2>
+<p><strong>One public monorepo + one private infra repo</strong> (collapsed from v1&#39;s four):</p>
+<pre><code>freehold/                        (public, Apache-2.0 + /ee)
+├── apps/
+│   ├── web/                    Next.js frontend
+│   └── api/                    Node/TS API
+├── packages/
+│   ├── db/                     Prisma schema + migrations
+│   ├── ui/                     shared components
+│   ├── workflows/              action plan engine
+│   ├── importers/              import framework + vendor importers
+│   ├── integrations/           esign/email/SMS/CRM adapter interfaces + open adapters
+│   └── vault/                  credential vault (crypto + audit)
+├── ee/                         commercial license — Cloud billing, plan gating
+├── services/
+│   ├── esign-bridge/           Documenso API wrapper (Documenso runs as its own service)
+│   └── comms-bridge/           webhook surface for SMS/voice attach
+├── docs/
+└── LICENSE                     Apache-2.0 (root); ee/LICENSE commercial
+
+freehold-infra/                  (private)
+├── cloud/                      Cloud deploy, ops, runbooks
+└── hub/                        news feed, marketplace index, telemetry
+</code></pre>
+<h2>Pricing (proposed defaults)</h2>
+<p>All numbers are proposals to confirm before Stage 05 — calibrated against the legacy platforms (roughly $32/user/mo at the low end to $99+/mo):</p>
+<table>
+<thead>
+<tr>
+<th>Plan</th>
+<th>Price</th>
+<th>Includes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Self-hosted</td>
+<td>Free forever</td>
+<td>Everything, unlimited, BYO keys</td>
+</tr>
+<tr>
+<td>Cloud Free</td>
+<td>$0</td>
+<td>2 users, 10 active transactions/mo, AI trial credits</td>
+</tr>
+<tr>
+<td>Cloud Pro</td>
+<td>~$29/user/mo</td>
+<td>Unlimited transactions, AI fair-use included, all integrations</td>
+</tr>
+<tr>
+<td>Cloud Business</td>
+<td>~$59/user/mo</td>
+<td>Priority support, advanced reporting, sub-billing (Connect)</td>
+</tr>
+<tr>
+<td>Setup service</td>
+<td>one-time fee</td>
+<td>&quot;We set it up for you&quot; self-host install</td>
+</tr>
+<tr>
+<td>Migration service</td>
+<td>quoted</td>
+<td>White-glove import from any incumbent</td>
+</tr>
+</tbody></table>
+<p>Budget note: development + initial rollout runs on ~$100/mo (hobby-tier hosting + provider testing). Cloud infrastructure cost scales with tenants and must be repriced into the tiers at first real usage — flagged, not a blocker.</p>
+<h2>Open decisions</h2>
+<table>
+<thead>
+<tr>
+<th>Decision</th>
+<th>Default in this plan</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Name</td>
+<td>Freehold (FreeholdTC fallback)</td>
+<td>Checked clean in software/TC space; <strong>domains not yet purchased</strong> — buy before public repo</td>
+</tr>
+<tr>
+<td>Cloud free-tier at-limit behavior</td>
+<td>New-transaction creation gated; read/export always free</td>
+<td>Default — confirm</td>
+</tr>
+<tr>
+<td>Pricing numbers</td>
+<td>Table above</td>
+<td>Proposed — confirm before Stage 05</td>
+</tr>
+<tr>
+<td>Template revenue share</td>
+<td>70/30 author/platform</td>
+<td>Proposed — confirm before Stage 08</td>
+</tr>
+<tr>
+<td>Self-host bundled storage</td>
+<td>SeaweedFS (Apache-2.0) over MinIO</td>
+<td>Default — decide at Stage 03</td>
+</tr>
+<tr>
+<td>Cloud hosting platform</td>
+<td>Start Vercel + Railway hobby tiers; consolidate later if cost demands</td>
+<td>Default — revisit at Stage 05</td>
+</tr>
+<tr>
+<td>Vault automation (auto-login with stored creds)</td>
+<td><strong>Not at launch</strong> — MLS ToS risk; official APIs only</td>
+<td>Decided; revisit only with legal review</td>
+</tr>
+<tr>
+<td>Pen test</td>
+<td>Deferred until revenue covers it; structured self-review + disclosure policy at GA</td>
+<td>Default given $100/mo budget</td>
+</tr>
+<tr>
+<td>CLA</td>
+<td>CLA Assistant + Apache ICLA-style template, live before repo goes public</td>
+<td>Decided — do not forget (tracked)</td>
+</tr>
+<tr>
+<td>Telemetry</td>
+<td>Anonymized daily ping, README-disclosed, env-var opt-out</td>
+<td>Confirmed</td>
+</tr>
+</tbody></table>
+</main>
+<script>
+  // GitHub-style slug ids so the Contents links work
+  document.querySelectorAll('h1, h2, h3').forEach(function (h) {
+    if (!h.id) {
+      h.id = h.textContent.trim().toLowerCase()
+        .replace(/[^\w\s-]/g, '').replace(/\s/g, '-');
+    }
+  });
+  // Render mermaid blocks if the CDN is reachable; otherwise leave the code visible
+  var mm = document.querySelectorAll('code.language-mermaid');
+  if (mm.length) {
+    mm.forEach(function (c) {
+      var div = document.createElement('pre');
+      div.className = 'mermaid';
+      div.textContent = c.textContent;
+      c.closest('pre').replaceWith(div);
+    });
+    var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    import('https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs')
+      .then(function (m) { m.default.initialize({ startOnLoad: true, theme: dark ? 'dark' : 'neutral' }); m.default.run(); })
+      .catch(function () {});
+  }
+</script>
+</body>
+</html>
