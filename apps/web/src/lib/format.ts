@@ -32,11 +32,3 @@ export const ROLE_LABEL: Record<string, string> = {
   ATTORNEY: "Attorney",
   OTHER: "Other",
 };
-
-export const STATUS_BADGE: Record<string, string> = {
-  LISTING: "bg-sky-100 text-sky-800",
-  UNDER_CONTRACT: "bg-amber-100 text-amber-800",
-  PENDING: "bg-violet-100 text-violet-800",
-  CLOSED: "bg-emerald-100 text-emerald-800",
-  CANCELLED: "bg-stone-200 text-stone-600",
-};

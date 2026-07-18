@@ -1,9 +1,10 @@
 import { withTenant } from "@freehold/db";
 import Link from "next/link";
+import { EmptyState } from "@/components/empty-state";
 import { createTemplate } from "@/lib/actions/templates";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
-import { btn, card, input, label, td, th } from "@/lib/ui";
+import { btn, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export default async function TemplatesPage() {
       </div>
 
       <details className={card}>
-        <summary className="cursor-pointer font-medium text-brand-700">New template</summary>
+        <summary className={summaryLink}>New template</summary>
         <form action={createTemplate} className="mt-4 flex flex-wrap items-end gap-3">
           <label className={label}>
             Name *
@@ -42,7 +43,10 @@ export default async function TemplatesPage() {
 
       <section className={card}>
         {templates.length === 0 ? (
-          <p className="text-sm text-stone-500">No templates yet.</p>
+          <EmptyState
+            title="No templates yet"
+            hint="Write a letter or form once with merge fields, then generate a filled PDF from any transaction in one click."
+          />
         ) : (
           <table className="w-full">
             <thead>
@@ -54,11 +58,11 @@ export default async function TemplatesPage() {
             </thead>
             <tbody>
               {templates.map((t) => (
-                <tr key={t.id}>
+                <tr key={t.id} className={trHover}>
                   <td className={td}>
                     <Link
                       href={`/dashboard/templates/${t.id}`}
-                      className="text-brand-600 hover:underline"
+                      className="font-medium text-brand-700 hover:text-brand-600"
                     >
                       {t.name}
                     </Link>

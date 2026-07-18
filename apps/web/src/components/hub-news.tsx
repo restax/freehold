@@ -44,14 +44,16 @@ async function fetchHubFeed(): Promise<NewsItem[] | null> {
 export async function HubNews() {
   const items = (await fetchHubFeed()) ?? FALLBACK;
   return (
-    <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+    <section className="rounded-xl border border-stone-200/70 bg-white p-5 shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_8px_rgb(41_37_36/0.04)]">
       <h2 className="mb-3 font-medium">What's new in Freehold</h2>
-      <ul className="flex flex-col gap-2">
+      <ul className="flex flex-col divide-y divide-stone-100">
         {items.map((item) => (
-          <li key={item.title} className="text-sm">
+          <li key={item.title} className="py-2 text-sm first:pt-0 last:pb-0">
             <span className="font-medium">{item.title}</span>
-            {item.date && <span className="ml-2 text-xs text-stone-400">{item.date}</span>}
-            <p className="text-stone-500">{item.body}</p>
+            {item.date && (
+              <span className="ml-2 text-xs tabular-nums text-stone-400">{item.date}</span>
+            )}
+            <p className="max-w-prose leading-relaxed text-stone-500">{item.body}</p>
           </li>
         ))}
       </ul>

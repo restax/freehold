@@ -1,9 +1,16 @@
 import { withTenant } from "@freehold/db";
+import { Badge, type BadgeTone } from "@/components/badges";
+import { EmptyState } from "@/components/empty-state";
 import { RevealCredential } from "@/components/reveal-credential";
 import { createCredential, deleteCredential } from "@/lib/actions/vault";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
-import { btn, card, input, label, td, th } from "@/lib/ui";
+import { btn, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
+
+const LOG_TONE: Record<string, BadgeTone> = {
+  REVEALED: "progress",
+  DELETED: "danger",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +48,7 @@ export default async function VaultPage() {
       )}
 
       <details className={card}>
-        <summary className="cursor-pointer font-medium text-brand-700">Add credential</summary>
+        <summary className={summaryLink}>Add credential</summary>
         <form action={createCredential} className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <label className={label}>
             System *
@@ -84,7 +91,10 @@ export default async function VaultPage() {
 
       <section className={card}>
         {credentials.length === 0 ? (
-          <p className="text-sm text-stone-500">No credentials stored.</p>
+          <EmptyState
+            title="The vault is empty"
+            hint="Store a client's MLS or lender-portal login and it's encrypted before it touches the database — nobody sees it again without an audited reveal."
+          />
         ) : (
           <table className="w-full">
             <thead>
@@ -99,7 +109,7 @@ export default async function VaultPage() {
             </thead>
             <tbody>
               {credentials.map((c) => (
-                <tr key={c.id}>
+                <tr key={c.id} className={trHover}>
                   <td className={`${td} font-medium`}>{c.system}</td>
                   <td className={td}>{c.client?.name ?? "—"}</td>
                   <td className={td}>{c.username}</td>
@@ -147,17 +157,9 @@ export default async function VaultPage() {
                 className="flex flex-wrap gap-2 border-b border-stone-100 py-1.5 last:border-0"
               >
                 <span className="text-stone-400">{fmtDate(entry.createdAt)}</span>
-                <span
-                  className={`rounded-full px-2 text-xs leading-5 ${
-                    entry.action === "REVEALED"
-                      ? "bg-amber-100 text-amber-800"
-                      : entry.action === "DELETED"
-                        ? "bg-red-100 text-red-700"
-                        : "bg-stone-100 text-stone-600"
-                  }`}
-                >
+                <Badge tone={LOG_TONE[entry.action] ?? "neutral"}>
                   {entry.action.toLowerCase()}
-                </span>
+                </Badge>
                 <span>{entry.detail}</span>
               </li>
             ))}

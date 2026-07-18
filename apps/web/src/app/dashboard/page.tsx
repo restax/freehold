@@ -1,10 +1,12 @@
 import { TaskStatus, TransactionStatus, withTenant } from "@freehold/db";
 import Link from "next/link";
+import { StatusBadge, statusDot } from "@/components/badges";
+import { EmptyState } from "@/components/empty-state";
 import { HubNews } from "@/components/hub-news";
 import { toggleTask } from "@/lib/actions/tasks";
-import { fmtDate, STATUS_BADGE, STATUS_LABEL } from "@/lib/format";
+import { fmtDate, STATUS_LABEL } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
-import { card, td, th } from "@/lib/ui";
+import { card, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -42,11 +44,27 @@ export default async function DashboardPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Dashboard</h1>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {PIPELINE.map((s) => (
-          <Link key={s} href={`/dashboard/transactions?status=${s}`} className={card}>
-            <div className="text-3xl font-semibold">{countFor(s)}</div>
-            <div className="mt-1 text-sm text-stone-500">{STATUS_LABEL[s]}</div>
+      <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-stone-200/70 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_8px_rgb(41_37_36/0.04)] sm:grid-cols-4">
+        {PIPELINE.map((s, i) => (
+          <Link
+            key={s}
+            href={`/dashboard/transactions?status=${s}`}
+            className={`flex flex-col gap-1 border-stone-100 px-5 pb-4 pt-5 transition-colors hover:bg-stone-50 ${
+              [
+                "border-b border-r sm:border-b-0",
+                "border-b sm:border-b-0 sm:border-r",
+                "border-r",
+                "",
+              ][i]
+            }`}
+          >
+            <span className="font-serif text-3xl font-semibold tabular-nums leading-none">
+              {countFor(s)}
+            </span>
+            <span className="mt-1 flex items-center gap-1.5 text-sm text-stone-500">
+              <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${statusDot(s)}`} />
+              {STATUS_LABEL[s]}
+            </span>
           </Link>
         ))}
       </div>
@@ -97,13 +115,17 @@ export default async function DashboardPage() {
       <section className={card}>
         <h2 className="mb-3 font-medium">Recent transactions</h2>
         {recent.length === 0 ? (
-          <p className="text-sm text-stone-500">
-            No transactions yet —{" "}
-            <Link href="/dashboard/transactions" className="text-brand-600 hover:underline">
-              create your first
+          <EmptyState
+            title="No transactions yet"
+            hint="Create your first transaction and Freehold will track its dates, tasks, people, and paperwork in one place."
+          >
+            <Link
+              href="/dashboard/transactions"
+              className="text-sm font-medium text-brand-700 hover:text-brand-600"
+            >
+              Create a transaction →
             </Link>
-            .
-          </p>
+          </EmptyState>
         ) : (
           <table className="w-full">
             <thead>
@@ -116,20 +138,18 @@ export default async function DashboardPage() {
             </thead>
             <tbody>
               {recent.map((t) => (
-                <tr key={t.id}>
+                <tr key={t.id} className={trHover}>
                   <td className={td}>
                     <Link
                       href={`/dashboard/transactions/${t.id}`}
-                      className="text-brand-600 hover:underline"
+                      className="font-medium text-brand-700 hover:text-brand-600"
                     >
                       {t.propertyAddress}
                     </Link>
                   </td>
                   <td className={td}>{t.client?.name ?? "—"}</td>
                   <td className={td}>
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_BADGE[t.status]}`}>
-                      {STATUS_LABEL[t.status]}
-                    </span>
+                    <StatusBadge status={t.status} />
                   </td>
                   <td className={td}>{fmtDate(t.closeDate)}</td>
                 </tr>

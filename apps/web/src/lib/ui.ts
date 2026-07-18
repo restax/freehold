@@ -11,4 +11,7 @@ export const card =
 export const th =
   "border-b border-stone-200 px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-stone-500";
 export const td = "border-b border-stone-100 px-3 py-2 text-sm tabular-nums";
+export const trHover = "transition-colors hover:bg-stone-50";
 export const label = "flex flex-col gap-1 text-sm font-medium text-stone-700";
+export const summaryLink =
+  "cursor-pointer select-none font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600";

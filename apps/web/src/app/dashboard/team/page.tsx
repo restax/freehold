@@ -4,7 +4,7 @@ import { cancelInvitation, inviteMember, removeMember, updateMemberRole } from "
 import { fmtDate } from "@/lib/format";
 import { seatState } from "@/lib/plans";
 import { requireAdminTenant } from "@/lib/tenant";
-import { btn, btnGhost, card, input, label, td, th } from "@/lib/ui";
+import { btn, btnGhost, card, input, label, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +59,7 @@ export default async function TeamPage() {
           </thead>
           <tbody>
             {members.map((m) => (
-              <tr key={m.id}>
+              <tr key={m.id} className={trHover}>
                 <td className={`${td} font-medium`}>
                   {m.user.name}
                   {m.userId === userId && (

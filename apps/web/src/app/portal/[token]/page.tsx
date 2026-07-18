@@ -1,12 +1,6 @@
 import { notFound } from "next/navigation";
-import {
-  fmtDate,
-  fmtMoney,
-  ROLE_LABEL,
-  SIDE_LABEL,
-  STATUS_BADGE,
-  STATUS_LABEL,
-} from "@/lib/format";
+import { StatusBadge } from "@/components/badges";
+import { fmtDate, fmtMoney, ROLE_LABEL, SIDE_LABEL } from "@/lib/format";
 import { resolvePortal } from "@/lib/portal";
 
 export const dynamic = "force-dynamic";
@@ -21,44 +15,59 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-5 px-4 py-8">
-      <header>
-        <p className="text-sm font-medium text-brand-700">{tenantName}</p>
-        <h1 className="text-2xl font-semibold tracking-tight">{txn.propertyAddress}</h1>
-        <p className="text-sm text-stone-500">
+      <header className="pt-4">
+        <p className="text-xs font-medium uppercase tracking-widest text-brand-700">{tenantName}</p>
+        <h1 className="mt-1 text-balance text-3xl font-semibold tracking-tight">
+          {txn.propertyAddress}
+        </h1>
+        <p className="mt-1 text-sm text-stone-500">
           {[txn.city, txn.state, txn.zip].filter(Boolean).join(", ")}
         </p>
       </header>
 
-      <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
-        <div className="grid grid-cols-2 gap-3 text-sm">
+      <section className="rounded-xl border border-stone-200/70 bg-white p-5 shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_8px_rgb(41_37_36/0.04)]">
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-4 text-sm">
           <div>
-            <div className="text-stone-500">Status</div>
-            <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_BADGE[txn.status]}`}>
-              {STATUS_LABEL[txn.status]}
-            </span>
+            <dt className="mb-1 text-xs uppercase tracking-wide text-stone-400">Status</dt>
+            <dd>
+              <StatusBadge status={txn.status} />
+            </dd>
           </div>
           <div>
-            <div className="text-stone-500">Side</div>
-            {SIDE_LABEL[txn.side]}
+            <dt className="mb-1 text-xs uppercase tracking-wide text-stone-400">Side</dt>
+            <dd className="font-medium">{SIDE_LABEL[txn.side]}</dd>
           </div>
           <div>
-            <div className="text-stone-500">Contract date</div>
-            {fmtDate(txn.contractDate)}
+            <dt className="mb-1 text-xs uppercase tracking-wide text-stone-400">Contract date</dt>
+            <dd className="font-medium tabular-nums">{fmtDate(txn.contractDate)}</dd>
           </div>
           <div>
-            <div className="text-stone-500">Closing date</div>
-            {fmtDate(txn.closeDate)}
+            <dt className="mb-1 text-xs uppercase tracking-wide text-stone-400">Closing date</dt>
+            <dd className="font-medium tabular-nums">{fmtDate(txn.closeDate)}</dd>
           </div>
           <div>
-            <div className="text-stone-500">Purchase price</div>
-            {fmtMoney(txn.purchasePrice)}
+            <dt className="mb-1 text-xs uppercase tracking-wide text-stone-400">Purchase price</dt>
+            <dd className="font-medium tabular-nums">{fmtMoney(txn.purchasePrice)}</dd>
           </div>
-        </div>
+        </dl>
       </section>
 
       {link.showTasks && Array.isArray(txn.tasks) && txn.tasks.length > 0 && (
-        <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-3 font-medium">Progress</h2>
+        <section className="rounded-xl border border-stone-200/70 bg-white p-5 shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_8px_rgb(41_37_36/0.04)]">
+          <div className="mb-3 flex items-baseline justify-between">
+            <h2 className="font-medium">Progress</h2>
+            <span className="text-xs tabular-nums text-stone-400">
+              {txn.tasks.filter((t) => t.status === "DONE").length} of {txn.tasks.length} steps done
+            </span>
+          </div>
+          <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-stone-100">
+            <div
+              className="h-full rounded-full bg-brand-600"
+              style={{
+                width: `${Math.round((txn.tasks.filter((t) => t.status === "DONE").length / txn.tasks.length) * 100)}%`,
+              }}
+            />
+          </div>
           <ul className="flex flex-col">
             {txn.tasks.map((t) => {
               const done = t.status === "DONE";
@@ -91,7 +100,7 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
       )}
 
       {link.showParties && Array.isArray(txn.parties) && txn.parties.length > 0 && (
-        <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+        <section className="rounded-xl border border-stone-200/70 bg-white p-5 shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_8px_rgb(41_37_36/0.04)]">
           <h2 className="mb-3 font-medium">Who's involved</h2>
           <ul className="flex flex-col gap-1 text-sm">
             {txn.parties.map((p) => (
@@ -106,7 +115,7 @@ export default async function PortalPage({ params }: { params: Promise<{ token: 
       )}
 
       {link.showDocuments && Array.isArray(txn.documents) && txn.documents.length > 0 && (
-        <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+        <section className="rounded-xl border border-stone-200/70 bg-white p-5 shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_8px_rgb(41_37_36/0.04)]">
           <h2 className="mb-3 font-medium">Documents</h2>
           <ul className="flex flex-col gap-1 text-sm">
             {txn.documents.map((d) => (

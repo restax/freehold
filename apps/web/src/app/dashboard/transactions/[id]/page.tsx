@@ -1,6 +1,7 @@
 import { PartyRole, TransactionSide, TransactionStatus, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Badge, EnvelopeBadge, ExtractionBadge } from "@/components/badges";
 import { deleteDocument, uploadDocument } from "@/lib/actions/documents";
 import {
   deleteEnvelope,
@@ -417,7 +418,7 @@ export default async function TransactionDetailPage({
                   </button>
                 </form>
                 <details className="w-full">
-                  <summary className="cursor-pointer text-xs text-brand-600">
+                  <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
                     Send for signature
                   </summary>
                   <form
@@ -495,19 +496,7 @@ export default async function TransactionDetailPage({
                     key={env.id}
                     className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
                   >
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs ${
-                        env.status === "COMPLETED"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : env.status === "SENT"
-                            ? "bg-amber-100 text-amber-800"
-                            : env.status === "ERROR" || env.status === "DECLINED"
-                              ? "bg-red-100 text-red-700"
-                              : "bg-stone-200 text-stone-600"
-                      }`}
-                    >
-                      {env.status.toLowerCase()}
-                    </span>
+                    <EnvelopeBadge status={env.status} />
                     <span className="font-medium">{env.document.filename}</span>
                     <span className="text-stone-500">
                       {env.provider.toLowerCase()} · {signers.map((s) => s.name).join(", ")}
@@ -553,19 +542,7 @@ export default async function TransactionDetailPage({
                   key={ex.id}
                   className="flex items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
                 >
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs ${
-                      ex.status === "READY"
-                        ? "bg-amber-100 text-amber-800"
-                        : ex.status === "APPLIED"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : ex.status === "FAILED"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-stone-200 text-stone-600"
-                    }`}
-                  >
-                    {ex.status === "READY" ? "Needs review" : ex.status.toLowerCase()}
-                  </span>
+                  <ExtractionBadge status={ex.status} />
                   <span className="text-stone-500">
                     {fmtDate(ex.createdAt)} · {ex._count.fields} fields · {ex.model}
                   </span>
@@ -607,9 +584,7 @@ export default async function TransactionDetailPage({
                         .join(", ") || "summary only"}
                     </span>
                     {pl.revokedAt ? (
-                      <span className="rounded-full bg-stone-200 px-2 py-0.5 text-xs text-stone-600">
-                        revoked
-                      </span>
+                      <Badge tone="neutral">revoked</Badge>
                     ) : (
                       <span className="text-xs text-stone-400">
                         {pl.lastAccessedAt

@@ -1,8 +1,9 @@
 import { withTenant } from "@freehold/db";
+import { EmptyState } from "@/components/empty-state";
 import { createContact, deleteContact } from "@/lib/actions/contacts";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
-import { btn, card, input, label, td, th } from "@/lib/ui";
+import { btn, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export default async function ContactsPage() {
       <h1 className="text-xl font-semibold">Contacts</h1>
 
       <details className={card}>
-        <summary className="cursor-pointer font-medium text-brand-700">New contact</summary>
+        <summary className={summaryLink}>New contact</summary>
         <form action={createContact} className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <label className={label}>
             Name *
@@ -76,7 +77,10 @@ export default async function ContactsPage() {
 
       <section className={card}>
         {contacts.length === 0 ? (
-          <p className="text-sm text-stone-500">No contacts yet.</p>
+          <EmptyState
+            title="No contacts yet"
+            hint='Add the people you work with — agents, lenders, title reps, inspectors — then attach them to transactions as parties. Open "New contact" above to start.'
+          />
         ) : (
           <table className="w-full">
             <thead>
@@ -92,7 +96,7 @@ export default async function ContactsPage() {
             </thead>
             <tbody>
               {contacts.map((c) => (
-                <tr key={c.id}>
+                <tr key={c.id} className={trHover}>
                   <td className={`${td} font-medium`}>{c.name}</td>
                   <td className={td}>{c.category}</td>
                   <td className={td}>{c.email ?? "—"}</td>

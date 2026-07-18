@@ -1,7 +1,8 @@
 import { ClientType, EsignProvider, withTenant } from "@freehold/db";
+import { EmptyState } from "@/components/empty-state";
 import { createClient, deleteClient, updateClientEsign } from "@/lib/actions/clients";
 import { requireTenant } from "@/lib/tenant";
-import { btn, btnGhost, card, input, label, td, th } from "@/lib/ui";
+import { btn, btnGhost, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,7 @@ export default async function ClientsPage() {
       </div>
 
       <details className={card}>
-        <summary className="cursor-pointer font-medium text-brand-700">New client</summary>
+        <summary className={summaryLink}>New client</summary>
         <form action={createClient} className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <label className={label}>
             Name *
@@ -83,7 +84,10 @@ export default async function ClientsPage() {
 
       <section className={card}>
         {clients.length === 0 ? (
-          <p className="text-sm text-stone-500">No clients yet.</p>
+          <EmptyState
+            title="No clients yet"
+            hint='Clients are who you coordinate for — an agent, a brokerage, a title company. Each transaction belongs to one, and their preferences (like e-sign provider) follow automatically. Open "New client" above to add your first.'
+          />
         ) : (
           <table className="w-full">
             <thead>
@@ -99,7 +103,7 @@ export default async function ClientsPage() {
             </thead>
             <tbody>
               {clients.map((c) => (
-                <tr key={c.id}>
+                <tr key={c.id} className={trHover}>
                   <td className={`${td} font-medium`}>{c.name}</td>
                   <td className={td}>{TYPE_LABEL[c.type]}</td>
                   <td className={td}>{c.email ?? "—"}</td>

@@ -1,8 +1,9 @@
 import { withTenant } from "@freehold/db";
 import Link from "next/link";
+import { EmptyState } from "@/components/empty-state";
 import { createPlan } from "@/lib/actions/action-plans";
 import { requireTenant } from "@/lib/tenant";
-import { btn, card, input, label, td, th } from "@/lib/ui";
+import { btn, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export default async function ActionPlansPage() {
       </div>
 
       <details className={card}>
-        <summary className="cursor-pointer font-medium text-brand-700">New action plan</summary>
+        <summary className={summaryLink}>New action plan</summary>
         <form action={createPlan} className="mt-4 flex flex-wrap items-end gap-3">
           <label className={label}>
             Name *
@@ -44,7 +45,10 @@ export default async function ActionPlansPage() {
 
       <section className={card}>
         {plans.length === 0 ? (
-          <p className="text-sm text-stone-500">No action plans yet.</p>
+          <EmptyState
+            title="No action plans yet"
+            hint="Build your closing checklist once — each step anchored to the contract or close date — and apply it to every new deal for instant deadlines."
+          />
         ) : (
           <table className="w-full">
             <thead>
@@ -56,11 +60,11 @@ export default async function ActionPlansPage() {
             </thead>
             <tbody>
               {plans.map((p) => (
-                <tr key={p.id}>
+                <tr key={p.id} className={trHover}>
                   <td className={td}>
                     <Link
                       href={`/dashboard/action-plans/${p.id}`}
-                      className="text-brand-600 hover:underline"
+                      className="font-medium text-brand-700 hover:text-brand-600"
                     >
                       {p.name}
                     </Link>

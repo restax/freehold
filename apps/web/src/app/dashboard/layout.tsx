@@ -25,6 +25,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="flex min-h-screen">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:shadow-md"
+      >
+        Skip to content
+      </a>
       <aside className="flex w-56 flex-col border-r border-stone-200 bg-white px-4 py-6">
         <div className="mb-1 font-serif text-2xl font-semibold tracking-tight text-brand-700">
           Freehold
@@ -36,7 +42,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <SignOutButton />
         </div>
       </aside>
-      <main className="flex-1 px-8 py-8">
+      <main id="main" className="flex-1 px-8 py-8">
         <div className="mx-auto max-w-6xl">{children}</div>
       </main>
     </div>

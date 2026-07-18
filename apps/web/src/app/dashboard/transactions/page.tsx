@@ -1,10 +1,12 @@
 import { TransactionSide, TransactionStatus, withTenant } from "@freehold/db";
 import Link from "next/link";
+import { StatusBadge } from "@/components/badges";
+import { EmptyState } from "@/components/empty-state";
 import { createTransaction } from "@/lib/actions/transactions";
-import { fmtDate, fmtMoney, SIDE_LABEL, STATUS_BADGE, STATUS_LABEL } from "@/lib/format";
+import { fmtDate, fmtMoney, SIDE_LABEL, STATUS_LABEL } from "@/lib/format";
 import { transactionLimit } from "@/lib/plans";
 import { requireTenant } from "@/lib/tenant";
-import { btn, btnGhost, card, input, label, td, th } from "@/lib/ui";
+import { btn, btnGhost, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -75,7 +77,7 @@ export default async function TransactionsPage({
       )}
 
       <details className={card}>
-        <summary className="cursor-pointer font-medium text-brand-700">New transaction</summary>
+        <summary className={summaryLink}>New transaction</summary>
         <form action={createTransaction} className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <label className={`${label} sm:col-span-2`}>
             Property address *
@@ -151,9 +153,24 @@ export default async function TransactionsPage({
 
       <section className={card}>
         {transactions.length === 0 ? (
-          <p className="text-sm text-stone-500">
-            No transactions{statusFilter ? " with this status" : ""} yet.
-          </p>
+          statusFilter ? (
+            <EmptyState
+              title={`No ${STATUS_LABEL[statusFilter].toLowerCase()} transactions`}
+              hint="Clear the filter to see everything, or move a deal into this stage from its detail page."
+            >
+              <Link
+                href="/dashboard/transactions"
+                className="text-sm font-medium text-brand-700 hover:text-brand-600"
+              >
+                Show all transactions →
+              </Link>
+            </EmptyState>
+          ) : (
+            <EmptyState
+              title="Your pipeline is empty"
+              hint='Open "New transaction" above to add your first deal — attach the people, apply an action plan, and every deadline computes itself.'
+            />
+          )
         ) : (
           <table className="w-full">
             <thead>
@@ -169,20 +186,18 @@ export default async function TransactionsPage({
             </thead>
             <tbody>
               {transactions.map((t) => (
-                <tr key={t.id}>
+                <tr key={t.id} className={trHover}>
                   <td className={td}>
                     <Link
                       href={`/dashboard/transactions/${t.id}`}
-                      className="text-brand-600 hover:underline"
+                      className="font-medium text-brand-700 hover:text-brand-600"
                     >
                       {t.propertyAddress}
                     </Link>
                   </td>
                   <td className={td}>{t.client?.name ?? "—"}</td>
                   <td className={td}>
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_BADGE[t.status]}`}>
-                      {STATUS_LABEL[t.status]}
-                    </span>
+                    <StatusBadge status={t.status} />
                   </td>
                   <td className={td}>{SIDE_LABEL[t.side]}</td>
                   <td className={td}>{fmtDate(t.closeDate)}</td>

@@ -1,6 +1,7 @@
 import { withTenant } from "@freehold/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Badge, type BadgeTone } from "@/components/badges";
 import { applyExtraction, discardExtraction } from "@/lib/actions/extractions";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
@@ -8,10 +9,10 @@ import { btn, btnDanger, card } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
-const CONF_BADGE: Record<string, string> = {
-  HIGH: "bg-emerald-100 text-emerald-800",
-  MEDIUM: "bg-amber-100 text-amber-800",
-  LOW: "bg-red-100 text-red-700",
+const CONF_TONE: Record<string, BadgeTone> = {
+  HIGH: "success",
+  MEDIUM: "progress",
+  LOW: "danger",
 };
 
 const TARGET_LABEL: Record<string, string> = {
@@ -119,18 +120,16 @@ export default async function ExtractionReviewPage({
                         />
                       ) : (
                         <span
-                          className={`text-xs ${f.applied ? "text-emerald-600" : "text-stone-300"}`}
+                          className={`text-xs ${f.applied ? "text-brand-600" : "text-stone-300"}`}
                         >
                           {f.applied ? "✓ applied" : "skipped"}
                         </span>
                       )}
                       <span className="font-medium">{f.label}</span>
                       <span className="text-stone-700">{f.value}</span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs ${CONF_BADGE[f.confidence]}`}
-                      >
+                      <Badge tone={CONF_TONE[f.confidence] ?? "neutral"}>
                         {f.confidence.toLowerCase()}
-                      </span>
+                      </Badge>
                       <span className="ml-auto text-xs text-stone-400">
                         {TARGET_LABEL[f.target]}
                         {f.page ? ` · p. ${f.page}` : ""}

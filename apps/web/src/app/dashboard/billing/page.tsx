@@ -82,13 +82,23 @@ export default async function BillingPage({
         isAdmin && (
           <div className="grid gap-4 sm:grid-cols-2">
             {(["PRO", "BUSINESS"] as const).map((tier) => (
-              <section key={tier} className={card}>
-                <h3 className="font-medium">{PLAN_INFO[tier].label}</h3>
-                <p className="mb-1 text-2xl font-semibold">
+              <section
+                key={tier}
+                className={`${card} flex flex-col ${tier === "PRO" ? "border-brand-600/30 ring-1 ring-brand-600/15" : ""}`}
+              >
+                <div className="flex items-baseline justify-between">
+                  <h3 className="font-medium">{PLAN_INFO[tier].label}</h3>
+                  {tier === "PRO" && (
+                    <span className="text-xs font-medium uppercase tracking-wide text-brand-700">
+                      Most popular
+                    </span>
+                  )}
+                </div>
+                <p className="mb-1 font-serif text-3xl font-semibold tabular-nums">
                   ${PLAN_INFO[tier].priceMonthly}
-                  <span className="text-sm font-normal text-stone-500">/user/mo</span>
+                  <span className="font-sans text-sm font-normal text-stone-500">/user/mo</span>
                 </p>
-                <ul className="mb-3 flex flex-col gap-0.5 text-sm text-stone-600">
+                <ul className="mb-3 flex min-h-16 flex-col gap-0.5 text-sm text-stone-600">
                   <li>Unlimited transactions</li>
                   <li>AI contract extraction included</li>
                   {tier === "BUSINESS" ? (
@@ -100,7 +110,7 @@ export default async function BillingPage({
                     <li>All integrations</li>
                   )}
                 </ul>
-                <form action={startUpgrade} className="flex items-end gap-2">
+                <form action={startUpgrade} className="mt-auto flex items-end gap-2">
                   <input type="hidden" name="tier" value={tier} />
                   <label className={label}>
                     Seats
