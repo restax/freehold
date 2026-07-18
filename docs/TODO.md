@@ -15,9 +15,9 @@ The single list of everything open across stages. Items move to ~~struck~~ with 
 
 ## Marketing honesty items (site currently promises these)
 
-- [ ] Free-tier "AI extraction trial credits" — either implement credit limits or change the pricing page line (Free currently gets full AI)
-- [ ] Partner account / fleet dashboard / consolidated invoicing — pricing page states it as current; build or soften before launch
-- [ ] "White-glove onboarding" + "first access to reporting" on Business tier — define what these actually are
+- [x] Free-tier "AI extraction trial credits" — implemented *(2026-07-19)*: 10 lifetime trial extractions on Cloud Free (durable `ai_extractions_used` counter on organization; consumed only on success; enforced in the action, surfaced on the Extract button and billing page; paid tiers fair-use unmetered; demo reset refreshes credits; pricing page says "10 AI contract extractions to try it")
+- [x] Partner account / fleet dashboard / consolidated invoicing — pricing page reworded to honest "works today vs in development" framing with partners@ CTA *(2026-07-19)*
+- [x] Business tier definitions *(2026-07-19)* — "White-glove onboarding" → "Onboarding done with you: send your exports, we set up your workspace on a call"; "first access to reporting and invoicing" → "Early access to new features, reporting first" (invoicing is live, now listed on Pro)
 
 ## Product backlog (pre-launch polish)
 
@@ -29,7 +29,10 @@ The single list of everything open across stages. Items move to ~~struck~~ with 
 - [ ] Custom 404 exists; add error.tsx boundary pages
 - [ ] Telemetry ping implementation (currently a stub; needs Hub endpoint)
 - [ ] Bitwarden import/export for the vault
-- [ ] Portal logo branding upload
+- [ ] Portal logo branding upload (subdomain entry pages make this visible now)
+- [x] Tenant subdomains *(2026-07-19)* — `acme.freeholdtc.dev` serves a branded client-portal entry page (middleware host routing; portal links display with the tenant subdomain; app paths redirect to apex; wildcard domain + cert on Vercel; works for self-hosters with their own wildcard DNS)
+- [ ] Per-tenant custom portal domains (portal.acmerealty.com, CNAME + cert via Vercel API) — natural Business-tier feature; registrar domain-forwarding works today as the manual version
+- [ ] Separate client-facing domain (e.g. freehold.estate) if Paul registers one — middleware already keys off one env var
 
 ## Stage 07 — Importers + integrations round 1 (in progress)
 

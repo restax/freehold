@@ -93,8 +93,10 @@ export async function resetDemoData() {
   await prisma.portalLink.deleteMany({ where: { tenantId: org.id } });
   await prisma.apiKey.deleteMany({ where: { tenantId: org.id } });
 
-  // Log out any lingering visitor sessions so each day starts clean.
+  // Log out any lingering visitor sessions so each day starts clean, and
+  // refresh the free-tier AI trial credits visitors burn through.
   await prisma.session.deleteMany({ where: { userId: visitor.id } });
+  await prisma.organization.update({ where: { id: org.id }, data: { aiExtractionsUsed: 0 } });
 
   await seedTenantData(org.id, visitor.id);
 }

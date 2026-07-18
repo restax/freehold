@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { flattenExtraction, transactionUpdateFor } from "@/lib/ai/contract-schema";
 import { EXTRACTION_MODEL, extractContract } from "@/lib/ai/extract";
 import { str } from "@/lib/forms";
+import { extractionCreditState, recordExtractionUse } from "@/lib/plans";
 import { getObjectBytes } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
 
@@ -19,6 +20,11 @@ export async function runExtraction(formData: FormData) {
   const { tenantId } = await requireTenant();
   const documentId = str(formData, "documentId");
   if (!documentId) return;
+
+  // Free-tier trial credits (Cloud only). The page hides the button when
+  // exhausted; this is the enforcement either way.
+  const credits = await extractionCreditState(tenantId);
+  if (credits.limited) return;
 
   const created = await withTenant(tenantId, async (tx) => {
     const doc = await tx.document.findUniqueOrThrow({
@@ -62,6 +68,8 @@ export async function runExtraction(formData: FormData) {
         data: { status: ExtractionStatus.READY },
       });
     });
+    // Credits are consumed only on success — a failed run costs nothing.
+    if (credits.limit != null) await recordExtractionUse(tenantId);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await withTenant(tenantId, (tx) =>

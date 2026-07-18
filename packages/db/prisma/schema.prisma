@@ -102,6 +102,7 @@ model Organization {
   metadata             String?
   planTier             PlanTier             @default(FREE) @map("plan_tier")
   seatLimit            Int                  @default(2) @map("seat_limit")
+  aiExtractionsUsed    Int                  @default(0) @map("ai_extractions_used")
   stripeCustomerId     String?              @map("stripe_customer_id")
   stripeSubscriptionId String?              @map("stripe_subscription_id")
   createdAt            DateTime             @default(now())

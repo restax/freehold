@@ -1,6 +1,13 @@
 import { billingEnabled } from "@freehold/ee-billing";
 import { openBillingPortal, startUpgrade } from "@/lib/actions/billing";
-import { countActiveTransactions, getTenantPlan, isCloud, PLAN_INFO, seatState } from "@/lib/plans";
+import {
+  countActiveTransactions,
+  extractionCreditState,
+  getTenantPlan,
+  isCloud,
+  PLAN_INFO,
+  seatState,
+} from "@/lib/plans";
 import { requireAdminTenant } from "@/lib/tenant";
 import { btn, btnGhost, card } from "@/lib/ui";
 
@@ -13,10 +20,11 @@ export default async function BillingPage({
 }) {
   const { tenantId, isAdmin } = await requireAdminTenant();
   const { upgraded } = await searchParams;
-  const [plan, seats, activeTxns] = await Promise.all([
+  const [plan, seats, activeTxns, aiCredits] = await Promise.all([
     getTenantPlan(tenantId),
     seatState(tenantId),
     countActiveTransactions(tenantId),
+    extractionCreditState(tenantId),
   ]);
   const info = PLAN_INFO[plan.tier];
 
@@ -62,6 +70,12 @@ export default async function BillingPage({
             {plan.activeTransactionLimit != null
               ? ` of ${plan.activeTransactionLimit}`
               : " (unlimited)"}
+          </li>
+          <li>
+            AI extractions:{" "}
+            {aiCredits.limit != null
+              ? `${aiCredits.used} of ${aiCredits.limit} trial credits used`
+              : "included (fair use)"}
           </li>
         </ul>
         {plan.stripeCustomerId && isAdmin && billingEnabled() && (

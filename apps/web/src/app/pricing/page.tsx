@@ -25,7 +25,7 @@ const TIERS: Array<{
     features: [
       "2 users",
       "10 active transactions a month",
-      "AI extraction trial credits",
+      "10 AI contract extractions to try it",
       "Client portals and e-sign",
       "Data always readable and exportable",
     ],
@@ -44,6 +44,7 @@ const TIERS: Array<{
       "Merge-field document templates",
       "Credential vault with reveal audit",
       "Branded client portals, per-client e-sign",
+      "Client invoicing via Stripe",
     ],
     cta: "Start with Pro",
     featured: true,
@@ -59,8 +60,8 @@ const TIERS: Array<{
       "200 active transactions a month",
       "Up to 200 active clients",
       "Priority, real-estate-focused support",
-      "White-glove onboarding",
-      "First access to reporting and invoicing",
+      "Onboarding done with you: send your exports, we set up your workspace on a call",
+      "Early access to new features, reporting first",
     ],
     cta: "Start with Business",
   },
@@ -171,19 +172,27 @@ export default function PricingPage() {
               IT providers and agencies
             </h2>
             <p className="mt-4 max-w-md leading-relaxed text-stone-600">
-              A free partner account lets you provision and manage any number of Freehold instances
-              for the brokerages you serve. Each instance is billed at standard plan rates on a
-              single consolidated invoice, with volume discounts as your fleet grows.
+              We're building a free partner program for IT providers who manage Freehold for the
+              brokerages they serve: fleet provisioning, consolidated billing, volume discounts.
+              It's in development — the first cohort of partners is shaping it with us.{" "}
+              <a
+                href="mailto:partners@freeholdtc.dev"
+                className="font-medium text-brand-700 hover:text-brand-600"
+              >
+                partners@freeholdtc.dev
+              </a>
             </p>
           </div>
           <div className="flex flex-col gap-4">
             <p className="rounded-xl bg-stone-100/70 px-5 py-4 text-sm leading-relaxed text-stone-600">
-              <strong className="font-medium text-stone-900">One dashboard, many instances.</strong>{" "}
-              Provision, suspend, and monitor every client instance from one place.
+              <strong className="font-medium text-stone-900">Works today:</strong> self-host
+              Freehold for any number of clients, free — every feature, no partner account needed.
+              The full API and signed webhooks are live for your own tooling.
             </p>
             <p className="rounded-xl bg-stone-100/70 px-5 py-4 text-sm leading-relaxed text-stone-600">
-              <strong className="font-medium text-stone-900">API keys for automation.</strong> Scope
-              keys to one instance or your whole fleet for provisioning and monitoring.
+              <strong className="font-medium text-stone-900">In development:</strong> one dashboard
+              to provision, suspend, and monitor every client instance, with fleet-scoped API keys
+              and one consolidated invoice.
             </p>
             <p className="rounded-xl bg-stone-100/70 px-5 py-4 text-sm leading-relaxed text-stone-600">
               <strong className="font-medium text-stone-900">Your hosting or ours.</strong> Run

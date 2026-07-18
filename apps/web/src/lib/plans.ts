@@ -16,11 +16,31 @@ export const PLAN_INFO: Record<
     priceMonthly: number | null;
     includedSeats: number;
     activeTransactionLimit: number | null;
+    /** Lifetime AI extraction trial credits; null = fair-use, not metered. */
+    aiExtractionCredits: number | null;
   }
 > = {
-  FREE: { label: "Free", priceMonthly: 0, includedSeats: 2, activeTransactionLimit: 10 },
-  PRO: { label: "Pro", priceMonthly: 29, includedSeats: 2, activeTransactionLimit: 50 },
-  BUSINESS: { label: "Business", priceMonthly: 80, includedSeats: 10, activeTransactionLimit: 200 },
+  FREE: {
+    label: "Free",
+    priceMonthly: 0,
+    includedSeats: 2,
+    activeTransactionLimit: 10,
+    aiExtractionCredits: 10,
+  },
+  PRO: {
+    label: "Pro",
+    priceMonthly: 29,
+    includedSeats: 2,
+    activeTransactionLimit: 50,
+    aiExtractionCredits: null,
+  },
+  BUSINESS: {
+    label: "Business",
+    priceMonthly: 80,
+    includedSeats: 10,
+    activeTransactionLimit: 200,
+    aiExtractionCredits: null,
+  },
 };
 
 export function isCloud(): boolean {
@@ -78,6 +98,36 @@ export async function transactionLimit(tenantId: string): Promise<TransactionLim
     active,
     limit: plan.activeTransactionLimit,
   };
+}
+
+export interface ExtractionCreditState {
+  limited: boolean;
+  used: number;
+  limit: number | null;
+}
+
+/**
+ * Free-tier AI trial credits. Metered only on Cloud + FREE; paid tiers are
+ * fair-use. Counted with a durable per-tenant counter (not row counts, so
+ * deleting documents never refunds credits).
+ */
+export async function extractionCreditState(tenantId: string): Promise<ExtractionCreditState> {
+  if (!isCloud()) return { limited: false, used: 0, limit: null };
+  const org = await prisma.organization.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: { planTier: true, aiExtractionsUsed: true },
+  });
+  const limit = PLAN_INFO[org.planTier].aiExtractionCredits;
+  if (limit == null) return { limited: false, used: org.aiExtractionsUsed, limit: null };
+  return { limited: org.aiExtractionsUsed >= limit, used: org.aiExtractionsUsed, limit };
+}
+
+/** Consume one trial credit after a successful extraction. */
+export async function recordExtractionUse(tenantId: string): Promise<void> {
+  await prisma.organization.update({
+    where: { id: tenantId },
+    data: { aiExtractionsUsed: { increment: 1 } },
+  });
 }
 
 export interface SeatState {

@@ -1,6 +1,29 @@
 import { prisma, withTenant } from "@freehold/db";
 
 /**
+ * The origin portal links are shown with. On the tenant's subdomain
+ * (acme.freeholdtc.dev) when the deployment has a real domain; the plain
+ * base URL otherwise (localhost, bare-IP self-hosts).
+ */
+export async function portalOrigin(tenantId: string): Promise<string> {
+  const base = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
+  let url: URL;
+  try {
+    url = new URL(base);
+  } catch {
+    return base;
+  }
+  const bareHost = url.hostname === "localhost" || /^[0-9.]+$/.test(url.hostname);
+  if (bareHost) return base;
+  const org = await prisma.organization.findUnique({
+    where: { id: tenantId },
+    select: { slug: true },
+  });
+  if (!org?.slug) return base;
+  return `${url.protocol}//${org.slug}.${url.host}`;
+}
+
+/**
  * Resolve a portal token to its link + the data the link is allowed to show.
  * The bare-token lookup runs outside withTenant on purpose (portal_link has
  * no RLS — see the schema note); everything else is fetched tenant-scoped.

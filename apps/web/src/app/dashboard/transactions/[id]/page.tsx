@@ -12,6 +12,8 @@ import {
 import { runExtraction } from "@/lib/actions/extractions";
 import { addParty, removeParty } from "@/lib/actions/parties";
 import { createPortalLink, deletePortalLink, revokePortalLink } from "@/lib/actions/portal";
+import { extractionCreditState } from "@/lib/plans";
+import { portalOrigin } from "@/lib/portal";
 import { applyActionPlan, createTask, deleteTask, toggleTask } from "@/lib/actions/tasks";
 import { generateDocument } from "@/lib/actions/templates";
 import {
@@ -74,6 +76,8 @@ export default async function TransactionDetailPage({
   });
   if (!data) notFound();
   const { txn, contacts, clients, plans, templates } = data;
+  const portalBase = await portalOrigin(tenantId);
+  const aiCredits = await extractionCreditState(tenantId);
 
   const customFields = (txn.customFields as Record<string, string> | null) ?? {};
   const today = fmtDate(new Date());
@@ -402,14 +406,32 @@ export default async function TransactionDetailPage({
                 <span className="text-xs text-stone-400">
                   {(doc.sizeBytes / 1024).toFixed(0)} KB · {fmtDate(doc.createdAt)}
                 </span>
-                {doc.contentType === "application/pdf" && (
-                  <form action={runExtraction}>
-                    <input type="hidden" name="documentId" value={doc.id} />
-                    <button type="submit" className={btnGhost}>
-                      Extract contract data
-                    </button>
-                  </form>
-                )}
+                {doc.contentType === "application/pdf" &&
+                  (aiCredits.limited ? (
+                    <span className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
+                      Trial credits used ({aiCredits.used} of {aiCredits.limit}) —{" "}
+                      <Link
+                        href="/dashboard/billing"
+                        className="font-medium text-brand-700 underline"
+                      >
+                        upgrade
+                      </Link>{" "}
+                      for included AI extraction
+                    </span>
+                  ) : (
+                    <form action={runExtraction} className="flex items-center gap-2">
+                      <input type="hidden" name="documentId" value={doc.id} />
+                      <button type="submit" className={btnGhost}>
+                        Extract contract data
+                      </button>
+                      {aiCredits.limit != null && (
+                        <span className="text-xs text-stone-400">
+                          {aiCredits.limit - aiCredits.used} of {aiCredits.limit} trial credits
+                          left
+                        </span>
+                      )}
+                    </form>
+                  ))}
                 <form action={deleteDocument} className="ml-auto">
                   <input type="hidden" name="id" value={doc.id} />
                   <input type="hidden" name="transactionId" value={txn.id} />
@@ -568,7 +590,7 @@ export default async function TransactionDetailPage({
         {txn.portalLinks.length > 0 && (
           <ul className="mb-4 flex flex-col">
             {txn.portalLinks.map((pl) => {
-              const url = `${process.env.BETTER_AUTH_URL ?? "http://localhost:3000"}/portal/${pl.token}`;
+              const url = `${portalBase}/portal/${pl.token}`;
               return (
                 <li key={pl.id} className="border-b border-stone-100 py-2 last:border-0">
                   <div className="flex flex-wrap items-center gap-3 text-sm">
