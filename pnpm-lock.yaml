@@ -90,6 +90,9 @@ importers:
       react-dom:
         specifier: 19.2.7
         version: 19.2.7(react@19.2.7)
+      stripe:
+        specifier: ^22.3.2
+        version: 22.3.2(@types/node@22.20.1)
     devDependencies:
       '@tailwindcss/postcss':
         specifier: 4.3.3

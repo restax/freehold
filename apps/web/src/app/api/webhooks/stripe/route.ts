@@ -18,6 +18,23 @@ export async function POST(req: Request) {
     return new Response("Invalid signature", { status: 400 });
   }
 
+  // Client invoicing: mark tenant invoices paid/void as Stripe reports them.
+  if (event.type === "invoice.paid" || event.type === "invoice.voided") {
+    const invoice = event.data.object as { id?: string };
+    if (invoice.id) {
+      await prisma.invoice
+        .updateMany({
+          where: { stripeInvoiceId: invoice.id },
+          data:
+            event.type === "invoice.paid"
+              ? { status: "PAID", paidAt: new Date() }
+              : { status: "VOID" },
+        })
+        .catch(() => {});
+    }
+    return new Response("ok", { status: 200 });
+  }
+
   const update = planUpdateFromEvent(event);
   if (update) {
     await prisma.organization

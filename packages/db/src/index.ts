@@ -61,3 +61,5 @@ export const FieldTarget = PrismaPkg.FieldTarget;
 export type FieldTarget = PrismaPkg.FieldTarget;
 export const FieldValueType = PrismaPkg.FieldValueType;
 export type FieldValueType = PrismaPkg.FieldValueType;
+export const InvoiceStatus = PrismaPkg.InvoiceStatus;
+export type InvoiceStatus = PrismaPkg.InvoiceStatus;

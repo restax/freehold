@@ -95,35 +95,36 @@ enum PlanTier {
 }
 
 model Organization {
-  id              String            @id
-  name            String
-  slug            String            @unique
-  logo            String?
-  metadata        String?
-  planTier        PlanTier          @default(FREE) @map("plan_tier")
-  seatLimit       Int               @default(2) @map("seat_limit")
-  stripeCustomerId String?          @map("stripe_customer_id")
-  stripeSubscriptionId String?      @map("stripe_subscription_id")
-  createdAt       DateTime          @default(now())
-  members         Member[]
-  invitations     Invitation[]
-  clients         Client[]
-  contacts        Contact[]
-  transactions    Transaction[]
-  parties         TransactionParty[]
-  tasks           Task[]
-  actionPlans     ActionPlan[]
-  actionPlanTasks ActionPlanTask[]
-  documents       Document[]
-  extractions     ContractExtraction[]
-  extractionFields ExtractionField[]
-  templates       DocTemplate[]
-  envelopes       SignatureEnvelope[]
-  portalLinks     PortalLink[]
-  vaultCredentials VaultCredential[]
-  vaultAccessLogs VaultAccessLog[]
-  apiKeys         ApiKey[]
-  webhookEndpoints WebhookEndpoint[]
+  id                   String               @id
+  name                 String
+  slug                 String               @unique
+  logo                 String?
+  metadata             String?
+  planTier             PlanTier             @default(FREE) @map("plan_tier")
+  seatLimit            Int                  @default(2) @map("seat_limit")
+  stripeCustomerId     String?              @map("stripe_customer_id")
+  stripeSubscriptionId String?              @map("stripe_subscription_id")
+  createdAt            DateTime             @default(now())
+  members              Member[]
+  invitations          Invitation[]
+  clients              Client[]
+  contacts             Contact[]
+  transactions         Transaction[]
+  parties              TransactionParty[]
+  tasks                Task[]
+  actionPlans          ActionPlan[]
+  actionPlanTasks      ActionPlanTask[]
+  documents            Document[]
+  extractions          ContractExtraction[]
+  extractionFields     ExtractionField[]
+  templates            DocTemplate[]
+  envelopes            SignatureEnvelope[]
+  portalLinks          PortalLink[]
+  vaultCredentials     VaultCredential[]
+  vaultAccessLogs      VaultAccessLog[]
+  apiKeys              ApiKey[]
+  invoices             Invoice[]
+  webhookEndpoints     WebhookEndpoint[]
 
   @@map("organization")
 }
@@ -171,21 +172,22 @@ enum ClientType {
 /// serve. Transactions, vault credentials, portal branding, and invoicing all
 /// attach here in later stages.
 model Client {
-  id            String         @id @default(uuid())
-  tenantId      String         @map("tenant_id")
-  tenant        Organization   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  type          ClientType     @default(AGENT)
+  id            String            @id @default(uuid())
+  tenantId      String            @map("tenant_id")
+  tenant        Organization      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type          ClientType        @default(AGENT)
   name          String
   email         String?
   phone         String?
   notes         String?
   /// Per-client e-signature provider; null = tenant default (FREEHOLD_ESIGN_DEFAULT env, else MANUAL).
-  esignProvider EsignProvider? @map("esign_provider")
-  isSample      Boolean        @default(false)
+  esignProvider EsignProvider?    @map("esign_provider")
+  isSample      Boolean           @default(false)
   transactions  Transaction[]
   credentials   VaultCredential[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  invoices      Invoice[]
 
   @@index([tenantId])
   @@map("client")
@@ -256,22 +258,22 @@ model Contact {
 /// The central object: one closing. Belongs to a tenant, optionally to the
 /// client (agent/brokerage) the tenant serves it for.
 model Transaction {
-  id              String             @id @default(uuid())
-  tenantId        String             @map("tenant_id")
-  tenant          Organization       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id              String               @id @default(uuid())
+  tenantId        String               @map("tenant_id")
+  tenant          Organization         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   clientId        String?
-  client          Client?            @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  status          TransactionStatus  @default(UNDER_CONTRACT)
-  side            TransactionSide    @default(BUY_SIDE)
-  propertyAddress String             @map("property_address")
+  client          Client?              @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  status          TransactionStatus    @default(UNDER_CONTRACT)
+  side            TransactionSide      @default(BUY_SIDE)
+  propertyAddress String               @map("property_address")
   city            String?
   state           String?
   zip             String?
-  purchasePrice   Int?               @map("purchase_price")
-  contractDate    DateTime?          @map("contract_date") @db.Date
-  closeDate       DateTime?          @map("close_date") @db.Date
+  purchasePrice   Int?                 @map("purchase_price")
+  contractDate    DateTime?            @map("contract_date") @db.Date
+  closeDate       DateTime?            @map("close_date") @db.Date
   notes           String?
-  customFields    Json?              @map("custom_fields")
+  customFields    Json?                @map("custom_fields")
   isSample        Boolean              @default(false)
   parties         TransactionParty[]
   tasks           Task[]
@@ -281,6 +283,7 @@ model Transaction {
   portalLinks     PortalLink[]
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
+  invoices        Invoice[]
 
   @@index([tenantId, status])
   @@map("transaction")
@@ -348,6 +351,35 @@ model WebhookEndpoint {
 
   @@index([tenantId])
   @@map("webhook_endpoint")
+}
+
+enum InvoiceStatus {
+  SENT
+  PAID
+  VOID
+}
+
+/**
+ * Client invoicing: the tenant bills their client through Stripe.
+ */
+model Invoice {
+  id              String        @id @default(uuid())
+  tenantId        String        @map("tenant_id")
+  tenant          Organization  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId        String?
+  client          Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  transactionId   String?
+  transaction     Transaction?  @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  description     String
+  amountCents     Int           @map("amount_cents")
+  status          InvoiceStatus @default(SENT)
+  stripeInvoiceId String?       @unique @map("stripe_invoice_id")
+  hostedUrl       String?       @map("hosted_url")
+  createdAt       DateTime      @default(now())
+  paidAt          DateTime?     @map("paid_at")
+
+  @@index([tenantId])
+  @@map("invoice")
 }
 
 enum VaultAction {
