@@ -7,6 +7,9 @@ export type {
   ActionPlanTask,
   Client,
   Contact,
+  ContractExtraction,
+  Document,
+  ExtractionField,
   Invitation,
   Member,
   Organization,
@@ -37,3 +40,11 @@ export const TransactionSide = PrismaPkg.TransactionSide;
 export type TransactionSide = PrismaPkg.TransactionSide;
 export const TransactionStatus = PrismaPkg.TransactionStatus;
 export type TransactionStatus = PrismaPkg.TransactionStatus;
+export const ExtractionStatus = PrismaPkg.ExtractionStatus;
+export type ExtractionStatus = PrismaPkg.ExtractionStatus;
+export const FieldConfidence = PrismaPkg.FieldConfidence;
+export type FieldConfidence = PrismaPkg.FieldConfidence;
+export const FieldTarget = PrismaPkg.FieldTarget;
+export type FieldTarget = PrismaPkg.FieldTarget;
+export const FieldValueType = PrismaPkg.FieldValueType;
+export type FieldValueType = PrismaPkg.FieldValueType;

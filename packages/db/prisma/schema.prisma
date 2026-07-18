@@ -102,6 +102,9 @@ model Organization {
   tasks           Task[]
   actionPlans     ActionPlan[]
   actionPlanTasks ActionPlanTask[]
+  documents       Document[]
+  extractions     ContractExtraction[]
+  extractionFields ExtractionField[]
 
   @@map("organization")
 }
@@ -247,11 +250,13 @@ model Transaction {
   closeDate       DateTime?          @map("close_date") @db.Date
   notes           String?
   customFields    Json?              @map("custom_fields")
-  isSample        Boolean            @default(false)
+  isSample        Boolean              @default(false)
   parties         TransactionParty[]
   tasks           Task[]
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  documents       Document[]
+  extractions     ContractExtraction[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
 
   @@index([tenantId, status])
   @@map("transaction")
@@ -324,4 +329,98 @@ model ActionPlanTask {
 
   @@index([tenantId])
   @@map("action_plan_task")
+}
+
+// --- Stage 02: documents + AI contract extraction ---
+
+enum ExtractionStatus {
+  RUNNING
+  READY
+  APPLIED
+  FAILED
+}
+
+enum FieldConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum FieldTarget {
+  TRANSACTION_FIELD
+  TASK
+  CUSTOM_FIELD
+}
+
+enum FieldValueType {
+  TEXT
+  DATE
+  MONEY
+}
+
+/// Uploaded file attached to a transaction. Bytes live in Postgres for now —
+/// an explicit interim choice until Stage 03 moves storage behind the
+/// S3-compatible interface. Capped at upload time (10 MB).
+model Document {
+  id            String               @id @default(uuid())
+  tenantId      String               @map("tenant_id")
+  tenant        Organization         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactionId String
+  transaction   Transaction          @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  filename      String
+  contentType   String               @map("content_type")
+  sizeBytes     Int                  @map("size_bytes")
+  data          Bytes
+  extractions   ContractExtraction[]
+  createdAt     DateTime             @default(now())
+
+  @@index([tenantId])
+  @@index([transactionId])
+  @@map("document")
+}
+
+/// One AI extraction run over a document. Nothing an extraction finds touches
+/// the transaction until a human applies it field-by-field.
+model ContractExtraction {
+  id            String            @id @default(uuid())
+  tenantId      String            @map("tenant_id")
+  tenant        Organization      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  documentId    String
+  document      Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  transactionId String
+  transaction   Transaction       @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  status        ExtractionStatus  @default(RUNNING)
+  model         String
+  error         String?
+  fields        ExtractionField[]
+  createdAt     DateTime          @default(now())
+
+  @@index([tenantId])
+  @@index([transactionId])
+  @@map("contract_extraction")
+}
+
+/// A single extracted value with its provenance: page number, verbatim quote,
+/// and the model's confidence. `target` says where applying it lands —
+/// a transaction column, a dated task, or a custom field.
+model ExtractionField {
+  id           String             @id @default(uuid())
+  tenantId     String             @map("tenant_id")
+  tenant       Organization       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  extractionId String
+  extraction   ContractExtraction @relation(fields: [extractionId], references: [id], onDelete: Cascade)
+  key          String
+  label        String
+  value        String
+  valueType    FieldValueType     @default(TEXT) @map("value_type")
+  page         Int?
+  quote        String?
+  confidence   FieldConfidence    @default(MEDIUM)
+  target       FieldTarget        @default(CUSTOM_FIELD)
+  applied      Boolean            @default(false)
+  sortOrder    Int                @default(0) @map("sort_order")
+
+  @@index([tenantId])
+  @@index([extractionId])
+  @@map("extraction_field")
 }

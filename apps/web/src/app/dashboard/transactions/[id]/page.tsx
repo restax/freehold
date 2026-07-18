@@ -1,6 +1,8 @@
 import { PartyRole, TransactionSide, TransactionStatus, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { deleteDocument, uploadDocument } from "@/lib/actions/documents";
+import { runExtraction } from "@/lib/actions/extractions";
 import { addParty, removeParty } from "@/lib/actions/parties";
 import { applyActionPlan, createTask, deleteTask, toggleTask } from "@/lib/actions/tasks";
 import {
@@ -34,6 +36,14 @@ export default async function TransactionDetailPage({
         client: true,
         parties: { include: { contact: true }, orderBy: { createdAt: "asc" } },
         tasks: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
+        documents: {
+          orderBy: { createdAt: "desc" },
+          select: { id: true, filename: true, contentType: true, sizeBytes: true, createdAt: true },
+        },
+        extractions: {
+          orderBy: { createdAt: "desc" },
+          include: { _count: { select: { fields: true } } },
+        },
       },
     });
     if (!txn) return null;
@@ -345,6 +355,109 @@ export default async function TransactionDetailPage({
             Add task
           </button>
         </form>
+      </section>
+
+      <section className={card}>
+        <h2 className="mb-1 font-medium">Documents &amp; contract extraction</h2>
+        <p className="mb-3 text-sm text-stone-500">
+          Upload the purchase contract and let AI pull every key date and figure — page-cited, and
+          nothing is saved until you confirm it.
+        </p>
+        {!process.env.ANTHROPIC_API_KEY && (
+          <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            No <code>ANTHROPIC_API_KEY</code> is configured — extraction runs will fail until one is
+            added to <code>.env</code>.
+          </p>
+        )}
+        {txn.documents.length > 0 && (
+          <ul className="mb-4 flex flex-col">
+            {txn.documents.map((doc) => (
+              <li
+                key={doc.id}
+                className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 last:border-0"
+              >
+                <a
+                  href={`/api/documents/${doc.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-brand-600 hover:underline"
+                >
+                  {doc.filename}
+                </a>
+                <span className="text-xs text-stone-400">
+                  {(doc.sizeBytes / 1024).toFixed(0)} KB · {fmtDate(doc.createdAt)}
+                </span>
+                {doc.contentType === "application/pdf" && (
+                  <form action={runExtraction}>
+                    <input type="hidden" name="documentId" value={doc.id} />
+                    <button type="submit" className={btnGhost}>
+                      Extract contract data
+                    </button>
+                  </form>
+                )}
+                <form action={deleteDocument} className="ml-auto">
+                  <input type="hidden" name="id" value={doc.id} />
+                  <input type="hidden" name="transactionId" value={txn.id} />
+                  <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
+                    delete
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form action={uploadDocument} className="mb-4 flex flex-wrap items-end gap-2">
+          <input type="hidden" name="transactionId" value={txn.id} />
+          <label className={label}>
+            Upload document (PDF, max 10 MB)
+            <input
+              name="file"
+              type="file"
+              accept="application/pdf,.pdf"
+              required
+              className={input}
+            />
+          </label>
+          <button type="submit" className={btnGhost}>
+            Upload
+          </button>
+        </form>
+        {txn.extractions.length > 0 && (
+          <div>
+            <h3 className="mb-1 text-sm font-medium text-stone-600">Extraction runs</h3>
+            <ul className="flex flex-col">
+              {txn.extractions.map((ex) => (
+                <li
+                  key={ex.id}
+                  className="flex items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
+                >
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs ${
+                      ex.status === "READY"
+                        ? "bg-amber-100 text-amber-800"
+                        : ex.status === "APPLIED"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : ex.status === "FAILED"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-stone-200 text-stone-600"
+                    }`}
+                  >
+                    {ex.status === "READY" ? "Needs review" : ex.status.toLowerCase()}
+                  </span>
+                  <span className="text-stone-500">
+                    {fmtDate(ex.createdAt)} · {ex._count.fields} fields · {ex.model}
+                  </span>
+                  <Link
+                    href={`/dashboard/transactions/${txn.id}/extractions/${ex.id}`}
+                    className="ml-auto text-brand-600 hover:underline"
+                  >
+                    {ex.status === "READY" ? "Review & apply" : "View"}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
     </div>
   );

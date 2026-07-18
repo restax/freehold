@@ -235,9 +235,9 @@ Monorepo + CI; auth (email/password + OAuth); three-level tenancy (tenant → cl
 Transactions (custom fields, unlimited), contacts, clients, dashboards/saved views, action plans + task templates with role auto-assignment, merge-field email templates (SMTP abstraction), seed data + onboarding wizard.
 **Exit:** a TC runs one real transaction end-to-end. *Verified: transaction → parties → applied action plan with computed deadlines → task completion → pipeline dashboard; RLS tenant isolation proven live (app connects as non-superuser role). Deferred within stage: merge-field email templates/SMTP sending, saved views, role-based auto-assignment (template field exists; tasks assign to the applying user).*
 
-### Stage 02 — Contract extraction (the wedge) *(~3 wk)*
+### Stage 02 — Contract extraction (the wedge) *(~3 wk)* ✅ *shipped 2026-07-18*
 Upload → Claude extraction → citation/confidence confirmation screen → dates instantiate deadline tasks. BYO Anthropic key path working.
-**Exit:** a real signed contract produces correct, page-cited dates on a transaction with zero unconfirmed fields.
+**Exit:** a real signed contract produces correct, page-cited dates on a transaction with zero unconfirmed fields. *Built: PDF upload (Postgres bytes — interim until Stage 03 storage), structured-outputs extraction (`claude-opus-4-8` default, `FREEHOLD_AI_MODEL` override), field-by-field review with page cites/quotes/confidence (low-confidence unchecked by default), apply → columns/dated tasks/custom fields, graceful no-key failure state. Sample contract at `apps/web/public/sample-contract.pdf`. Interim choices tracked: synchronous extraction call (BullMQ job later), bytes-in-Postgres (S3 in Stage 03).*
 
 ### Stage 03 — Documents + e-signature adapters *(~4 wk)*
 S3-abstraction storage + presigned flows; document templates + merge-to-PDF; envelope interface with Documenso (bundled, arm's-length) and DocuSign adapters; Dotloop adapter next; per-client provider preference.
