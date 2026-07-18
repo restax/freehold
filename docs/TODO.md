@@ -8,9 +8,9 @@ The single list of everything open across stages. Items move to ~~struck~~ with 
 - [x] **Self-hosting guide** at [SELF-HOSTING.md](SELF-HOSTING.md); site buttons and footer now link to it *(2026-07-18)*
 - [ ] **Seeded demo instance** — fictional brokerage strangers can explore
 - [ ] **Launch posts** — Show HN, Product Hunt, r/selfhosted drafts
-- [ ] **Push repo to github.com/restax/freehold** (Paul: GitHub auth)
+- [x] **Pushed to github.com/restax/freehold** (private; history triple-scrubbed: secrets, personal names, banned words; CI green). Flip to public when ready: `gh repo edit restax/freehold --visibility public` *(2026-07-18)*
 - [ ] **Vercel deploy** of freeholdtc.dev (Paul: Vercel login; then wire domain, Neon Postgres, Upstash Redis)
-- [ ] **hello@freeholdtc.dev mailbox** (Paul — features/integrations pages point requests there; partners@ already exists)
+- [x] **hello@freeholdtc.dev mailbox** set up; partners@ already existed *(2026-07-18)*
 - [ ] OG/social share image for freeholdtc.dev (Higgsfield once Paul's paid account is logged in: `higgsfield auth login`)
 
 ## Marketing honesty items (site currently promises these)
