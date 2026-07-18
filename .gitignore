@@ -31,3 +31,6 @@ coverage/
 
 # typescript incremental
 *.tsbuildinfo
+
+# dev-only Documenso signing cert
+db/documenso/cert.p12

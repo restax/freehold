@@ -20,7 +20,9 @@ describe("status mapping", () => {
   it("maps documenso statuses", () => {
     expect(_documensoInternals.mapStatus("COMPLETED").status).toBe("COMPLETED");
     expect(_documensoInternals.mapStatus("REJECTED").status).toBe("DECLINED");
+    expect(_documensoInternals.mapStatus("CANCELLED").status).toBe("DECLINED");
     expect(_documensoInternals.mapStatus("PENDING").status).toBe("SENT");
+    expect(_documensoInternals.mapStatus("DRAFT").status).toBe("SENT");
   });
 
   it("maps docusign statuses", () => {

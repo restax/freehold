@@ -1,0 +1,63 @@
+# Optional overlay: a local Documenso instance for e-signature development
+# and testing. All secrets below are DEV-ONLY defaults — never expose this
+# stack to the internet as-is.
+#
+#   sh db/documenso/gen-cert.sh                       # once — signing cert
+#   docker compose -f docker-compose.documenso.yml up -d
+#   open http://localhost:3030                        # Documenso
+#   open http://localhost:8025                        # Mailpit (catches all email)
+#
+# Then in Documenso: sign up → verify via Mailpit → Settings → API tokens.
+# Put the token in .env as DOCUMENSO_API_TOKEN with DOCUMENSO_URL=http://localhost:3030.
+
+services:
+  documenso-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: documenso
+      POSTGRES_PASSWORD: documenso
+      POSTGRES_DB: documenso
+    volumes:
+      - documenso_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U documenso"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025" # web inbox; SMTP stays internal on 1025
+
+  documenso:
+    image: documenso/documenso:latest
+    ports:
+      - "3030:3000"
+    depends_on:
+      documenso-db:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      NEXTAUTH_URL: http://localhost:3030
+      NEXT_PUBLIC_WEBAPP_URL: http://localhost:3030
+      # Background jobs (emails) call the app back on this in-container URL.
+      NEXT_PRIVATE_INTERNAL_WEBAPP_URL: http://localhost:3000
+      NEXTAUTH_SECRET: dev-only-nextauth-secret-not-for-production
+      NEXT_PRIVATE_ENCRYPTION_KEY: dev-only-encryption-key-0000000000000000
+      NEXT_PRIVATE_ENCRYPTION_SECONDARY_KEY: dev-only-secondary-key-1111111111111111
+      NEXT_PRIVATE_DATABASE_URL: postgresql://documenso:documenso@documenso-db:5432/documenso
+      NEXT_PRIVATE_DIRECT_DATABASE_URL: postgresql://documenso:documenso@documenso-db:5432/documenso
+      NEXT_PRIVATE_SMTP_TRANSPORT: smtp
+      NEXT_PRIVATE_SMTP_HOST: mailpit
+      NEXT_PRIVATE_SMTP_PORT: 1025
+      NEXT_PRIVATE_SMTP_FROM_ADDRESS: noreply@freehold.local
+      NEXT_PRIVATE_SMTP_FROM_NAME: Freehold Dev
+      NEXT_PRIVATE_SIGNING_TRANSPORT: local
+      NEXT_PRIVATE_SIGNING_PASSPHRASE: freehold-dev
+      NEXT_PRIVATE_SIGNING_LOCAL_FILE_PATH: /opt/documenso/cert.p12
+    volumes:
+      - ./db/documenso/cert.p12:/opt/documenso/cert.p12:ro
+
+volumes:
+  documenso_pgdata:
