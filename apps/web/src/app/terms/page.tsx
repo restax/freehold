@@ -1,13 +1,11 @@
-import Link from "next/link";
+import { Wordmark } from "@/components/marketing";
 
 export const metadata = { title: "Terms of service · Freehold" };
 
 export default function TermsPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-14 sm:px-6">
-      <Link href="/" className="font-serif text-lg font-semibold text-brand-700">
-        Freehold
-      </Link>
+      <Wordmark size="sm" />
       <h1 className="mt-6 text-3xl font-semibold tracking-tight">Terms of service</h1>
       <p className="mt-2 text-sm text-stone-500">Pre-launch draft. Last updated July 18, 2026.</p>
       <div className="mt-6 flex max-w-prose flex-col gap-4 text-sm leading-relaxed text-stone-700">

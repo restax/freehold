@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { DashboardNav } from "@/components/dashboard-nav";
+import { Wordmark } from "@/components/marketing";
 import { SignOutButton } from "@/components/sign-out-button";
 import { getSession, listTenants } from "@/lib/session";
 
@@ -32,8 +33,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
         Skip to content
       </a>
       <aside className="flex w-56 flex-col border-r border-stone-200 bg-white px-4 py-6">
-        <div className="mb-1 font-serif text-2xl font-semibold tracking-tight text-brand-700">
-          Freehold
+        <div className="mb-1">
+          <Wordmark href="/dashboard" />
         </div>
         <div className="mb-6 truncate text-sm text-stone-500">{active?.name}</div>
         <DashboardNav items={NAV} />

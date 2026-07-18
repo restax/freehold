@@ -1,26 +1,38 @@
 @import "tailwindcss";
 
+/* Brand greens matched to the reference design (Untitled-UI-style scale). */
 @theme {
-  --color-brand-50: #ecf7f2;
-  --color-brand-100: #d9eee3;
-  --color-brand-600: #0f6b4f;
-  --color-brand-700: #0b5540;
-  --color-brand-800: #094536;
+  --color-brand-50: #ecfdf3;
+  --color-brand-100: #d1fadf;
+  --color-brand-200: #a6f4c5;
+  --color-brand-300: #6ce9a6;
+  --color-brand-400: #32d583;
+  --color-brand-500: #12b76a;
+  --color-brand-600: #0d9257;
+  --color-brand-700: #0b7a49;
+  --color-brand-800: #08603a;
+  --color-brand-900: #054f30;
 }
 
 @theme inline {
   --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-fraunces), Georgia, serif;
+  --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
 body {
   @apply bg-stone-50 font-sans text-stone-900 antialiased;
 }
 
-/* Brand voice: page titles carry the serif; sizes/weights stay per-page. */
-h1 {
-  font-family: var(--font-serif);
-  letter-spacing: -0.015em;
+/* Brand voice: page titles carry the serif; sizes/weights stay per-page.
+   Lives in the base layer so utility classes (e.g. font-display on the
+   marketing hero) can override it. */
+@layer base {
+  h1 {
+    font-family: var(--font-serif);
+    letter-spacing: -0.015em;
+  }
 }
 
 ::selection {

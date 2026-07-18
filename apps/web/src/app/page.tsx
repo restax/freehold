@@ -3,15 +3,18 @@ import {
   BuildingOffice,
   ChartLineUp,
   FileText,
+  GitBranch,
   ListChecks,
   LockKey,
+  ShieldCheck,
   Signature,
+  Sparkle,
   UsersThree,
 } from "@phosphor-icons/react/dist/ssr";
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge } from "@/components/badges";
+import { ExtractionReviewCard, MarketingFooter, MarketingNav } from "@/components/marketing";
 import { getSession } from "@/lib/session";
 import brokerageDusk from "../../public/marketing/brokerage-dusk.jpg";
 import closingKeys from "../../public/marketing/closing-keys.jpg";
@@ -27,50 +30,10 @@ export const metadata = {
 const CTA_PRIMARY = "Start free";
 
 /*
- * Marketing landing page. The extraction preview renders the app's real
- * badge components with values from a real verified extraction of the
- * bundled sample contract; nothing here is a faked screenshot.
+ * Marketing landing page. The extraction preview mirrors the product's
+ * review screen with illustrative sample values; it is a styled mock of
+ * our own UI, not a screenshot of anyone else's.
  */
-
-function ExtractionReviewCard() {
-  const rows: Array<[string, string, string, "HIGH" | "MEDIUM"]> = [
-    ["Purchase price", "$385,000", "cited p. 1, §2(a)", "HIGH"],
-    ["Effective date", "Jul 15, 2026", "cited p. 1, §1", "HIGH"],
-    ["Inspection deadline", "Jul 25, 2026", "cited p. 3, §7(b)", "MEDIUM"],
-    ["Financing deadline", "Aug 4, 2026", "cited p. 5, §8(a)", "HIGH"],
-    ["Closing date", "Aug 14, 2026", "cited p. 9, §14", "HIGH"],
-  ];
-  const tone = { HIGH: "success", MEDIUM: "progress" } as const;
-  return (
-    <div className="w-full max-w-md rounded-xl border border-stone-200/70 bg-white p-5 shadow-[0_1px_2px_rgb(41_37_36/0.06),0_12px_32px_rgb(41_37_36/0.1)]">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium">Review extraction</p>
-        <span className="font-mono text-xs text-stone-400">purchase-contract.pdf</span>
-      </div>
-      <ul className="mt-3 flex flex-col">
-        {rows.map(([label, value, cite, conf]) => (
-          <li
-            key={label}
-            className="flex flex-wrap items-center gap-x-3 gap-y-0.5 border-b border-stone-100 py-2 last:border-0"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium leading-tight">{label}</p>
-              <p className="text-xs text-stone-400">{cite}</p>
-            </div>
-            <span className="text-sm tabular-nums">{value}</span>
-            <Badge tone={tone[conf]}>{conf.toLowerCase()}</Badge>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-3 flex items-center justify-between gap-3 border-t border-stone-100 pt-3">
-        <span className="text-xs text-stone-500">4 confirmed, 1 flagged for review</span>
-        <span className="rounded-lg bg-brand-700 px-3 py-1.5 text-xs font-medium text-white">
-          Apply to transaction
-        </span>
-      </div>
-    </div>
-  );
-}
 
 const BENTO = [
   {
@@ -142,6 +105,10 @@ const FAQ: Array<[string, string]> = [
     "What does switching from my current system look like?",
     "Most TCs run their in-flight files to closing in the old system and open new files in Freehold, so nothing gets disrupted mid-deal. Start with one file; the first ten are free. Importers for the big legacy platforms are on our roadmap.",
   ],
+  [
+    "Do you pay people to recommend Freehold?",
+    "No, and we never will. Some TC platforms pay 20% recurring commissions to affiliates, which buys a lot of glowing recommendations in Facebook groups and never gets disclosed to you. That doesn't seem fair. Nobody earns a dime recommending Freehold, so when a TC vouches for us, the software earned it.",
+  ],
 ];
 
 export default async function LandingPage() {
@@ -150,61 +117,31 @@ export default async function LandingPage() {
 
   return (
     <main className="bg-stone-50 text-stone-900">
-      {/* Nav */}
-      <header className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-        <span className="font-serif text-xl font-semibold tracking-tight text-brand-700">
-          Freehold
-        </span>
-        <nav className="flex items-center gap-5 text-sm">
-          <a
-            href="#features"
-            className="hidden text-stone-600 transition-colors hover:text-stone-900 sm:block"
-          >
-            Features
-          </a>
-          <a
-            href="#pricing"
-            className="hidden text-stone-600 transition-colors hover:text-stone-900 sm:block"
-          >
-            Pricing
-          </a>
-          <Link
-            href="/compare"
-            className="hidden text-stone-600 transition-colors hover:text-stone-900 md:block"
-          >
-            Open source
-          </Link>
-          <Link href="/login" className="text-stone-600 transition-colors hover:text-stone-900">
-            Log in
-          </Link>
-          <Link
-            href="/signup"
-            className="rounded-lg bg-brand-700 px-3.5 py-1.5 font-medium text-white shadow-xs transition hover:bg-brand-600 active:scale-[0.98]"
-          >
-            {CTA_PRIMARY}
-          </Link>
-        </nav>
-      </header>
+      <MarketingNav />
 
       {/* Hero */}
-      <section className="relative overflow-hidden">
+      <section className="relative overflow-hidden bg-[linear-gradient(165deg,#d7f8e4_0%,#ecfdf3_45%,#fafaf9_100%)]">
         <div
           aria-hidden
-          className="absolute inset-0 bg-[radial-gradient(60%_50%_at_25%_20%,#ecf7f2_0%,transparent_70%)]"
+          className="absolute inset-0 bg-[radial-gradient(55%_60%_at_20%_10%,#c5f4d8_0%,transparent_70%)]"
         />
-        <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-4 pb-12 pt-14 sm:px-6 lg:grid-cols-[6fr_5fr] lg:gap-14 lg:pb-16 lg:pt-20">
+        <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-14 sm:px-6 lg:grid-cols-[6fr_6fr] lg:gap-14 lg:pb-24 lg:pt-24">
           <div>
-            <h1 className="max-w-xl text-4xl font-semibold tracking-tight md:text-5xl">
-              Every deal, every deadline, one place.
+            <h1 className="font-display max-w-xl text-5xl font-extrabold leading-[1.08] tracking-tight md:text-6xl">
+              Every deal,
+              <br />
+              every deadline,
+              <br />
+              <span className="text-brand-600">one place.</span>
             </h1>
-            <p className="mt-4 max-w-lg text-lg leading-relaxed text-stone-600">
-              The most complete TC system in the world. AI reads the contract and builds the file.
-              Open source, free to self-host, effortless on Cloud.
+            <p className="mt-5 max-w-lg text-lg leading-relaxed text-stone-600">
+              The most complete TC platform. AI reads the contract and builds the file. Open source,
+              free to self-host.
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <Link
                 href="/signup"
-                className="rounded-lg bg-brand-700 px-5 py-2.5 font-medium text-white shadow-xs transition hover:bg-brand-600 active:scale-[0.98]"
+                className="rounded-lg bg-brand-600 px-5 py-2.5 font-medium text-white shadow-xs transition hover:bg-brand-700 active:scale-[0.98]"
               >
                 {CTA_PRIMARY}
               </Link>
@@ -220,45 +157,61 @@ export default async function LandingPage() {
             <ExtractionReviewCard />
           </div>
         </div>
-        <div className="relative border-t border-stone-200/70 bg-white/60">
-          <div className="mx-auto grid max-w-6xl gap-4 px-4 py-5 text-sm text-stone-600 sm:grid-cols-3 sm:px-6">
-            <p>No data entry. AI reads the contract and builds the file, every field page-cited.</p>
-            <p>Apache-2.0 licensed. The whole product, not a crippled core.</p>
-            <p>Every credential reveal lands in the vault's audit log.</p>
-          </div>
-        </div>
       </section>
+
+      {/* Value strip */}
+      <div className="border-y border-stone-200/70 bg-white">
+        <div className="mx-auto grid max-w-6xl gap-5 px-4 py-6 text-sm text-stone-600 sm:grid-cols-3 sm:px-6">
+          <p className="flex gap-3">
+            <Sparkle size={20} aria-hidden className="mt-0.5 shrink-0 text-brand-600" />
+            <span>
+              No data entry. AI reads the contract and builds the file, every field page-cited.
+            </span>
+          </p>
+          <p className="flex gap-3">
+            <GitBranch size={20} aria-hidden className="mt-0.5 shrink-0 text-brand-600" />
+            <span>Apache-2.0 licensed. The whole product, not a crippled core.</span>
+          </p>
+          <p className="flex gap-3">
+            <ShieldCheck size={20} aria-hidden className="mt-0.5 shrink-0 text-brand-600" />
+            <span>Every date, document, and credential reveal lands in the audit log.</span>
+          </p>
+        </div>
+      </div>
 
       {/* AI contract extraction */}
       <section id="extraction" className="border-b border-stone-200/70 bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
-          <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
-            No data entry. None.
-          </h2>
-          <p className="mt-3 max-w-2xl leading-relaxed text-stone-600">
-            Upload a purchase contract and the AI extracts the parties, price, deposits, and every
-            deadline-bearing date. It even computes the relative ones, like &quot;ten days from the
-            Effective Date,&quot; onto the calendar. Every field carries a page citation and a
-            confidence level, and nothing enters the record until a human confirms it.
-          </p>
-          <div className="mt-10 grid gap-8 md:grid-cols-3">
-            <div className="border-l-2 border-brand-600/50 pl-4">
-              <h3 className="font-medium">Upload</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
+        <div className="mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:py-24">
+          <div>
+            <p className="text-sm font-medium text-brand-600">AI contract extraction</p>
+            <h2 className="font-display mt-2 text-4xl font-extrabold tracking-tight md:text-5xl">
+              No data entry. None.
+            </h2>
+            <p className="mt-4 max-w-xl leading-relaxed text-stone-600">
+              Upload a purchase contract and Claude extracts the parties, price, deposits, and every
+              deadline-bearing date. It even computes the relative ones, like &quot;ten days from
+              the Effective Date,&quot; onto the calendar. Every field carries a page citation and a
+              confidence level. Nothing enters the record until a human confirms it.
+            </p>
+          </div>
+          <div className="flex flex-col gap-8">
+            <div className="border-l-[3px] border-brand-600 pl-5">
+              <h3 className="font-display text-lg font-bold">Upload</h3>
+              <p className="mt-1.5 leading-relaxed text-stone-600">
                 Drop in the signed PDF. That's the last time you type anything the contract already
                 says.
               </p>
             </div>
-            <div className="border-l-2 border-brand-600/50 pl-4">
-              <h3 className="font-medium">Review with citations</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
+            <div className="border-l-[3px] border-brand-600 pl-5">
+              <h3 className="font-display text-lg font-bold">Review with citations</h3>
+              <p className="mt-1.5 leading-relaxed text-stone-600">
                 Each extracted field shows the exact page and clause it came from. Low-confidence
                 fields are flagged, never silently filled.
               </p>
             </div>
-            <div className="border-l-2 border-brand-600/50 pl-4">
-              <h3 className="font-medium">Apply to the file</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
+            <div className="border-l-[3px] border-brand-600 pl-5">
+              <h3 className="font-display text-lg font-bold">Apply to the file</h3>
+              <p className="mt-1.5 leading-relaxed text-stone-600">
                 Confirmed dates populate the transaction and create every dated deadline task in
                 your action plan. The system does the chasing from there.
               </p>
@@ -269,10 +222,8 @@ export default async function LandingPage() {
 
       {/* Feature bento */}
       <section id="features" className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
-        <h2 className="max-w-2xl text-3xl font-semibold tracking-tight md:text-4xl">
-          <span className="bg-brand-100 box-decoration-clone px-1">
-            Everything a transaction coordinator runs in a day.
-          </span>
+        <h2 className="font-display max-w-2xl text-3xl font-extrabold leading-[1.15] tracking-tight md:text-4xl lg:text-5xl">
+          Everything a transaction coordinator runs in a day.
         </h2>
         <p className="mt-4 max-w-xl leading-relaxed text-stone-600">
           Tasks, contacts, documents, signatures, and dates in one system, not scattered across
@@ -280,9 +231,9 @@ export default async function LandingPage() {
         </p>
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="rounded-xl bg-brand-700 p-6 text-white sm:col-span-2">
-            <ListChecks size={26} weight="regular" aria-hidden className="text-brand-100" />
-            <h3 className="mt-3 font-medium">Transactions and action plans</h3>
-            <p className="mt-1.5 max-w-lg text-sm leading-relaxed text-brand-50/90">
+            <ListChecks size={26} weight="regular" aria-hidden className="text-white/85" />
+            <h3 className="mt-3 font-semibold">Transactions and action plans</h3>
+            <p className="mt-1.5 max-w-lg text-sm leading-relaxed text-white/90">
               Unlimited transactions with custom fields, documents, and parties. Apply a checklist
               template and every deadline task is dated from the contract automatically. Set it
               once, run it on every file.
@@ -320,8 +271,10 @@ export default async function LandingPage() {
             />
           </div>
           <div>
-            <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
-              Keep the workflow. Drop the invoice.
+            <h2 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
+              Keep the workflow.
+              <br />
+              Drop the invoice.
             </h2>
             <p className="mt-3 max-w-md leading-relaxed text-stone-600">
               Legacy TC platforms run $99 or more a month and make leaving painful. Freehold starts
@@ -330,32 +283,26 @@ export default async function LandingPage() {
             <dl className="mt-7 grid grid-cols-3 gap-4">
               <div>
                 <dt className="sr-only">Self-hosted price</dt>
-                <dd className="font-serif text-4xl font-semibold tabular-nums text-brand-700">
-                  $0
-                </dd>
+                <dd className="font-display text-4xl font-bold tabular-nums text-brand-700">$0</dd>
                 <p className="mt-1 text-xs leading-snug text-stone-500">Self-hosted, forever</p>
               </div>
               <div>
                 <dt className="sr-only">Cloud Pro price</dt>
-                <dd className="font-serif text-4xl font-semibold tabular-nums text-brand-700">
-                  $29
-                </dd>
+                <dd className="font-display text-4xl font-bold tabular-nums text-brand-700">$29</dd>
                 <p className="mt-1 text-xs leading-snug text-stone-500">
                   Cloud Pro, per user monthly
                 </p>
               </div>
               <div>
                 <dt className="sr-only">Free transactions</dt>
-                <dd className="font-serif text-4xl font-semibold tabular-nums text-brand-700">
-                  10
-                </dd>
+                <dd className="font-display text-4xl font-bold tabular-nums text-brand-700">10</dd>
                 <p className="mt-1 text-xs leading-snug text-stone-500">
                   Free transactions a month on Cloud
                 </p>
               </div>
             </dl>
             <a
-              href="#pricing"
+              href="/pricing"
               className="mt-7 inline-block font-medium text-brand-700 underline decoration-brand-600/40 underline-offset-4 transition-colors hover:text-brand-600"
             >
               View pricing
@@ -408,7 +355,7 @@ export default async function LandingPage() {
 
       {/* Why TCs and brokerages switch */}
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
-        <h2 className="max-w-md text-3xl font-semibold tracking-tight md:text-4xl">
+        <h2 className="max-w-md font-display text-3xl font-bold tracking-tight md:text-4xl">
           Why TCs and brokerages switch
         </h2>
         <div className="mt-10 grid gap-x-12 gap-y-8 md:grid-cols-2">
@@ -449,7 +396,7 @@ export default async function LandingPage() {
       <section className="border-t border-brand-600/15 bg-brand-50/50">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
           <div className="max-w-2xl">
-            <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
+            <h2 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
               Freehold Cloud handles the parts you never wanted to think about
             </h2>
             <p className="mt-3 max-w-xl leading-relaxed text-stone-600">
@@ -491,90 +438,12 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* Pricing */}
-      <section id="pricing" className="border-t border-stone-200/70 bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
-          <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
-            Keep more of every file fee
-          </h2>
-          <p className="mt-2 max-w-lg leading-relaxed text-stone-600">
-            No per-file fees, no setup fees, no contracts. Start free and pay only when your
-            business grows.
-          </p>
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
-            <div className="flex flex-col rounded-xl border border-stone-200/70 bg-stone-50 p-6">
-              <h3 className="font-medium">Free</h3>
-              <p className="mt-1 font-serif text-4xl font-semibold tabular-nums">
-                $0<span className="font-sans text-sm font-normal text-stone-500">/mo</span>
-              </p>
-              <ul className="mt-4 flex flex-col gap-1.5 text-sm text-stone-600">
-                <li>10 active transactions</li>
-                <li>2 team members</li>
-                <li>AI contract reading included</li>
-                <li>Portals, vault, e-sign, everything</li>
-              </ul>
-              <Link href="/signup" className="mt-auto pt-6">
-                <span className="block rounded-lg border border-stone-300 bg-white px-4 py-2 text-center text-sm font-medium text-stone-700 shadow-xs transition hover:border-stone-400 hover:bg-stone-50 active:scale-[0.98]">
-                  {CTA_PRIMARY}
-                </span>
-              </Link>
-            </div>
-            <div className="flex flex-col rounded-xl border border-brand-600/30 bg-white p-6 ring-1 ring-brand-600/15">
-              <div className="flex items-baseline justify-between">
-                <h3 className="font-medium">Pro</h3>
-                <span className="text-xs font-medium uppercase tracking-wide text-brand-700">
-                  Most popular
-                </span>
-              </div>
-              <p className="mt-1 font-serif text-4xl font-semibold tabular-nums">
-                $29<span className="font-sans text-sm font-normal text-stone-500">/user/mo</span>
-              </p>
-              <ul className="mt-4 flex flex-col gap-1.5 text-sm text-stone-600">
-                <li>Unlimited transactions</li>
-                <li>Seats you choose, change any time</li>
-                <li>All integrations</li>
-                <li>Cancel whenever, data exports free</li>
-              </ul>
-              <Link href="/signup" className="mt-auto pt-6">
-                <span className="block rounded-lg bg-brand-700 px-4 py-2 text-center text-sm font-medium text-white shadow-xs transition hover:bg-brand-600 active:scale-[0.98]">
-                  {CTA_PRIMARY}
-                </span>
-              </Link>
-            </div>
-            <div className="flex flex-col rounded-xl border border-stone-200/70 bg-stone-50 p-6">
-              <h3 className="font-medium">Business</h3>
-              <p className="mt-1 font-serif text-4xl font-semibold tabular-nums">
-                $59<span className="font-sans text-sm font-normal text-stone-500">/user/mo</span>
-              </p>
-              <ul className="mt-4 flex flex-col gap-1.5 text-sm text-stone-600">
-                <li>Everything in Pro</li>
-                <li>Priority support</li>
-                <li>Client sub-billing (coming)</li>
-              </ul>
-              <Link href="/signup" className="mt-auto pt-6">
-                <span className="block rounded-lg border border-stone-300 bg-white px-4 py-2 text-center text-sm font-medium text-stone-700 shadow-xs transition hover:border-stone-400 hover:bg-stone-50 active:scale-[0.98]">
-                  {CTA_PRIMARY}
-                </span>
-              </Link>
-            </div>
-          </div>
-          <p className="mt-6 max-w-2xl text-sm leading-relaxed text-stone-500">
-            Brokerage with an IT department? Freehold is open source and running it on your own
-            server is free with no limits. For everyone else, Cloud is the easy button.{" "}
-            <Link href="/compare" className="font-medium text-brand-700 hover:text-brand-600">
-              See the honest comparison
-            </Link>
-            .
-          </p>
-        </div>
-      </section>
-
       {/* For IT providers */}
       <section id="partners" className="border-t border-stone-200/70 bg-stone-50">
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:py-24">
           <div>
             <p className="text-sm font-medium text-brand-700">For IT providers</p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">
+            <h2 className="mt-2 font-display text-3xl font-bold tracking-tight md:text-4xl">
               Run Freehold for every brokerage you serve.
             </h2>
             <p className="mt-3 max-w-md leading-relaxed text-stone-600">
@@ -626,7 +495,9 @@ export default async function LandingPage() {
       {/* FAQ */}
       <section className="border-t border-stone-200/70 bg-white">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
-          <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">Fair questions</h2>
+          <h2 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
+            Fair questions
+          </h2>
           <div className="mt-10 grid gap-x-12 gap-y-8 md:grid-cols-2">
             {FAQ.map(([q, a]) => (
               <div key={q}>
@@ -640,8 +511,8 @@ export default async function LandingPage() {
 
       {/* Green CTA banner */}
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
-        <div className="rounded-3xl bg-[radial-gradient(80%_120%_at_50%_0%,#0f6b4f_0%,#094536_100%)] px-6 py-16 text-center sm:px-12">
-          <h2 className="mx-auto max-w-2xl font-serif text-3xl font-semibold tracking-tight text-white md:text-4xl">
+        <div className="rounded-3xl bg-[radial-gradient(80%_120%_at_50%_0%,#0b7a49_0%,#054f30_100%)] px-6 py-16 text-center sm:px-12">
+          <h2 className="font-display mx-auto max-w-2xl text-3xl font-bold tracking-tight text-white md:text-4xl">
             Free for 2 users and 10 transactions a month. No card required.
           </h2>
           <p className="mx-auto mt-4 max-w-xl leading-relaxed text-brand-50/90">
@@ -656,7 +527,7 @@ export default async function LandingPage() {
               {CTA_PRIMARY}
             </Link>
             <a
-              href="#pricing"
+              href="/pricing"
               className="rounded-lg border border-white/30 px-5 py-2.5 font-medium text-white transition hover:border-white/60 hover:bg-white/10 active:scale-[0.98]"
             >
               View pricing
@@ -665,93 +536,7 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-stone-200/70 bg-white">
-        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[2fr_1fr_1fr_1fr]">
-          <div>
-            <span className="font-serif text-lg font-semibold text-brand-700">Freehold</span>
-            <p className="mt-2 max-w-xs text-sm leading-relaxed text-stone-500">
-              The open-source, all-in-one platform for real estate transaction management and CRM.
-            </p>
-          </div>
-          <nav aria-label="Product">
-            <h3 className="text-sm font-medium">Product</h3>
-            <ul className="mt-3 flex flex-col gap-2 text-sm text-stone-500">
-              <li>
-                <a href="#features" className="transition-colors hover:text-stone-900">
-                  Features
-                </a>
-              </li>
-              <li>
-                <a href="#extraction" className="transition-colors hover:text-stone-900">
-                  Contract extraction
-                </a>
-              </li>
-              <li>
-                <a href="#pricing" className="transition-colors hover:text-stone-900">
-                  Pricing
-                </a>
-              </li>
-            </ul>
-          </nav>
-          <nav aria-label="Open source">
-            <h3 className="text-sm font-medium">Open source</h3>
-            <ul className="mt-3 flex flex-col gap-2 text-sm text-stone-500">
-              <li>
-                <a
-                  href="https://github.com/restax/freehold"
-                  className="transition-colors hover:text-stone-900"
-                >
-                  Self-hosting
-                </a>
-              </li>
-              <li>
-                <Link href="/compare" className="transition-colors hover:text-stone-900">
-                  Cloud vs self-host
-                </Link>
-              </li>
-              <li>
-                <a
-                  href="https://github.com/restax/freehold/blob/main/LICENSE"
-                  className="transition-colors hover:text-stone-900"
-                >
-                  License
-                </a>
-              </li>
-            </ul>
-          </nav>
-          <nav aria-label="For partners">
-            <h3 className="text-sm font-medium">For partners</h3>
-            <ul className="mt-3 flex flex-col gap-2 text-sm text-stone-500">
-              <li>
-                <a href="#partners" className="transition-colors hover:text-stone-900">
-                  IT providers
-                </a>
-              </li>
-              <li>
-                <Link href="/signup" className="transition-colors hover:text-stone-900">
-                  Create an account
-                </Link>
-              </li>
-              <li>
-                <Link href="/privacy" className="transition-colors hover:text-stone-900">
-                  Privacy
-                </Link>
-              </li>
-              <li>
-                <Link href="/terms" className="transition-colors hover:text-stone-900">
-                  Terms
-                </Link>
-              </li>
-            </ul>
-          </nav>
-        </div>
-        <div className="border-t border-stone-100">
-          <p className="mx-auto max-w-6xl px-4 py-5 text-center text-sm text-stone-400 sm:px-6">
-            Freehold is open source under Apache-2.0. Self-hosting is free forever.
-          </p>
-        </div>
-      </footer>
+      <MarketingFooter />
     </main>
   );
 }

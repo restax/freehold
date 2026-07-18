@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { Wordmark } from "@/components/marketing";
 
 export default function NotFound() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
-      <p className="font-serif text-2xl font-semibold tracking-tight text-brand-700">Freehold</p>
+      <Wordmark />
       <h1 className="text-3xl font-semibold">Page not found</h1>
       <p className="max-w-md text-balance text-sm leading-relaxed text-stone-500">
         This page doesn't exist. If you followed a shared portal link, it may have expired or been
