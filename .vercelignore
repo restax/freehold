@@ -1,0 +1,9 @@
+.git
+.turbo
+**/.turbo
+**/.next
+**/node_modules
+**/dist
+db/documenso
+docker-compose*.yml
+.claude

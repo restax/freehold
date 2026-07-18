@@ -9,7 +9,7 @@ The single list of everything open across stages. Items move to ~~struck~~ with 
 - [ ] **Seeded demo instance** — fictional brokerage strangers can explore
 - [ ] **Launch posts** — Show HN, Product Hunt, r/selfhosted drafts
 - [x] **Pushed to github.com/restax/freehold** (private; history triple-scrubbed: secrets, personal names, banned words; CI green). Flip to public when ready: `gh repo edit restax/freehold --visibility public` *(2026-07-18)*
-- [ ] **Vercel deploy** of freeholdtc.dev (Paul: Vercel login; then wire domain, Neon Postgres, Upstash Redis)
+- [x] **Vercel deploy** of freeholdtc.dev *(2026-07-18)* — LIVE with TLS: project `freehold` (root `apps/web`, turbo build), Hostinger nameservers → Vercel DNS with all email records (MX/SPF/DKIM/DMARC/autodiscover) pre-copied so hello@/partners@ kept working, www 308→apex. Neon Postgres via Marketplace: build step `scripts/vercel-db-setup.mjs` creates non-owner `freehold_app` role + runs `prisma migrate deploy` + grants each deploy; runtime derives its connection from `STORAGE_DATABASE_URL` with `freehold_app` credentials (RLS intact). Stripe test-mode webhook endpoint live at /api/webhooks/stripe (subscriptions + invoices). Verified end-to-end on prod: signup → workspace create → dashboard, /api/health db:true. Leftovers: smoke-test account (smoketest@freeholdtc.dev / "Smoke Test TC") to delete when demo-seeding; `REDIS_URL` still placeholder (nothing uses it yet); apps/api (Fastify) not on Vercel — host separately when public API goes live.
 - [x] **hello@freeholdtc.dev mailbox** set up; partners@ already existed *(2026-07-18)*
 - [ ] OG/social share image for freeholdtc.dev (Higgsfield once Paul's paid account is logged in: `higgsfield auth login`)
 

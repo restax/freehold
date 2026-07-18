@@ -34,3 +34,6 @@ coverage/
 
 # dev-only Documenso signing cert
 db/documenso/cert.p12
+
+# Vercel
+.vercel
