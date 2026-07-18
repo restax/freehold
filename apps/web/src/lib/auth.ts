@@ -2,6 +2,7 @@ import { prisma } from "@freehold/db";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization } from "better-auth/plugins";
+import { adminAlert } from "@/lib/notify";
 
 type SocialProvider = { clientId: string; clientSecret: string };
 
@@ -29,4 +30,13 @@ export const auth = betterAuth({
   },
   socialProviders,
   plugins: [organization()],
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user) => {
+          adminAlert(`🆕 New Freehold signup: ${user.name} <${user.email}>`);
+        },
+      },
+    },
+  },
 });

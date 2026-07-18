@@ -20,9 +20,11 @@
     "@freehold/vault": "workspace:^",
     "@freehold/workflows": "workspace:*",
     "@phosphor-icons/react": "^2.1.10",
+    "@vercel/analytics": "^2.0.1",
     "better-auth": "^1.6.23",
     "next": "16.2.10",
     "pdf-lib": "^1.17.1",
+    "posthog-js": "^1.404.1",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "stripe": "^22.3.2"

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChatWidget } from "@/components/chat-widget";
 
 /* Shared brand chrome: wordmark, nav, footer, and the extraction review card. */
 
@@ -151,6 +152,7 @@ export function MarketingFooter() {
           Freehold is open source under Apache-2.0. Self-hosting is free forever.
         </p>
       </div>
+      <ChatWidget />
     </footer>
   );
 }

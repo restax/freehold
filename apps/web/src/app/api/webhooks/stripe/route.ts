@@ -1,5 +1,6 @@
 import { prisma, withTenant } from "@freehold/db";
 import { billingEnabled, planUpdateFromEvent, verifyWebhook } from "@freehold/ee-billing";
+import { adminAlert } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,9 @@ export async function POST(req: Request) {
 
   const update = planUpdateFromEvent(event);
   if (update) {
+    adminAlert(
+      `💳 Plan change: tenant ${update.tenantId} → ${update.tier} (${update.seats} seats)`,
+    );
     await prisma.organization
       .update({
         where: { id: update.tenantId },

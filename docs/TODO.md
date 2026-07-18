@@ -19,6 +19,14 @@ The single list of everything open across stages. Items move to ~~struck~~ with 
 - [x] Partner account / fleet dashboard / consolidated invoicing — pricing page reworded to honest "works today vs in development" framing with partners@ CTA *(2026-07-19)*
 - [x] Business tier definitions *(2026-07-19)* — "White-glove onboarding" → "Onboarding done with you: send your exports, we set up your workspace on a call"; "first access to reporting and invoicing" → "Early access to new features, reporting first" (invoicing is live, now listed on Pro)
 
+## Growth & operations (added 2026-07-19)
+
+- [x] **Operator admin panel** at `/admin` *(2026-07-19)* — workspaces table (plan, seats, active txns vs cap, AI credits used, Stripe customer link), topline stats (tenants, paying, MRR, users, 7-day signups), recent signups; read-only; gated by `PLATFORM_ADMIN_EMAILS` env (set to Paul's email on Vercel; unset on self-host = no panel)
+- [x] **Site chatbot messenger** *(2026-07-19)* — Claude-powered widget on all marketing pages (`/api/chat`, honest system prompt with real pricing/features, points to hello@ when unsure); every conversation forwards to Slack when the webhook is configured
+- [x] **Slack operator alerts** *(2026-07-19, scaffolded)* — new signups, plan changes, chat messages post to `SLACK_ADMIN_WEBHOOK_URL`. **(Paul)** create the webhook: api.slack.com/apps → Create App → Incoming Webhooks → pick channel → copy URL → add as `SLACK_ADMIN_WEBHOOK_URL` in Vercel env (no approval process)
+- [x] **Website tracking** *(2026-07-19, scaffolded)* — Vercel Web Analytics component mounted (**Paul**: enable the toggle at vercel.com → freehold project → Analytics tab); PostHog wired for robust events/funnels (**Paul**: free account at posthog.com → project API key → add `NEXT_PUBLIC_POSTHOG_KEY` in Vercel env, then redeploy)
+- [ ] **Tenant messaging notifications** — per-workspace Slack/Discord/Telegram webhooks for transaction/task events (all approval-free; WhatsApp + FB Messenger intentionally skipped — Meta review required, same policy as Google)
+
 ## Product backlog (pre-launch polish)
 
 - [ ] DocuSign adapter live test (only adapter never exercised with real credentials)
