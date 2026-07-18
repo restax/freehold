@@ -5,7 +5,7 @@ import { ExtractionReviewCard, MarketingFooter, MarketingNav } from "@/component
 export const metadata = {
   title: "Pricing | Freehold",
   description:
-    "Simple pricing with one honest free tier. Cloud from $0, Pro $29 per user, self-hosting free forever.",
+    "Simple pricing with one honest free tier. Cloud from $0, Pro $29 a month for a 2-person team, self-hosting free forever.",
 };
 
 const TIERS: Array<{
@@ -35,9 +35,11 @@ const TIERS: Array<{
     name: "Cloud Pro",
     audience: "For working TCs and small teams.",
     price: "$29",
-    period: "per user / month",
+    period: "/ month",
     features: [
-      "Unlimited transactions and custom fields",
+      "2 users included",
+      "50 active transactions a month",
+      "Up to 200 active clients",
       "AI contract extraction, fair use included",
       "Merge-field document templates",
       "Credential vault with reveal audit",
@@ -49,10 +51,13 @@ const TIERS: Array<{
   {
     name: "Cloud Business",
     audience: "For brokerages and title companies.",
-    price: "$59",
-    period: "per user / month",
+    price: "$80",
+    period: "/ month",
     features: [
       "Everything in Pro",
+      "10 users included",
+      "200 active transactions a month",
+      "Up to 200 active clients",
       "Priority, real-estate-focused support",
       "White-glove onboarding",
       "First access to reporting and invoicing",
@@ -73,7 +78,9 @@ export default function PricingPage() {
         <p className="mt-5 max-w-xl leading-relaxed text-stone-600">
           Legacy TC platforms run $99 or more a month. Freehold starts free, and hitting a limit
           never locks your data: existing transactions stay readable and exportable, only creating
-          new ones asks you to upgrade.
+          new ones asks you to upgrade. Both paid plans include room for{" "}
+          <strong className="font-semibold text-stone-900">200 active clients</strong> — enough for
+          a TC serving an entire brokerage's agent roster.
         </p>
         <p className="mt-3 max-w-xl text-sm leading-relaxed text-stone-500">
           One more difference: we pay no affiliate commissions. Other platforms hand recommenders

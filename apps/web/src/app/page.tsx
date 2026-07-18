@@ -151,6 +151,12 @@ export default async function LandingPage() {
               >
                 Self-host it
               </Link>
+              <a
+                href="/api/demo"
+                className="px-1 py-2.5 font-medium text-brand-700 transition hover:text-brand-600"
+              >
+                Explore the live demo &rarr;
+              </a>
             </div>
           </div>
           <div className="justify-self-center lg:justify-self-end">
@@ -290,7 +296,7 @@ export default async function LandingPage() {
                 <dt className="sr-only">Cloud Pro price</dt>
                 <dd className="font-display text-4xl font-bold tabular-nums text-brand-700">$29</dd>
                 <p className="mt-1 text-xs leading-snug text-stone-500">
-                  Cloud Pro, per user monthly
+                  Cloud Pro monthly, 2 users included
                 </p>
               </div>
               <div>
@@ -531,6 +537,12 @@ export default async function LandingPage() {
               className="rounded-lg border border-white/30 px-5 py-2.5 font-medium text-white transition hover:border-white/60 hover:bg-white/10 active:scale-[0.98]"
             >
               View pricing
+            </a>
+            <a
+              href="/api/demo"
+              className="rounded-lg border border-white/30 px-5 py-2.5 font-medium text-white transition hover:border-white/60 hover:bg-white/10 active:scale-[0.98]"
+            >
+              Explore the live demo
             </a>
           </div>
         </div>

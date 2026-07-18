@@ -2,7 +2,7 @@ import { billingEnabled } from "@freehold/ee-billing";
 import { openBillingPortal, startUpgrade } from "@/lib/actions/billing";
 import { countActiveTransactions, getTenantPlan, isCloud, PLAN_INFO, seatState } from "@/lib/plans";
 import { requireAdminTenant } from "@/lib/tenant";
-import { btn, btnGhost, card, input, label } from "@/lib/ui";
+import { btn, btnGhost, card } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +49,7 @@ export default async function BillingPage({
           {info.priceMonthly ? (
             <span className="text-sm font-normal text-stone-500">
               {" "}
-              — ${info.priceMonthly}/user/mo × {plan.seatLimit} seats
+              — ${info.priceMonthly}/mo, {plan.seatLimit} users included
             </span>
           ) : null}
         </h2>
@@ -96,36 +96,24 @@ export default async function BillingPage({
                 </div>
                 <p className="mb-1 font-serif text-3xl font-semibold tabular-nums">
                   ${PLAN_INFO[tier].priceMonthly}
-                  <span className="font-sans text-sm font-normal text-stone-500">/user/mo</span>
+                  <span className="font-sans text-sm font-normal text-stone-500">/mo</span>
                 </p>
                 <ul className="mb-3 flex min-h-16 flex-col gap-0.5 text-sm text-stone-600">
-                  <li>Unlimited transactions</li>
+                  <li>{PLAN_INFO[tier].includedSeats} users included</li>
+                  <li>{PLAN_INFO[tier].activeTransactionLimit} active transactions a month</li>
+                  <li>Up to 200 active clients</li>
                   <li>AI contract extraction included</li>
-                  {tier === "BUSINESS" ? (
-                    <>
-                      <li>Priority support</li>
-                      <li>Client sub-billing (coming)</li>
-                    </>
-                  ) : (
-                    <li>All integrations</li>
-                  )}
+                  {tier === "BUSINESS" ? <li>Priority support</li> : <li>All integrations</li>}
                 </ul>
-                <form action={startUpgrade} className="mt-auto flex items-end gap-2">
+                <form action={startUpgrade} className="mt-auto">
                   <input type="hidden" name="tier" value={tier} />
-                  <label className={label}>
-                    Seats
-                    <input
-                      name="seats"
-                      type="number"
-                      min={1}
-                      max={100}
-                      defaultValue={Math.max(seats.used, 2)}
-                      className={`${input} w-20`}
-                    />
-                  </label>
-                  <button type="submit" className={btn}>
-                    {plan.tier === tier ? "Change seats" : `Upgrade to ${PLAN_INFO[tier].label}`}
-                  </button>
+                  {plan.tier === tier ? (
+                    <p className="text-sm text-stone-500">Your current plan.</p>
+                  ) : (
+                    <button type="submit" className={btn}>
+                      Upgrade to {PLAN_INFO[tier].label}
+                    </button>
+                  )}
                 </form>
               </section>
             ))}

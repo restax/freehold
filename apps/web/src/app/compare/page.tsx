@@ -52,7 +52,7 @@ const ROWS: Array<[string, string, string, string]> = [
   ],
   [
     "Price",
-    "$0, $29, or $59 per user / month",
+    "$0, $29, or $80 a month — flat, users included",
     "$0 forever; an unused PC you already own works",
     "Standard plan rates on one consolidated invoice",
   ],

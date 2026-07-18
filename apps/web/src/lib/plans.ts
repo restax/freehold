@@ -11,11 +11,16 @@ import { type PlanTier, prisma, withTenant } from "@freehold/db";
 
 export const PLAN_INFO: Record<
   PlanTier,
-  { label: string; priceMonthly: number | null; activeTransactionLimit: number | null }
+  {
+    label: string;
+    priceMonthly: number | null;
+    includedSeats: number;
+    activeTransactionLimit: number | null;
+  }
 > = {
-  FREE: { label: "Free", priceMonthly: 0, activeTransactionLimit: 10 },
-  PRO: { label: "Pro", priceMonthly: 29, activeTransactionLimit: null },
-  BUSINESS: { label: "Business", priceMonthly: 59, activeTransactionLimit: null },
+  FREE: { label: "Free", priceMonthly: 0, includedSeats: 2, activeTransactionLimit: 10 },
+  PRO: { label: "Pro", priceMonthly: 29, includedSeats: 2, activeTransactionLimit: 50 },
+  BUSINESS: { label: "Business", priceMonthly: 80, includedSeats: 10, activeTransactionLimit: 200 },
 };
 
 export function isCloud(): boolean {

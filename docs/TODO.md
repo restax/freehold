@@ -6,12 +6,12 @@ The single list of everything open across stages. Items move to ~~struck~~ with 
 
 - [x] **CLA final legal text** in [CLA.md](CLA.md) (Apache ICLA V2.2 adaptation with dual-license grant); signing gate workflow already in place *(2026-07-18)*
 - [x] **Self-hosting guide** at [SELF-HOSTING.md](SELF-HOSTING.md); site buttons and footer now link to it *(2026-07-18)*
-- [ ] **Seeded demo instance** — fictional brokerage strangers can explore
-- [ ] **Launch posts** — Show HN, Product Hunt, r/selfhosted drafts
+- [x] **Seeded demo instance** *(2026-07-19)* — "Explore the live demo" on the landing page → `/api/demo` signs visitors into the shared "Maplewood Transactions (Demo)" workspace as a plain member (owner/admin actions locked); Vercel cron wipes and re-seeds nightly at 9:00 UTC via `/api/demo/reset` (CRON_SECRET-guarded); demo only activates when `DEMO_USER_PASSWORD` is set, so self-hosters never expose one
+- [ ] **Launch posts** — drafts ready for Paul's review in [launch/](launch/): Show HN, Product Hunt, r/selfhosted *(drafted 2026-07-19; post only after repo flips public + honesty items resolved)*
 - [x] **Pushed to github.com/restax/freehold** (private; history triple-scrubbed: secrets, personal names, banned words; CI green). Flip to public when ready: `gh repo edit restax/freehold --visibility public` *(2026-07-18)*
 - [x] **Vercel deploy** of freeholdtc.dev *(2026-07-18)* — LIVE with TLS: project `freehold` (root `apps/web`, turbo build), Hostinger nameservers → Vercel DNS with all email records (MX/SPF/DKIM/DMARC/autodiscover) pre-copied so hello@/partners@ kept working, www 308→apex. Neon Postgres via Marketplace: build step `scripts/vercel-db-setup.mjs` creates non-owner `freehold_app` role + runs `prisma migrate deploy` + grants each deploy; runtime derives its connection from `STORAGE_DATABASE_URL` with `freehold_app` credentials (RLS intact). Stripe test-mode webhook endpoint live at /api/webhooks/stripe (subscriptions + invoices). Verified end-to-end on prod: signup → workspace create → dashboard, /api/health db:true. Leftovers: smoke-test account (smoketest@freeholdtc.dev / "Smoke Test TC") to delete when demo-seeding; `REDIS_URL` still placeholder (nothing uses it yet); apps/api (Fastify) not on Vercel — host separately when public API goes live.
 - [x] **hello@freeholdtc.dev mailbox** set up; partners@ already existed *(2026-07-18)*
-- [ ] OG/social share image for freeholdtc.dev (Higgsfield once Paul's paid account is logged in: `higgsfield auth login`)
+- [x] OG/social share image *(2026-07-19)* — Higgsfield Soul V2 photo (Flux Kontext pass removed AI-gibberish lettering) + real Outfit type overlay, rendered at 2x via headless Chrome; installed as `apps/web/src/app/opengraph-image.png` + `twitter-image.png` (Next file convention, alt text included), verified live in meta tags
 
 ## Marketing honesty items (site currently promises these)
 

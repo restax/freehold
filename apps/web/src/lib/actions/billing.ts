@@ -3,7 +3,7 @@
 import { prisma } from "@freehold/db";
 import { billingEnabled, createPortalSession, createUpgradeCheckout } from "@freehold/ee-billing";
 import { redirect } from "next/navigation";
-import { intOr, oneOf, str } from "@/lib/forms";
+import { oneOf } from "@/lib/forms";
 import { requireAdminTenant } from "@/lib/tenant";
 
 function baseUrl(): string {
@@ -14,7 +14,6 @@ export async function startUpgrade(formData: FormData) {
   const { tenantId, session, isAdmin } = await requireAdminTenant();
   if (!isAdmin || !billingEnabled()) return;
   const tier = oneOf(formData, "tier", ["PRO", "BUSINESS"] as const, "PRO");
-  const seats = Math.min(Math.max(intOr(formData, "seats", 2) ?? 2, 1), 100);
 
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: tenantId },
@@ -23,7 +22,6 @@ export async function startUpgrade(formData: FormData) {
   const url = await createUpgradeCheckout({
     tenantId,
     tier,
-    seats,
     customerEmail: session.user.email,
     existingCustomerId: org.stripeCustomerId,
     baseUrl: baseUrl(),
