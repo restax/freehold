@@ -1,6 +1,8 @@
 import { prisma } from "@freehold/db";
+import Link from "next/link";
 import { cancelInvitation, inviteMember, removeMember, updateMemberRole } from "@/lib/actions/team";
 import { fmtDate } from "@/lib/format";
+import { seatState } from "@/lib/plans";
 import { requireAdminTenant } from "@/lib/tenant";
 import { btn, btnGhost, card, input, label, td, th } from "@/lib/ui";
 
@@ -22,6 +24,7 @@ export default async function TeamPage() {
     }),
   ]);
   const baseUrl = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
+  const seats = await seatState(tenantId);
 
   return (
     <div className="flex flex-col gap-6">
@@ -32,6 +35,16 @@ export default async function TeamPage() {
           delete transactions, clients, templates, or plans.
         </p>
       </div>
+
+      {seats.limited && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          All {seats.limit} seats are in use (members + pending invitations).{" "}
+          <Link href="/dashboard/billing" className="font-medium text-brand-700 underline">
+            Add seats
+          </Link>{" "}
+          to invite more teammates.
+        </p>
+      )}
 
       <section className={card}>
         <h2 className="mb-3 font-medium">Members</h2>

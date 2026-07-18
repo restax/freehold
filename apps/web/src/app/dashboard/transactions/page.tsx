@@ -2,6 +2,7 @@ import { TransactionSide, TransactionStatus, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { createTransaction } from "@/lib/actions/transactions";
 import { fmtDate, fmtMoney, SIDE_LABEL, STATUS_BADGE, STATUS_LABEL } from "@/lib/format";
+import { transactionLimit } from "@/lib/plans";
 import { requireTenant } from "@/lib/tenant";
 import { btn, btnGhost, card, input, label, td, th } from "@/lib/ui";
 
@@ -16,6 +17,7 @@ export default async function TransactionsPage({
   searchParams: Promise<{ status?: string }>;
 }) {
   const { tenantId } = await requireTenant();
+  const limit = await transactionLimit(tenantId);
   const { status } = await searchParams;
   const statusFilter = STATUSES.includes(status as TransactionStatus)
     ? (status as TransactionStatus)
@@ -48,6 +50,29 @@ export default async function TransactionsPage({
           </button>
         </form>
       </div>
+
+      {limit.limit != null && (
+        <p
+          className={`rounded-lg px-3 py-2 text-sm ${
+            limit.limited ? "bg-amber-50 text-amber-900" : "bg-stone-100 text-stone-600"
+          }`}
+        >
+          {limit.active} of {limit.limit} active transactions on the Free plan.{" "}
+          {limit.limited ? (
+            <>
+              You've reached the limit — existing transactions stay fully accessible;{" "}
+              <Link href="/dashboard/billing" className="font-medium text-brand-700 underline">
+                upgrade
+              </Link>{" "}
+              to create more (or close out finished deals).
+            </>
+          ) : (
+            <Link href="/dashboard/billing" className="text-brand-700 underline">
+              View plans
+            </Link>
+          )}
+        </p>
+      )}
 
       <details className={card}>
         <summary className="cursor-pointer font-medium text-brand-700">New transaction</summary>

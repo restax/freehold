@@ -4,6 +4,7 @@ import { TransactionSide, TransactionStatus, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { dateOnly, intOr, oneOf, optStr, str } from "@/lib/forms";
+import { transactionLimit } from "@/lib/plans";
 import { requireAdminTenant, requireTenant } from "@/lib/tenant";
 
 const STATUSES = Object.values(TransactionStatus);
@@ -28,6 +29,8 @@ export async function createTransaction(formData: FormData) {
   const { tenantId } = await requireTenant();
   const propertyAddress = str(formData, "propertyAddress");
   if (!propertyAddress) return;
+  const limit = await transactionLimit(tenantId);
+  if (limit.limited) return; // cloud free-tier cap; the page shows the upgrade banner
   const created = await withTenant(tenantId, (tx) =>
     tx.transaction.create({
       data: { tenantId, propertyAddress, ...commonFields(formData) },

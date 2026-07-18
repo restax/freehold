@@ -86,12 +86,24 @@ model Verification {
 
 // --- Better Auth organization plugin (Organization = Freehold tenant) ---
 
+/// Cloud plan tier. Self-hosted installs stay on FREE semantics-wise but are
+/// never limited — limits are enforced only when FREEHOLD_CLOUD=1.
+enum PlanTier {
+  FREE
+  PRO
+  BUSINESS
+}
+
 model Organization {
   id              String            @id
   name            String
   slug            String            @unique
   logo            String?
   metadata        String?
+  planTier        PlanTier          @default(FREE) @map("plan_tier")
+  seatLimit       Int               @default(2) @map("seat_limit")
+  stripeCustomerId String?          @map("stripe_customer_id")
+  stripeSubscriptionId String?      @map("stripe_subscription_id")
   createdAt       DateTime          @default(now())
   members         Member[]
   invitations     Invitation[]

@@ -1,5 +1,6 @@
 import { TaskStatus, TransactionStatus, withTenant } from "@freehold/db";
 import Link from "next/link";
+import { HubNews } from "@/components/hub-news";
 import { toggleTask } from "@/lib/actions/tasks";
 import { fmtDate, STATUS_BADGE, STATUS_LABEL } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
@@ -135,6 +136,8 @@ export default async function DashboardPage() {
           </table>
         )}
       </section>
+
+      <HubNews />
     </div>
   );
 }

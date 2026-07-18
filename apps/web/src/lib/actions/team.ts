@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { oneOf, str } from "@/lib/forms";
+import { seatState } from "@/lib/plans";
 import { requireAdminTenant } from "@/lib/tenant";
 
 const ROLES = ["owner", "admin", "member"] as const;
@@ -18,6 +19,8 @@ export async function inviteMember(formData: FormData) {
   if (!isAdmin) return;
   const email = str(formData, "email").toLowerCase();
   if (!email) return;
+  const seats = await seatState(tenantId);
+  if (seats.limited) return; // cloud seat cap; the team page shows the upgrade banner
 
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7);

@@ -12,6 +12,7 @@ const NAV = [
   { href: "/dashboard/templates", label: "Templates" },
   { href: "/dashboard/vault", label: "Vault" },
   { href: "/dashboard/team", label: "Team" },
+  { href: "/dashboard/billing", label: "Billing" },
   { href: "/dashboard/settings", label: "Settings" },
 ];
 
