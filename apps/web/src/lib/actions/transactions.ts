@@ -4,7 +4,7 @@ import { TransactionSide, TransactionStatus, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { dateOnly, intOr, oneOf, optStr, str } from "@/lib/forms";
-import { requireTenant } from "@/lib/tenant";
+import { requireAdminTenant, requireTenant } from "@/lib/tenant";
 
 const STATUSES = Object.values(TransactionStatus);
 const SIDES = Object.values(TransactionSide);
@@ -90,9 +90,9 @@ export async function removeCustomField(formData: FormData) {
 }
 
 export async function deleteTransaction(formData: FormData) {
-  const { tenantId } = await requireTenant();
+  const { tenantId, isAdmin } = await requireAdminTenant();
   const id = str(formData, "id");
-  if (!id) return;
+  if (!id || !isAdmin) return;
   await withTenant(tenantId, (tx) => tx.transaction.delete({ where: { id } }));
   revalidatePath("/dashboard/transactions");
   redirect("/dashboard/transactions");

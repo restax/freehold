@@ -10,6 +10,7 @@ import {
 } from "@/lib/actions/esign";
 import { runExtraction } from "@/lib/actions/extractions";
 import { addParty, removeParty } from "@/lib/actions/parties";
+import { createPortalLink, deletePortalLink, revokePortalLink } from "@/lib/actions/portal";
 import { applyActionPlan, createTask, deleteTask, toggleTask } from "@/lib/actions/tasks";
 import { generateDocument } from "@/lib/actions/templates";
 import {
@@ -55,6 +56,7 @@ export default async function TransactionDetailPage({
           orderBy: { createdAt: "desc" },
           include: { document: { select: { filename: true } } },
         },
+        portalLinks: { orderBy: { createdAt: "desc" } },
       },
     });
     if (!txn) return null;
@@ -578,6 +580,109 @@ export default async function TransactionDetailPage({
             </ul>
           </div>
         )}
+      </section>
+
+      <section className={card}>
+        <h2 className="mb-1 font-medium">Client portal links</h2>
+        <p className="mb-3 text-sm text-stone-500">
+          Share a read-only view of this transaction — text or email the link to your buyer, seller,
+          or agent. You choose what each link shows; revoke any time.
+        </p>
+        {txn.portalLinks.length > 0 && (
+          <ul className="mb-4 flex flex-col">
+            {txn.portalLinks.map((pl) => {
+              const url = `${process.env.BETTER_AUTH_URL ?? "http://localhost:3000"}/portal/${pl.token}`;
+              return (
+                <li key={pl.id} className="border-b border-stone-100 py-2 last:border-0">
+                  <div className="flex flex-wrap items-center gap-3 text-sm">
+                    <span className="font-medium">{pl.label}</span>
+                    <span className="text-xs text-stone-400">
+                      shows:{" "}
+                      {[
+                        pl.showTasks && "tasks",
+                        pl.showParties && "parties",
+                        pl.showDocuments && "documents",
+                      ]
+                        .filter(Boolean)
+                        .join(", ") || "summary only"}
+                    </span>
+                    {pl.revokedAt ? (
+                      <span className="rounded-full bg-stone-200 px-2 py-0.5 text-xs text-stone-600">
+                        revoked
+                      </span>
+                    ) : (
+                      <span className="text-xs text-stone-400">
+                        {pl.lastAccessedAt
+                          ? `last viewed ${fmtDate(pl.lastAccessedAt)}`
+                          : "never viewed"}
+                      </span>
+                    )}
+                    <span className="ml-auto flex items-center gap-2">
+                      {!pl.revokedAt && (
+                        <form action={revokePortalLink}>
+                          <input type="hidden" name="id" value={pl.id} />
+                          <input type="hidden" name="transactionId" value={txn.id} />
+                          <button
+                            type="submit"
+                            className="text-xs text-stone-400 hover:text-red-600"
+                          >
+                            revoke
+                          </button>
+                        </form>
+                      )}
+                      <form action={deletePortalLink}>
+                        <input type="hidden" name="id" value={pl.id} />
+                        <input type="hidden" name="transactionId" value={txn.id} />
+                        <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
+                          delete
+                        </button>
+                      </form>
+                    </span>
+                  </div>
+                  {!pl.revokedAt && (
+                    <input
+                      readOnly
+                      value={url}
+                      className="mt-1 w-full rounded border border-stone-200 bg-stone-50 px-2 py-1 font-mono text-xs text-stone-600"
+                    />
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <form action={createPortalLink} className="flex flex-wrap items-end gap-3">
+          <input type="hidden" name="transactionId" value={txn.id} />
+          <label className={label}>
+            Label *
+            <input name="label" required placeholder="Buyer — Jordan" className={input} />
+          </label>
+          <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
+            <input
+              type="checkbox"
+              name="showTasks"
+              defaultChecked
+              className="h-4 w-4 accent-brand-600"
+            />
+            Tasks
+          </label>
+          <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
+            <input
+              type="checkbox"
+              name="showParties"
+              defaultChecked
+              className="h-4 w-4 accent-brand-600"
+            />
+            Parties
+          </label>
+          <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
+            <input type="checkbox" name="showDocuments" className="h-4 w-4 accent-brand-600" />
+            Documents
+          </label>
+          <button type="submit" className={btnGhost}>
+            Create link
+          </button>
+        </form>
       </section>
     </div>
   );

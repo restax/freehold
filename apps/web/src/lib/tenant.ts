@@ -1,3 +1,4 @@
+import { prisma } from "@freehold/db";
 import { redirect } from "next/navigation";
 import { getSession, listTenants } from "./session";
 
@@ -15,4 +16,24 @@ export async function requireTenant() {
   const tenantId =
     tenants.find((t) => t.id === session.session.activeOrganizationId)?.id ?? first.id;
   return { session, tenantId, userId: session.user.id };
+}
+
+/** The caller's role in the active tenant ("owner" | "admin" | "member"). */
+export async function getMemberRole(tenantId: string, userId: string): Promise<string> {
+  const member = await prisma.member.findFirst({
+    where: { organizationId: tenantId, userId },
+    select: { role: true },
+  });
+  return member?.role ?? "member";
+}
+
+/**
+ * requireTenant plus an admin check. Destructive actions call this and no-op
+ * for plain members (owner/admin pass). Button-hiding for members is a UI
+ * refinement tracked for later — the enforcement lives here either way.
+ */
+export async function requireAdminTenant() {
+  const ctx = await requireTenant();
+  const role = await getMemberRole(ctx.tenantId, ctx.userId);
+  return { ...ctx, role, isAdmin: role === "owner" || role === "admin" };
 }

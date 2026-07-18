@@ -4,7 +4,7 @@ import { DateAnchor, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { intOr, oneOf, optStr, str } from "@/lib/forms";
-import { requireTenant } from "@/lib/tenant";
+import { requireAdminTenant, requireTenant } from "@/lib/tenant";
 
 const ANCHORS = Object.values(DateAnchor);
 
@@ -22,9 +22,9 @@ export async function createPlan(formData: FormData) {
 }
 
 export async function deletePlan(formData: FormData) {
-  const { tenantId } = await requireTenant();
+  const { tenantId, isAdmin } = await requireAdminTenant();
   const id = str(formData, "id");
-  if (!id) return;
+  if (!id || !isAdmin) return;
   await withTenant(tenantId, (tx) => tx.actionPlan.delete({ where: { id } }));
   revalidatePath("/dashboard/action-plans");
   redirect("/dashboard/action-plans");

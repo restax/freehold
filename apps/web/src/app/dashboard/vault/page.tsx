@@ -1,0 +1,169 @@
+import { withTenant } from "@freehold/db";
+import { RevealCredential } from "@/components/reveal-credential";
+import { createCredential, deleteCredential } from "@/lib/actions/vault";
+import { fmtDate } from "@/lib/format";
+import { requireTenant } from "@/lib/tenant";
+import { btn, card, input, label, td, th } from "@/lib/ui";
+
+export const dynamic = "force-dynamic";
+
+export default async function VaultPage() {
+  const { tenantId } = await requireTenant();
+  const { credentials, clients, log } = await withTenant(tenantId, async (tx) => ({
+    credentials: await tx.vaultCredential.findMany({
+      orderBy: [{ clientId: "asc" }, { system: "asc" }],
+      include: { client: { select: { name: true } } },
+    }),
+    clients: await tx.client.findMany({ orderBy: { name: "asc" } }),
+    log: await tx.vaultAccessLog.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      include: { credential: { select: { system: true } } },
+    }),
+  }));
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-xl font-semibold">Credential vault</h1>
+        <p className="text-sm text-stone-500">
+          Client logins (MLS, lender portals, e-sign accounts) — encrypted at rest, revealed only on click,
+          every reveal audited. Freehold never logs into anything automatically. Store credentials
+          only with your client's consent.
+        </p>
+      </div>
+
+      {!process.env.VAULT_MASTER_KEY && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <code>VAULT_MASTER_KEY</code> is not set — generate one with{" "}
+          <code>openssl rand -base64 32</code> and add it to <code>.env</code>.
+        </p>
+      )}
+
+      <details className={card}>
+        <summary className="cursor-pointer font-medium text-brand-700">Add credential</summary>
+        <form action={createCredential} className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <label className={label}>
+            System *
+            <input name="system" required placeholder="MLS — MRED" className={input} />
+          </label>
+          <label className={label}>
+            Client
+            <select name="clientId" className={input} defaultValue="">
+              <option value="">— (tenant-wide)</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={label}>
+            Username *
+            <input name="username" required className={input} />
+          </label>
+          <label className={label}>
+            Password / secret *
+            <input name="secret" type="password" required className={input} />
+          </label>
+          <label className={label}>
+            Login URL
+            <input name="url" placeholder="https://..." className={input} />
+          </label>
+          <label className={label}>
+            Notes
+            <input name="notes" className={input} />
+          </label>
+          <div className="flex items-end">
+            <button type="submit" className={btn}>
+              Save encrypted
+            </button>
+          </div>
+        </form>
+      </details>
+
+      <section className={card}>
+        {credentials.length === 0 ? (
+          <p className="text-sm text-stone-500">No credentials stored.</p>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr>
+                <th className={th}>System</th>
+                <th className={th}>Client</th>
+                <th className={th}>Username</th>
+                <th className={th}>Secret</th>
+                <th className={th}>URL</th>
+                <th className={th} />
+              </tr>
+            </thead>
+            <tbody>
+              {credentials.map((c) => (
+                <tr key={c.id}>
+                  <td className={`${td} font-medium`}>{c.system}</td>
+                  <td className={td}>{c.client?.name ?? "—"}</td>
+                  <td className={td}>{c.username}</td>
+                  <td className={td}>
+                    <RevealCredential credentialId={c.id} />
+                  </td>
+                  <td className={td}>
+                    {c.url ? (
+                      <a
+                        href={c.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-brand-600 hover:underline"
+                      >
+                        open
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className={td}>
+                    <form action={deleteCredential}>
+                      <input type="hidden" name="id" value={c.id} />
+                      <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
+                        delete
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section className={card}>
+        <h2 className="mb-2 font-medium">Access log</h2>
+        {log.length === 0 ? (
+          <p className="text-sm text-stone-500">No vault activity yet.</p>
+        ) : (
+          <ul className="flex flex-col text-sm">
+            {log.map((entry) => (
+              <li
+                key={entry.id}
+                className="flex flex-wrap gap-2 border-b border-stone-100 py-1.5 last:border-0"
+              >
+                <span className="text-stone-400">{fmtDate(entry.createdAt)}</span>
+                <span
+                  className={`rounded-full px-2 text-xs leading-5 ${
+                    entry.action === "REVEALED"
+                      ? "bg-amber-100 text-amber-800"
+                      : entry.action === "DELETED"
+                        ? "bg-red-100 text-red-700"
+                        : "bg-stone-100 text-stone-600"
+                  }`}
+                >
+                  {entry.action.toLowerCase()}
+                </span>
+                <span>{entry.detail}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}

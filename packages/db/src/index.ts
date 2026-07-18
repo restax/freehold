@@ -15,12 +15,15 @@ export type {
   Member,
   Organization,
   Organization as Tenant,
+  PortalLink,
   Session,
   SignatureEnvelope,
   Task,
   Transaction,
   TransactionParty,
   User,
+  VaultAccessLog,
+  VaultCredential,
 } from "@prisma/client";
 export { prisma } from "./client.js";
 export { tenantSlug } from "./slug.js";
@@ -42,6 +45,8 @@ export const TransactionSide = PrismaPkg.TransactionSide;
 export type TransactionSide = PrismaPkg.TransactionSide;
 export const TransactionStatus = PrismaPkg.TransactionStatus;
 export type TransactionStatus = PrismaPkg.TransactionStatus;
+export const VaultAction = PrismaPkg.VaultAction;
+export type VaultAction = PrismaPkg.VaultAction;
 export const EnvelopeStatus = PrismaPkg.EnvelopeStatus;
 export type EnvelopeStatus = PrismaPkg.EnvelopeStatus;
 export const EsignProvider = PrismaPkg.EsignProvider;

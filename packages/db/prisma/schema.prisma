@@ -107,6 +107,9 @@ model Organization {
   extractionFields ExtractionField[]
   templates       DocTemplate[]
   envelopes       SignatureEnvelope[]
+  portalLinks     PortalLink[]
+  vaultCredentials VaultCredential[]
+  vaultAccessLogs VaultAccessLog[]
 
   @@map("organization")
 }
@@ -166,6 +169,7 @@ model Client {
   esignProvider EsignProvider? @map("esign_provider")
   isSample      Boolean        @default(false)
   transactions  Transaction[]
+  credentials   VaultCredential[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -260,11 +264,94 @@ model Transaction {
   documents       Document[]
   extractions     ContractExtraction[]
   envelopes       SignatureEnvelope[]
+  portalLinks     PortalLink[]
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
   @@index([tenantId, status])
   @@map("transaction")
+}
+
+// --- Stage 04: client portals + credential vault ---
+
+/// Shareable read-only portal access to one transaction. The random token IS
+/// the capability — portal pages are unauthenticated by design (TCs text
+/// these links to buyers/sellers).
+///
+/// ⚠️ Deliberately NOT covered by row-level security: the public portal route
+/// must resolve a bare token with no tenant context. The table carries only
+/// the token, display toggles, and foreign keys; all transaction data is then
+/// fetched through withTenant() using the link's own tenant id.
+model PortalLink {
+  id             String       @id @default(uuid())
+  tenantId       String       @map("tenant_id")
+  tenant         Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactionId  String
+  transaction    Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  token          String       @unique
+  label          String
+  showTasks      Boolean      @default(true) @map("show_tasks")
+  showDocuments  Boolean      @default(false) @map("show_documents")
+  showParties    Boolean      @default(true) @map("show_parties")
+  revokedAt      DateTime?    @map("revoked_at")
+  lastAccessedAt DateTime?    @map("last_accessed_at")
+  createdAt      DateTime     @default(now())
+
+  @@index([tenantId])
+  @@index([transactionId])
+  @@map("portal_link")
+}
+
+enum VaultAction {
+  CREATED
+  UPDATED
+  REVEALED
+  DELETED
+}
+
+/// Envelope-encrypted third-party credential (MLS, lender portals, e-sign accounts)
+/// stored on a client's behalf. The secret never exists in plaintext at rest:
+/// AES-256-GCM under a per-credential data key, itself wrapped by
+/// VAULT_MASTER_KEY (see packages/vault). Reveals are audited — Freehold
+/// stores and audits credentials; it never logs into anything automatically.
+model VaultCredential {
+  id         String           @id @default(uuid())
+  tenantId   String           @map("tenant_id")
+  tenant     Organization     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId   String?
+  client     Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  system     String
+  username   String
+  url        String?
+  notes      String?
+  ciphertext String
+  iv         String
+  tag        String
+  wrappedKey String           @map("wrapped_key")
+  wrapIv     String           @map("wrap_iv")
+  wrapTag    String           @map("wrap_tag")
+  keyVersion Int              @default(1) @map("key_version")
+  accessLogs VaultAccessLog[]
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@index([tenantId])
+  @@map("vault_credential")
+}
+
+model VaultAccessLog {
+  id           String           @id @default(uuid())
+  tenantId     String           @map("tenant_id")
+  tenant       Organization     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  credentialId String?
+  credential   VaultCredential? @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+  userId       String
+  action       VaultAction
+  detail       String?
+  createdAt    DateTime         @default(now())
+
+  @@index([tenantId, createdAt])
+  @@map("vault_access_log")
 }
 
 model TransactionParty {

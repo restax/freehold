@@ -7,7 +7,7 @@ import { optStr, str } from "@/lib/forms";
 import { listTenants } from "@/lib/session";
 import { putObject } from "@/lib/storage";
 import { buildMergeContext, renderTemplatePdf, resolveTemplate } from "@/lib/templates";
-import { requireTenant } from "@/lib/tenant";
+import { requireAdminTenant, requireTenant } from "@/lib/tenant";
 
 export async function createTemplate(formData: FormData) {
   const { tenantId } = await requireTenant();
@@ -46,9 +46,9 @@ export async function updateTemplate(formData: FormData) {
 }
 
 export async function deleteTemplate(formData: FormData) {
-  const { tenantId } = await requireTenant();
+  const { tenantId, isAdmin } = await requireAdminTenant();
   const id = str(formData, "id");
-  if (!id) return;
+  if (!id || !isAdmin) return;
   await withTenant(tenantId, (tx) => tx.docTemplate.delete({ where: { id } }));
   revalidatePath("/dashboard/templates");
   redirect("/dashboard/templates");

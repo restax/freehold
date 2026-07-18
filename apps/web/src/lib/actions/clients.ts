@@ -3,7 +3,7 @@
 import { ClientType, EsignProvider, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { oneOf, optStr, str } from "@/lib/forms";
-import { requireTenant } from "@/lib/tenant";
+import { requireAdminTenant, requireTenant } from "@/lib/tenant";
 
 const CLIENT_TYPES = Object.values(ClientType);
 const ESIGN_PROVIDERS = Object.values(EsignProvider);
@@ -43,9 +43,9 @@ export async function updateClientEsign(formData: FormData) {
 }
 
 export async function deleteClient(formData: FormData) {
-  const { tenantId } = await requireTenant();
+  const { tenantId, isAdmin } = await requireAdminTenant();
   const id = str(formData, "id");
-  if (!id) return;
+  if (!id || !isAdmin) return;
   await withTenant(tenantId, (tx) => tx.client.delete({ where: { id } }));
   revalidatePath("/dashboard/clients");
 }

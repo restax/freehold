@@ -15,6 +15,7 @@
     "@aws-sdk/client-s3": "^3.1090.0",
     "@freehold/db": "workspace:*",
     "@freehold/integrations": "workspace:^",
+    "@freehold/vault": "workspace:^",
     "@freehold/workflows": "workspace:*",
     "better-auth": "^1.6.23",
     "next": "16.2.10",

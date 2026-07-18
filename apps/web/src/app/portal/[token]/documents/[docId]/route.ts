@@ -1,0 +1,39 @@
+import { prisma, withTenant } from "@freehold/db";
+import { getObjectBytes } from "@/lib/storage";
+
+export const dynamic = "force-dynamic";
+
+/** Public, token-scoped document download for portal viewers. */
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ token: string; docId: string }> },
+) {
+  const { token, docId } = await params;
+  const link = await prisma.portalLink.findUnique({ where: { token } });
+  if (!link || link.revokedAt || !link.showDocuments) {
+    return new Response("Not found", { status: 404 });
+  }
+  const doc = await withTenant(link.tenantId, (tx) =>
+    tx.document.findUnique({
+      where: { id: docId },
+      select: {
+        filename: true,
+        contentType: true,
+        data: true,
+        storageKey: true,
+        transactionId: true,
+      },
+    }),
+  );
+  if (!doc || doc.transactionId !== link.transactionId) {
+    return new Response("Not found", { status: 404 });
+  }
+  const bytes = await getObjectBytes(doc);
+  return new Response(new Uint8Array(bytes), {
+    headers: {
+      "Content-Type": doc.contentType,
+      "Content-Disposition": `inline; filename="${doc.filename.replace(/[^\w.\- ]/g, "_")}"`,
+      "Cache-Control": "private, no-store",
+    },
+  });
+}
