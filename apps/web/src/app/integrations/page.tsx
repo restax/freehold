@@ -33,20 +33,20 @@ const LIVE: Integration[] = [
   [
     "Stripe",
     "St",
-    "Powers Freehold Cloud subscriptions today; client invoicing through your own Stripe is on the way.",
+    "Powers Freehold Cloud subscriptions, and client invoicing through your own Stripe account with hosted payment pages and automatic paid-status sync.",
   ],
 ];
 
 const COMING: Integration[] = [
   [
-    "Google Workspace",
-    "G",
-    "Send email from your address, sync documents, import contacts, and push key dates to your calendar.",
+    "Email (IMAP/SMTP)",
+    "@",
+    "Connect any mailbox with the standard settings every provider publishes. Send from your own address — no big-tech app approvals standing between you and your email.",
   ],
   [
-    "Microsoft Outlook",
-    "O",
-    "Email, contacts, and calendar dates connected to the account your brokerage already runs on.",
+    "Calendar feeds (ICS)",
+    "Ca",
+    "Subscribe once from whatever calendar you already live in, and every deadline Freehold computes shows up there automatically.",
   ],
   [
     "Follow Up Boss",
