@@ -1,10 +1,154 @@
-import { withTenant } from "@freehold/db";
+import { prisma, withTenant } from "@freehold/db";
+import { Badge } from "@/components/badges";
+import {
+  createApiKey,
+  createWebhookEndpoint,
+  deleteWebhookEndpoint,
+  readNewApiKey,
+  revokeApiKey,
+} from "@/lib/actions/api-keys";
 import { removeSampleData } from "@/lib/actions/sample-data";
+import { fmtDate } from "@/lib/format";
 import { listTenants } from "@/lib/session";
-import { requireTenant } from "@/lib/tenant";
-import { btnGhost, card } from "@/lib/ui";
+import { getMemberRole, requireTenant } from "@/lib/tenant";
+import { btn, btnGhost, card, input, label, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
+
+async function ApiSection({ tenantId, userId }: { tenantId: string; userId: string }) {
+  const role = await getMemberRole(tenantId, userId);
+  const isAdmin = role === "owner" || role === "admin";
+  if (!isAdmin) return null;
+  const [keys, endpoints, newKey] = await Promise.all([
+    prisma.apiKey.findMany({ where: { tenantId }, orderBy: { createdAt: "desc" } }),
+    withTenant(tenantId, (tx) => tx.webhookEndpoint.findMany({ orderBy: { createdAt: "desc" } })),
+    readNewApiKey(),
+  ]);
+
+  return (
+    <>
+      <section className={card}>
+        <h2 className="mb-1 font-medium">API keys</h2>
+        <p className="mb-3 text-sm text-stone-500">
+          Keys give full read/write access to this workspace through the REST API. Treat them like
+          passwords.
+        </p>
+        {newKey && (
+          <div className="mb-3 rounded-lg bg-brand-50 px-3 py-2">
+            <p className="text-sm font-medium text-brand-800">
+              Copy this key now; it won't be shown again.
+            </p>
+            <code className="mt-1 block break-all font-mono text-xs text-stone-700">{newKey}</code>
+          </div>
+        )}
+        {keys.length > 0 && (
+          <table className="mb-4 w-full">
+            <thead>
+              <tr>
+                <th className={th}>Name</th>
+                <th className={th}>Key</th>
+                <th className={th}>Created</th>
+                <th className={th}>Last used</th>
+                <th className={th}>Status</th>
+                <th className={th} />
+              </tr>
+            </thead>
+            <tbody>
+              {keys.map((k) => (
+                <tr key={k.id} className={trHover}>
+                  <td className={`${td} font-medium`}>{k.name}</td>
+                  <td className={`${td} font-mono text-xs`}>{k.prefix}…</td>
+                  <td className={td}>{fmtDate(k.createdAt)}</td>
+                  <td className={td}>{k.lastUsedAt ? fmtDate(k.lastUsedAt) : "never"}</td>
+                  <td className={td}>
+                    {k.revokedAt ? (
+                      <Badge tone="neutral">revoked</Badge>
+                    ) : (
+                      <Badge tone="success">active</Badge>
+                    )}
+                  </td>
+                  <td className={td}>
+                    {!k.revokedAt && (
+                      <form action={revokeApiKey}>
+                        <input type="hidden" name="id" value={k.id} />
+                        <button type="submit" className="text-xs text-stone-400 hover:text-red-600">
+                          revoke
+                        </button>
+                      </form>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <form action={createApiKey} className="flex flex-wrap items-end gap-2">
+          <label className={label}>
+            Key name
+            <input name="name" placeholder="Zapier connection" className={input} />
+          </label>
+          <button type="submit" className={btn}>
+            Create key
+          </button>
+        </form>
+      </section>
+
+      <section className={card}>
+        <h2 className="mb-1 font-medium">Webhooks</h2>
+        <p className="mb-3 text-sm text-stone-500">
+          Freehold POSTs signed JSON to your URL when things happen. Verify the{" "}
+          <code>freehold-signature</code> header with your endpoint's secret.
+        </p>
+        {endpoints.length > 0 && (
+          <ul className="mb-4 flex flex-col">
+            {endpoints.map((e) => (
+              <li
+                key={e.id}
+                className="flex flex-col gap-1 border-b border-stone-100 py-2 last:border-0"
+              >
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <span className="font-mono text-xs">{e.url}</span>
+                  <span className="text-xs text-stone-400">{e.events.join(", ")}</span>
+                  <form action={deleteWebhookEndpoint} className="ml-auto">
+                    <input type="hidden" name="id" value={e.id} />
+                    <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
+                      delete
+                    </button>
+                  </form>
+                </div>
+                <code className="break-all font-mono text-xs text-stone-400">
+                  secret: {e.secret}
+                </code>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form action={createWebhookEndpoint} className="flex flex-wrap items-end gap-3">
+          <label className={`${label} min-w-72 flex-1`}>
+            Endpoint URL
+            <input name="url" placeholder="https://example.com/hooks/freehold" className={input} />
+          </label>
+          <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
+            <input
+              type="checkbox"
+              name="transaction.created"
+              defaultChecked
+              className="accent-brand-600"
+            />
+            transaction.created
+          </label>
+          <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
+            <input type="checkbox" name="task.completed" className="accent-brand-600" />
+            task.completed
+          </label>
+          <button type="submit" className={btnGhost}>
+            Add endpoint
+          </button>
+        </form>
+      </section>
+    </>
+  );
+}
 
 export default async function SettingsPage() {
   const { tenantId, session } = await requireTenant();
@@ -47,6 +191,8 @@ export default async function SettingsPage() {
           <p className="text-sm text-stone-500">No sample data in this workspace.</p>
         )}
       </section>
+
+      <ApiSection tenantId={tenantId} userId={session.user.id} />
 
       <section className={card}>
         <h2 className="mb-2 font-medium">System health</h2>

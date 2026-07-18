@@ -1,6 +1,7 @@
 import { prisma } from "@freehold/db";
 import Fastify from "fastify";
 import { Redis } from "ioredis";
+import { registerV1 } from "./v1.js";
 
 const app = Fastify({ logger: true });
 
@@ -58,6 +59,8 @@ app.get("/v1/me", async (req, reply) => {
     activeTenantId: session.activeOrganizationId,
   };
 });
+
+registerV1(app);
 
 const port = Number(process.env.PORT ?? 3001);
 app

@@ -37,7 +37,9 @@ The single list of everything open across stages. Items move to ~~struck~~ with 
 - [x] Generic CSV import for contacts and transactions (UI at /dashboard/import, sample CSV included) *(2026-07-18)*
 - [ ] Vendor presets: header aliases cover the major legacy platforms' export shapes; still need verification against real export samples
 - [ ] Gmail / Outlook send + log
-- [ ] Public API + webhooks
+- [x] Public API v1 (API keys, transactions/contacts/tasks) + signed webhooks (transaction.created, task.completed) *(2026-07-18)*
+- [ ] API reference docs page (endpoints, auth, webhook signature verification example)
+- [ ] Webhook delivery retries with backoff (v1 is single-attempt best-effort)
 - [ ] Zapier app
 - [ ] Twenty CRM two-way sync
 - [ ] Stripe Connect: tenant invoices their client, gets paid

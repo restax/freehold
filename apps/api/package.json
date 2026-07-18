@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -13,11 +13,13 @@
   "dependencies": {
     "@freehold/db": "workspace:*",
     "fastify": "^5.10.0",
-    "ioredis": "^5.11.1"
+    "ioredis": "^5.11.1",
+    "@freehold/integrations": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22",
     "tsx": "^4.23.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "dotenv-cli": "^10.0.0"
   }
 }

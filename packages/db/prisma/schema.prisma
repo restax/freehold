@@ -122,6 +122,8 @@ model Organization {
   portalLinks     PortalLink[]
   vaultCredentials VaultCredential[]
   vaultAccessLogs VaultAccessLog[]
+  apiKeys         ApiKey[]
+  webhookEndpoints WebhookEndpoint[]
 
   @@map("organization")
 }
@@ -312,6 +314,40 @@ model PortalLink {
   @@index([tenantId])
   @@index([transactionId])
   @@map("portal_link")
+}
+
+/**
+ * Public API keys. Like portal_link, this table deliberately has NO RLS
+ * policy: the key hash IS the capability, and the API must look it up
+ * before any tenant context exists. Only the SHA-256 hash is stored.
+ */
+model ApiKey {
+  id         String       @id @default(uuid())
+  tenantId   String       @map("tenant_id")
+  tenant     Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name       String
+  prefix     String
+  hash       String       @unique
+  createdAt  DateTime     @default(now())
+  lastUsedAt DateTime?    @map("last_used_at")
+  revokedAt  DateTime?    @map("revoked_at")
+
+  @@index([tenantId])
+  @@map("api_key")
+}
+
+model WebhookEndpoint {
+  id        String       @id @default(uuid())
+  tenantId  String       @map("tenant_id")
+  tenant    Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  url       String
+  secret    String
+  events    String[]
+  active    Boolean      @default(true)
+  createdAt DateTime     @default(now())
+
+  @@index([tenantId])
+  @@map("webhook_endpoint")
 }
 
 enum VaultAction {

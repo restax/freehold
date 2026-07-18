@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { dateOnly, intOr, oneOf, optStr, str } from "@/lib/forms";
 import { transactionLimit } from "@/lib/plans";
 import { requireAdminTenant, requireTenant } from "@/lib/tenant";
+import { emitWebhook } from "@/lib/webhook-emit";
 
 const STATUSES = Object.values(TransactionStatus);
 const SIDES = Object.values(TransactionSide);
@@ -36,6 +37,12 @@ export async function createTransaction(formData: FormData) {
       data: { tenantId, propertyAddress, ...commonFields(formData) },
     }),
   );
+  await emitWebhook(tenantId, "transaction.created", {
+    id: created.id,
+    propertyAddress: created.propertyAddress,
+    status: created.status,
+    side: created.side,
+  });
   revalidatePath("/dashboard/transactions");
   redirect(`/dashboard/transactions/${created.id}`);
 }

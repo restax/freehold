@@ -5,6 +5,7 @@ import { instantiatePlan, type PlanTaskTemplate } from "@freehold/workflows";
 import { revalidatePath } from "next/cache";
 import { dateOnly, str } from "@/lib/forms";
 import { requireTenant } from "@/lib/tenant";
+import { emitWebhook } from "@/lib/webhook-emit";
 
 function revalidateTaskViews(transactionId: string | null) {
   if (transactionId) revalidatePath(`/dashboard/transactions/${transactionId}`);
@@ -35,13 +36,21 @@ export async function toggleTask(formData: FormData) {
   const id = str(formData, "id");
   if (!id) return;
   const transactionId = str(formData, "transactionId") || null;
-  await withTenant(tenantId, async (tx) => {
-    const task = await tx.task.findUniqueOrThrow({ where: { id }, select: { status: true } });
+  const completed = await withTenant(tenantId, async (tx) => {
+    const task = await tx.task.findUniqueOrThrow({
+      where: { id },
+      select: { status: true, title: true },
+    });
+    const nowDone = task.status !== TaskStatus.DONE;
     await tx.task.update({
       where: { id },
-      data: { status: task.status === TaskStatus.DONE ? TaskStatus.OPEN : TaskStatus.DONE },
+      data: { status: nowDone ? TaskStatus.DONE : TaskStatus.OPEN },
     });
+    return nowDone ? task.title : null;
   });
+  if (completed !== null) {
+    await emitWebhook(tenantId, "task.completed", { id, title: completed, transactionId });
+  }
   revalidateTaskViews(transactionId);
 }
 
