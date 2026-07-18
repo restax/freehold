@@ -12,6 +12,7 @@ const NAV = [
   { href: "/dashboard/action-plans", label: "Action plans" },
   { href: "/dashboard/templates", label: "Templates" },
   { href: "/dashboard/vault", label: "Vault" },
+  { href: "/dashboard/import", label: "Import" },
   { href: "/dashboard/team", label: "Team" },
   { href: "/dashboard/billing", label: "Billing" },
   { href: "/dashboard/settings", label: "Settings" },

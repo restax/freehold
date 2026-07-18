@@ -198,8 +198,8 @@ export default function PricingPage() {
             </p>
             <p className="text-sm leading-relaxed text-stone-600">
               <strong className="font-medium text-stone-900">Migration service.</strong> White-glove
-              import of your full book of business from Dotloop, SkySlope, Paperless Pipeline, Open
-              To Close, or Brokermint. Quoted per migration.
+              import of your full book of business from whichever legacy platform you're leaving.
+              Quoted per migration.
             </p>
           </div>
         </div>

@@ -34,9 +34,9 @@ export default async function VaultPage() {
       <div>
         <h1 className="text-xl font-semibold">Credential vault</h1>
         <p className="text-sm text-stone-500">
-          Client logins (MLS, lender portals, e-sign accounts) — encrypted at rest, revealed only on click,
-          every reveal audited. Freehold never logs into anything automatically. Store credentials
-          only with your client's consent.
+          Client logins (MLS, lender portals, e-sign accounts): encrypted at rest, revealed only on
+          click, every reveal audited. Freehold never logs into anything automatically. Store
+          credentials only with your client's consent.
         </p>
       </div>
 
