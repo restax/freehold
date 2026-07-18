@@ -12,8 +12,6 @@ import {
 import { runExtraction } from "@/lib/actions/extractions";
 import { addParty, removeParty } from "@/lib/actions/parties";
 import { createPortalLink, deletePortalLink, revokePortalLink } from "@/lib/actions/portal";
-import { extractionCreditState } from "@/lib/plans";
-import { portalOrigin } from "@/lib/portal";
 import { applyActionPlan, createTask, deleteTask, toggleTask } from "@/lib/actions/tasks";
 import { generateDocument } from "@/lib/actions/templates";
 import {
@@ -23,6 +21,8 @@ import {
   updateTransaction,
 } from "@/lib/actions/transactions";
 import { fmtDate, fmtMoney, ROLE_LABEL, SIDE_LABEL, STATUS_LABEL } from "@/lib/format";
+import { extractionCreditState } from "@/lib/plans";
+import { portalOrigin } from "@/lib/portal";
 import { requireTenant } from "@/lib/tenant";
 import { btn, btnDanger, btnGhost, card, input, label } from "@/lib/ui";
 
@@ -426,8 +426,7 @@ export default async function TransactionDetailPage({
                       </button>
                       {aiCredits.limit != null && (
                         <span className="text-xs text-stone-400">
-                          {aiCredits.limit - aiCredits.used} of {aiCredits.limit} trial credits
-                          left
+                          {aiCredits.limit - aiCredits.used} of {aiCredits.limit} trial credits left
                         </span>
                       )}
                     </form>
