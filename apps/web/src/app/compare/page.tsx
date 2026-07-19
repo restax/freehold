@@ -21,15 +21,15 @@ const ROWS: Array<[string, string, string, string]> = [
   ["Features", "All of them", "All of them", "All of them"],
   [
     "Transactions",
-    "Free: 10 active · paid: unlimited",
+    "Free: 5 active · Pro: 50 · Business: 100",
     "Unlimited, always",
-    "Per plan, unlimited on paid",
+    "Unlimited on self-hosted setups",
   ],
   [
     "Team members",
-    "Free: 2 · paid: seats you choose",
+    "Free & Pro: 2 · Business: 10",
     "Unlimited, always",
-    "Per plan, seats you choose",
+    "Unlimited on self-hosted setups",
   ],
   [
     "AI contract extraction",
@@ -57,7 +57,7 @@ const ROWS: Array<[string, string, string, string]> = [
   ],
   [
     "Price",
-    "$0, $29, or $80 a month — flat, users included",
+    "$0, $40, or $85 a month — flat, users included",
     "$0 forever; an unused PC you already own works",
     "Standard plan rates on one consolidated invoice",
   ],

@@ -43,7 +43,7 @@ Kept from v1: the stack, shared-DB row-level tenancy, Documenso at arm's length 
 
 Four revenue lines, none of which require restricting the open-source version:
 
-1. **Freehold Cloud** (primary). Managed hosting: sign up like any SaaS, no servers. Free tier: **up to 10 active transactions/month and 2 users**. Paid plans are per-seat monthly with usage-based AI fair-use included; seats and upgrades purchased directly in the admin panel. Hitting a free-tier limit never locks data: existing transactions stay readable and exportable; creating *new* ones requires upgrading.
+1. **Freehold Cloud** (primary). Managed hosting: sign up like any SaaS, no servers. Free tier: **up to 5 active transactions at a time and 2 users**. Paid plans are per-seat monthly with usage-based AI fair-use included; seats and upgrades purchased directly in the admin panel. Hitting a free-tier limit never locks data: existing transactions stay readable and exportable; creating *new* ones requires upgrading.
 2. **Services.** "We set it up for you" (managed self-host setup) and white-glove data migration from incumbent platforms.
 3. **Marketplace.** Paid template/checklist packs with author revenue share; possibly paid premium integrations later. See [Template library & marketplace](#template-library--marketplace).
 4. **Advertising / directory** (later). Curated directory of real-estate law firms and vendors; sponsored placement. Low build cost, real niche value — sequenced after launch.
@@ -248,7 +248,7 @@ Branded client/buyer/seller portals with selective sharing; full RBAC; credentia
 **Exit:** a client views their closing via portal link; a TC retrieves a stored MLS credential with the reveal audited. **✅ Both verified live:** portal link rendered the full closing (tenant-branded, checklist progress, parties, documents) with zero auth cookies, selective-share toggles per link, revocation → 404, last-viewed tracking; vault credential stored envelope-encrypted (verified no plaintext at rest), revealed in-place with CREATED + REVEALED audit entries. *Also: team page (members, roles, link-based invitations — no SMTP needed), owner/admin gating on destructive actions. Deferred in-stage: Bitwarden import/export, per-tenant logo/color branding (name only for now), hiding gated buttons from members (enforcement is server-side), invitation emails (links instead, by design until SMTP lands).*
 
 ### Stage 05 — Freehold Cloud + billing *(~4 wk)* ✅ *software shipped 2026-07-18; public deployment pending*
-Multi-tenant cloud deployment, signup, Stripe subscriptions; free tier (10 active transactions/mo, 2 users) with upgrade-in-admin seat purchase; graceful at-limit behavior (read/export always; new-transaction creation gated). Hub v1: news feed + opt-out telemetry.
+Multi-tenant cloud deployment, signup, Stripe subscriptions; free tier (5 active transactions at a time, 2 users) with upgrade-in-admin seat purchase; graceful at-limit behavior (read/export always; new-transaction creation gated). Hub v1: news feed + opt-out telemetry.
 **Exit:** a stranger can sign up, use the free tier, and upgrade with a card. **✅ The full upgrade loop verified live in Stripe test mode:** free-tier caps enforced (11th active transaction and 3rd seat blocked server-side, with upgrade banners; data never locked), checkout completed with a test card, webhook flipped the tenant to Pro/3 seats, caps lifted. *Built: `ee/` billing package (commercial license — Checkout subscriptions with per-seat quantity, Customer Portal, webhook plan sync; config-gated on STRIPE_* env), plan tiers on the tenant, limits active only under FREEHOLD_CLOUD=1 (self-host stays unlimited — verified default-off), Hub v1 news panel (FREEHOLD_HUB_URL feed, fail-silent, built-in fallback). AI supply decision recorded: Freehold Cloud provides AI via Freehold's own Anthropic account bundled into plans — third-party API resellers (e.g. claudeapi.com) rejected on data-privacy/ToS/reliability grounds. Remaining for public go-live (not code): domain freeholdtc.dev purchased ✅, GitHub org restax ✅, hosting = Vercel (decided); still open: deploy, Stripe live mode (deliberately staying in test mode for now), ops ownership. Telemetry ping still a stub pending a real Hub endpoint.*
 
 ### Stage 06 — Launch *(~3 wk, its own deliverable — decided)*
@@ -306,9 +306,9 @@ All numbers are proposals to confirm before Stage 05 — calibrated against the 
 | Plan | Price | Includes |
 |---|---|---|
 | Self-hosted | Free forever | Everything, unlimited, BYO keys |
-| Cloud Free | $0 | 2 users, 10 active transactions/mo, AI trial credits |
-| Cloud Pro | ~$29/user/mo | Unlimited transactions, AI fair-use included, all integrations |
-| Cloud Business | ~$59/user/mo | Priority support, advanced reporting, sub-billing (Connect) |
+| Cloud Free | $0 | 2 users, 5 active transactions at a time, 5 portal clients, AI trial credits |
+| Cloud Pro | $40/mo flat | 2 users, 50 active transactions, 50 portal clients, AI fair-use, all integrations |
+| Cloud Business | $85/mo flat | 10 users, 100 active transactions, 100 portal clients, priority support |
 | Setup service | one-time fee | "We set it up for you" self-host install |
 | Migration service | quoted | White-glove import from any incumbent |
 

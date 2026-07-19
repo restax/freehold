@@ -99,8 +99,8 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ["Custom fields", "Track any data point your market needs on any transaction.", "today"],
       [
         "Email templates with merge fields",
-        "Compose emails from templates the way documents already work.",
-        "request",
+        "A full studio: a 14-template starter library organized by category, merge fields for every party, and per-workspace editing of every word.",
+        "today",
       ],
     ],
   ],

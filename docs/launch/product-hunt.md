@@ -44,9 +44,9 @@ up holding — encrypted, access-audited, never plaintext.
 signed webhooks, Stripe invoicing.**
 
 💸 **The honest part:** self-hosting is free forever with every feature —
-an unused office PC works. Freehold Cloud is $0 for 2 users and 10
+an unused office PC works. Freehold Cloud is $0 for 2 users and 5
 active transactions; Pro is a flat $40/month (2 users, 50 active transactions, 50 clients with portals — portal logins never count as users; 7-day free trial)
-and Business $80/month (10 users, 200 transactions) — both with room for
+and Business $85/month (10 users, 100 active transactions, 100 clients with portals) — both with room for
 200 active clients. Your data exports in full either way. And we never pay
 referral commissions — if someone recommends Freehold, it's because they
 like it.

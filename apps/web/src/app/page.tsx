@@ -2,6 +2,7 @@ import {
   AddressBook,
   BuildingOffice,
   ChartLineUp,
+  EnvelopeSimple,
   FileText,
   GitBranch,
   ListChecks,
@@ -78,10 +79,16 @@ const BENTO = [
     cls: "border border-stone-200/70 bg-white",
   },
   {
+    icon: EnvelopeSimple,
+    title: "Email that runs itself",
+    body: "Branded emails from your own address, replies threading back onto the file. Templates tied to tasks, automated intro and closing notes, quiet hours, voice dictation.",
+    cls: "border border-stone-200/70 bg-white",
+  },
+  {
     icon: BuildingOffice,
     title: "Built for teams",
     body: "Owners, admins, TCs, and assistants with role-based permissions. Invite by link. Destructive actions stay gated to the people you trust.",
-    cls: "border border-stone-200/70 bg-white sm:col-span-2",
+    cls: "border border-stone-200/70 bg-white",
   },
 ];
 
@@ -92,7 +99,7 @@ const FAQ: Array<[string, string]> = [
   ],
   [
     "What happens when I hit the free limits?",
-    "Nothing scary. Everything you've entered stays readable and exportable forever. You just can't create an 11th active transaction until you close one out, upgrade, or move to your own server. Upgrading is a choice, never a ransom.",
+    "Nothing scary. Everything you've entered stays readable and exportable forever. You just can't create a 6th active transaction until you close one out, upgrade, or move to your own server. Upgrading is a choice, never a ransom.",
   ],
   [
     "Do I need to be technical?",
@@ -299,16 +306,16 @@ export default async function LandingPage() {
               </div>
               <div>
                 <dt className="sr-only">Cloud Pro price</dt>
-                <dd className="font-display text-4xl font-bold tabular-nums text-brand-700">$29</dd>
+                <dd className="font-display text-4xl font-bold tabular-nums text-brand-700">$40</dd>
                 <p className="mt-1 text-xs leading-snug text-stone-500">
                   Cloud Pro monthly, 2 users included
                 </p>
               </div>
               <div>
-                <dt className="sr-only">Free transactions</dt>
-                <dd className="font-display text-4xl font-bold tabular-nums text-brand-700">10</dd>
+                <dt className="sr-only">Free active transactions</dt>
+                <dd className="font-display text-4xl font-bold tabular-nums text-brand-700">5</dd>
                 <p className="mt-1 text-xs leading-snug text-stone-500">
-                  Free transactions a month on Cloud
+                  Active transactions free on Cloud
                 </p>
               </div>
             </dl>

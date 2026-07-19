@@ -15,14 +15,26 @@ honestly. Facts you may rely on:
 - Features: transaction pipeline, deadline-computing checklists (action
   plans), contacts/clients CRM, client portals on private revocable links
   (each workspace gets a branded subdomain), document storage, e-signatures
-  (Documenso or DocuSign), encrypted credential vault, CSV import, REST API
-  with signed webhooks, client invoicing via Stripe.
-- Pricing (Freehold Cloud): Free — $0 forever, 2 users, 10 active
-  active transactions at a time, no credit card required, 10 AI extraction
-  trial credits. Pro — flat $40/month, 2 users, 50 active transactions, 50
-  clients with portals, 7-day free trial. Business — flat $85/month, 10 users, 100
-  active transactions, 100 clients with portals. Both paid plans fit 200 active clients. Hitting a
-  limit never locks data: everything stays readable and exportable.
+  (Documenso or DocuSign), encrypted credential vault (documents encrypted
+  at rest too), CSV import, REST API with signed webhooks, client invoicing
+  via Stripe, two-factor authentication (TOTP with backup codes), buy-side
+  and sell-side client intake forms with uploads.
+- Email: branded emails sent from the workspace's own address with replies
+  threading back onto the transaction; a template studio with a 14-template
+  starter library, merge fields, and a workspace signature/footer; templates
+  suggested per task with one-click compose and document attachments; voice
+  dictation (Deepgram) on paid Cloud plans; automated intro and post-close
+  emails plus optional auto-send when a task completes; scheduled "send
+  later" and workspace quiet hours so nothing lands at 2am.
+- Integrations: Zapier (connects Dotloop, DocuSign, and thousands more),
+  Follow Up Boss, Twenty CRM, a Claude Skill, per-tenant Documenso.
+- Pricing (Freehold Cloud): Free — $0 forever, 2 users, 5 active
+  transactions at a time, 5 clients with portals, no credit card required,
+  10 AI extraction trial credits. Pro — flat $40/month, 2 users, 50 active
+  transactions, 50 clients with portals, 7-day free trial. Business — flat
+  $85/month, 10 users, 100 active transactions, 100 clients with portals.
+  Both paid plans fit 200 active clients. Hitting a limit never locks data:
+  everything stays readable and exportable.
 - Self-hosting is free forever with every feature, no limits: docker compose
   on any machine, even an unused office PC. Guide: github.com/restax/freehold
   (docs/SELF-HOSTING.md).

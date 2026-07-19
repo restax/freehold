@@ -54,6 +54,7 @@ around before importing your own.
 | External S3 storage | `STORAGE_S3_*` | Any S3-compatible service; bundled MinIO is the default |
 | Client invoicing | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Your own Stripe account; invoices go out under your name |
 | Email + reply capture | `RESEND_API_KEY`, `EMAIL_FROM_DOMAIN`, `EMAIL_REPLY_DOMAIN`, `RESEND_WEBHOOK_SECRET` | A free Resend account and one verified domain; replies thread back onto transactions |
+| Scheduled email delivery | `CRON_SECRET` | Required for "Send later" and quiet-hours deferrals — see below |
 
 ## Reaching it from the internet (optional)
 
@@ -131,3 +132,14 @@ TOTP two-factor auth is built in (better-auth `twoFactor` plugin) — no extra c
 ## Voice dictation (optional)
 
 Set `DEEPGRAM_API_KEY` (any [Deepgram](https://deepgram.com) account key) and a **Dictate** button appears on email compose — speech is transcribed by Deepgram's Nova model with excellent accuracy, punctuation included. Without the key the button simply reports dictation unavailable.
+
+## Scheduled email delivery (optional)
+
+"Send later" emails and quiet-hours deferrals (an automated email triggered at 2am waits until morning) sit in an outbox until a cron endpoint delivers them. Set `CRON_SECRET` in `.env` (generate with `openssl rand -base64 32`) and call the endpoint on a schedule — hourly is a good default:
+
+```sh
+# crontab -e
+0 * * * * curl -s -H "Authorization: Bearer YOUR_CRON_SECRET" http://localhost:3000/api/outbox/run
+```
+
+Without this, immediate emails still send normally — only scheduled and quiet-hours-deferred emails wait.
