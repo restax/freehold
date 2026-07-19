@@ -1,4 +1,5 @@
-import { importPKCS8, SignJWT } from "jose";
+import { createPrivateKey } from "node:crypto";
+import { SignJWT } from "jose";
 import type { EnvelopeStatusResult, EsignAdapter } from "./types.js";
 
 /**
@@ -7,8 +8,8 @@ import type { EnvelopeStatusResult, EsignAdapter } from "./types.js";
  * DOCUSIGN_PRIVATE_KEY (RSA PEM, \n-escaped allowed), plus optional
  * DOCUSIGN_BASE_URL / DOCUSIGN_OAUTH_BASE (default to the developer sandbox).
  *
- * ⚠️ Written against the published eSignature REST v2.1 shape but not yet
- * exercised live (config-gated). The integration key must have the user's
+ * Live-verified against the developer sandbox 2026-07-19 (JWT grant,
+ * envelope create, status). The integration key must have the user's
  * one-time consent granted in DocuSign before the JWT grant works.
  */
 
@@ -37,7 +38,9 @@ function cfg() {
 async function accessToken(): Promise<string> {
   const c = cfg();
   if (!c) throw new Error("DocuSign is not configured.");
-  const key = await importPKCS8(c.privateKey, "RS256");
+  // createPrivateKey accepts both PKCS1 ("BEGIN RSA PRIVATE KEY", what
+  // DocuSign's console generates) and PKCS8 ("BEGIN PRIVATE KEY").
+  const key = createPrivateKey(c.privateKey);
   const assertion = await new SignJWT({ scope: "signature impersonation" })
     .setProtectedHeader({ alg: "RS256" })
     .setIssuer(c.integrationKey)

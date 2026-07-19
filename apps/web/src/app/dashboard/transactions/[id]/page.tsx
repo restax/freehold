@@ -14,18 +14,28 @@ import {
 import { runExtraction } from "@/lib/actions/extractions";
 import { addParty, removeParty } from "@/lib/actions/parties";
 import { createPortalLink, deletePortalLink, setPortalLinkActive } from "@/lib/actions/portal";
-import { applyActionPlan, createTask, deleteTask, toggleTask } from "@/lib/actions/tasks";
+import {
+  applyActionPlan,
+  createTask,
+  cycleTaskPriority,
+  deleteTask,
+  toggleTask,
+} from "@/lib/actions/tasks";
 import { generateDocument } from "@/lib/actions/templates";
 import {
+  confirmDateChange,
   deleteTransaction,
+  proposeDateChange,
   removeCustomField,
   setCustomField,
   updatePayout,
   updateTransaction,
+  withdrawDateChange,
 } from "@/lib/actions/transactions";
 import { fmtDate, fmtMoney, ROLE_LABEL, SIDE_LABEL, STATUS_LABEL } from "@/lib/format";
 import { extractionCreditState } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
+import { PRIORITY_BADGE, PRIORITY_LABEL } from "@/lib/priority";
 import { requireTenant } from "@/lib/tenant";
 import { btn, btnDanger, btnGhost, card, input, label } from "@/lib/ui";
 
@@ -264,7 +274,31 @@ export default async function TransactionDetailPage({
                           <span className={`text-sm ${done ? "text-stone-400 line-through" : ""}`}>
                             {t.title}
                           </span>
+                          {PRIORITY_LABEL[t.priority] && (
+                            <span
+                              className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${PRIORITY_BADGE[t.priority]}`}
+                            >
+                              {PRIORITY_LABEL[t.priority]}
+                            </span>
+                          )}
                           <span className="ml-auto flex items-center gap-3">
+                            <form action={cycleTaskPriority}>
+                              <input type="hidden" name="id" value={t.id} />
+                              <input type="hidden" name="transactionId" value={txn.id} />
+                              <button
+                                type="submit"
+                                title={`Priority: ${t.priority.toLowerCase()} — click to change`}
+                                className={
+                                  t.priority === "CRITICAL"
+                                    ? "text-red-600"
+                                    : t.priority === "HIGH"
+                                      ? "text-amber-500"
+                                      : "text-stone-300 hover:text-amber-500"
+                                }
+                              >
+                                ⚑
+                              </button>
+                            </form>
                             <VisibilityToggles
                               kind="task"
                               id={t.id}
@@ -526,6 +560,78 @@ export default async function TransactionDetailPage({
           )}
           {tab === "dates" && (
             <>
+              <section className={card}>
+                <h2 className="mb-1 font-medium">Contract-governed dates</h2>
+                <p className="mb-3 text-sm text-stone-500">
+                  The contract is the source of truth. Changing the contract or closing date creates
+                  an amendment to-do; the date only moves — and dependent task deadlines only
+                  recompute — once you confirm the amendment is executed.
+                </p>
+                {(() => {
+                  const proposed = (txn.proposedDates as Record<string, string> | null) ?? {};
+                  const entries = Object.entries(proposed) as Array<
+                    ["contractDate" | "closeDate", string]
+                  >;
+                  return entries.length > 0 ? (
+                    <ul className="mb-4 flex flex-col gap-2">
+                      {entries.map(([field, value]) => (
+                        <li
+                          key={field}
+                          className="flex flex-wrap items-center gap-3 rounded-lg bg-amber-50 px-3 py-2.5 text-sm"
+                        >
+                          <span className="font-medium text-amber-900">
+                            {field === "closeDate" ? "Closing date" : "Contract date"}:{" "}
+                            {fmtDate(field === "closeDate" ? txn.closeDate : txn.contractDate)} →{" "}
+                            {value}
+                          </span>
+                          <span className="text-xs text-amber-700">
+                            awaiting executed amendment
+                          </span>
+                          <span className="ml-auto flex items-center gap-2">
+                            <form action={confirmDateChange}>
+                              <input type="hidden" name="id" value={txn.id} />
+                              <input type="hidden" name="field" value={field} />
+                              <button
+                                type="submit"
+                                className="rounded-lg bg-brand-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-brand-700"
+                              >
+                                Amendment executed — apply
+                              </button>
+                            </form>
+                            <form action={withdrawDateChange}>
+                              <input type="hidden" name="id" value={txn.id} />
+                              <input type="hidden" name="field" value={field} />
+                              <button
+                                type="submit"
+                                className="text-xs text-stone-500 hover:text-red-700"
+                              >
+                                Withdraw
+                              </button>
+                            </form>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null;
+                })()}
+                <form action={proposeDateChange} className="flex flex-wrap items-end gap-2">
+                  <input type="hidden" name="id" value={txn.id} />
+                  <label className={label}>
+                    Propose a change to
+                    <select name="field" className={input} defaultValue="closeDate">
+                      <option value="closeDate">Closing date</option>
+                      <option value="contractDate">Contract date</option>
+                    </select>
+                  </label>
+                  <label className={label}>
+                    New date
+                    <input type="date" name="proposedDate" required className={input} />
+                  </label>
+                  <button type="submit" className={btnGhost}>
+                    Propose &amp; create amendment to-do
+                  </button>
+                </form>
+              </section>
               <section className={card}>
                 <h2 className="mb-3 font-medium">Details</h2>
                 <form

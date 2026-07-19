@@ -37,3 +37,6 @@ db/documenso/cert.p12
 
 # Vercel
 .vercel
+
+# DocuSign RSA key drop-file (converted into .env, then deleted)
+docusign_private.key

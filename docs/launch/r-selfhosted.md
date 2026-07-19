@@ -19,7 +19,7 @@ first-class path, not a crippled community edition.
 
 **What it does:** transaction pipeline with deadline-computing checklists,
 contacts/clients CRM, client portals on revocable links, document storage,
-e-signatures (Documenso integration or DocuSign), an encrypted credential
+e-signatures (bundled open-source Documenso), an encrypted credential
 vault with access auditing, CSV import, REST API + HMAC-signed webhooks,
 and optional AI contract extraction (reads the purchase contract PDF,
 page-cites every extracted date and dollar for human confirmation).

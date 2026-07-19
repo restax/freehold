@@ -46,6 +46,11 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
         "today",
       ],
       [
+        "The contract is the source of truth",
+        "Contract-governed dates never change silently: edits become a proposal with an amendment to-do, and the date moves only when you confirm the amendment is executed.",
+        "today",
+      ],
+      [
         "Dual-person contact records",
         "One CRM entry holds a couple or a client and their assistant, so mailings and merges address both.",
         "today",
@@ -69,6 +74,16 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       [
         "Deadlines that compute themselves",
         "Template tasks anchor to the contract and close dates and land dated.",
+        "today",
+      ],
+      [
+        "Cascading dates",
+        "Confirm an amendment and every dependent deadline re-dates itself instantly — manually adjusted tasks stay where you put them.",
+        "today",
+      ],
+      [
+        "Task priorities that mean it",
+        "Normal, High, Critical — your day sorts priority first, and an unresolved amendment auto-escalates to Critical two days out.",
         "today",
       ],
       [

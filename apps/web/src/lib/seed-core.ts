@@ -164,6 +164,8 @@ export async function seedTenantData(tenantId: string, userId: string) {
         transactionId: txn.id,
         title: t.title,
         dueDate: t.dueDate,
+        anchor: SAMPLE_PLAN[i]?.anchor ?? null,
+        offsetDays: SAMPLE_PLAN[i]?.offsetDays ?? null,
         sortOrder: i + 1,
         assigneeId: userId,
         isSample: true,

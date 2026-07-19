@@ -16,6 +16,11 @@ interface NewsItem {
 
 const FALLBACK: NewsItem[] = [
   {
+    title: "Cascading dates, governed by the contract",
+    body: "Date changes now flow through an amendment to-do — confirm it's executed and every dependent deadline re-dates itself. Plus task priorities with auto-escalation.",
+    date: "2026-07-19",
+  },
+  {
     title: "Ask Claude about your deals",
     body: "A ready-made Claude skill queries your workspace through the API — closings this week, client portal activity, workspace stats. Grab it from the repo's skills/ folder.",
     date: "2026-07-19",

@@ -7,7 +7,7 @@ export default function PrivacyPage() {
     <main className="mx-auto max-w-2xl px-4 py-14 sm:px-6">
       <Wordmark size="sm" />
       <h1 className="mt-6 text-3xl font-semibold tracking-tight">Privacy policy</h1>
-      <p className="mt-2 text-sm text-stone-500">Pre-launch draft. Last updated July 18, 2026.</p>
+      <p className="mt-2 text-sm text-stone-500">Last updated July 19, 2026.</p>
       <div className="mt-6 flex max-w-prose flex-col gap-4 text-sm leading-relaxed text-stone-700">
         <p>
           Freehold Cloud stores the data you put into it: transactions, contacts, documents, and

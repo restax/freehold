@@ -68,7 +68,7 @@ const BENTO = [
   {
     icon: Signature,
     title: "E-sign, your client's way",
-    body: "Documenso built in, DocuSign supported, manual signing when you need it. Chosen per client behind one envelope interface.",
+    body: "Open-source Documenso built in, manual signing when you need it, and an adapter layer ready for other providers. Chosen per client behind one envelope interface.",
     cls: "border border-stone-200/70 bg-white",
   },
   {

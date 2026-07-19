@@ -97,7 +97,10 @@ export async function applyActionPlan(formData: FormData) {
       assigneeRole: t.assigneeRole,
     }));
     const base = (maxSort._max.sortOrder ?? 0) + 1;
-    const tasks = instantiatePlan(templates, {
+    // instantiatePlan sorts by sortOrder internally; sort our copy the same
+    // way so tasks[i] and sortedTemplates[i] stay aligned.
+    const sortedTemplates = [...templates].sort((a, b) => a.sortOrder - b.sortOrder);
+    const tasks = instantiatePlan(sortedTemplates, {
       contractDate: txn.contractDate,
       closeDate: txn.closeDate,
     });
@@ -108,12 +111,32 @@ export async function applyActionPlan(formData: FormData) {
         transactionId,
         title: t.title,
         dueDate: t.dueDate,
+        // Provenance for domino recomputation on confirmed date changes.
+        anchor: sortedTemplates[i]?.anchor ?? null,
+        offsetDays: sortedTemplates[i]?.offsetDays ?? null,
         sortOrder: base + i,
         // Role-based auto-assignment lands with multi-user teams; for now the
         // applying user owns every instantiated task.
         assigneeId: userId,
       })),
     });
+  });
+  revalidateTaskViews(transactionId);
+}
+
+const PRIORITY_CYCLE = ["NORMAL", "HIGH", "CRITICAL"] as const;
+
+/** Cycle a task's priority flag: Normal → High → Critical → Normal. */
+export async function cycleTaskPriority(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  if (!id) return;
+  const transactionId = str(formData, "transactionId") || null;
+  await withTenant(tenantId, async (tx) => {
+    const task = await tx.task.findUniqueOrThrow({ where: { id }, select: { priority: true } });
+    const next =
+      PRIORITY_CYCLE[(PRIORITY_CYCLE.indexOf(task.priority) + 1) % PRIORITY_CYCLE.length];
+    await tx.task.update({ where: { id }, data: { priority: next } });
   });
   revalidateTaskViews(transactionId);
 }

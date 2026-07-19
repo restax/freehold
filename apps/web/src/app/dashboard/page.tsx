@@ -6,6 +6,12 @@ import { EmptyState } from "@/components/empty-state";
 import { HubNews } from "@/components/hub-news";
 import { toggleTask } from "@/lib/actions/tasks";
 import { fmtDate, STATUS_LABEL } from "@/lib/format";
+import {
+  byPriorityThenDate,
+  effectivePriority,
+  PRIORITY_BADGE,
+  PRIORITY_LABEL,
+} from "@/lib/priority";
 import { requireTenant } from "@/lib/tenant";
 import { card, td, th, trHover } from "@/lib/ui";
 
@@ -48,7 +54,11 @@ export default async function DashboardPage() {
         where: { status: TaskStatus.OPEN, OR: [{ dueDate: { lte: soon } }, { dueDate: null }] },
         orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
         take: 40,
-        include: { transaction: { select: { id: true, propertyAddress: true } } },
+        include: {
+          transaction: {
+            select: { id: true, propertyAddress: true, contractDate: true, closeDate: true },
+          },
+        },
       }),
       closings: await tx.transaction.findMany({
         where: {
@@ -80,9 +90,14 @@ export default async function DashboardPage() {
 
   const countFor = (s: TransactionStatus) => counts.find((c) => c.status === s)?._count._all ?? 0;
 
-  const noDate = openTasks.filter((t) => !t.dueDate);
-  const overdue = openTasks.filter((t) => t.dueDate && dayKey(t.dueDate) < todayKey);
-  const dueToday = openTasks.filter((t) => t.dueDate && dayKey(t.dueDate) === todayKey);
+  const sortTasks = byPriorityThenDate<(typeof openTasks)[number]>((t) => t.transaction);
+  const noDate = openTasks.filter((t) => !t.dueDate).sort(sortTasks);
+  const overdue = openTasks
+    .filter((t) => t.dueDate && dayKey(t.dueDate) < todayKey)
+    .sort(sortTasks);
+  const dueToday = openTasks
+    .filter((t) => t.dueDate && dayKey(t.dueDate) === todayKey)
+    .sort(sortTasks);
   const upcoming = openTasks.filter((t) => t.dueDate && dayKey(t.dueDate) > todayKey);
 
   // Agenda for the next 6 days after today: tasks + closings grouped per day.
@@ -133,6 +148,16 @@ export default async function DashboardPage() {
           {fmtDate(t.dueDate)}
         </span>
         <span className="text-sm">{t.title}</span>
+        {(() => {
+          const eff = effectivePriority(t, t.transaction ?? null);
+          return PRIORITY_LABEL[eff] ? (
+            <span
+              className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${PRIORITY_BADGE[eff]}`}
+            >
+              {PRIORITY_LABEL[eff]}
+            </span>
+          ) : null;
+        })()}
         {t.transaction && (
           <Link
             href={`/dashboard/transactions/${t.transaction.id}`}

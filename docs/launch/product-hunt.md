@@ -38,7 +38,7 @@ dates. Change the close date, deadlines follow.
 🔐 **A real credential vault** for the MLS and lockbox logins every TC ends
 up holding — encrypted, access-audited, never plaintext.
 
-🤝 **Client portals, e-sign (Documenso/DocuSign), CSV import, REST API with
+🤝 **Client portals, e-sign via open-source Documenso, CSV import, REST API with
 signed webhooks, Stripe invoicing.**
 
 💸 **The honest part:** self-hosting is free forever with every feature —

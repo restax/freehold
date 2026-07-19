@@ -13,12 +13,7 @@ const LIVE: Integration[] = [
   [
     "Documenso",
     "Do",
-    "Open-source e-signature, bundled with Freehold. Send documents for signature without leaving the file.",
-  ],
-  [
-    "DocuSign",
-    "DS",
-    "Connect your DocuSign account and send envelopes through the provider your clients already know.",
+    "Open-source e-signature, bundled with Freehold — no vendor contract, no per-envelope tax. Send documents for signature without leaving the file.",
   ],
   [
     "Claude AI",
@@ -57,11 +52,6 @@ const COMING: Integration[] = [
     "Follow Up Boss",
     "FB",
     "Move transaction data, notes, and contacts both directions with your Follow Up Boss account.",
-  ],
-  [
-    "Dotloop",
-    "Dl",
-    "Import and export details, contacts, and documents from your loops while you transition, or forever.",
   ],
   [
     "SkySlope",

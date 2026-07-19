@@ -30,7 +30,7 @@ small brokerages:
   and close dates.
 - Client portals on capability links, a credential vault (AES-256-GCM
   envelope encryption) for the MLS/lockbox logins TCs inevitably hold,
-  e-signatures through Documenso or DocuSign, CSV import, a REST API with
+  e-signatures through bundled open-source Documenso, CSV import, a REST API with
   signed webhooks, and client invoicing via Stripe.
 
 Stack: Next.js + Fastify + Postgres in a pnpm monorepo. Tenant isolation is

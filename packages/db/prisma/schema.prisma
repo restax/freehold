@@ -239,6 +239,12 @@ enum DateAnchor {
   CLOSE_DATE
 }
 
+enum TaskPriority {
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
 /// CRM record — buyers, sellers, agents, lenders, vendors. Category is free
 /// text on purpose (competitors allow custom categories).
 /// Dual-person CRM record: one entry holds two related people (a couple, a
@@ -359,6 +365,9 @@ model Transaction {
   tc2UserId       String?              @map("tc2_user_id")
   /// Commission breakdown: {listPct, buyPct, note} — gross computes from price.
   payout          Json?
+  /// Contract-governed date changes awaiting an executed amendment:
+  /// {closeDate?: "YYYY-MM-DD", contractDate?: "YYYY-MM-DD"}
+  proposedDates   Json?                @map("proposed_dates")
   contractDate    DateTime?            @map("contract_date") @db.Date
   closeDate       DateTime?            @map("close_date") @db.Date
   notes           String?
@@ -576,6 +585,15 @@ model Task {
   notes         String?
   dueDate       DateTime?    @map("due_date") @db.Date
   status        TaskStatus   @default(OPEN)
+  priority      TaskPriority @default(NORMAL)
+  /// Provenance for domino recomputation: tasks instantiated from an action
+  /// plan keep their anchor + offset so a confirmed date change re-dates them.
+  anchor        DateAnchor?
+  offsetDays    Int?         @map("offset_days")
+  /// Manually re-dated tasks opt out of recomputation.
+  dueDateEdited Boolean      @default(false) @map("due_date_edited")
+  /// Set when this task exists to get a date amendment executed ("closeDate"/"contractDate").
+  proposedFor   String?      @map("proposed_for")
   completedAt   DateTime?    @map("completed_at")
   contactId     String?      @map("contact_id")
   contact       Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
