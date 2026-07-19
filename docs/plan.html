@@ -59,7 +59,7 @@
 <li><a href="#template-library--marketplace">Template library &amp; marketplace</a></li>
 <li><a href="#backups-retention--compliance">Backups, retention &amp; compliance</a></li>
 <li><a href="#communications-sms--voice">Communications (SMS / voice)</a></li>
-<li><a href="#build-stages">Build stages</a></li>
+<li><a href="#build-stages">Roadmap</a></li>
 <li><a href="#repo-layout">Repo layout</a></li>
 <li><a href="#pricing-proposed-defaults">Pricing (proposed defaults)</a></li>
 <li><a href="#open-decisions">Open decisions</a></li>
@@ -95,7 +95,7 @@
 <td>Cal.com pattern; a fraction of the maintenance surface for a small team</td>
 </tr>
 <tr>
-<td>Voice IVR as a core staged build</td>
+<td>Voice IVR as a core build phase</td>
 <td><strong>Webhook &quot;comms bridge&quot; surface; voice ships later as an attachable service</strong> (a pattern the maintainers have shipped before)</td>
 <td>Paul already built the voice stack once; core just needs a clean attachment point</td>
 </tr>
@@ -105,7 +105,7 @@
 <td>Non-technical TCs should never self-host; hosting is the main revenue line</td>
 </tr>
 </tbody></table>
-<p>Kept from v1: the stack, shared-DB row-level tenancy, Documenso at arm&#39;s length (AGPL isolation), Stripe + Stripe Connect, staged sequential build, opt-out telemetry disclosed in the README.</p>
+<p>Kept from v1: the stack, shared-DB row-level tenancy, Documenso at arm&#39;s length (AGPL isolation), Stripe + Stripe Connect, a sequential build order, opt-out telemetry disclosed in the README.</p>
 <h2>Business model</h2>
 <p>Four revenue lines, none of which require restricting the open-source version:</p>
 <ol>
@@ -455,7 +455,7 @@
 <li>The same rail later carries integration listings and the law-firm/vendor directory with sponsored placement.</li>
 </ul>
 <h2>Backups, retention &amp; compliance</h2>
-<p>Decided as a headline core feature, not a Stage-10 afterthought:</p>
+<p>Decided as a headline core feature, not a late-stage afterthought:</p>
 <ul>
 <li><strong>Client-owned backups:</strong> nightly encrypted export (DB + documents) pushed to storage the <em>tenant</em> controls — Google Drive, OneDrive, S3, Dropbox. Freehold Cloud is never the only copy of a brokerage&#39;s records. Restore tooling included and tested.</li>
 <li><strong>Retention policies:</strong> states require brokers to keep complete transaction files for 3–7 years; per-tenant retention windows with legal-hold override.</li>
@@ -466,39 +466,39 @@
 <li><strong>SMS:</strong> tenants bring their own Twilio or Vonage keys (both supported). Freehold ships the workflows (task reminders, reply-&quot;done&quot;-to-close, status notifications), compliance helpers (opt-in/opt-out handling, quiet hours, A2P 10DLC registration guidance), a per-tenant <strong>public compliance one-pager URL</strong> (doubles as light marketing), and an in-app disclaimer that texting clients requires their consent. Because keys are tenant-owned, A2P/TCPA registration and liability sit with the tenant — Freehold provides rails and guidance, not carriage.</li>
 <li><strong>Voice:</strong> not core at launch. The <strong>comms bridge</strong> exposes a documented webhook surface (post a structured transaction-update event with auth); a voice-agent service (Deepgram + ElevenLabs + Claude) attaches to it as a separate deployable. Paul has built this stack before; it lands as an attachable add-on once the bridge exists.</li>
 </ul>
-<h2>Build stages</h2>
-<p>Sequential; each stage is deployed and demoable before the next. Assumes a small team; ~9–10 months to GA.</p>
-<h3>Stage 00 — Foundations <em>(~2 wk)</em></h3>
+<h2 id="build-stages">Roadmap</h2>
+<p>Sequential; each phase is deployed and demoable before the next. Assumes a small team; ~9–10 months to GA.</p>
+<h3>Foundations <em>(~2 wk)</em></h3>
 <p>Monorepo + CI; auth (email/password + OAuth); three-level tenancy (tenant → client → user) with RLS; Docker Compose dev/self-host bundle from day one; <code>/ee</code> folder + commercial license header; <strong>CLA Assistant configured before the repo goes public</strong> (Apache ICLA-style template — Paul&#39;s explicit reminder); health page skeleton.
 <strong>Exit:</strong> signup → empty dashboard on Compose and on a dev cloud deploy.</p>
-<h3>Stage 01 — Core transaction management + CRM <em>(~5 wk)</em> ✅ <em>core shipped 2026-07-18</em></h3>
+<h3>Core transaction management + CRM <em>(~5 wk)</em> ✅ <em>core shipped 2026-07-18</em></h3>
 <p>Transactions (custom fields, unlimited), contacts, clients, dashboards/saved views, action plans + task templates with role auto-assignment, merge-field email templates (SMTP abstraction), seed data + onboarding wizard.
-<strong>Exit:</strong> a TC runs one real transaction end-to-end. <em>Verified: transaction → parties → applied action plan with computed deadlines → task completion → pipeline dashboard; RLS tenant isolation proven live (app connects as non-superuser role). Deferred within stage: merge-field email templates/SMTP sending, saved views, role-based auto-assignment (template field exists; tasks assign to the applying user).</em></p>
-<h3>Stage 02 — Contract extraction (the wedge) <em>(~3 wk)</em></h3>
+<strong>Exit:</strong> a TC runs one real transaction end-to-end. <em>Verified: transaction → parties → applied action plan with computed deadlines → task completion → pipeline dashboard; RLS tenant isolation proven live (app connects as non-superuser role). Deferred at this point: merge-field email templates/SMTP sending, saved views, role-based auto-assignment (template field exists; tasks assign to the applying user).</em></p>
+<h3>Contract extraction (the wedge) <em>(~3 wk)</em></h3>
 <p>Upload → Claude extraction → citation/confidence confirmation screen → dates instantiate deadline tasks. BYO Anthropic key path working.
 <strong>Exit:</strong> a real signed contract produces correct, page-cited dates on a transaction with zero unconfirmed fields.</p>
-<h3>Stage 03 — Documents + e-signature adapters <em>(~4 wk)</em></h3>
+<h3>Documents + e-signature adapters <em>(~4 wk)</em></h3>
 <p>S3-abstraction storage + presigned flows; document templates + merge-to-PDF; envelope interface with Documenso (bundled, arm&#39;s-length) and DocuSign adapters; Dotloop adapter next; per-client provider preference.
 <strong>Exit:</strong> two clients of one tenant sign through two different providers.</p>
-<h3>Stage 04 — Portals, roles, credential vault <em>(~4 wk)</em></h3>
+<h3>Portals, roles, credential vault <em>(~4 wk)</em></h3>
 <p>Branded client/buyer/seller portals with selective sharing; full RBAC; credential vault with envelope encryption, reveal audit, Bitwarden-format import/export.
 <strong>Exit:</strong> a client views their closing via portal link; a TC retrieves a stored MLS credential with the reveal audited.</p>
-<h3>Stage 05 — Freehold Cloud + billing <em>(~4 wk)</em></h3>
-<p>Multi-tenant cloud deployment, signup, Stripe subscriptions; free tier (10 active transactions/mo, 2 users) with upgrade-in-admin seat purchase; graceful at-limit behavior (read/export always; new-transaction creation gated). Hub v1: news feed + opt-out telemetry.
+<h3>Freehold Cloud + billing <em>(~4 wk)</em></h3>
+<p>Multi-tenant cloud deployment, signup, Stripe subscriptions; free tier (5 active transactions at a time, 2 users) with upgrade-in-admin seat purchase; graceful at-limit behavior (read/export always; new-transaction creation gated). Hub v1: news feed + opt-out telemetry.
 <strong>Exit:</strong> a stranger can sign up, use the free tier, and upgrade with a card.</p>
-<h3>Stage 06 — Launch <em>(~3 wk, its own deliverable — decided)</em></h3>
+<h3>Launch <em>(~3 wk, its own deliverable — decided)</em></h3>
 <p>Public demo instance with seeded brokerage; docs site + separate self-hosting guide site; honest Cloud-vs-self-host comparison page; README/screenshots as launch assets; Show HN / Product Hunt / r/selfhosted launch plan executed.
 <strong>Exit:</strong> repo public, demo live, first outside signups.</p>
-<h3>Stage 07 — Importers + integrations round 1 <em>(~4 wk)</em></h3>
+<h3>Importers + integrations round 1 <em>(~4 wk)</em></h3>
 <p>Import framework + CSV templates; first vendor importers (major legacy-platform exports); Gmail/Outlook send+log; public API + webhooks + Zapier; Twenty CRM two-way sync; Stripe Connect tenant→client invoicing.
 <strong>Exit:</strong> a real book of business imported from a competitor export; a tenant invoices a client and gets paid.</p>
-<h3>Stage 08 — Template library <em>(~3 wk)</em></h3>
+<h3>Template library <em>(~3 wk)</em></h3>
 <p>Marketplace index on the Hub; pack format (versioned, state-tagged); one-click install; curated launch set; paid packs + author revenue share via Stripe Connect.
 <strong>Exit:</strong> a veteran TC&#39;s paid checklist pack sells and installs on a stranger&#39;s instance.</p>
-<h3>Stage 09 — Comms round <em>(~3 wk)</em></h3>
+<h3>Comms round <em>(~3 wk)</em></h3>
 <p>BYO Twilio/Vonage SMS with compliance helpers + public compliance page; reply-to-close task flow; comms-bridge webhook surface documented; voice-agent add-on attaches as the reference add-on.
 <strong>Exit:</strong> an SMS &quot;done&quot; closes a task; a phoned-in update lands as a structured event via the bridge.</p>
-<h3>Stage 10 — Hardening + GA <em>(~4 wk)</em></h3>
+<h3>Hardening + GA <em>(~4 wk)</em></h3>
 <p>Backup engine → client-owned destinations with restore drills; retention policies + audit trail completion; security review (third-party pen test when budget allows — see <a href="#open-decisions">Open decisions</a>); load testing; MLS adapter #1 against a RESO sandbox.
 <strong>Exit:</strong> GA — a brokerage can trust it with real contracts and PII.</p>
 <h2>Repo layout</h2>
@@ -526,7 +526,7 @@ freehold-infra/                  (private)
 └── hub/                        news feed, marketplace index, telemetry
 </code></pre>
 <h2>Pricing (proposed defaults)</h2>
-<p>All numbers are proposals to confirm before Stage 05 — calibrated against the legacy platforms (roughly $32/user/mo at the low end to $99+/mo):</p>
+<p>All numbers are proposals to confirm before the Cloud + billing phase — calibrated against the legacy platforms (roughly $32/user/mo at the low end to $99+/mo):</p>
 <table>
 <thead>
 <tr>
@@ -589,22 +589,22 @@ freehold-infra/                  (private)
 <tr>
 <td>Pricing numbers</td>
 <td>Table above</td>
-<td>Proposed — confirm before Stage 05</td>
+<td>Proposed — confirm before the Cloud + billing phase</td>
 </tr>
 <tr>
 <td>Template revenue share</td>
 <td>70/30 author/platform</td>
-<td>Proposed — confirm before Stage 08</td>
+<td>Proposed — confirm before the template library phase</td>
 </tr>
 <tr>
 <td>Self-host bundled storage</td>
 <td>SeaweedFS (Apache-2.0) over MinIO</td>
-<td>Default — decide at Stage 03</td>
+<td>Default — decide during the documents + e-signature phase</td>
 </tr>
 <tr>
 <td>Cloud hosting platform</td>
 <td>Start Vercel + Railway hobby tiers; consolidate later if cost demands</td>
-<td>Default — revisit at Stage 05</td>
+<td>Default — revisit at the Cloud + billing phase</td>
 </tr>
 <tr>
 <td>Vault automation (auto-login with stored creds)</td>

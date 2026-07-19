@@ -26,8 +26,8 @@ pnpm-debug.log*
 # testing
 coverage/
 
-# claude local settings
-.claude/settings.local.json
+# Claude Code local tooling (skills, settings, launch config) — dev-only, not product code
+.claude/
 
 # typescript incremental
 *.tsbuildinfo
