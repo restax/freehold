@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, EnvelopeBadge, ExtractionBadge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
+import { VisibilityToggles } from "@/components/visibility-toggles";
 import { deleteDocument, uploadDocument } from "@/lib/actions/documents";
 import {
   deleteEnvelope,
@@ -50,7 +51,15 @@ export default async function TransactionDetailPage({
         tasks: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
         documents: {
           orderBy: { createdAt: "desc" },
-          select: { id: true, filename: true, contentType: true, sizeBytes: true, createdAt: true },
+          select: {
+            id: true,
+            filename: true,
+            contentType: true,
+            sizeBytes: true,
+            createdAt: true,
+            visibleToAgent: true,
+            visibleToClient: true,
+          },
         },
         extractions: {
           orderBy: { createdAt: "desc" },
@@ -343,7 +352,16 @@ export default async function TransactionDetailPage({
                   <span className={`text-sm ${done ? "text-stone-400 line-through" : ""}`}>
                     {t.title}
                   </span>
-                  <div className="ml-auto">
+                  <span className="ml-auto flex items-center gap-3">
+                    <VisibilityToggles
+                      kind="task"
+                      id={t.id}
+                      transactionId={txn.id}
+                      visibleToAgent={t.visibleToAgent}
+                      visibleToClient={t.visibleToClient}
+                    />
+                  </span>
+                  <div>
                     <DangerDelete
                       compact
                       action={deleteTask}
@@ -428,7 +446,16 @@ export default async function TransactionDetailPage({
                       )}
                     </form>
                   ))}
-                <div className="ml-auto">
+                <span className="ml-auto flex items-center gap-3">
+                  <VisibilityToggles
+                    kind="document"
+                    id={doc.id}
+                    transactionId={txn.id}
+                    visibleToAgent={doc.visibleToAgent}
+                    visibleToClient={doc.visibleToClient}
+                  />
+                </span>
+                <div>
                   <DangerDelete
                     compact
                     action={deleteDocument}

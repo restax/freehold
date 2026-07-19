@@ -38,7 +38,7 @@ export default async function DashboardPage() {
   soon.setUTCDate(soon.getUTCDate() + 7);
   const weekAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000);
 
-  const { counts, openTasks, closings, doneThisWeek, recent } = await withTenant(
+  const { counts, openTasks, closings, doneThisWeek, prospecting, recent } = await withTenant(
     tenantId,
     async (tx) => ({
       counts: await tx.transaction.groupBy({ by: ["status"], _count: { _all: true } }),
@@ -63,6 +63,12 @@ export default async function DashboardPage() {
         orderBy: { completedAt: "desc" },
         take: 15,
         include: { transaction: { select: { id: true, propertyAddress: true } } },
+      }),
+      prospecting: await tx.contact.findMany({
+        where: { nextTouchAt: { lte: now } },
+        orderBy: { nextTouchAt: "asc" },
+        take: 5,
+        select: { id: true, name: true, grade: true, nextTouchAt: true },
       }),
       recent: await tx.transaction.findMany({
         orderBy: { updatedAt: "desc" },
@@ -275,6 +281,46 @@ export default async function DashboardPage() {
           </div>
         )}
       </section>
+
+      {/* Prospecting queue */}
+      {prospecting.length > 0 && (
+        <section className={card}>
+          <h2 className="mb-1 font-medium">Prospecting due</h2>
+          <p className="mb-2 text-xs text-stone-400">
+            Contacts whose auto-prospect cadence says it's time. Open one and hit "Touched today"
+            when you've reached out.
+          </p>
+          <ul className="flex flex-col">
+            {prospecting.map((c) => (
+              <li
+                key={c.id}
+                className="flex items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
+              >
+                <Link
+                  href={`/dashboard/contacts/${c.id}`}
+                  className="font-medium text-brand-700 hover:underline"
+                >
+                  {c.name}
+                </Link>
+                {c.grade && (
+                  <span className="rounded-full bg-brand-50 px-1.5 py-0.5 text-xs font-semibold text-brand-800">
+                    {c.grade}
+                  </span>
+                )}
+                <span className="ml-auto tabular-nums text-stone-400">
+                  due {fmtDate(c.nextTouchAt)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <Link
+            href="/dashboard/contacts?due=1"
+            className="mt-2 inline-block text-sm text-brand-700 hover:underline"
+          >
+            All due contacts →
+          </Link>
+        </section>
+      )}
 
       {/* Week agenda */}
       <section className={card}>

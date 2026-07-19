@@ -26,6 +26,37 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <div className="mb-4 mt-1 truncate rounded-lg bg-stone-100/80 px-2.5 py-1.5 text-xs font-medium text-stone-500">
           {active?.name}
         </div>
+        <details className="group relative mb-3">
+          <summary className="flex cursor-pointer select-none items-center justify-center gap-1 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700">
+            + Create
+          </summary>
+          <div className="absolute left-0 right-0 z-10 mt-1 flex flex-col rounded-lg border border-stone-200 bg-white py-1 shadow-lg">
+            <a
+              href="/dashboard/transactions"
+              className="px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
+            >
+              Transaction
+            </a>
+            <a
+              href="/dashboard/contacts/new"
+              className="px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
+            >
+              Contact
+            </a>
+            <a
+              href="/dashboard/contacts?due=1"
+              className="px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
+            >
+              Contact note
+            </a>
+            <a
+              href="/dashboard/transactions"
+              className="px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
+            >
+              Task
+            </a>
+          </div>
+        </details>
         <DashboardNav />
         <div className="mt-auto flex flex-col gap-1 border-t border-stone-200 pt-3">
           <SettingsNavLink />

@@ -78,3 +78,57 @@ export async function deletePortalLink(formData: FormData) {
   revalidatePath(`/dashboard/transactions/${transactionId}`);
   revalidatePath("/dashboard/clients");
 }
+
+/** Managed-agent portal: one link per client, covering all their deals. */
+export async function createAgentPortalLink(formData: FormData) {
+  const { tenantId, session } = await requireTenant();
+  const clientId = str(formData, "clientId");
+  const label = str(formData, "label");
+  if (!clientId || !label) return;
+  await withTenant(tenantId, (tx) =>
+    tx.portalLink.create({
+      data: {
+        tenantId,
+        audience: "AGENT",
+        clientId,
+        label,
+        token: randomBytes(24).toString("base64url"),
+        showDocuments: true,
+      },
+    }),
+  );
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "portal.agent_created",
+    summary: `Created agent portal "${label}"`,
+    subjectType: "client",
+    subjectId: clientId,
+  });
+  revalidatePath(`/dashboard/clients/${clientId}`);
+}
+
+/**
+ * Per-item portal visibility: the two audience toggles next to every task
+ * and document on the transaction screen.
+ */
+export async function setItemVisibility(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const kind = str(formData, "kind");
+  const id = str(formData, "id");
+  const audience = str(formData, "audience");
+  const value = str(formData, "value") === "1";
+  const transactionId = str(formData, "transactionId");
+  if (!id || (kind !== "task" && kind !== "document")) return;
+  if (audience !== "agent" && audience !== "client") return;
+  const data = audience === "agent" ? { visibleToAgent: value } : { visibleToClient: value };
+  await withTenant(tenantId, async (tx) => {
+    if (kind === "task") {
+      await tx.task.update({ where: { id }, data });
+    } else {
+      await tx.document.update({ where: { id }, data });
+    }
+  });
+  revalidatePath(`/dashboard/transactions/${transactionId}`);
+}

@@ -8,6 +8,7 @@ import {
   readNewApiKey,
   revokeApiKey,
 } from "@/lib/actions/api-keys";
+import { setContactVisibilityRestriction } from "@/lib/actions/contacts";
 import { removeSampleData } from "@/lib/actions/sample-data";
 import { fmtDate } from "@/lib/format";
 import { listTenants } from "@/lib/session";
@@ -154,6 +155,40 @@ async function ApiSection({ tenantId, userId }: { tenantId: string; userId: stri
   );
 }
 
+async function ContactVisibilitySection({
+  tenantId,
+  userId,
+}: {
+  tenantId: string;
+  userId: string;
+}) {
+  const role = await getMemberRole(tenantId, userId);
+  if (role !== "owner" && role !== "admin") return null;
+  const { prisma } = await import("@freehold/db");
+  const org = await prisma.organization.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: { restrictContactsToOwner: true },
+  });
+  return (
+    <section className={card}>
+      <h2 className="mb-1 font-medium">Contact visibility</h2>
+      <p className="mb-3 text-sm text-stone-500">
+        {org.restrictContactsToOwner
+          ? "Members currently see only contacts they own. Owners and admins always see everything."
+          : "Everyone currently sees all contacts. Restrict it so members see only contacts they own."}
+      </p>
+      <form action={setContactVisibilityRestriction}>
+        <input type="hidden" name="restrict" value={org.restrictContactsToOwner ? "0" : "1"} />
+        <button type="submit" className={btnGhost}>
+          {org.restrictContactsToOwner
+            ? "Open visibility to everyone"
+            : "Restrict to owned contacts"}
+        </button>
+      </form>
+    </section>
+  );
+}
+
 async function AuditSection({ tenantId, userId }: { tenantId: string; userId: string }) {
   const role = await getMemberRole(tenantId, userId);
   if (role !== "owner" && role !== "admin") return null;
@@ -232,6 +267,8 @@ export default async function SettingsPage() {
       </section>
 
       <ApiSection tenantId={tenantId} userId={session.user.id} />
+
+      <ContactVisibilitySection tenantId={tenantId} userId={session.user.id} />
 
       <AuditSection tenantId={tenantId} userId={session.user.id} />
 

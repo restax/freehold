@@ -103,6 +103,8 @@ model Organization {
   planTier             PlanTier             @default(FREE) @map("plan_tier")
   seatLimit            Int                  @default(2) @map("seat_limit")
   aiExtractionsUsed    Int                  @default(0) @map("ai_extractions_used")
+  /// Admin setting: when true, members only see contacts they own.
+  restrictContactsToOwner Boolean           @default(false) @map("restrict_contacts_to_owner")
   stripeCustomerId     String?              @map("stripe_customer_id")
   stripeSubscriptionId String?              @map("stripe_subscription_id")
   createdAt            DateTime             @default(now())
@@ -124,6 +126,7 @@ model Organization {
   vaultCredentials     VaultCredential[]
   vaultAccessLogs      VaultAccessLog[]
   auditLogs            AuditLog[]
+  contactNotes         ContactNote[]
   apiKeys              ApiKey[]
   invoices             Invoice[]
   webhookEndpoints     WebhookEndpoint[]
@@ -187,6 +190,7 @@ model Client {
   isSample      Boolean           @default(false)
   transactions  Transaction[]
   credentials   VaultCredential[]
+  portalLinks   PortalLink[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   invoices      Invoice[]
@@ -235,6 +239,11 @@ enum DateAnchor {
 
 /// CRM record — buyers, sellers, agents, lenders, vendors. Category is free
 /// text on purpose (competitors allow custom categories).
+/// Dual-person CRM record: one entry holds two related people (a couple, a
+/// client + assistant) so mailings and document merges address both at once.
+/// `name` stays the denormalized display name ("Jordan & Casey Bell") used by
+/// pickers and party lists; structured person fields live alongside it, and
+/// the secondary person + overflow phones/emails live in JSON.
 model Contact {
   id        String             @id @default(uuid())
   tenantId  String             @map("tenant_id")
@@ -248,13 +257,63 @@ model Contact {
   rating    Int?
   touchDate DateTime?          @map("touch_date") @db.Date
   notes     String?
+  // --- dual-person CRM fields ---
+  personTitle String?          @map("person_title")
+  firstName   String?          @map("first_name")
+  middleName  String?          @map("middle_name")
+  lastName    String?          @map("last_name")
+  jobTitle    String?          @map("job_title")
+  company     String?
+  website     String?
+  workPhone   String?          @map("work_phone")
+  fax         String?
+  /// Secondary person (spouse/assistant): {title,first,middle,last,jobTitle,cell,workPhone,email}
+  secondary   Json?
+  /// Overflow contact points: {phones: string[], emails: string[]}
+  extraContacts Json?          @map("extra_contacts")
+  categories  String[]         @default([])
+  /// Relationship grade A-D; drives the auto-prospecting cadence.
+  grade       String?
+  /// When this contact is next due in the prospecting queue.
+  nextTouchAt DateTime?        @map("next_touch_at") @db.Date
+  homeAddress Json?            @map("home_address")
+  workAddress Json?            @map("work_address")
+  referredById   String?       @map("referred_by_id")
+  referredBy     Contact?      @relation("ContactReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals      Contact[]     @relation("ContactReferrals")
+  referralSource String?       @map("referral_source")
+  referralDate   DateTime?     @map("referral_date") @db.Date
+  /// BUYER | SELLER | NONE
+  leadType    String?          @map("lead_type")
+  /// Buyer: {cultivating,location,range,income}; Seller: {cultivating,address,listPrice,netProceeds}
+  leadDetails Json?            @map("lead_details")
+  /// {birthday:{m,d,y?}, birthdayAlt, weddingAnniversary, purchaseAnniversary}
+  touchDates  Json?            @map("touch_dates")
   isSample  Boolean            @default(false)
   parties   TransactionParty[]
+  contactNotes ContactNote[]
+  tasks     Task[]
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
 
   @@index([tenantId, category])
+  @@index([tenantId, nextTouchAt])
   @@map("contact")
+}
+
+/// Timestamped CRM notes on a contact (the Notes tab + quick-add).
+model ContactNote {
+  id        String       @id @default(uuid())
+  tenantId  String       @map("tenant_id")
+  tenant    Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contactId String       @map("contact_id")
+  contact   Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  authorId  String?      @map("author_id")
+  body      String
+  createdAt DateTime     @default(now())
+
+  @@index([tenantId, contactId, createdAt])
+  @@map("contact_note")
 }
 
 /// The central object: one closing. Belongs to a tenant, optionally to the
@@ -301,13 +360,24 @@ model Transaction {
 /// must resolve a bare token with no tenant context. The table carries only
 /// the token, display toggles, and foreign keys; all transaction data is then
 /// fetched through withTenant() using the link's own tenant id.
+/// Who a portal link serves. CLIENT = buyer/seller simplified view of one
+/// transaction; AGENT = the managed-agent portal, scoped to a Client record
+/// and covering all of that client's transactions.
+enum PortalAudience {
+  CLIENT
+  AGENT
+}
+
 model PortalLink {
-  id             String       @id @default(uuid())
-  tenantId       String       @map("tenant_id")
-  tenant         Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  transactionId  String
-  transaction    Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  token          String       @unique
+  id             String         @id @default(uuid())
+  tenantId       String         @map("tenant_id")
+  tenant         Organization   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  audience       PortalAudience @default(CLIENT)
+  transactionId  String?
+  transaction    Transaction?   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  clientId       String?        @map("client_id")
+  client         Client?        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  token          String         @unique
   label          String
   showTasks      Boolean      @default(true) @map("show_tasks")
   showDocuments  Boolean      @default(false) @map("show_documents")
@@ -479,6 +549,11 @@ model Task {
   dueDate       DateTime?    @map("due_date") @db.Date
   status        TaskStatus   @default(OPEN)
   completedAt   DateTime?    @map("completed_at")
+  contactId     String?      @map("contact_id")
+  contact       Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  /// Per-audience portal visibility, toggled from the transaction screen.
+  visibleToAgent  Boolean    @default(true) @map("visible_to_agent")
+  visibleToClient Boolean    @default(true) @map("visible_to_client")
   assigneeId    String?
   assignee      User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   sortOrder     Int          @default(0) @map("sort_order")
@@ -564,6 +639,8 @@ model Document {
   sizeBytes     Int                  @map("size_bytes")
   data          Bytes?
   storageKey    String?              @map("storage_key")
+  visibleToAgent  Boolean            @default(true) @map("visible_to_agent")
+  visibleToClient Boolean            @default(true) @map("visible_to_client")
   extractions   ContractExtraction[]
   envelopes     SignatureEnvelope[]
   createdAt     DateTime             @default(now())

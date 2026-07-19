@@ -5,11 +5,11 @@ import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
 import { deleteClient } from "@/lib/actions/clients";
-import { setPortalLinkActive } from "@/lib/actions/portal";
+import { createAgentPortalLink, setPortalLinkActive } from "@/lib/actions/portal";
 import { fmtDate, fmtMoney } from "@/lib/format";
 import { portalOrigin } from "@/lib/portal";
 import { requireAdminTenant } from "@/lib/tenant";
-import { btnGhost, card, td, th, trHover } from "@/lib/ui";
+import { btn, btnGhost, card, input, label as labelCls, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +29,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
     tx.client.findUnique({
       where: { id },
       include: {
+        portalLinks: { orderBy: { createdAt: "desc" } },
         transactions: {
           orderBy: { updatedAt: "desc" },
           include: { portalLinks: { orderBy: { createdAt: "desc" } } },
@@ -40,7 +41,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const portalBase = await portalOrigin(tenantId);
 
   const portalLinks = client.transactions.flatMap((t) =>
-    t.portalLinks.map((pl) => ({ ...pl, transaction: t })),
+    t.portalLinks.filter((pl) => pl.audience === "CLIENT").map((pl) => ({ ...pl, transaction: t })),
   );
 
   return (
@@ -103,13 +104,81 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
       </section>
 
       <section className={card}>
+        <h2 className="mb-1 font-medium">Agent portal</h2>
+        <p className="mb-3 text-sm text-stone-500">
+          One link for {client.name} to follow every deal you run for them: live pipeline, task
+          progress, files, and their closed history. Share it once.
+        </p>
+        {client.portalLinks.length > 0 && (
+          <ul className="mb-3 flex flex-col">
+            {client.portalLinks.map((pl) => {
+              const active = !pl.revokedAt;
+              return (
+                <li
+                  key={pl.id}
+                  className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2.5 last:border-0"
+                >
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
+                      active ? "bg-brand-50 text-brand-800" : "bg-stone-100 text-stone-500"
+                    }`}
+                  >
+                    <span
+                      aria-hidden
+                      className={`h-1.5 w-1.5 rounded-full ${active ? "bg-brand-500" : "bg-stone-400"}`}
+                    />
+                    {active ? "Active" : "Inactive"}
+                  </span>
+                  <span className="text-sm font-medium">{pl.label}</span>
+                  {pl.lastAccessedAt && (
+                    <span className="text-xs text-stone-400">
+                      last opened {fmtDate(pl.lastAccessedAt)}
+                    </span>
+                  )}
+                  <div className="ml-auto flex items-center gap-2">
+                    {active && (
+                      <span className="max-w-56 truncate font-mono text-xs text-stone-400">
+                        {portalBase}/portal/{pl.token}
+                      </span>
+                    )}
+                    <form action={setPortalLinkActive}>
+                      <input type="hidden" name="id" value={pl.id} />
+                      <input type="hidden" name="active" value={active ? "0" : "1"} />
+                      <button type="submit" className={`${btnGhost} px-2.5 py-1 text-xs`}>
+                        {active ? "Deactivate" : "Activate"}
+                      </button>
+                    </form>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <form action={createAgentPortalLink} className="flex items-end gap-2">
+          <input type="hidden" name="clientId" value={client.id} />
+          <label className={labelCls}>
+            Label
+            <input
+              name="label"
+              required
+              placeholder={`${client.name} portal`}
+              className={`${input} w-56`}
+            />
+          </label>
+          <button type="submit" className={btn}>
+            Create agent portal
+          </button>
+        </form>
+      </section>
+
+      <section className={card}>
         <h2 className="mb-1 flex items-center gap-2 font-medium">
           <LinkSimple size={17} weight="bold" className="text-brand-600" aria-hidden />
-          Portal access
+          Buyer &amp; seller portals
         </h2>
         <p className="mb-3 text-sm text-stone-500">
-          Everyone with a portal sign-in for this client's transactions. Deactivating a link shuts
-          it off instantly — the same link works again if you reactivate.
+          Per-transaction links for buyers and sellers. Deactivating a link shuts it off instantly —
+          the same link works again if you reactivate.
         </p>
         {portalLinks.length === 0 ? (
           <p className="text-sm text-stone-500">

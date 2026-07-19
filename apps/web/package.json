@@ -22,6 +22,7 @@
     "@phosphor-icons/react": "^2.1.10",
     "@vercel/analytics": "^2.0.1",
     "better-auth": "^1.6.23",
+    "jszip": "^3.10.1",
     "next": "16.2.10",
     "pdf-lib": "^1.17.1",
     "posthog-js": "^1.404.1",
