@@ -30,10 +30,10 @@ export default function TwentyDocsPage() {
           Freehold + Twenty CRM
         </h1>
         <p className="mt-4 leading-relaxed text-stone-600">
-          Twenty is the open-source CRM — a natural neighbor for a fair-source TC platform. If your
-          team runs its sales pipeline there, this connection keeps both systems fed with no double
-          entry, using a plain API key. No OAuth, no approvals, works with Twenty's cloud or your
-          own self-hosted instance.
+          Twenty is the open-source CRM — a natural neighbor for a source-available TC platform. If
+          your team runs its sales pipeline there, this connection keeps both systems fed with no
+          double entry, using a plain API key. No OAuth, no approvals, works with Twenty's cloud or
+          your own self-hosted instance.
         </p>
 
         <div className="mt-8 rounded-2xl border border-stone-200/70 bg-white p-6">

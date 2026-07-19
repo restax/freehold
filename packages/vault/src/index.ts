@@ -77,3 +77,44 @@ export function decryptSecret(enc: EncryptedSecret, masterKey: Buffer): string {
   );
   return plain.toString("utf8");
 }
+
+/**
+ * Binary envelope encryption for stored documents. Same scheme as
+ * credentials (per-object data key wrapped by the master key, AES-256-GCM)
+ * but packed into one self-describing buffer:
+ *
+ *   FHE1 | wrapIv(12) | wrapTag(16) | wrappedKey(32) | iv(12) | tag(16) | ciphertext
+ *
+ * The magic prefix makes decryption backward-compatible: payloads without
+ * it (documents stored before encryption shipped) pass through unchanged.
+ */
+const BYTES_MAGIC = Buffer.from("FHE1");
+const BYTES_HEADER = 4 + 12 + 16 + 32 + 12 + 16;
+
+export function isEncryptedBytes(payload: Buffer): boolean {
+  return payload.length > BYTES_HEADER && payload.subarray(0, 4).equals(BYTES_MAGIC);
+}
+
+export function encryptBytes(plain: Buffer, masterKey: Buffer): Buffer {
+  const dataKey = randomBytes(32);
+  const enc = gcmEncrypt(dataKey, plain);
+  const wrap = gcmEncrypt(masterKey, dataKey);
+  return Buffer.concat([BYTES_MAGIC, wrap.iv, wrap.tag, wrap.out, enc.iv, enc.tag, enc.out]);
+}
+
+export function decryptBytes(payload: Buffer, masterKey: Buffer): Buffer {
+  if (!isEncryptedBytes(payload)) return payload;
+  const wrapIv = payload.subarray(4, 16);
+  const wrapTag = payload.subarray(16, 32);
+  const wrappedKey = payload.subarray(32, 64);
+  const iv = payload.subarray(64, 76);
+  const tag = payload.subarray(76, 92);
+  const o = 92;
+  const dataKey = gcmDecrypt(
+    masterKey,
+    Buffer.from(wrappedKey),
+    Buffer.from(wrapIv),
+    Buffer.from(wrapTag),
+  );
+  return gcmDecrypt(dataKey, Buffer.from(payload.subarray(o)), Buffer.from(iv), Buffer.from(tag));
+}

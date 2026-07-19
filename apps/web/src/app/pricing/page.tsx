@@ -5,7 +5,7 @@ import { ExtractionReviewCard, MarketingFooter, MarketingNav } from "@/component
 export const metadata = {
   title: "Pricing | Freehold",
   description:
-    "Simple pricing with one honest free tier. Cloud from $0, Pro $35 a month for a 2-person team, self-hosting free forever.",
+    "Simple pricing with one honest free tier. Cloud from $0, Pro $40 a month for a 2-person team with a 7-day free trial, self-hosting free forever.",
 };
 
 const TIERS: Array<{
@@ -15,6 +15,7 @@ const TIERS: Array<{
   period: string;
   features: string[];
   cta: string;
+  note?: string;
   featured?: boolean;
 }> = [
   {
@@ -25,21 +26,23 @@ const TIERS: Array<{
     features: [
       "2 users — client & agent portal logins don't count",
       "5 active transactions at a time",
+      "5 clients with portals",
       "10 AI contract extractions to try it",
       "Client portals and e-sign",
       "Data always readable and exportable",
     ],
     cta: "Start free",
+    note: "No credit card required",
   },
   {
     name: "Cloud Pro",
     audience: "For working TCs and small teams.",
-    price: "$35",
+    price: "$40",
     period: "/ month",
     features: [
-      "2 users included — client & agent portal logins are unlimited and never count as users",
-      "100 active transactions at a time",
-      "Up to 200 active clients",
+      "2 users included — client & agent portal logins never count as users",
+      "50 active transactions at a time",
+      "50 clients with portals",
       "AI contract extraction, fair use included",
       "Merge-field document templates",
       "Credential vault with reveal audit",
@@ -47,23 +50,25 @@ const TIERS: Array<{
       "Client invoicing via Stripe",
     ],
     cta: "Start with Pro",
+    note: "7-day free trial · cancel in two clicks",
     featured: true,
   },
   {
     name: "Cloud Business",
     audience: "For brokerages and title companies.",
-    price: "$80",
+    price: "$85",
     period: "/ month",
     features: [
       "Everything in Pro",
       "10 users included",
-      "200 active transactions at a time",
-      "Up to 200 active clients",
+      "100 active transactions at a time",
+      "100 clients with portals",
       "Priority, real-estate-focused support",
       "Onboarding done with you: send your exports, we set up your workspace on a call",
       "Early access to new features, reporting first",
     ],
     cta: "Start with Business",
+    note: "7-day free trial · cancel in two clicks",
   },
 ];
 
@@ -140,9 +145,21 @@ export default function PricingPage() {
                   {tier.cta}
                 </span>
               </Link>
+              {tier.note && (
+                <p
+                  className={`mt-2 text-center text-xs ${tier.featured ? "text-brand-100" : "text-stone-400"}`}
+                >
+                  {tier.note}
+                </p>
+              )}
             </div>
           ))}
         </div>
+
+        <p className="mt-5 text-center text-xs text-stone-400">
+          All billing runs through Stripe — we never see or store your card. Cancel any time from
+          the billing page; your data stays exportable.
+        </p>
 
         {/* Self-hosted band */}
         <div className="mt-6 flex flex-wrap items-center justify-between gap-5 rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-5">

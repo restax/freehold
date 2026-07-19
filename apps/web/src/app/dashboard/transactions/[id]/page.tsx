@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, EnvelopeBadge, ExtractionBadge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
+import { DictateButton } from "@/components/dictate-button";
 import { VisibilityToggles } from "@/components/visibility-toggles";
 import { deleteDocument, uploadDocument } from "@/lib/actions/documents";
 import { sendTransactionEmail } from "@/lib/actions/emails";
@@ -33,7 +34,9 @@ import {
   updateTransaction,
   withdrawDateChange,
 } from "@/lib/actions/transactions";
+import { emailContextForTransaction, transactionMergeContext } from "@/lib/auto-emails";
 import { emailEnabled } from "@/lib/email";
+import { EMAIL_MERGE_CODES, renderMerge } from "@/lib/email-template";
 import { fmtDate, fmtMoney, ROLE_LABEL, STATUS_LABEL } from "@/lib/format";
 import { extractionCreditState } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
@@ -65,12 +68,12 @@ export default async function TransactionDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; emailTemplate?: string; emailTask?: string }>;
 }) {
-  const { tenantId } = await requireTenant();
+  const { tenantId, session } = await requireTenant();
   const labels = await tenantSideLabels(tenantId);
   const { id } = await params;
-  const { tab: tabRaw } = await searchParams;
+  const { tab: tabRaw, emailTemplate, emailTask } = await searchParams;
   const tab: TxnTab = (TXN_TABS.some(([t]) => t === tabRaw) ? tabRaw : "tasks") as TxnTab;
 
   const data = await withTenant(tenantId, async (tx) => {
@@ -115,12 +118,34 @@ export default async function TransactionDetailPage({
       }),
       tx.docTemplate.findMany({ orderBy: { name: "asc" } }),
     ]);
-    return { txn, contacts, clients, plans, templates };
+    const emailTemplates = await tx.emailTemplate.findMany({ orderBy: { name: "asc" } });
+    return { txn, contacts, clients, plans, templates, emailTemplates };
   });
   if (!data) notFound();
-  const { txn, contacts, clients, plans, templates } = data;
+  const { txn, contacts, clients, plans, templates, emailTemplates } = data;
   const portalBase = await portalOrigin(tenantId);
   const aiCredits = await extractionCreditState(tenantId);
+
+  // Template-driven compose prefill: merge fields render server-side so the
+  // TC sees (and can edit) the final text before sending.
+  let composeSubject = "";
+  let composeBody = "";
+  const selectedEmailTemplate = emailTemplate
+    ? emailTemplates.find((t) => t.id === emailTemplate)
+    : undefined;
+  if (selectedEmailTemplate) {
+    const ctx = await emailContextForTransaction(tenantId, txn.id, session.user);
+    const task = emailTask ? txn.tasks.find((t) => t.id === emailTask) : undefined;
+    const merge = ctx
+      ? {
+          ...transactionMergeContext(ctx, session.user),
+          task_title: task?.title ?? "",
+          task_due: task?.dueDate ? fmtDate(task.dueDate) : "",
+        }
+      : {};
+    composeSubject = renderMerge(selectedEmailTemplate.subject, merge);
+    composeBody = renderMerge(selectedEmailTemplate.body, merge);
+  }
 
   const customFields = (txn.customFields as Record<string, string> | null) ?? {};
   const today = fmtDate(new Date());
@@ -288,6 +313,13 @@ export default async function TransactionDetailPage({
                             </span>
                           )}
                           <span className="ml-auto flex items-center gap-3">
+                            <Link
+                              href={`/dashboard/transactions/${txn.id}?tab=emails&emailTask=${t.id}`}
+                              title="Send an email about this task — templates available"
+                              className="text-stone-300 transition-colors hover:text-brand-700"
+                            >
+                              ✉
+                            </Link>
                             <form action={cycleTaskPriority}>
                               <input type="hidden" name="id" value={t.id} />
                               <input type="hidden" name="transactionId" value={txn.id} />
@@ -829,7 +861,31 @@ export default async function TransactionDetailPage({
                       Sends from your workspace's address; replies land right back on this
                       transaction.
                     </p>
-                    <form action={sendTransactionEmail} className="flex flex-col gap-3">
+                    {emailTemplates.length > 0 && (
+                      <p className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="font-medium uppercase tracking-wide text-stone-400">
+                          Start from a template
+                        </span>
+                        {emailTemplates.map((t) => (
+                          <Link
+                            key={t.id}
+                            href={`/dashboard/transactions/${txn.id}?tab=emails&emailTemplate=${t.id}${emailTask ? `&emailTask=${emailTask}` : ""}`}
+                            className={`rounded-full border px-2.5 py-1 transition-colors ${
+                              t.id === emailTemplate
+                                ? "border-brand-600 bg-brand-50 font-medium text-brand-800"
+                                : "border-stone-200 text-stone-600 hover:border-brand-600 hover:text-brand-700"
+                            }`}
+                          >
+                            {t.name.replace(" (Sample)", "")}
+                          </Link>
+                        ))}
+                      </p>
+                    )}
+                    <form
+                      action={sendTransactionEmail}
+                      className="flex flex-col gap-3"
+                      key={emailTemplate ?? "blank"}
+                    >
                       <input type="hidden" name="transactionId" value={txn.id} />
                       <div className="grid gap-3 sm:grid-cols-2">
                         <label className={label}>
@@ -853,17 +909,35 @@ export default async function TransactionDetailPage({
                         </datalist>
                         <label className={label}>
                           Subject
-                          <input name="subject" required className={input} />
+                          <input
+                            name="subject"
+                            required
+                            defaultValue={composeSubject}
+                            className={input}
+                          />
                         </label>
                       </div>
                       <label className={label}>
                         Message
-                        <textarea name="body" required rows={5} className={input} />
+                        <textarea
+                          id="compose-body"
+                          name="body"
+                          required
+                          rows={9}
+                          defaultValue={composeBody}
+                          className={input}
+                        />
                       </label>
-                      <div>
+                      <p className="text-xs text-stone-400">
+                        Formatting: **bold**, _italic_, "# " big heading, "- " bullet lists — the
+                        sent email renders them properly. Merge codes work in templates:{" "}
+                        {EMAIL_MERGE_CODES.slice(0, 4).join(" ")} …
+                      </p>
+                      <div className="flex items-center gap-3">
                         <button type="submit" className={btn}>
                           Send email
                         </button>
+                        <DictateButton targetId="compose-body" />
                       </div>
                     </form>
                   </>

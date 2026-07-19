@@ -1,10 +1,10 @@
 # Contributing
 
-Freehold's core is fair source (FSL-1.1-Apache-2.0 — free to use, modify, and self-host; each release becomes Apache-2.0 after two years) and open to contributions once Stage 00 lands (see [`docs/PLAN.md`](docs/PLAN.md) for the build sequence — early stages are foundational and best coordinated before large PRs).
+Freehold's core is source-available (Elastic License 2.0 — free to use, modify, and self-host for your own organization; never resellable or hostable for others) and open to contributions once Stage 00 lands (see [`docs/PLAN.md`](docs/PLAN.md) for the build sequence — early stages are foundational and best coordinated before large PRs).
 
 ## Contributor License Agreement (required)
 
-Because a commercial tier (Freehold Cloud, `ee/`) is sold alongside the fair-source core, **all contributors must sign a CLA before any code is merged**. This preserves the legal flexibility to sustain the project commercially while fully welcoming and crediting community contributions.
+Because a commercial tier (Freehold Cloud, `ee/`) is sold alongside the source-available core, **all contributors must sign a CLA before any code is merged**. This preserves the legal flexibility to sustain the project commercially while fully welcoming and crediting community contributions.
 
 - Signing is automated via CLA Assistant on your first PR — no paperwork beyond a click.
 - The agreement is a standard, widely used template (Apache Software Foundation ICLA / contributoragreements.org — final text published before the repo opens to external PRs).

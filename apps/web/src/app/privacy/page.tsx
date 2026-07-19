@@ -19,12 +19,22 @@ export default function PrivacyPage() {
           Anthropic does not train on this data under the API terms we operate under.
         </p>
         <p>
-          Credentials you store in the vault are encrypted before they reach the database. We cannot
-          read them.
+          Credentials you store in the vault and every document you upload are envelope-encrypted
+          before they reach the database or storage.
         </p>
         <p>
           Payments are processed by Stripe; we never see your card number. We use no third-party
           advertising or analytics trackers.
+        </p>
+        <p>
+          We protect data with industry-standard physical and electronic safeguards — encryption in
+          transit and at rest, database-enforced workspace isolation, and audit logging. No
+          internet-connected system is 100% secure, though, and we can make no guarantees as to the
+          security or privacy of your information; see the security disclaimer in our{" "}
+          <a href="/terms" className="text-brand-700 hover:text-brand-600">
+            terms
+          </a>
+          .
         </p>
         <p>
           You can export your data or delete your workspace at any time, and deletion is permanent.

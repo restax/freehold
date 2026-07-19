@@ -2,7 +2,7 @@
   "name": "@freehold/web",
   "version": "0.0.0",
   "private": true,
-  "license": "FSL-1.1-Apache-2.0",
+  "license": "Elastic-2.0",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

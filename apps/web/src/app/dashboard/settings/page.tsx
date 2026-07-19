@@ -1,6 +1,7 @@
 import { prisma, withTenant } from "@freehold/db";
 import { Badge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
+import { TwoFactorSettings } from "@/components/two-factor-settings";
 import {
   createApiKey,
   createWebhookEndpoint,
@@ -251,6 +252,11 @@ export default async function SettingsPage() {
         <p className="text-sm">
           <span className="text-stone-500">Signed in as:</span> {session.user.email}
         </p>
+      </section>
+
+      <section className={card}>
+        <h2 className="mb-1 font-medium">Two-factor authentication</h2>
+        <TwoFactorSettings enabled={Boolean(session.user.twoFactorEnabled)} />
       </section>
 
       <section className={card}>

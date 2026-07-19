@@ -16,6 +16,8 @@ export const PLAN_INFO: Record<
     priceMonthly: number | null;
     includedSeats: number;
     activeTransactionLimit: number | null;
+    /** Distinct clients that may have portal links; null = uncapped. */
+    portalClientLimit: number | null;
     /** Lifetime AI extraction trial credits; null = fair-use, not metered. */
     aiExtractionCredits: number | null;
   }
@@ -25,20 +27,23 @@ export const PLAN_INFO: Record<
     priceMonthly: 0,
     includedSeats: 2,
     activeTransactionLimit: 5,
+    portalClientLimit: 5,
     aiExtractionCredits: 10,
   },
   PRO: {
     label: "Pro",
-    priceMonthly: 35,
+    priceMonthly: 40,
     includedSeats: 2,
-    activeTransactionLimit: 100,
+    activeTransactionLimit: 50,
+    portalClientLimit: 50,
     aiExtractionCredits: null,
   },
   BUSINESS: {
     label: "Business",
-    priceMonthly: 80,
+    priceMonthly: 85,
     includedSeats: 10,
-    activeTransactionLimit: 200,
+    activeTransactionLimit: 100,
+    portalClientLimit: 100,
     aiExtractionCredits: null,
   },
 };
@@ -145,4 +150,31 @@ export async function seatState(tenantId: string): Promise<SeatState> {
   ]);
   const used = members + pending;
   return { limited: isCloud() && used >= plan.seatLimit, used, limit: plan.seatLimit };
+}
+
+/** Distinct clients that already have at least one portal link. */
+export async function portalClientLimit(
+  tenantId: string,
+  clientIdToAdd: string | null,
+): Promise<{ limited: boolean; used: number; limit: number | null }> {
+  if (!isCloud()) return { limited: false, used: 0, limit: null };
+  const org = await prisma.organization.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: { planTier: true },
+  });
+  const limit = PLAN_INFO[org.planTier].portalClientLimit;
+  if (limit == null) return { limited: false, used: 0, limit: null };
+  const rows = await withTenant(tenantId, (tx) =>
+    tx.portalLink.findMany({
+      where: { revokedAt: null },
+      select: { clientId: true, transaction: { select: { clientId: true } } },
+    }),
+  );
+  const clients = new Set<string>();
+  for (const r of rows) {
+    const id = r.clientId ?? r.transaction?.clientId;
+    if (id) clients.add(id);
+  }
+  const alreadyCounted = clientIdToAdd ? clients.has(clientIdToAdd) : false;
+  return { limited: !alreadyCounted && clients.size >= limit, used: clients.size, limit };
 }

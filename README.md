@@ -2,7 +2,7 @@
 
 *Working name (formerly "Keystone") — final name/domain purchase pending.*
 
-An AI-enabled real estate transaction management and CRM platform for brokerages and transaction coordinators — one system of record for listings, contracts, contacts, and closings. **Fair source (FSL-1.1-Apache-2.0): the full code is public and self-hosting is free and unlimited, forever — no license keys, no caps. Every release automatically becomes Apache-2.0 open source two years after publication; the only restricted use is offering Freehold as a competing hosted service.** Revenue comes from Freehold Cloud (the hosted version), setup/migration services, and a template marketplace — not from restricting this repo.
+An AI-enabled real estate transaction management and CRM platform for brokerages and transaction coordinators — one system of record for listings, contracts, contacts, and closings. **Source-available (Elastic License 2.0): the full code is public, and self-hosting for your own organization is free and unlimited, forever — no license keys, no caps. What the license forbids is redistribution of the product and offering Freehold to others as a hosted or managed service, under any brand. Hosting for clients is what Freehold Cloud is for.** Revenue comes from Freehold Cloud (the hosted version), setup/migration services, and a template marketplace — not from restricting this repo.
 
 The flagship AI feature: upload a purchase contract and Freehold extracts every key date and figure — page-cited, confidence-scored, human-confirmed before anything enters the record. No guessing.
 
@@ -47,7 +47,7 @@ docs/
   plan.html           styled version of the same plan
 ```
 
-Everything a working TC needs day-to-day lives in the fair-source (FSL-1.1-Apache-2.0) core. The small [`ee/`](ee/) folder (commercial license, Cal.com-style) contains only Cloud billing and plan gating. One private companion repo (`freehold-infra`) holds cloud operations and the Hub (news feed, marketplace index, telemetry) — nothing in it is needed to self-host.
+Everything a working TC needs day-to-day lives in the source-available (Elastic License 2.0) core. The small [`ee/`](ee/) folder (commercial license, Cal.com-style) contains only Cloud billing and plan gating. One private companion repo (`freehold-infra`) holds cloud operations and the Hub (news feed, marketplace index, telemetry) — nothing in it is needed to self-host.
 
 ## Getting started
 
@@ -75,7 +75,7 @@ Instances send an anonymized install ping and daily heartbeat (instance ID, vers
 
 ## License
 
-Functional Source License, Version 1.1, with Apache-2.0 future grant (FSL-1.1-Apache-2.0) — see [`LICENSE`](LICENSE). In plain terms: use it, modify it, and self-host it free for your own business; the only thing you may not do is sell Freehold as a competing hosted service. Each release automatically converts to Apache-2.0 two years after publication. The `ee/` directory is licensed separately (commercial); it is not required to run, build, or self-host Freehold.
+Elastic License 2.0 — see [`LICENSE`](LICENSE). In plain terms: use it, modify it, and self-host it free for your own organization. You may not provide Freehold to third parties as a hosted or managed service, resell it, or offer it under another brand — not even a single hosted copy; Freehold Cloud is the hosted offering. The `ee/` directory is licensed separately (commercial); it is not required to run, build, or self-host Freehold.
 
 ## Contributing
 

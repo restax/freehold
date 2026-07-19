@@ -83,7 +83,8 @@ export function MarketingFooter() {
         <div>
           <Wordmark size="sm" />
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-stone-500">
-            The fair-source, all-in-one platform for real estate transaction management and CRM.
+            The source-available, all-in-one platform for real estate transaction management and
+            CRM.
           </p>
         </div>
         <nav aria-label="Product">
@@ -175,8 +176,9 @@ export function MarketingFooter() {
       </div>
       <div className="border-t border-stone-100">
         <p className="mx-auto max-w-6xl px-4 py-5 text-center text-sm text-stone-400 sm:px-6">
-          Freehold is fair source (FSL-1.1-Apache-2.0). Self-hosting is free forever; every release
-          becomes Apache-2.0 open source two years after publication.
+          Freehold is source-available (Elastic License 2.0). Self-hosting for your own organization
+          is free forever — Freehold may never be resold or offered as someone else's hosted
+          service.
         </p>
       </div>
       <ChatWidget />

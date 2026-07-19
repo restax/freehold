@@ -1,0 +1,37 @@
+name: Nightly database backup
+
+# Offsite backup independent of Neon: pg_dump the production database,
+# encrypt it with a passphrase (the dump contains all tenant data), and
+# store it as a workflow artifact on this private repo. Restore runbook:
+# docs/BACKUP.md. Requires repo secrets BACKUP_DATABASE_URL (the owner
+# connection string) and BACKUP_PASSPHRASE.
+on:
+  schedule:
+    - cron: "17 7 * * *" # daily, 07:17 UTC (off the busy minute-0 queue)
+  workflow_dispatch: {}
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Install Postgres client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Dump, compress, encrypt
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          test -n "$DATABASE_URL" || { echo "BACKUP_DATABASE_URL secret is not set"; exit 1; }
+          test -n "$PASSPHRASE" || { echo "BACKUP_PASSPHRASE secret is not set"; exit 1; }
+          pg_dump --no-owner --no-privileges "$DATABASE_URL" \
+            | gzip \
+            | openssl enc -aes-256-cbc -pbkdf2 -pass env:PASSPHRASE \
+            -out "freehold-$(date -u +%Y%m%d).sql.gz.enc"
+          ls -la freehold-*.sql.gz.enc
+      - name: Upload encrypted dump
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: freehold-*.sql.gz.enc
+          retention-days: 30

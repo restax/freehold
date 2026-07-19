@@ -45,9 +45,9 @@ export default function ServicesPage() {
           Don't want to touch servers? We'll set it up.
         </h1>
         <p className="mt-5 max-w-xl leading-relaxed text-stone-600">
-          Freehold is fair source — anyone can self-host it free, forever. If you'd rather spend
-          that time on closings, our team does the technical work for a flat fee, quoted up front.
-          No subscriptions, no surprises.
+          Freehold is source-available — anyone can self-host it free for their own organization,
+          forever. If you'd rather spend that time on closings, our team does the technical work for
+          a flat fee, quoted up front. No subscriptions, no surprises.
         </p>
 
         <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">

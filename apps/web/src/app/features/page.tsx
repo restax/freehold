@@ -31,8 +31,8 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
         "today",
       ],
       [
-        "Fair source",
-        "The full code is public under the Functional Source License. Self-host free forever, read every line we ship — and each release becomes Apache-2.0 two years on.",
+        "The code is public",
+        "Read every line we ship and self-host free for your own organization, forever. Nobody may resell Freehold or run it as a service for others — which keeps the project funded and your platform alive.",
         "today",
       ],
       [
@@ -148,12 +148,27 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
         "Start from a working checklist or build your own.",
         "today",
       ],
+      [
+        "Task automation",
+        "Apply a plan and every deadline becomes a dated, assigned task — and when the contract's dates change, open tasks cascade with them.",
+        "today",
+      ],
+      [
+        "Email automation",
+        "Lifecycle emails send themselves: an intro when the file opens, congratulations at closing. Wording is editable per workspace, with per-client on/off switches.",
+        "today",
+      ],
       ["Shared team workflows", "Everyone works the same file with the same live state.", "today"],
       ["Task assignment by role", "New tasks route to the right person automatically.", "request"],
       [
         "Email templates attached to tasks",
-        "A task fires with its message ready to send.",
-        "request",
+        "One click on any task opens a merge-filled email — buyer names, dates, and addresses filled from the file, editable before sending. Build your own template library.",
+        "today",
+      ],
+      [
+        "Voice-to-email dictation",
+        "Talk instead of type: dictation powered by Deepgram's Nova model transcribes with excellent accuracy — punctuation and all — straight into your compose box. Paid plans; self-hosters bring their own key.",
+        "today",
       ],
     ],
   ],
@@ -168,6 +183,16 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       [
         "Intake forms with document upload",
         "Buyer and seller intake forms live on the client portal: legal names, lender, attorney, HOA — plus uploads like pre-approvals and deeds. Submissions land on the transaction with a review task, and every workspace can rename its sides (sell side, sale side, list side) everywhere.",
+        "today",
+      ],
+      [
+        "Brand customization",
+        "Your logo on your website and emails, your own subdomain, even your own wording for transaction sides (sell side, sale side, list side).",
+        "today",
+      ],
+      [
+        "Works on any phone",
+        "Dashboard and portals are responsive web — clients tap a link and it just opens. Nothing to install, nothing to update.",
         "today",
       ],
       [
@@ -209,6 +234,51 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ["Team performance breakdowns", "Metrics by person and team.", "request"],
       ["Built-in reports", "Internal and client-facing reporting.", "request"],
       ["Client-facing TC analytics", "Show your agent clients the work you do.", "request"],
+    ],
+  ],
+  [
+    "Security",
+    [
+      [
+        "Database-enforced isolation",
+        "Every workspace is walled off with Postgres row-level security — enforced by the database itself, not just application code.",
+        "today",
+      ],
+      [
+        "Documents encrypted at rest",
+        "Every uploaded document — contracts, intake files, disclosures — is envelope-encrypted at the application layer before it touches storage. Direct database access yields ciphertext.",
+        "today",
+      ],
+      [
+        "Encrypted credential vault",
+        "Client logins are envelope-encrypted at rest and revealed only on click — never stored or displayed in plaintext.",
+        "today",
+      ],
+      [
+        "Offsite encrypted backups",
+        "Nightly encrypted database backups stored independently of the primary host, with point-in-time restore on top.",
+        "today",
+      ],
+      [
+        "Full audit log",
+        "Sensitive actions — deletions, portal access changes, credential reveals, sent emails, integration connections — are recorded with who did them, viewable in Settings.",
+        "today",
+      ],
+      [
+        "Signed, revocable links",
+        "Portals ride single-purpose signed links you can deactivate instantly — the same link resumes if you reactivate. Webhooks are HMAC-signed.",
+        "today",
+      ],
+      [
+        "Nothing deletes in one click",
+        "Every destructive action requires typing DELETE, enforced on the server.",
+        "today",
+      ],
+      [
+        "Two-factor authentication",
+        "TOTP codes from any authenticator app, with one-time backup codes — enable it in Settings in under a minute.",
+        "today",
+      ],
     ],
   ],
   [

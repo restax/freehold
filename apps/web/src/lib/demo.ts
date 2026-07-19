@@ -25,6 +25,8 @@ async function ensureUser(email: string, name: string, password: string) {
   await auth.api.signUpEmail({ body: { email, password, name } });
   const created = await prisma.user.findUnique({ where: { email } });
   if (!created) throw new Error(`demo bootstrap: failed to create ${email}`);
+  // Demo accounts never do the OTP dance.
+  await prisma.user.update({ where: { id: created.id }, data: { emailVerified: true } });
   return created;
 }
 
@@ -82,6 +84,7 @@ export async function resetDemoData() {
     await tx.actionPlan.deleteMany({});
     await tx.document.deleteMany({});
     await tx.docTemplate.deleteMany({});
+    await tx.emailTemplate.deleteMany({});
     await tx.contact.deleteMany({});
     await tx.client.deleteMany({});
     await tx.vaultAccessLog.deleteMany({});

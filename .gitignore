@@ -40,3 +40,7 @@ db/documenso/cert.p12
 
 # DocuSign RSA key drop-file (converted into .env, then deleted)
 docusign_private.key
+
+# personal credential stashes never belong in the repo
+.site2FA
+*.backup-codes*

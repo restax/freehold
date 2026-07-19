@@ -12,11 +12,11 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://freeholdtc.dev"),
   title: "Freehold",
   description:
-    "Fair-source AI transaction management and CRM for real estate brokerages and transaction coordinators.",
+    "AI transaction management and CRM for real estate brokerages and transaction coordinators. Free to self-host, easy on Freehold Cloud.",
   openGraph: {
     title: "Freehold",
     description:
-      "AI reads the purchase contract, you approve every value, and every deadline lands in one system. Fair source, free to self-host.",
+      "AI reads the purchase contract, you approve every value, and every deadline lands in one system. Free to self-host.",
     url: "https://freeholdtc.dev",
     siteName: "Freehold",
     type: "website",

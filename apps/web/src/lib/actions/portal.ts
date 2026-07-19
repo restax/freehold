@@ -5,6 +5,7 @@ import { withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
 import { confirmed, optStr, str } from "@/lib/forms";
+import { portalClientLimit } from "@/lib/plans";
 import { requireTenant } from "@/lib/tenant";
 
 export async function createPortalLink(formData: FormData) {
@@ -12,6 +13,11 @@ export async function createPortalLink(formData: FormData) {
   const transactionId = str(formData, "transactionId");
   const label = str(formData, "label");
   if (!transactionId || !label) return;
+  const txnClient = await withTenant(tenantId, (tx) =>
+    tx.transaction.findUnique({ where: { id: transactionId }, select: { clientId: true } }),
+  );
+  const cap = await portalClientLimit(tenantId, txnClient?.clientId ?? null);
+  if (cap.limited) return; // plan cap; billing page explains the tier limits
 
   await withTenant(tenantId, (tx) =>
     tx.portalLink.create({
@@ -90,6 +96,8 @@ export async function createAgentPortalLink(formData: FormData) {
   const clientId = str(formData, "clientId");
   const contactId = optStr(formData, "contactId");
   if (!clientId) return;
+  const cap = await portalClientLimit(tenantId, clientId);
+  if (cap.limited) return; // plan cap; billing page explains the tier limits
   const label = await withTenant(tenantId, async (tx) => {
     let name = str(formData, "label");
     if (!name && contactId) {

@@ -15,8 +15,8 @@ export default function TermsPage() {
           more.
         </p>
         <p>
-          The software itself is fair source under the Functional Source License
-          (FSL-1.1-Apache-2.0); self-hosting it is governed by that license, not these terms.
+          The software itself is source-available under the Elastic License 2.0; self-hosting it is
+          governed by that license, not these terms.
         </p>
         <p>
           Freehold is a coordination tool, not a law firm, brokerage, or escrow agent. Extracted
@@ -30,6 +30,27 @@ export default function TermsPage() {
         <p>
           Don't use the service to break the law, and don't attempt to access other customers' data.
           We may suspend accounts that do either.
+        </p>
+        <h2 className="mt-2 font-semibold text-stone-900">Security disclaimer</h2>
+        <p>
+          Real estate transactions involve sensitive information, and we treat that seriously: we
+          use industry-standard physical and electronic safeguards, including encryption in transit
+          and at rest, database-enforced workspace isolation, envelope-encrypted document and
+          credential storage, and audit logging. However, no system connected to the internet is
+          100% secure, and{" "}
+          <strong>
+            we can make no guarantees as to the security or privacy of your information
+          </strong>
+          . You use the service at your own risk.
+        </p>
+        <h2 className="mt-2 font-semibold text-stone-900">Your responsibilities</h2>
+        <p>
+          You are solely responsible for the data you put into Freehold and for who you give access
+          to it: safeguarding your password and API keys, choosing what each portal link exposes and
+          to whom you send it, obtaining your clients' consent before storing their information or
+          credentials, deactivating access when relationships end, and complying with the laws and
+          license rules that apply to your business. If you self-host Freehold, you are solely
+          responsible for securing the servers it runs on.
         </p>
         <p>
           These terms will be finalized with counsel before Freehold Cloud takes paid customers.

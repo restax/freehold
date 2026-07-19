@@ -29,7 +29,7 @@ import tcAtWork from "../../public/marketing/tc-at-work.jpg";
 export const metadata = {
   title: "Freehold: the most complete TC system in the world",
   description:
-    "Every deal, every deadline, one place. AI reads the contract and builds the file. Fair source, free to self-host, easy on Freehold Cloud.",
+    "Every deal, every deadline, one place. AI reads the contract and builds the file. Free to self-host, easy on Freehold Cloud.",
 };
 
 const CTA_PRIMARY = "Start free";
@@ -88,7 +88,7 @@ const BENTO = [
 const FAQ: Array<[string, string]> = [
   [
     "How can all of this be free?",
-    "Freehold is fair source: the full product's code is public under the Functional Source License, self-hosting it for your own business costs nothing and always will, and every release becomes Apache-2.0 open source two years after publication. Freehold Cloud, the hosted version, has a real free tier (2 users, 5 active transactions) funded by the paid plans of teams that grow. We make money when you upgrade because you want to, not because your data is trapped.",
+    "Freehold is source-available: the full product's code is public, and self-hosting it for your own organization costs nothing and always will. The license (Elastic License 2.0) forbids one thing — offering Freehold to others as a hosted service or under another brand. Freehold Cloud, the hosted version, has a real free tier (2 users, 5 active transactions) funded by the paid plans of teams that grow. We make money when you upgrade because you want to, not because your data is trapped.",
   ],
   [
     "What happens when I hit the free limits?",
@@ -140,7 +140,7 @@ export default async function LandingPage() {
               <span className="text-brand-600">one place.</span>
             </h1>
             <p className="mt-5 max-w-lg text-lg leading-relaxed text-stone-600">
-              The most complete TC platform. AI reads the contract and builds the file. Fair source,
+              The most complete TC platform. AI reads the contract and builds the file. Source open,
               free to self-host.
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-3">
@@ -181,7 +181,7 @@ export default async function LandingPage() {
           </p>
           <p className="flex gap-3">
             <GitBranch size={20} aria-hidden className="mt-0.5 shrink-0 text-brand-600" />
-            <span>Fair source: the whole product's code is public, not a crippled core.</span>
+            <span>The whole product's code is public, not a crippled core.</span>
           </p>
           <p className="flex gap-3">
             <ShieldCheck size={20} aria-hidden className="mt-0.5 shrink-0 text-brand-600" />
@@ -397,8 +397,9 @@ export default async function LandingPage() {
             <h3 className="font-medium">Isolation you can prove</h3>
             <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
               Every workspace's data is walled off with Postgres row-level security, enforced by the
-              database itself, not just the application code. Credentials are envelope-encrypted,
-              never stored in plaintext.
+              database itself, not just the application code. Documents and credentials are
+              envelope-encrypted at the application layer — even direct database access yields
+              ciphertext.
             </p>
           </div>
         </div>
@@ -560,7 +561,7 @@ export default async function LandingPage() {
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
         <div className="rounded-3xl bg-[radial-gradient(80%_120%_at_50%_0%,#0b7a49_0%,#054f30_100%)] px-6 py-16 text-center sm:px-12">
           <h2 className="font-display mx-auto max-w-2xl text-3xl font-bold tracking-tight text-white md:text-4xl">
-            Free for 2 users and 5 active transactions. No card required.
+            Free for 2 users and 5 active transactions — no credit card required.
           </h2>
           <p className="mx-auto mt-4 max-w-xl leading-relaxed text-brand-50/90">
             Hit a limit and your data stays readable and exportable forever. Upgrading is a choice,

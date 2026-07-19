@@ -19,14 +19,20 @@ export async function startUpgrade(formData: FormData) {
     where: { id: tenantId },
     select: { stripeCustomerId: true },
   });
-  const url = await createUpgradeCheckout({
+  const checkout = await createUpgradeCheckout({
     tenantId,
     tier,
     customerEmail: session.user.email,
     existingCustomerId: org.stripeCustomerId,
     baseUrl: baseUrl(),
   });
-  redirect(url);
+  // Cart tracking for the operator analytics panel; never blocks checkout.
+  await prisma.checkoutAttempt
+    .create({
+      data: { id: checkout.sessionId, tenantId, email: session.user.email, tier },
+    })
+    .catch(() => {});
+  redirect(checkout.url);
 }
 
 export async function openBillingPortal(formData: FormData) {

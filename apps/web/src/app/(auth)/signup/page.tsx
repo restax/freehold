@@ -23,7 +23,14 @@ export default function SignupPage() {
       setBusy(false);
       return;
     }
-    router.push("/onboarding");
+    // With email verification on (Cloud), sign-up doesn't create a session;
+    // the 6-digit code page finishes the job. Self-host goes straight in.
+    const { data: session } = await authClient.getSession();
+    if (session?.user) {
+      router.push("/onboarding");
+    } else {
+      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+    }
     router.refresh();
   }
 
@@ -68,6 +75,17 @@ export default function SignupPage() {
       >
         {busy ? "Creating…" : "Create account"}
       </button>
+      <p className="text-center text-xs text-stone-400">
+        By creating an account you agree to the{" "}
+        <Link href="/terms" className="underline hover:text-stone-600">
+          terms
+        </Link>{" "}
+        and{" "}
+        <Link href="/privacy" className="underline hover:text-stone-600">
+          privacy policy
+        </Link>
+        , including the security disclaimer.
+      </p>
       <p className="text-center text-sm text-stone-500">
         Already have an account?{" "}
         <Link href="/login" className="text-brand-600 hover:underline">

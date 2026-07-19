@@ -123,3 +123,11 @@ docker compose down -v       # stop AND delete all data, irreversible
 Your data is always yours: `pg_dump` gives you everything in a portable
 format, whether you're moving to another server, to Freehold Cloud, or away
 from Freehold entirely.
+
+## Two-factor authentication
+
+TOTP two-factor auth is built in (better-auth `twoFactor` plugin) — no extra configuration. Each user enables it under **Settings → Two-factor authentication**: scan the QR code with any authenticator app, store the one-time backup codes offline. Sign-ins then require a 6-digit code; a device can be trusted for 30 days.
+
+## Voice dictation (optional)
+
+Set `DEEPGRAM_API_KEY` (any [Deepgram](https://deepgram.com) account key) and a **Dictate** button appears on email compose — speech is transcribed by Deepgram's Nova model with excellent accuracy, punctuation included. Without the key the button simply reports dictation unavailable.

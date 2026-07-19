@@ -28,6 +28,8 @@ export async function removeSampleData() {
     await tx.task.deleteMany({ where: { isSample: true } });
     await tx.transaction.deleteMany({ where: { isSample: true } });
     await tx.actionPlan.deleteMany({ where: { isSample: true } });
+    await tx.docTemplate.deleteMany({ where: { isSample: true } });
+    await tx.emailTemplate.deleteMany({ where: { isSample: true } });
     await tx.contact.deleteMany({ where: { isSample: true } });
     await tx.client.deleteMany({ where: { isSample: true } });
   });

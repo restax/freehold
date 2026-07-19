@@ -39,16 +39,45 @@ function contactCell(c: EmailContact, small = false): string {
     </td>`;
 }
 
-export function renderEmailHtml(input: EmailRenderInput): string {
-  const paragraphs = input.body
+/**
+ * Markdown-lite → email-safe HTML. Deliberately tiny (an embedded rich-text
+ * editor is unreliable across email clients and browsers): **bold**,
+ * _italic_, "# " large / "## " medium headings, "- " bullet lists, blank
+ * lines for paragraphs. Everything else renders literally.
+ */
+function inline(text: string): string {
+  return esc(text)
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\b_([^_]+)_\b/g, "<em>$1</em>");
+}
+
+export function renderLiteMarkdown(body: string): string {
+  const blocks = body
     .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .map(
-      (p) =>
-        `<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#292524;">${esc(p).replace(/\n/g, "<br/>")}</p>`,
-    )
+    .map((b) => b.trim())
+    .filter(Boolean);
+  return blocks
+    .map((block) => {
+      const lines = block.split("\n");
+      if (lines.every((l) => l.trim().startsWith("- "))) {
+        const items = lines
+          .map((l) => `<li style="margin:0 0 6px;">${inline(l.trim().slice(2))}</li>`)
+          .join("");
+        return `<ul style="margin:0 0 14px;padding-left:22px;font-size:15px;line-height:1.6;color:#292524;">${items}</ul>`;
+      }
+      if (block.startsWith("## ")) {
+        return `<p style="margin:0 0 10px;font-size:17px;font-weight:600;color:#1c1917;">${inline(block.slice(3))}</p>`;
+      }
+      if (block.startsWith("# ")) {
+        return `<p style="margin:0 0 10px;font-size:20px;font-weight:700;color:#1c1917;">${inline(block.slice(2))}</p>`;
+      }
+      return `<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#292524;">${inline(block).replace(/\n/g, "<br/>")}</p>`;
+    })
     .join("");
+}
+
+export function renderEmailHtml(input: EmailRenderInput): string {
+  const paragraphs = renderLiteMarkdown(input.body);
 
   const cards: string[] = [];
   if (input.tc) cards.push(contactCell(input.tc));
@@ -123,6 +152,14 @@ export const EMAIL_MERGE_CODES = [
   "{{contract_date}}",
   "{{tc_name}}",
   "{{tenant_name}}",
+  "{{buyer_name}}",
+  "{{seller_name}}",
+  "{{buyer_agent_name}}",
+  "{{listing_agent_name}}",
+  "{{lender_name}}",
+  "{{title_company_name}}",
+  "{{task_title}}",
+  "{{task_due}}",
 ] as const;
 
 export const DEFAULT_EMAIL_TEMPLATES: TenantEmailTemplates = {

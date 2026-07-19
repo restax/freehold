@@ -75,6 +75,28 @@ export async function emailContextForTransaction(
   return { txn, org, tcCard, agentCard, otherCard };
 }
 
+/** Merge map for template rendering on a transaction (party names by role). */
+export function transactionMergeContext(
+  ctx: NonNullable<Awaited<ReturnType<typeof emailContextForTransaction>>>,
+  tc: { name?: string | null },
+): Record<string, string> {
+  const party = (role: string) => ctx.txn.parties.find((p) => p.role === role)?.contact.name ?? "";
+  return {
+    client_name: ctx.txn.client?.name ?? "",
+    property_address: ctx.txn.propertyAddress,
+    close_date: ctx.txn.closeDate ? fmtDate(ctx.txn.closeDate) : "",
+    contract_date: ctx.txn.contractDate ? fmtDate(ctx.txn.contractDate) : "",
+    tc_name: tc.name ?? ctx.org.name,
+    tenant_name: ctx.org.name,
+    buyer_name: party("BUYER"),
+    seller_name: party("SELLER"),
+    buyer_agent_name: party("BUYER_AGENT"),
+    listing_agent_name: party("LISTING_AGENT"),
+    lender_name: party("LENDER"),
+    title_company_name: party("TITLE_COMPANY"),
+  };
+}
+
 async function sendLifecycleEmail(
   kind: "intro" | "postClose",
   tenantId: string,

@@ -20,19 +20,21 @@ datasource db {
 // --- Better Auth core ---
 
 model User {
-  id            String       @id
-  name          String
-  email         String       @unique
-  emailVerified Boolean      @default(false)
-  image         String?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-  members       Member[]
-  invitations   Invitation[]
-  ownedContacts Contact[]    @relation("ContactOwner")
-  assignedTasks Task[]       @relation("TaskAssignee")
+  id               String       @id
+  name             String
+  email            String       @unique
+  emailVerified    Boolean      @default(false)
+  image            String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  twoFactorEnabled Boolean?     @map("two_factor_enabled")
+  twoFactors       TwoFactor[]
+  sessions         Session[]
+  accounts         Account[]
+  members          Member[]
+  invitations      Invitation[]
+  ownedContacts    Contact[]    @relation("ContactOwner")
+  assignedTasks    Task[]       @relation("TaskAssignee")
 
   @@map("user")
 }
@@ -51,6 +53,21 @@ model Session {
 
   @@index([userId])
   @@map("session")
+}
+
+/// better-auth twoFactor plugin storage (TOTP secret + hashed backup codes).
+model TwoFactor {
+  id                      String    @id
+  userId                  String    @map("user_id")
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  secret                  String
+  backupCodes             String    @map("backup_codes")
+  verified                Boolean   @default(false)
+  failedVerificationCount Int       @default(0) @map("failed_verification_count")
+  lockedUntil             DateTime? @map("locked_until")
+
+  @@index([userId])
+  @@map("two_factor")
 }
 
 model Account {
@@ -143,6 +160,7 @@ model Organization {
   contactNotes            ContactNote[]
   clientNotes             ClientNote[]
   clientAgents            ClientAgent[]
+  emailTemplatesLib       EmailTemplate[]
   intakeSubmissions       IntakeSubmission[]
   emails                  Email[]
   apiKeys                 ApiKey[]
@@ -856,6 +874,40 @@ enum EnvelopeStatus {
 
 /// Reusable merge-field document template. Body is plain text with
 /// {{merge.fields}}; rendering produces a PDF attached to a transaction.
+/// Reusable outbound email templates with merge fields, selectable from
+/// any transaction's compose (and from task rows). Distinct from the two
+/// automated lifecycle templates on the organization row.
+model EmailTemplate {
+  id        String       @id @default(uuid())
+  tenantId  String       @map("tenant_id")
+  tenant    Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  subject   String
+  body      String
+  isSample  Boolean      @default(false)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([tenantId])
+  @@map("email_template")
+}
+
+/// Operator analytics: every Checkout session we start, completed or not.
+/// Platform-level table (no RLS) — read only from the /admin panel.
+model CheckoutAttempt {
+  id          String    @id // Stripe checkout session id
+  tenantId    String    @map("tenant_id")
+  email       String
+  tier        String
+  createdAt   DateTime  @default(now())
+  completedAt DateTime? @map("completed_at")
+  expiredAt   DateTime? @map("expired_at")
+  recoveryUrl String?   @map("recovery_url")
+
+  @@index([createdAt])
+  @@map("checkout_attempt")
+}
+
 model DocTemplate {
   id          String       @id @default(uuid())
   tenantId    String       @map("tenant_id")

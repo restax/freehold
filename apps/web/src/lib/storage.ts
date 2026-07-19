@@ -6,6 +6,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { decryptBytes, encryptBytes, isEncryptedBytes, loadMasterKey } from "@freehold/vault";
 
 /**
  * Storage contract for document bytes. Two drivers behind one interface:
@@ -56,24 +57,40 @@ function isNoSuchBucket(err: unknown): boolean {
   return name === "NoSuchBucket";
 }
 
+/**
+ * Documents are envelope-encrypted at the application layer whenever
+ * VAULT_MASTER_KEY is set (always on Cloud): even direct database or bucket
+ * access yields ciphertext. Reads pass old plaintext objects through
+ * unchanged, so enabling encryption never breaks existing documents.
+ */
+function documentKey(): Buffer | null {
+  try {
+    return process.env.VAULT_MASTER_KEY ? loadMasterKey() : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function putObject(
   tenantId: string,
   filename: string,
   bytes: Buffer,
   contentType: string,
 ): Promise<StoredBytes> {
+  const key = documentKey();
+  const payload = key ? encryptBytes(bytes, key) : bytes;
   const cfg = s3Config();
-  if (!cfg) return { storageKey: null, data: new Uint8Array(bytes) };
+  if (!cfg) return { storageKey: null, data: new Uint8Array(payload) };
 
   const safeName = filename.replace(/[^\w.-]/g, "_").slice(-80);
-  const key = `${tenantId}/${randomUUID()}-${safeName}`;
+  const objectKey = `${tenantId}/${randomUUID()}-${safeName}`;
   const cmd = () =>
     s3().send(
       new PutObjectCommand({
         Bucket: cfg.bucket,
-        Key: key,
-        Body: bytes,
-        ContentType: contentType,
+        Key: objectKey,
+        Body: payload,
+        ContentType: key ? "application/octet-stream" : contentType,
       }),
     );
   try {
@@ -83,11 +100,20 @@ export async function putObject(
     await s3().send(new CreateBucketCommand({ Bucket: cfg.bucket }));
     await cmd();
   }
-  return { storageKey: key, data: null };
+  return { storageKey: objectKey, data: null };
+}
+
+function maybeDecrypt(buf: Buffer): Buffer {
+  if (!isEncryptedBytes(buf)) return buf;
+  const key = documentKey();
+  if (!key) {
+    throw new Error("Document is encrypted but VAULT_MASTER_KEY is not set.");
+  }
+  return decryptBytes(buf, key);
 }
 
 export async function getObjectBytes(doc: StoredBytes): Promise<Buffer> {
-  if (doc.data) return Buffer.from(doc.data);
+  if (doc.data) return maybeDecrypt(Buffer.from(doc.data));
   if (doc.storageKey) {
     const cfg = s3Config();
     if (!cfg) {
@@ -97,7 +123,7 @@ export async function getObjectBytes(doc: StoredBytes): Promise<Buffer> {
     }
     const res = await s3().send(new GetObjectCommand({ Bucket: cfg.bucket, Key: doc.storageKey }));
     if (!res.Body) throw new Error("Object storage returned an empty body.");
-    return Buffer.from(await res.Body.transformToByteArray());
+    return maybeDecrypt(Buffer.from(await res.Body.transformToByteArray()));
   }
   throw new Error("Document has neither inline data nor a storage key.");
 }

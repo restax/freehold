@@ -19,6 +19,26 @@ export async function POST(req: Request) {
     return new Response("Invalid signature", { status: 400 });
   }
 
+  // Cart tracking: close the loop on checkout sessions we started.
+  if (event.type === "checkout.session.completed" || event.type === "checkout.session.expired") {
+    const cs = event.data.object as {
+      id?: string;
+      after_expiration?: { recovery?: { url?: string | null } | null } | null;
+    };
+    if (cs.id) {
+      await prisma.checkoutAttempt
+        .update({
+          where: { id: cs.id },
+          data:
+            event.type === "checkout.session.completed"
+              ? { completedAt: new Date() }
+              : { expiredAt: new Date(), recoveryUrl: cs.after_expiration?.recovery?.url ?? null },
+        })
+        .catch(() => {}); // sessions started before tracking existed
+    }
+    return new Response("ok", { status: 200 });
+  }
+
   // Client invoicing: mark tenant invoices paid/void as Stripe reports them.
   // The invoice table is RLS-protected, so the update must run inside the
   // tenant scope; we stamped the tenant id into the Stripe invoice metadata.

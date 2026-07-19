@@ -111,3 +111,37 @@ export async function saveEmailTemplates(formData: FormData) {
   });
   revalidatePath("/dashboard/templates");
 }
+
+/** Email template library CRUD (reusable merge-field emails). */
+export async function createEmailTemplateLib(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const name = str(formData, "name");
+  const subject = str(formData, "subject");
+  const body = str(formData, "body");
+  if (!name || !subject || !body) return;
+  await withTenant(tenantId, (tx) =>
+    tx.emailTemplate.create({ data: { tenantId, name, subject, body } }),
+  );
+  revalidatePath("/dashboard/templates");
+}
+
+export async function updateEmailTemplateLib(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  const name = str(formData, "name");
+  const subject = str(formData, "subject");
+  const body = str(formData, "body");
+  if (!id || !name || !subject || !body) return;
+  await withTenant(tenantId, (tx) =>
+    tx.emailTemplate.update({ where: { id }, data: { name, subject, body } }),
+  );
+  revalidatePath("/dashboard/templates");
+}
+
+export async function deleteEmailTemplateLib(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  if (!id || !confirmed(formData)) return;
+  await withTenant(tenantId, (tx) => tx.emailTemplate.delete({ where: { id } }));
+  revalidatePath("/dashboard/templates");
+}

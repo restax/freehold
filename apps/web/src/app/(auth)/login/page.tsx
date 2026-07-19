@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const verified = useSearchParams().get("verified") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +19,13 @@ export default function LoginPage() {
     setError(null);
     const { error } = await authClient.signIn.email({ email, password });
     if (error) {
+      if (error.status === 403) {
+        await authClient.emailOtp
+          .sendVerificationOtp({ email, type: "email-verification" })
+          .catch(() => {});
+        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+        return;
+      }
       setError(error.message ?? "Sign-in failed.");
       setBusy(false);
       return;
@@ -29,6 +37,11 @@ export default function LoginPage() {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <h1 className="text-lg font-semibold">Sign in</h1>
+      {verified && (
+        <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800">
+          Email verified — sign in to continue.
+        </p>
+      )}
       <label className="flex flex-col gap-1 text-sm">
         Email
         <input
@@ -64,5 +77,13 @@ export default function LoginPage() {
         </Link>
       </p>
     </form>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }

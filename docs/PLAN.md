@@ -2,9 +2,9 @@
 
 *Name **Freehold**, chosen 2026-07-18. Domain: **freeholdtc.dev** (purchased; freehold.app was taken). GitHub org: **restax**. Hosting decision: Vercel + managed Postgres. Supersedes the v1 "Keystone" plan. A styled copy lives at [`plan.html`](plan.html).*
 
-An AI-enabled transaction management and CRM platform for real estate brokerages and transaction coordinators — one system of record for listings, contracts, contacts, and closings. **Fair source (FSL-1.1-Apache-2.0; relicensed from Apache-2.0 on 2026-07-19, pre-public-flip): code public, self-hosting unlimited and free, each release becomes Apache-2.0 after two years. Revenue comes from Freehold Cloud (the hosted version, the primary offering) plus services and a template/integration marketplace — not from license enforcement.**
+An AI-enabled transaction management and CRM platform for real estate brokerages and transaction coordinators — one system of record for listings, contracts, contacts, and closings. **Source-available (Elastic License 2.0; Apache-2.0 → FSL → ELv2 all on 2026-07-19, pre-public-flip — Paul's call: nobody may ever host or resell it, no time-based conversion): code public, self-hosting for your own organization unlimited and free. Revenue comes from Freehold Cloud (the hosted version, the primary offering) plus services and a template/integration marketplace — not from license enforcement.**
 
-**Stack at a glance:** Next.js · Node/TypeScript · PostgreSQL + Prisma (row-level tenancy) · Redis + BullMQ · S3-compatible storage · Claude API · FSL-1.1-Apache-2.0 core with a commercial `/ee` folder · Revenue = cloud hosting + services + marketplace.
+**Stack at a glance:** Next.js · Node/TypeScript · PostgreSQL + Prisma (row-level tenancy) · Redis + BullMQ · S3-compatible storage · Claude API · Elastic License 2.0 core with a commercial `/ee` folder · Revenue = cloud hosting + services + marketplace.
 
 ## Contents
 
@@ -276,7 +276,7 @@ Backup engine → client-owned destinations with restore drills; retention polic
 **One public monorepo + one private infra repo** (collapsed from v1's four):
 
 ```
-freehold/                        (public, FSL-1.1-Apache-2.0 + /ee)
+freehold/                        (public, Elastic License 2.0 + /ee)
 ├── apps/
 │   ├── web/                    Next.js frontend
 │   └── api/                    Node/TS API
@@ -292,7 +292,7 @@ freehold/                        (public, FSL-1.1-Apache-2.0 + /ee)
 │   ├── esign-bridge/           Documenso API wrapper (Documenso runs as its own service)
 │   └── comms-bridge/           webhook surface for SMS/voice attach
 ├── docs/
-└── LICENSE                     FSL-1.1-Apache-2.0 (root); ee/LICENSE commercial
+└── LICENSE                     Elastic License 2.0 (root); ee/LICENSE commercial
 
 freehold-infra/                  (private)
 ├── cloud/                      Cloud deploy, ops, runbooks

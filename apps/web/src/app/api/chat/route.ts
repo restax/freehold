@@ -5,7 +5,7 @@ import { adminAlert } from "@/lib/notify";
 export const dynamic = "force-dynamic";
 
 const SYSTEM_PROMPT = `You are the assistant on freeholdtc.dev, the site for Freehold —
-fair-source (FSL-1.1-Apache-2.0: free to self-host, code public, each release becomes Apache-2.0 open source after two years) transaction management + CRM for real estate
+source-available (Elastic License 2.0: code public, free to self-host for your own organization; may not be resold or hosted for others) transaction management + CRM for real estate
 transaction coordinators. Answer visitor questions briefly, warmly, and
 honestly. Facts you may rely on:
 
@@ -18,9 +18,10 @@ honestly. Facts you may rely on:
   (Documenso or DocuSign), encrypted credential vault, CSV import, REST API
   with signed webhooks, client invoicing via Stripe.
 - Pricing (Freehold Cloud): Free — $0 forever, 2 users, 10 active
-  active transactions at a time, 10 AI extraction trial credits. Pro — flat
-  $35/month, 2 users, 100 active transactions. Business — flat $80/month, 10 users, 200
-  active transactions. Both paid plans fit 200 active clients. Hitting a
+  active transactions at a time, no credit card required, 10 AI extraction
+  trial credits. Pro — flat $40/month, 2 users, 50 active transactions, 50
+  clients with portals, 7-day free trial. Business — flat $85/month, 10 users, 100
+  active transactions, 100 clients with portals. Both paid plans fit 200 active clients. Hitting a
   limit never locks data: everything stays readable and exportable.
 - Self-hosting is free forever with every feature, no limits: docker compose
   on any machine, even an unused office PC. Guide: github.com/restax/freehold

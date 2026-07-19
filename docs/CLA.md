@@ -33,7 +33,7 @@ distributed by Us a perpetual, worldwide, non-exclusive, no-charge,
 royalty-free, irrevocable copyright license to reproduce, prepare derivative
 works of, publicly display, publicly perform, sublicense, and distribute Your
 Contributions and such derivative works, **under any license, including the
-Project's FSL-1.1-Apache-2.0 license (including its Apache-2.0 future grant) and commercial licenses for the Project's `ee/`
+Project's Elastic License 2.0 and commercial licenses for the Project's `ee/`
 components**.
 
 You retain full ownership of the copyright in Your Contributions. Nothing in

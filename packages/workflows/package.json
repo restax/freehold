@@ -2,7 +2,7 @@
   "name": "@freehold/workflows",
   "version": "0.0.0",
   "private": true,
-  "license": "FSL-1.1-Apache-2.0",
+  "license": "Elastic-2.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
