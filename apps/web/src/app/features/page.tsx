@@ -381,7 +381,7 @@ export default function FeaturesPage() {
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-stone-600">
             Straight from the live demo workspace \u2014 what you see is what ships.{" "}
-            <a href="/api/demo" className="font-medium text-brand-700 hover:text-brand-600">
+            <a href="/demo" className="font-medium text-brand-700 hover:text-brand-600">
               Click around it yourself \u2192
             </a>
           </p>

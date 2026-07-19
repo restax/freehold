@@ -2,6 +2,7 @@ import { TaskStatus, TransactionStatus, withTenant } from "@freehold/db";
 import { CalendarCheck, CheckCircle, Sun, Warning } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { StatusBadge, statusDot } from "@/components/badges";
+import { DemoWelcome } from "@/components/demo-welcome";
 import { EmptyState } from "@/components/empty-state";
 import { HubNews } from "@/components/hub-news";
 import { toggleTask } from "@/lib/actions/tasks";
@@ -172,6 +173,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <DemoWelcome />
       <div>
         <p className="text-sm text-stone-500">{heading}</p>
         <h1 className="font-display text-2xl font-bold tracking-tight">Your day</h1>

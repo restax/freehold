@@ -164,7 +164,7 @@ export default async function LandingPage() {
                 Self-host it
               </Link>
               <a
-                href="/api/demo"
+                href="/demo"
                 className="px-1 py-2.5 font-medium text-brand-700 transition hover:text-brand-600"
               >
                 Explore the live demo &rarr;
@@ -588,7 +588,7 @@ export default async function LandingPage() {
               View pricing
             </a>
             <a
-              href="/api/demo"
+              href="/demo"
               className="rounded-lg border border-white/30 px-5 py-2.5 font-medium text-white transition hover:border-white/60 hover:bg-white/10 active:scale-[0.98]"
             >
               Explore the live demo
