@@ -9,13 +9,13 @@
 
 **Tagline (60 chars max):**
 
-Open-source AI transaction management for real estate TCs
+Fair-source AI transaction management for real estate TCs
 
 **Description (260 chars max):**
 
 AI reads the purchase contract — every date and dollar page-cited, human-
 confirmed. Checklists compute deadlines, portals keep clients out of your
-inbox. Apache-2.0, free to self-host forever, or Cloud from $0. No lock-in,
+inbox. Fair source (FSL), free to self-host forever, or Cloud from $0. No lock-in,
 no affiliate-paid reviews.
 
 **First comment (maker story):**
@@ -26,7 +26,8 @@ closed: forty deadlines per deal, a hundred emails a day, and software that
 charges per seat, locks the data, and pays 20% commissions to the
 "influencers" recommending it.
 
-Freehold is my answer, built in the open under Apache-2.0:
+Freehold is my answer, built in the open under the Functional Source License
+(free to self-host; every release becomes Apache-2.0 after two years):
 
 🏠 **AI contract extraction, without guessing.** Upload the PDF; every
 extracted price, date, and party is page-cited with the quoted text and a

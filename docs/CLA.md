@@ -8,7 +8,7 @@ CLA". You sign once; it covers all your future contributions.*
 Thank you for your interest in contributing to Freehold (the "Project"),
 maintained by the Freehold maintainers ("We" or "Us"). This Agreement clarifies
 the intellectual-property rights in your Contributions so that the Project can
-be distributed under its open-source license and, for the small commercially
+be distributed under its public license and, for the small commercially
 licensed `ee/` portion, under a commercial license. This protects you as a
 contributor as well as Us and the Project's users; it does not change your
 rights to use your own Contributions for any other purpose.
@@ -33,7 +33,7 @@ distributed by Us a perpetual, worldwide, non-exclusive, no-charge,
 royalty-free, irrevocable copyright license to reproduce, prepare derivative
 works of, publicly display, publicly perform, sublicense, and distribute Your
 Contributions and such derivative works, **under any license, including the
-Project's Apache License 2.0 and commercial licenses for the Project's `ee/`
+Project's FSL-1.1-Apache-2.0 license (including its Apache-2.0 future grant) and commercial licenses for the Project's `ee/`
 components**.
 
 You retain full ownership of the copyright in Your Contributions. Nothing in

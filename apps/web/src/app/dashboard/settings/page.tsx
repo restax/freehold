@@ -14,6 +14,7 @@ import { fmtDate } from "@/lib/format";
 import { listTenants } from "@/lib/session";
 import { getMemberRole, requireTenant } from "@/lib/tenant";
 import { btn, btnGhost, card, input, label, td, th, trHover } from "@/lib/ui";
+import { WEBHOOK_EVENTS } from "@/lib/webhook-emit";
 
 export const dynamic = "force-dynamic";
 
@@ -133,19 +134,17 @@ async function ApiSection({ tenantId, userId }: { tenantId: string; userId: stri
             Endpoint URL
             <input name="url" placeholder="https://example.com/hooks/freehold" className={input} />
           </label>
-          <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
-            <input
-              type="checkbox"
-              name="transaction.created"
-              defaultChecked
-              className="accent-brand-600"
-            />
-            transaction.created
-          </label>
-          <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
-            <input type="checkbox" name="task.completed" className="accent-brand-600" />
-            task.completed
-          </label>
+          {WEBHOOK_EVENTS.map((ev) => (
+            <label key={ev} className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
+              <input
+                type="checkbox"
+                name={ev}
+                defaultChecked={ev === "transaction.created"}
+                className="accent-brand-600"
+              />
+              {ev}
+            </label>
+          ))}
           <button type="submit" className={btnGhost}>
             Add endpoint
           </button>

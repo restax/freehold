@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
-import { confirmed, str } from "@/lib/forms";
+import { confirmed, optStr, str } from "@/lib/forms";
 import { requireTenant } from "@/lib/tenant";
 
 export async function createPortalLink(formData: FormData) {
@@ -79,24 +79,37 @@ export async function deletePortalLink(formData: FormData) {
   revalidatePath("/dashboard/clients");
 }
 
-/** Managed-agent portal: one link per client, covering all their deals. */
+/**
+ * Managed-agent portal covering all the client's deals. Granted per agent
+ * (contactId) from the client page — agents who don't want one just never
+ * get a link. Links without a contactId are client-wide (legacy).
+ */
 export async function createAgentPortalLink(formData: FormData) {
   const { tenantId, session } = await requireTenant();
   const clientId = str(formData, "clientId");
-  const label = str(formData, "label");
-  if (!clientId || !label) return;
-  await withTenant(tenantId, (tx) =>
-    tx.portalLink.create({
+  const contactId = optStr(formData, "contactId");
+  if (!clientId) return;
+  const label = await withTenant(tenantId, async (tx) => {
+    let name = str(formData, "label");
+    if (!name && contactId) {
+      const agent = await tx.contact.findUnique({ where: { id: contactId } });
+      name = agent ? `${agent.name} — portal` : "";
+    }
+    if (!name) return null;
+    await tx.portalLink.create({
       data: {
         tenantId,
         audience: "AGENT",
         clientId,
-        label,
+        contactId,
+        label: name,
         token: randomBytes(24).toString("base64url"),
         showDocuments: true,
       },
-    }),
-  );
+    });
+    return name;
+  });
+  if (!label) return;
   logAudit({
     tenantId,
     actorId: session.user.id,

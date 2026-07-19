@@ -7,12 +7,42 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { confirmed, str } from "@/lib/forms";
 import { requireAdminTenant } from "@/lib/tenant";
+import { WEBHOOK_EVENTS } from "@/lib/webhook-emit";
 
 const NEW_KEY_COOKIE = "freehold-new-api-key";
 
 /** Read (and thereby consume on next set) the one-time plaintext key. */
 export async function readNewApiKey(): Promise<string | null> {
   return (await cookies()).get(NEW_KEY_COOKIE)?.value ?? null;
+}
+
+const NEW_SKILL_KEY_COOKIE = "freehold-new-skill-key";
+
+/** One-time plaintext key for the Claude Skill card on the Integrations page. */
+export async function readNewSkillKey(): Promise<string | null> {
+  return (await cookies()).get(NEW_SKILL_KEY_COOKIE)?.value ?? null;
+}
+
+/**
+ * One-click skill setup from the Integrations page: same hashed-key
+ * mechanics as createApiKey, but named for what it is and surfaced back on
+ * the Integrations card (once, via short-lived cookie) inside a paste-ready
+ * Claude prompt.
+ */
+export async function createSkillKey(formData: FormData) {
+  const { tenantId, isAdmin } = await requireAdminTenant();
+  if (!isAdmin) return;
+  str(formData, "noop"); // plain form post, no payload
+  const secret = `fh_live_${randomBytes(24).toString("hex")}`;
+  const hash = createHash("sha256").update(secret).digest("hex");
+  await prisma.apiKey.create({
+    data: { tenantId, name: "Claude Skill", prefix: secret.slice(0, 12), hash },
+  });
+  (await cookies()).set(NEW_SKILL_KEY_COOKIE, secret, {
+    path: "/dashboard/integrations",
+    maxAge: 300,
+  });
+  revalidatePath("/dashboard/integrations");
 }
 
 export async function createApiKey(formData: FormData) {
@@ -45,7 +75,7 @@ export async function createWebhookEndpoint(formData: FormData) {
   if (!isAdmin) return;
   const url = str(formData, "url");
   if (!url.startsWith("http")) return;
-  const events = ["transaction.created", "task.completed"].filter((e) => formData.get(e) === "on");
+  const events = WEBHOOK_EVENTS.filter((e) => formData.get(e) === "on");
   if (events.length === 0) return;
   await withTenant(tenantId, (tx) =>
     tx.webhookEndpoint.create({

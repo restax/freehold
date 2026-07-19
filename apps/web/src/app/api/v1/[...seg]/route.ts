@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { prisma, withTenant } from "@freehold/db";
+import { generateWebhookSecret } from "@freehold/integrations";
 import { NextResponse } from "next/server";
 import { emitWebhook } from "@/lib/webhook-emit";
 
@@ -229,6 +230,88 @@ async function handle(req: Request, seg: string[]): Promise<Response> {
     });
   }
 
+  if (path === "tasks" && method === "POST") {
+    const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+    const title = typeof body?.title === "string" ? body.title.slice(0, 300) : "";
+    if (!title) return json({ error: "title_required" }, 400);
+    const due = typeof body?.dueDate === "string" ? new Date(`${body.dueDate}T00:00:00Z`) : null;
+    const transactionId = typeof body?.transactionId === "string" ? body.transactionId : null;
+    const priority =
+      typeof body?.priority === "string" && ["NORMAL", "HIGH", "CRITICAL"].includes(body.priority)
+        ? (body.priority as "NORMAL" | "HIGH" | "CRITICAL")
+        : "NORMAL";
+    const created = await withTenant(tenantId, (tx) =>
+      tx.task.create({
+        data: {
+          tenantId,
+          title,
+          transactionId,
+          priority,
+          dueDate: due && !Number.isNaN(due.getTime()) ? due : null,
+        },
+      }),
+    );
+    return json(
+      { task: { id: created.id, title: created.title, dueDate: dateOnly(created.dueDate) } },
+      201,
+    );
+  }
+
+  // Append a timestamped line to a transaction's notes (Zapier writeback).
+  if (path === "notes" && method === "POST") {
+    const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+    const transactionId = typeof body?.transactionId === "string" ? body.transactionId : "";
+    const text = typeof body?.body === "string" ? body.body.slice(0, 2000) : "";
+    if (!transactionId || !text) return json({ error: "transactionId_and_body_required" }, 400);
+    const stamp = new Date().toISOString().slice(0, 10);
+    const updated = await withTenant(tenantId, async (tx) => {
+      const t = await tx.transaction.findUnique({
+        where: { id: transactionId },
+        select: { notes: true },
+      });
+      if (!t) return null;
+      return tx.transaction.update({
+        where: { id: transactionId },
+        data: { notes: `${t.notes ? `${t.notes}\n` : ""}[${stamp}] ${text}` },
+        select: { id: true },
+      });
+    });
+    if (!updated) return json({ error: "transaction_not_found" }, 404);
+    return json({ ok: true, transactionId: updated.id }, 201);
+  }
+
+  // Webhook endpoint management — enables Zapier REST-hook subscriptions.
+  if (path === "webhooks" && method === "GET") {
+    const endpoints = await withTenant(tenantId, (tx) =>
+      tx.webhookEndpoint.findMany({ where: { active: true }, orderBy: { createdAt: "desc" } }),
+    );
+    return json({
+      webhooks: endpoints.map((e) => ({ id: e.id, url: e.url, events: e.events })),
+    });
+  }
+
+  if (path === "webhooks" && method === "POST") {
+    const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+    const target = typeof body?.url === "string" ? body.url : "";
+    const events = Array.isArray(body?.events)
+      ? (body.events as unknown[]).filter((e): e is string => typeof e === "string")
+      : [];
+    if (!target.startsWith("http") || events.length === 0) {
+      return json({ error: "url_and_events_required" }, 400);
+    }
+    const secret = generateWebhookSecret();
+    const created = await withTenant(tenantId, (tx) =>
+      tx.webhookEndpoint.create({ data: { tenantId, url: target, secret, events } }),
+    );
+    // The secret is returned once so the consumer can verify signatures.
+    return json({ webhook: { id: created.id, url: created.url, events, secret } }, 201);
+  }
+
+  if (seg[0] === "webhooks" && seg.length === 2 && method === "DELETE") {
+    await withTenant(tenantId, (tx) => tx.webhookEndpoint.deleteMany({ where: { id: seg[1] } }));
+    return json({ ok: true });
+  }
+
   return json({ error: "not_found" }, 404);
 }
 
@@ -238,6 +321,11 @@ export async function GET(req: Request, ctx: { params: Promise<{ seg: string[] }
 }
 
 export async function POST(req: Request, ctx: { params: Promise<{ seg: string[] }> }) {
+  const { seg } = await ctx.params;
+  return handle(req, seg);
+}
+
+export async function DELETE(req: Request, ctx: { params: Promise<{ seg: string[] }> }) {
   const { seg } = await ctx.params;
   return handle(req, seg);
 }

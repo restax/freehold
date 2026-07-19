@@ -6,7 +6,7 @@
 
 **Title:**
 
-Show HN: Freehold – open-source transaction management for real estate TCs
+Show HN: Freehold – fair-source transaction management for real estate TCs
 
 **URL:** https://github.com/restax/freehold
 
@@ -19,7 +19,9 @@ per-seat-priced, and hostile to leaving. I got tired of watching it, so I
 built the thing I always wanted — with heavy help from AI, since I'm not a
 developer by trade.
 
-Freehold is an Apache-2.0 transaction management + CRM platform for TCs and
+Freehold is a fair-source (FSL-1.1-Apache-2.0 — free to self-host, converts
+to Apache-2.0 two years after each release) transaction management + CRM
+platform for TCs and
 small brokerages:
 
 - The wedge feature: upload a purchase contract PDF and the AI extracts

@@ -53,6 +53,7 @@ around before importing your own.
 | E-signatures via DocuSign | `DOCUSIGN_*` | Config-gated; appears once set |
 | External S3 storage | `STORAGE_S3_*` | Any S3-compatible service; bundled MinIO is the default |
 | Client invoicing | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Your own Stripe account; invoices go out under your name |
+| Email + reply capture | `RESEND_API_KEY`, `EMAIL_FROM_DOMAIN`, `EMAIL_REPLY_DOMAIN`, `RESEND_WEBHOOK_SECRET` | A free Resend account and one verified domain; replies thread back onto transactions |
 
 ## Reaching it from the internet (optional)
 

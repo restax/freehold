@@ -11,6 +11,11 @@ type Integration = [name: string, mono: string, description: string];
 
 const LIVE: Integration[] = [
   [
+    "Email & reply capture",
+    "@",
+    "Send transactional email from your workspace's own address — and when anyone replies, it lands right back on the transaction, threaded. No mailbox setup, ever.",
+  ],
+  [
     "Documenso",
     "Do",
     "Open-source e-signature, bundled with Freehold — no vendor contract, no per-envelope tax. Send documents for signature without leaving the file.",
@@ -36,6 +41,11 @@ const LIVE: Integration[] = [
     "REST API with signed webhooks: read and write transactions, contacts, tasks, clients, and your account — plus a ready-made Claude skill.",
   ],
   [
+    "Zapier",
+    "Z",
+    "Working today: instant triggers (new transaction, document uploaded, envelope completed, website leads) and actions into 7,000+ apps — including DocuSign and Dotloop through your own accounts.",
+  ],
+  [
     "Stripe",
     "St",
     "Powers Freehold Cloud subscriptions, and client invoicing through your own Stripe account with hosted payment pages and automatic paid-status sync.",
@@ -43,11 +53,6 @@ const LIVE: Integration[] = [
 ];
 
 const COMING: Integration[] = [
-  [
-    "Email (IMAP/SMTP)",
-    "@",
-    "Connect any mailbox with the standard settings every provider publishes. Send from your own address — no big-tech app approvals standing between you and your email.",
-  ],
   [
     "Follow Up Boss",
     "FB",
@@ -62,11 +67,6 @@ const COMING: Integration[] = [
     "Brokermint",
     "Bm",
     "Import and export transaction details, contacts, and documents from Brokermint accounts.",
-  ],
-  [
-    "Zapier",
-    "Z",
-    "Connect Freehold to thousands of apps: push and pull transactions, contacts, and documents.",
   ],
   [
     "JotForm",

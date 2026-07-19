@@ -4,13 +4,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
+import { RevealCredential } from "@/components/reveal-credential";
 import { addContactNote, deleteContact, logTouch, scheduleFollowUp } from "@/lib/actions/contacts";
 import { toggleTask } from "@/lib/actions/tasks";
+import { createCredential } from "@/lib/actions/vault";
 import {
   type Address,
   fmtMonthDay,
   GRADE_CADENCE,
   type PersonFields,
+  SOCIAL_LABELS,
+  type SocialLinks,
   TOUCH_DATE_LABELS,
   type TouchDates,
 } from "@/lib/crm";
@@ -25,6 +29,7 @@ const TABS = [
   ["transactions", "Transactions"],
   ["notes", "Notes"],
   ["tasks", "Tasks"],
+  ["credentials", "Credentials"],
   ["touch-dates", "Touch dates"],
   ["addresses", "Addresses"],
   ["details", "Other details"],
@@ -63,6 +68,21 @@ export default async function ContactDetailPage({
       where: { id },
       include: {
         referredBy: { select: { id: true, name: true } },
+        credentials: {
+          orderBy: { system: "asc" },
+          select: {
+            id: true,
+            system: true,
+            username: true,
+            url: true,
+            client: { select: { name: true } },
+          },
+        },
+        agentOf: { include: { client: { select: { id: true, name: true } } } },
+        portalLinks: {
+          orderBy: { createdAt: "desc" },
+          include: { client: { select: { name: true } } },
+        },
         contactNotes: { orderBy: { createdAt: "desc" }, take: 50 },
         tasks: { orderBy: [{ status: "asc" }, { dueDate: "asc" }], take: 50 },
         parties: {
@@ -88,6 +108,8 @@ export default async function ContactDetailPage({
     : null;
 
   const secondary = contact.secondary as PersonFields | null;
+  const socialRaw = contact.socialLinks as SocialLinks | null;
+  const social = socialRaw && Object.values(socialRaw).some(Boolean) ? socialRaw : null;
   const touchDates = (contact.touchDates as TouchDates | null) ?? {};
   const lead = (contact.leadDetails as Record<string, string> | null) ?? null;
   const transactions = Array.from(
@@ -121,7 +143,14 @@ export default async function ContactDetailPage({
         </Link>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="flex items-center gap-2.5 text-xl font-semibold">
-            {secondary ? (
+            {contact.photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={contact.photoUrl}
+                alt=""
+                className="h-9 w-9 rounded-full border border-stone-200 object-cover"
+              />
+            ) : secondary ? (
               <UsersThree size={22} weight="duotone" className="text-brand-600" aria-hidden />
             ) : (
               <UserCircle size={22} weight="duotone" className="text-brand-600" aria-hidden />
@@ -165,6 +194,23 @@ export default async function ContactDetailPage({
             </span>
           )}
         </p>
+        {social && (
+          <p className="mt-1 flex flex-wrap items-center gap-x-3 text-xs">
+            {(Object.keys(SOCIAL_LABELS) as Array<keyof SocialLinks>).map((k) =>
+              social[k] ? (
+                <a
+                  key={k}
+                  href={social[k]}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-brand-700 hover:underline"
+                >
+                  {SOCIAL_LABELS[k]}
+                </a>
+              ) : null,
+            )}
+          </p>
+        )}
       </div>
 
       {/* Quick actions */}
@@ -340,6 +386,107 @@ export default async function ContactDetailPage({
                 })}
               </ul>
             ))}
+
+          {tab === "credentials" && (
+            <div className="flex flex-col gap-4">
+              {contact.agentOf.length > 0 && (
+                <p className="text-sm text-stone-500">
+                  Represents{" "}
+                  {contact.agentOf.map((a, i) => (
+                    <span key={a.id}>
+                      {i > 0 && ", "}
+                      <Link
+                        href={`/dashboard/clients/${a.client.id}`}
+                        className="text-brand-700 hover:underline"
+                      >
+                        {a.client.name}
+                      </Link>
+                    </span>
+                  ))}
+                  {contact.portalLinks.some((pl) => !pl.revokedAt)
+                    ? " · portal access active"
+                    : " · no active portal"}
+                </p>
+              )}
+              {contact.credentials.length === 0 ? (
+                <p className="text-sm text-stone-500">
+                  No credentials stored for {contact.name} yet — add one below. Encrypted at rest,
+                  every reveal audited.
+                </p>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr>
+                      <th className={th}>System</th>
+                      <th className={th}>Username</th>
+                      <th className={th}>Secret</th>
+                      <th className={th}>URL</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {contact.credentials.map((c) => (
+                      <tr key={c.id} className={trHover}>
+                        <td className={`${td} font-medium`}>{c.system}</td>
+                        <td className={td}>{c.username}</td>
+                        <td className={td}>
+                          <RevealCredential credentialId={c.id} />
+                        </td>
+                        <td className={td}>
+                          {c.url ? (
+                            <a
+                              href={c.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-brand-600 hover:underline"
+                            >
+                              open
+                            </a>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <form
+                action={createCredential}
+                className="grid gap-3 border-t border-stone-100 pt-4 sm:grid-cols-2 lg:grid-cols-4"
+              >
+                <input type="hidden" name="contactId" value={contact.id} />
+                <input type="hidden" name="backTo" value={`/dashboard/contacts/${contact.id}`} />
+                <label className={labelCls}>
+                  System *
+                  <input name="system" required placeholder="MLS — MRED" className={input} />
+                </label>
+                <label className={labelCls}>
+                  Username *
+                  <input name="username" required className={input} />
+                </label>
+                <label className={labelCls}>
+                  Password / secret *
+                  <input name="secret" type="password" required className={input} />
+                </label>
+                <label className={labelCls}>
+                  Login URL
+                  <input name="url" placeholder="https://…" className={input} />
+                </label>
+                <div className="flex items-end lg:col-start-4">
+                  <button type="submit" className={btn}>
+                    Save encrypted
+                  </button>
+                </div>
+              </form>
+              <p className="text-xs text-stone-400">
+                Delete credentials from the{" "}
+                <Link href="/dashboard/vault" className="underline hover:text-brand-700">
+                  vault
+                </Link>
+                .
+              </p>
+            </div>
+          )}
 
           {tab === "touch-dates" && (
             <div className="flex flex-col gap-2 text-sm">

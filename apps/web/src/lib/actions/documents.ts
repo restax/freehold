@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { confirmed, str } from "@/lib/forms";
 import { deleteObject, putObject } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
+import { emitWebhook } from "@/lib/webhook-emit";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -20,7 +21,7 @@ export async function uploadDocument(formData: FormData) {
   const contentType = file.type || "application/octet-stream";
   const stored = await putObject(tenantId, filename, bytes, contentType);
 
-  await withTenant(tenantId, (tx) =>
+  const created = await withTenant(tenantId, (tx) =>
     tx.document.create({
       data: {
         tenantId,
@@ -33,6 +34,13 @@ export async function uploadDocument(formData: FormData) {
       },
     }),
   );
+  await emitWebhook(tenantId, "document.uploaded", {
+    id: created.id,
+    transactionId,
+    filename,
+    contentType,
+    sizeBytes: file.size,
+  });
   revalidatePath(`/dashboard/transactions/${transactionId}`);
 }
 

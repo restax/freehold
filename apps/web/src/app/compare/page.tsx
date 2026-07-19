@@ -8,11 +8,11 @@ import movingDay from "../../../public/marketing/moving-day.jpg";
 export const metadata = {
   title: "Cloud vs self-hosting: the honest comparison | Freehold",
   description:
-    "Three honest ways to run Freehold: Cloud, your own server, or through the IT provider you already trust. Same open-source software either way.",
+    "Three honest ways to run Freehold: Cloud, your own server, or through the IT provider you already trust. Same fair-source software either way.",
 };
 
 const ROWS: Array<[string, string, string, string]> = [
-  ["Software", "Same open-source code", "Same open-source code", "Same open-source code"],
+  ["Software", "Same fair-source code", "Same fair-source code", "Same fair-source code"],
   ["Features", "All of them", "All of them", "All of them"],
   [
     "Transactions",
@@ -69,7 +69,7 @@ export default function ComparePage() {
         </h1>
         <p className="mt-5 max-w-xl leading-relaxed text-stone-600">
           Cloud, your own server, or the IT provider you already trust. All three run the identical
-          open-source software with every feature. Self-hosting is not a crippled trial and never
+          fair-source software with every feature. Self-hosting is not a crippled trial and never
           will be. The real difference is who runs the server, who handles backups and updates, and
           who pays for the AI calls.
         </p>

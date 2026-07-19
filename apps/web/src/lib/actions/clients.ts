@@ -75,3 +75,47 @@ export async function addClientNote(formData: FormData) {
   );
   revalidatePath(`/dashboard/clients/${clientId}`);
 }
+
+/** Attach an agent (contact) to a managed client. */
+export async function addClientAgent(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const clientId = str(formData, "clientId");
+  const contactId = str(formData, "contactId");
+  if (!clientId || !contactId) return;
+  await withTenant(tenantId, async (tx) => {
+    const existing = await tx.clientAgent.findFirst({ where: { clientId, contactId } });
+    if (!existing) await tx.clientAgent.create({ data: { tenantId, clientId, contactId } });
+  });
+  revalidatePath(`/dashboard/clients/${clientId}`);
+}
+
+/**
+ * Detach an agent from a client. Their portal links for this client are
+ * deactivated (never deleted) so re-attaching restores everything.
+ */
+export async function removeClientAgent(formData: FormData) {
+  const { tenantId, session } = await requireTenant();
+  const id = str(formData, "id");
+  if (!id) return;
+  const gone = await withTenant(tenantId, async (tx) => {
+    const link = await tx.clientAgent.delete({
+      where: { id },
+      include: { contact: { select: { id: true, name: true } } },
+    });
+    await tx.portalLink.updateMany({
+      where: { clientId: link.clientId, contactId: link.contactId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return link;
+  });
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "client.agent_removed",
+    summary: `Removed agent "${gone.contact.name}" from client (portal access deactivated)`,
+    subjectType: "client",
+    subjectId: gone.clientId,
+  });
+  revalidatePath(`/dashboard/clients/${gone.clientId}`);
+}

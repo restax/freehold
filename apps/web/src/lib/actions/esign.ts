@@ -3,9 +3,11 @@
 import { EnvelopeStatus, EsignProvider, withTenant } from "@freehold/db";
 import { getEsignAdapter } from "@freehold/integrations";
 import { revalidatePath } from "next/cache";
+import { esignOverrides } from "@/lib/esign-config";
 import { confirmed, str } from "@/lib/forms";
 import { getObjectBytes } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
+import { emitWebhook } from "@/lib/webhook-emit";
 
 const PROVIDERS = Object.values(EsignProvider);
 
@@ -57,7 +59,7 @@ export async function sendForSignature(formData: FormData) {
     }),
   );
 
-  const adapter = getEsignAdapter(provider);
+  const adapter = getEsignAdapter(provider, await esignOverrides(tenantId));
   const availability = adapter.available();
   try {
     if (!availability.ok) {
@@ -75,6 +77,14 @@ export async function sendForSignature(formData: FormData) {
         },
       }),
     );
+    await emitWebhook(tenantId, "envelope.sent", {
+      id: envelope.id,
+      transactionId: doc.transactionId,
+      documentId: doc.id,
+      filename: doc.filename,
+      provider,
+      signers,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await withTenant(tenantId, (tx) =>
@@ -99,7 +109,7 @@ export async function refreshEnvelope(formData: FormData) {
   if (!envelope.externalId || envelope.provider === EsignProvider.MANUAL) return;
 
   try {
-    const adapter = getEsignAdapter(envelope.provider);
+    const adapter = getEsignAdapter(envelope.provider, await esignOverrides(tenantId));
     const result = await adapter.getStatus(envelope.externalId);
     await withTenant(tenantId, (tx) =>
       tx.signatureEnvelope.update({
@@ -111,6 +121,14 @@ export async function refreshEnvelope(formData: FormData) {
         },
       }),
     );
+    if (result.status === "COMPLETED") {
+      await emitWebhook(tenantId, "envelope.completed", {
+        id: envelope.id,
+        transactionId: envelope.transactionId,
+        documentId: envelope.documentId,
+        provider: envelope.provider,
+      });
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await withTenant(tenantId, (tx) =>
@@ -135,6 +153,12 @@ export async function markEnvelopeSigned(formData: FormData) {
       where: { id },
       data: { status: EnvelopeStatus.COMPLETED, completedAt: new Date() },
     });
+  });
+  await emitWebhook(tenantId, "envelope.completed", {
+    id: envelope.id,
+    transactionId: envelope.transactionId,
+    documentId: envelope.documentId,
+    provider: envelope.provider,
   });
   revalidatePath(`/dashboard/transactions/${envelope.transactionId}`);
 }

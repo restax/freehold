@@ -107,6 +107,15 @@ function parseContactForm(formData: FormData) {
 
   const name = displayName(primary, secondary, "") || str(formData, "name") || "Unnamed contact";
 
+  const socialLinks = {
+    facebook: optStr(formData, "socialFacebook") ?? undefined,
+    instagram: optStr(formData, "socialInstagram") ?? undefined,
+    linkedin: optStr(formData, "socialLinkedin") ?? undefined,
+    x: optStr(formData, "socialX") ?? undefined,
+    youtube: optStr(formData, "socialYoutube") ?? undefined,
+    other: optStr(formData, "socialOther") ?? undefined,
+  };
+
   type Json = string | number | boolean | null | Json[] | { [k: string]: Json };
   const asJson = <T>(v: T | null | undefined) =>
     v == null ? undefined : (JSON.parse(JSON.stringify(v)) as { [k: string]: Json });
@@ -139,6 +148,8 @@ function parseContactForm(formData: FormData) {
     leadType,
     leadDetails: asJson(leadDetails),
     touchDates: Object.values(touchDates).some(Boolean) ? asJson(touchDates) : undefined,
+    photoUrl: optStr(formData, "photoUrl"),
+    socialLinks: Object.values(socialLinks).some(Boolean) ? asJson(socialLinks) : undefined,
     ownerId: optStr(formData, "ownerId"),
   };
 }

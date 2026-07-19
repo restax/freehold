@@ -29,7 +29,7 @@ import tcAtWork from "../../public/marketing/tc-at-work.jpg";
 export const metadata = {
   title: "Freehold: the most complete TC system in the world",
   description:
-    "Every deal, every deadline, one place. AI reads the contract and builds the file. Open source, free to self-host, easy on Freehold Cloud.",
+    "Every deal, every deadline, one place. AI reads the contract and builds the file. Fair source, free to self-host, easy on Freehold Cloud.",
 };
 
 const CTA_PRIMARY = "Start free";
@@ -88,7 +88,7 @@ const BENTO = [
 const FAQ: Array<[string, string]> = [
   [
     "How can all of this be free?",
-    "Freehold is an open-source project: the full product's code is public under the Apache-2.0 license, so self-hosting it costs nothing and always will. Freehold Cloud, the hosted version, has a real free tier (2 users, 10 active transactions) funded by the paid plans of teams that grow. We make money when you upgrade because you want to, not because your data is trapped.",
+    "Freehold is fair source: the full product's code is public under the Functional Source License, self-hosting it for your own business costs nothing and always will, and every release becomes Apache-2.0 open source two years after publication. Freehold Cloud, the hosted version, has a real free tier (2 users, 10 active transactions) funded by the paid plans of teams that grow. We make money when you upgrade because you want to, not because your data is trapped.",
   ],
   [
     "What happens when I hit the free limits?",
@@ -104,7 +104,7 @@ const FAQ: Array<[string, string]> = [
   ],
   [
     "Where does my data live, and can I leave?",
-    "On Cloud, in Freehold's database, exportable by you at any time with no contracts. Self-hosted, it never leaves your own server. Either way the software is open source, so leaving is always real, which keeps us honest.",
+    "On Cloud, in Freehold's database, exportable by you at any time with no contracts. Self-hosted, it never leaves your own server. Either way the full code is public and free to self-host, so leaving is always real, which keeps us honest.",
   ],
   [
     "What does switching from my current system look like?",
@@ -140,7 +140,7 @@ export default async function LandingPage() {
               <span className="text-brand-600">one place.</span>
             </h1>
             <p className="mt-5 max-w-lg text-lg leading-relaxed text-stone-600">
-              The most complete TC platform. AI reads the contract and builds the file. Open source,
+              The most complete TC platform. AI reads the contract and builds the file. Fair source,
               free to self-host.
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-3">
@@ -181,7 +181,7 @@ export default async function LandingPage() {
           </p>
           <p className="flex gap-3">
             <GitBranch size={20} aria-hidden className="mt-0.5 shrink-0 text-brand-600" />
-            <span>Apache-2.0 licensed. The whole product, not a crippled core.</span>
+            <span>Fair source: the whole product's code is public, not a crippled core.</span>
           </p>
           <p className="flex gap-3">
             <ShieldCheck size={20} aria-hidden className="mt-0.5 shrink-0 text-brand-600" />
@@ -379,10 +379,11 @@ export default async function LandingPage() {
             </p>
           </div>
           <div className="border-l-2 border-stone-200 pl-5">
-            <h3 className="font-medium">Open source is the exit clause</h3>
+            <h3 className="font-medium">The code is the exit clause</h3>
             <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
-              The entire product is Apache-2.0. Leave Cloud any time and run the same software on
-              your own server, with your own data. No caps, no license keys.
+              The entire product's code is public and free to self-host. Leave Cloud any time and
+              run the same software on your own server, with your own data. No caps, no license
+              keys.
             </p>
           </div>
           <div className="border-l-2 border-stone-200 pl-5">
@@ -461,9 +462,9 @@ export default async function LandingPage() {
               Run Freehold for every brokerage you serve.
             </h2>
             <p className="mt-3 max-w-md leading-relaxed text-stone-600">
-              Because Freehold is open source, you can host an isolated instance for each of your
-              brokerage clients today, on your infrastructure, under your brand. A partner dashboard
-              that manages fleets of instances, with per-client plans on one bill, is in
+              Because Freehold is free to self-host, you can host an isolated instance for each of
+              your brokerage clients today, on your infrastructure, under your brand. A partner
+              dashboard that manages fleets of instances, with per-client plans on one bill, is in
               development.
             </p>
             <a

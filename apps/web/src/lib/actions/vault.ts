@@ -19,6 +19,7 @@ export async function createCredential(formData: FormData) {
       data: {
         tenantId,
         clientId: optStr(formData, "clientId"),
+        contactId: optStr(formData, "contactId"),
         system,
         username,
         url: optStr(formData, "url"),
@@ -37,6 +38,8 @@ export async function createCredential(formData: FormData) {
     });
   });
   revalidatePath("/dashboard/vault");
+  const backTo = optStr(formData, "backTo");
+  if (backTo?.startsWith("/dashboard/")) revalidatePath(backTo);
 }
 
 /**

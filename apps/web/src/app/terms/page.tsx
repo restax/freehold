@@ -15,8 +15,8 @@ export default function TermsPage() {
           more.
         </p>
         <p>
-          The software itself is open source under the Apache-2.0 license; self-hosting it is
-          governed by that license, not these terms.
+          The software itself is fair source under the Functional Source License
+          (FSL-1.1-Apache-2.0); self-hosting it is governed by that license, not these terms.
         </p>
         <p>
           Freehold is a coordination tool, not a law firm, brokerage, or escrow agent. Extracted

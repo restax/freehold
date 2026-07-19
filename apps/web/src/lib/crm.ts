@@ -32,6 +32,24 @@ export interface Address {
   zip?: string;
 }
 
+export interface SocialLinks {
+  facebook?: string;
+  instagram?: string;
+  linkedin?: string;
+  x?: string;
+  youtube?: string;
+  other?: string;
+}
+
+export const SOCIAL_LABELS: Record<keyof SocialLinks, string> = {
+  facebook: "Facebook",
+  instagram: "Instagram",
+  linkedin: "LinkedIn",
+  x: "X",
+  youtube: "YouTube",
+  other: "Other",
+};
+
 /** Relationship grade → auto-prospecting cadence in days. */
 export const GRADE_CADENCE: Record<string, number> = { A: 30, B: 60, C: 90, D: 180 };
 export const GRADES = ["A", "B", "C", "D"] as const;

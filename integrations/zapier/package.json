@@ -1,0 +1,16 @@
+{
+  "name": "freehold-zapier",
+  "version": "1.0.0",
+  "description": "Freehold integration for Zapier (private app): triggers from signed webhooks, actions via the Freehold REST API.",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "zapier-platform-core": "19.0.0"
+  }
+}

@@ -5,7 +5,7 @@ import { adminAlert } from "@/lib/notify";
 export const dynamic = "force-dynamic";
 
 const SYSTEM_PROMPT = `You are the assistant on freeholdtc.dev, the site for Freehold —
-open-source (Apache-2.0) transaction management + CRM for real estate
+fair-source (FSL-1.1-Apache-2.0: free to self-host, code public, each release becomes Apache-2.0 open source after two years) transaction management + CRM for real estate
 transaction coordinators. Answer visitor questions briefly, warmly, and
 honestly. Facts you may rely on:
 

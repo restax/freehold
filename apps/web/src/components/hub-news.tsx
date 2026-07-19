@@ -16,6 +16,11 @@ interface NewsItem {
 
 const FALLBACK: NewsItem[] = [
   {
+    title: "Email lives on the transaction now",
+    body: "Send from your workspace's address on the Emails tab — replies come back onto the deal, threaded, with delivery status. No mailbox to set up.",
+    date: "2026-07-19",
+  },
+  {
     title: "Cascading dates, governed by the contract",
     body: "Date changes now flow through an amendment to-do — confirm it's executed and every dependent deadline re-dates itself. Plus task priorities with auto-escalation.",
     date: "2026-07-19",

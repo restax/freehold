@@ -33,6 +33,7 @@ export { type TenantTx, withTenant } from "./tenant.js";
 // (not named re-exports): bundlers statically verify named imports against
 // the generated CJS module and can miss freshly generated members, which
 // breaks the whole module graph at runtime. Property access is always safe.
+export const Prisma = PrismaPkg.Prisma;
 export const ClientType = PrismaPkg.ClientType;
 export type ClientType = PrismaPkg.ClientType;
 export const DateAnchor = PrismaPkg.DateAnchor;

@@ -7,8 +7,8 @@
 
 **Title:**
 
-Freehold – open-source transaction management for real estate transaction
-coordinators (Apache-2.0, docker compose, AGPL-free)
+Freehold – fair-source transaction management for real estate transaction
+coordinators (FSL, free self-host, docker compose, AGPL-free)
 
 **Body:**
 
@@ -30,9 +30,12 @@ page-cites every extracted date and dollar for human confirmation).
   -d`. Postgres, Redis, MinIO, migrations, web on :3000, API on :3001.
 - Runs comfortably in 4 GB RAM, works in 2 — an unused office PC is a
   perfectly good production box for a solo TC.
-- Every feature, no seat limits, no license keys, forever. Apache-2.0 (one
-  clearly-marked `ee/` billing directory is commercial — it only matters if
-  you're reselling a hosted version).
+- Every feature, no seat limits, no license keys, forever. License is FSL
+  (Sentry's Functional Source License): self-host and modify freely for your
+  own business; the only restricted use is selling a competing hosted
+  version, and each release auto-converts to Apache-2.0 after two years.
+  Saying it plainly up front: this is fair source, not OSI open source.
+  (One clearly-marked `ee/` billing directory is separately commercial.)
 - Bring your own keys where it makes sense: Anthropic for the AI (a few
   cents per contract, optional), your own Stripe for invoicing clients,
   any S3-compatible storage.

@@ -11,7 +11,7 @@ const WAYS = [
   {
     icon: Star,
     title: "Star us on GitHub",
-    body: "The single biggest signal for an open-source project. Thirty seconds, no account gymnastics if you already have one.",
+    body: "The single biggest signal for a project like this. Thirty seconds, no account gymnastics if you already have one.",
     cta: "Star restax/freehold",
     href: "https://github.com/restax/freehold",
   },

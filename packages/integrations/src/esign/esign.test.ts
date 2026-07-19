@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { _documensoInternals, documensoAdapter } from "./documenso.js";
+import { _documensoInternals, documensoAdapter, makeDocumensoAdapter } from "./documenso.js";
 import { _docusignInternals, docusignAdapter } from "./docusign.js";
 import { manualAdapter } from "./manual.js";
 
@@ -10,9 +10,14 @@ describe("availability gating", () => {
 
   it("documenso and docusign are unavailable without env config", () => {
     expect(documensoAdapter.available().ok).toBe(false);
-    expect(documensoAdapter.available().reason).toContain("DOCUMENSO_URL");
+    expect(documensoAdapter.available().reason).toContain("Connect Documenso");
     expect(docusignAdapter.available().ok).toBe(false);
     expect(docusignAdapter.available().reason).toContain("DOCUSIGN_ACCOUNT_ID");
+  });
+
+  it("a per-tenant override makes documenso available", () => {
+    const bound = makeDocumensoAdapter({ url: "https://sign.example.com", token: "tok" });
+    expect(bound.available().ok).toBe(true);
   });
 });
 

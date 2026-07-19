@@ -95,42 +95,49 @@ enum PlanTier {
 }
 
 model Organization {
-  id                   String               @id
-  name                 String
-  slug                 String               @unique
-  logo                 String?
-  metadata             String?
-  planTier             PlanTier             @default(FREE) @map("plan_tier")
-  seatLimit            Int                  @default(2) @map("seat_limit")
-  aiExtractionsUsed    Int                  @default(0) @map("ai_extractions_used")
+  id                      String               @id
+  name                    String
+  slug                    String               @unique
+  logo                    String?
+  metadata                String?
+  planTier                PlanTier             @default(FREE) @map("plan_tier")
+  seatLimit               Int                  @default(2) @map("seat_limit")
+  aiExtractionsUsed       Int                  @default(0) @map("ai_extractions_used")
   /// Admin setting: when true, members only see contacts they own.
-  restrictContactsToOwner Boolean           @default(false) @map("restrict_contacts_to_owner")
-  stripeCustomerId     String?              @map("stripe_customer_id")
-  stripeSubscriptionId String?              @map("stripe_subscription_id")
-  createdAt            DateTime             @default(now())
-  members              Member[]
-  invitations          Invitation[]
-  clients              Client[]
-  contacts             Contact[]
-  transactions         Transaction[]
-  parties              TransactionParty[]
-  tasks                Task[]
-  actionPlans          ActionPlan[]
-  actionPlanTasks      ActionPlanTask[]
-  documents            Document[]
-  extractions          ContractExtraction[]
-  extractionFields     ExtractionField[]
-  templates            DocTemplate[]
-  envelopes            SignatureEnvelope[]
-  portalLinks          PortalLink[]
-  vaultCredentials     VaultCredential[]
-  vaultAccessLogs      VaultAccessLog[]
-  auditLogs            AuditLog[]
-  contactNotes         ContactNote[]
-  clientNotes          ClientNote[]
-  apiKeys              ApiKey[]
-  invoices             Invoice[]
-  webhookEndpoints     WebhookEndpoint[]
+  restrictContactsToOwner Boolean              @default(false) @map("restrict_contacts_to_owner")
+  /// Tenant mini-site at <slug>.<root>: {published, tagline, about, phone, email, services, showRegistration}.
+  siteConfig              Json?                @map("site_config")
+  /// Per-tenant Documenso connection: {url, enc:{ciphertext,iv,tag,wrappedKey,wrapIv,wrapTag,keyVersion}}.
+  /// Token encrypted with VAULT_MASTER_KEY; null = use server-wide env default.
+  documensoConfig         Json?                @map("documenso_config")
+  stripeCustomerId        String?              @map("stripe_customer_id")
+  stripeSubscriptionId    String?              @map("stripe_subscription_id")
+  createdAt               DateTime             @default(now())
+  members                 Member[]
+  invitations             Invitation[]
+  clients                 Client[]
+  contacts                Contact[]
+  transactions            Transaction[]
+  parties                 TransactionParty[]
+  tasks                   Task[]
+  actionPlans             ActionPlan[]
+  actionPlanTasks         ActionPlanTask[]
+  documents               Document[]
+  extractions             ContractExtraction[]
+  extractionFields        ExtractionField[]
+  templates               DocTemplate[]
+  envelopes               SignatureEnvelope[]
+  portalLinks             PortalLink[]
+  vaultCredentials        VaultCredential[]
+  vaultAccessLogs         VaultAccessLog[]
+  auditLogs               AuditLog[]
+  contactNotes            ContactNote[]
+  clientNotes             ClientNote[]
+  clientAgents            ClientAgent[]
+  emails                  Email[]
+  apiKeys                 ApiKey[]
+  invoices                Invoice[]
+  webhookEndpoints        WebhookEndpoint[]
 
   @@map("organization")
 }
@@ -193,6 +200,7 @@ model Client {
   credentials   VaultCredential[]
   portalLinks   PortalLink[]
   clientNotes   ClientNote[]
+  agents        ClientAgent[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   invoices      Invoice[]
@@ -252,61 +260,135 @@ enum TaskPriority {
 /// `name` stays the denormalized display name ("Jordan & Casey Bell") used by
 /// pickers and party lists; structured person fields live alongside it, and
 /// the secondary person + overflow phones/emails live in JSON.
+/// Which agents (contacts) work under a managed client (team/brokerage).
+/// Portal access is granted per agent from the client page; agents without
+/// a portal simply have no portal_link row.
+model ClientAgent {
+  id        String       @id @default(uuid())
+  tenantId  String       @map("tenant_id")
+  tenant    Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId  String       @map("client_id")
+  client    Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contactId String       @map("contact_id")
+  contact   Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@unique([clientId, contactId])
+  @@index([tenantId])
+  @@map("client_agent")
+}
+
 model Contact {
-  id        String             @id @default(uuid())
-  tenantId  String             @map("tenant_id")
-  tenant    Organization       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerId   String?
-  owner     User?              @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  name      String
-  email     String?
-  phone     String?
-  category  String             @default("Other")
-  rating    Int?
-  touchDate DateTime?          @map("touch_date") @db.Date
-  notes     String?
+  id             String             @id @default(uuid())
+  tenantId       String             @map("tenant_id")
+  tenant         Organization       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerId        String?
+  owner          User?              @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  name           String
+  email          String?
+  phone          String?
+  category       String             @default("Other")
+  rating         Int?
+  touchDate      DateTime?          @map("touch_date") @db.Date
+  notes          String?
   // --- dual-person CRM fields ---
-  personTitle String?          @map("person_title")
-  firstName   String?          @map("first_name")
-  middleName  String?          @map("middle_name")
-  lastName    String?          @map("last_name")
-  jobTitle    String?          @map("job_title")
-  company     String?
-  website     String?
-  workPhone   String?          @map("work_phone")
-  fax         String?
+  personTitle    String?            @map("person_title")
+  firstName      String?            @map("first_name")
+  middleName     String?            @map("middle_name")
+  lastName       String?            @map("last_name")
+  jobTitle       String?            @map("job_title")
+  company        String?
+  website        String?
+  workPhone      String?            @map("work_phone")
+  fax            String?
   /// Secondary person (spouse/assistant): {title,first,middle,last,jobTitle,cell,workPhone,email}
-  secondary   Json?
+  secondary      Json?
   /// Overflow contact points: {phones: string[], emails: string[]}
-  extraContacts Json?          @map("extra_contacts")
-  categories  String[]         @default([])
+  extraContacts  Json?              @map("extra_contacts")
+  categories     String[]           @default([])
   /// Relationship grade A-D; drives the auto-prospecting cadence.
-  grade       String?
+  grade          String?
   /// When this contact is next due in the prospecting queue.
-  nextTouchAt DateTime?        @map("next_touch_at") @db.Date
-  homeAddress Json?            @map("home_address")
-  workAddress Json?            @map("work_address")
-  referredById   String?       @map("referred_by_id")
-  referredBy     Contact?      @relation("ContactReferrals", fields: [referredById], references: [id], onDelete: SetNull)
-  referrals      Contact[]     @relation("ContactReferrals")
-  referralSource String?       @map("referral_source")
-  referralDate   DateTime?     @map("referral_date") @db.Date
+  nextTouchAt    DateTime?          @map("next_touch_at") @db.Date
+  homeAddress    Json?              @map("home_address")
+  workAddress    Json?              @map("work_address")
+  referredById   String?            @map("referred_by_id")
+  referredBy     Contact?           @relation("ContactReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals      Contact[]          @relation("ContactReferrals")
+  referralSource String?            @map("referral_source")
+  referralDate   DateTime?          @map("referral_date") @db.Date
   /// BUYER | SELLER | NONE
-  leadType    String?          @map("lead_type")
+  leadType       String?            @map("lead_type")
   /// Buyer: {cultivating,location,range,income}; Seller: {cultivating,address,listPrice,netProceeds}
-  leadDetails Json?            @map("lead_details")
+  leadDetails    Json?              @map("lead_details")
   /// {birthday:{m,d,y?}, birthdayAlt, weddingAnniversary, purchaseAnniversary}
-  touchDates  Json?            @map("touch_dates")
-  isSample  Boolean            @default(false)
-  parties   TransactionParty[]
-  contactNotes ContactNote[]
-  tasks     Task[]
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
+  touchDates     Json?              @map("touch_dates")
+  photoUrl       String?            @map("photo_url")
+  /// {facebook, instagram, linkedin, x, youtube, other}
+  socialLinks    Json?              @map("social_links")
+  isSample       Boolean            @default(false)
+  parties        TransactionParty[]
+  contactNotes   ContactNote[]
+  emails         Email[]
+  tasks          Task[]
+  credentials    VaultCredential[]
+  agentOf        ClientAgent[]
+  portalLinks    PortalLink[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
   @@index([tenantId, category])
   @@index([tenantId, nextTouchAt])
   @@map("contact")
+}
+
+/// Transactional email with reply capture. Outbound goes through Resend from
+/// the tenant's identity on the shared mail domain; each message carries a
+/// per-thread reply token, and inbound replies post back via webhook and
+/// attach here. This IS the mailbox — storage is rows + document attachments.
+enum EmailDirection {
+  OUTBOUND
+  INBOUND
+}
+
+/// Reply-token → tenant mapping for the inbound webhook. Deliberately has NO
+/// row-level security (same reasoning as portal_link): the webhook arrives
+/// with no tenant context and the unguessable token IS the capability; the
+/// email bodies themselves stay in the RLS-protected email table.
+model EmailThread {
+  token         String   @id
+  tenantId      String   @map("tenant_id")
+  transactionId String?  @map("transaction_id")
+  contactId     String?  @map("contact_id")
+  providerId    String?  @map("provider_id")
+  createdAt     DateTime @default(now())
+
+  @@index([providerId])
+  @@map("email_thread")
+}
+
+model Email {
+  id            String         @id @default(uuid())
+  tenantId      String         @map("tenant_id")
+  tenant        Organization   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactionId String?
+  transaction   Transaction?   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  contactId     String?        @map("contact_id")
+  contact       Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  direction     EmailDirection
+  fromAddr      String         @map("from_addr")
+  toAddr        String         @map("to_addr")
+  subject       String
+  bodyText      String         @map("body_text")
+  /// Reply capture token; inbound mail to reply+<token>@ matches the thread.
+  replyToken    String?        @map("reply_token")
+  providerId    String?        @map("provider_id")
+  status        String         @default("SENT")
+  createdAt     DateTime       @default(now())
+
+  @@index([tenantId, transactionId, createdAt])
+  @@index([replyToken])
+  @@map("email")
 }
 
 /// Notes a TC keeps about a client (the backend client page).
@@ -365,6 +447,7 @@ model Transaction {
   tc2UserId       String?              @map("tc2_user_id")
   /// Commission breakdown: {listPct, buyPct, note} — gross computes from price.
   payout          Json?
+  emails          Email[]
   /// Contract-governed date changes awaiting an executed amendment:
   /// {closeDate?: "YYYY-MM-DD", contractDate?: "YYYY-MM-DD"}
   proposedDates   Json?                @map("proposed_dates")
@@ -414,14 +497,16 @@ model PortalLink {
   transaction    Transaction?   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   clientId       String?        @map("client_id")
   client         Client?        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contactId      String?        @map("contact_id")
+  contact        Contact?       @relation(fields: [contactId], references: [id], onDelete: Cascade)
   token          String         @unique
   label          String
-  showTasks      Boolean      @default(true) @map("show_tasks")
-  showDocuments  Boolean      @default(false) @map("show_documents")
-  showParties    Boolean      @default(true) @map("show_parties")
-  revokedAt      DateTime?    @map("revoked_at")
-  lastAccessedAt DateTime?    @map("last_accessed_at")
-  createdAt      DateTime     @default(now())
+  showTasks      Boolean        @default(true) @map("show_tasks")
+  showDocuments  Boolean        @default(false) @map("show_documents")
+  showParties    Boolean        @default(true) @map("show_parties")
+  revokedAt      DateTime?      @map("revoked_at")
+  lastAccessedAt DateTime?      @map("last_accessed_at")
+  createdAt      DateTime       @default(now())
 
   @@index([tenantId])
   @@index([transactionId])
@@ -509,6 +594,8 @@ model VaultCredential {
   tenant     Organization     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   clientId   String?
   client     Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  contactId  String?          @map("contact_id")
+  contact    Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
   system     String
   username   String
   url        String?
@@ -576,36 +663,36 @@ model TransactionParty {
 }
 
 model Task {
-  id            String       @id @default(uuid())
-  tenantId      String       @map("tenant_id")
-  tenant        Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  transactionId String?
-  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  title         String
-  notes         String?
-  dueDate       DateTime?    @map("due_date") @db.Date
-  status        TaskStatus   @default(OPEN)
-  priority      TaskPriority @default(NORMAL)
+  id              String       @id @default(uuid())
+  tenantId        String       @map("tenant_id")
+  tenant          Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactionId   String?
+  transaction     Transaction? @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  title           String
+  notes           String?
+  dueDate         DateTime?    @map("due_date") @db.Date
+  status          TaskStatus   @default(OPEN)
+  priority        TaskPriority @default(NORMAL)
   /// Provenance for domino recomputation: tasks instantiated from an action
   /// plan keep their anchor + offset so a confirmed date change re-dates them.
-  anchor        DateAnchor?
-  offsetDays    Int?         @map("offset_days")
+  anchor          DateAnchor?
+  offsetDays      Int?         @map("offset_days")
   /// Manually re-dated tasks opt out of recomputation.
-  dueDateEdited Boolean      @default(false) @map("due_date_edited")
+  dueDateEdited   Boolean      @default(false) @map("due_date_edited")
   /// Set when this task exists to get a date amendment executed ("closeDate"/"contractDate").
-  proposedFor   String?      @map("proposed_for")
-  completedAt   DateTime?    @map("completed_at")
-  contactId     String?      @map("contact_id")
-  contact       Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  proposedFor     String?      @map("proposed_for")
+  completedAt     DateTime?    @map("completed_at")
+  contactId       String?      @map("contact_id")
+  contact         Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
   /// Per-audience portal visibility, toggled from the transaction screen.
-  visibleToAgent  Boolean    @default(true) @map("visible_to_agent")
-  visibleToClient Boolean    @default(true) @map("visible_to_client")
-  assigneeId    String?
-  assignee      User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  sortOrder     Int          @default(0) @map("sort_order")
-  isSample      Boolean      @default(false)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  visibleToAgent  Boolean      @default(true) @map("visible_to_agent")
+  visibleToClient Boolean      @default(true) @map("visible_to_client")
+  assigneeId      String?
+  assignee        User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  sortOrder       Int          @default(0) @map("sort_order")
+  isSample        Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   @@index([tenantId, status, dueDate])
   @@map("task")
@@ -675,21 +762,21 @@ enum FieldValueType {
 /// inline in Postgres (`data`, the zero-config default). Exactly one of the
 /// two is set. Capped at upload time (10 MB).
 model Document {
-  id            String               @id @default(uuid())
-  tenantId      String               @map("tenant_id")
-  tenant        Organization         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  transactionId String
-  transaction   Transaction          @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  filename      String
-  contentType   String               @map("content_type")
-  sizeBytes     Int                  @map("size_bytes")
-  data          Bytes?
-  storageKey    String?              @map("storage_key")
-  visibleToAgent  Boolean            @default(true) @map("visible_to_agent")
-  visibleToClient Boolean            @default(true) @map("visible_to_client")
-  extractions   ContractExtraction[]
-  envelopes     SignatureEnvelope[]
-  createdAt     DateTime             @default(now())
+  id              String               @id @default(uuid())
+  tenantId        String               @map("tenant_id")
+  tenant          Organization         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactionId   String
+  transaction     Transaction          @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  filename        String
+  contentType     String               @map("content_type")
+  sizeBytes       Int                  @map("size_bytes")
+  data            Bytes?
+  storageKey      String?              @map("storage_key")
+  visibleToAgent  Boolean              @default(true) @map("visible_to_agent")
+  visibleToClient Boolean              @default(true) @map("visible_to_client")
+  extractions     ContractExtraction[]
+  envelopes       SignatureEnvelope[]
+  createdAt       DateTime             @default(now())
 
   @@index([tenantId])
   @@index([transactionId])

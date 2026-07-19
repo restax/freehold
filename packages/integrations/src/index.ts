@@ -1,4 +1,4 @@
-import { documensoAdapter } from "./esign/documenso.js";
+import { type DocumensoConfig, documensoAdapter, makeDocumensoAdapter } from "./esign/documenso.js";
 import { docusignAdapter } from "./esign/docusign.js";
 import { manualAdapter } from "./esign/manual.js";
 import type { EsignAdapter, EsignProviderId } from "./esign/types.js";
@@ -13,7 +13,8 @@ export type {
   EsignAdapter,
   EsignProviderId,
 } from "./esign/types.js";
-export { documensoAdapter, docusignAdapter, manualAdapter };
+export type { DocumensoConfig };
+export { documensoAdapter, docusignAdapter, makeDocumensoAdapter, manualAdapter };
 
 const ADAPTERS: Record<EsignProviderId, EsignAdapter> = {
   MANUAL: manualAdapter,
@@ -21,7 +22,13 @@ const ADAPTERS: Record<EsignProviderId, EsignAdapter> = {
   DOCUSIGN: docusignAdapter,
 };
 
-export function getEsignAdapter(id: EsignProviderId): EsignAdapter {
+/** Per-tenant credential overrides; anything omitted falls back to env. */
+export interface EsignOverrides {
+  documenso?: DocumensoConfig;
+}
+
+export function getEsignAdapter(id: EsignProviderId, overrides?: EsignOverrides): EsignAdapter {
+  if (id === "DOCUMENSO" && overrides?.documenso) return makeDocumensoAdapter(overrides.documenso);
   return ADAPTERS[id];
 }
 

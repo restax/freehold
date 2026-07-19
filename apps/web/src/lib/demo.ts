@@ -87,10 +87,12 @@ export async function resetDemoData() {
     await tx.vaultAccessLog.deleteMany({});
     await tx.vaultCredential.deleteMany({});
     await tx.webhookEndpoint.deleteMany({});
+    await tx.email.deleteMany({});
   });
 
   // Capability tables carry no RLS; scope the delete explicitly.
   await prisma.portalLink.deleteMany({ where: { tenantId: org.id } });
+  await prisma.emailThread.deleteMany({ where: { tenantId: org.id } });
   await prisma.apiKey.deleteMany({ where: { tenantId: org.id } });
 
   // Log out any lingering visitor sessions so each day starts clean, and

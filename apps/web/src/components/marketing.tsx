@@ -57,7 +57,7 @@ export function MarketingNav() {
             Pricing
           </Link>
           <Link href="/compare" className="transition-colors hover:text-stone-900">
-            Open source
+            Self-host
           </Link>
         </nav>
         <div className="flex items-center gap-5 text-sm">
@@ -83,7 +83,7 @@ export function MarketingFooter() {
         <div>
           <Wordmark size="sm" />
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-stone-500">
-            The open-source, all-in-one platform for real estate transaction management and CRM.
+            The fair-source, all-in-one platform for real estate transaction management and CRM.
           </p>
         </div>
         <nav aria-label="Product">
@@ -110,14 +110,19 @@ export function MarketingFooter() {
               </Link>
             </li>
             <li>
+              <Link href="/services" className="transition-colors hover:text-stone-900">
+                Setup &amp; IT services
+              </Link>
+            </li>
+            <li>
               <Link href="/docs/api" className="transition-colors hover:text-stone-900">
                 API reference
               </Link>
             </li>
           </ul>
         </nav>
-        <nav aria-label="Open source">
-          <h3 className="text-sm font-medium">Open source</h3>
+        <nav aria-label="Self-hosting">
+          <h3 className="text-sm font-medium">Self-hosting</h3>
           <ul className="mt-3 flex flex-col gap-2 text-sm text-stone-500">
             <li>
               <a
@@ -170,7 +175,8 @@ export function MarketingFooter() {
       </div>
       <div className="border-t border-stone-100">
         <p className="mx-auto max-w-6xl px-4 py-5 text-center text-sm text-stone-400 sm:px-6">
-          Freehold is open source under Apache-2.0. Self-hosting is free forever.
+          Freehold is fair source (FSL-1.1-Apache-2.0). Self-hosting is free forever; every release
+          becomes Apache-2.0 open source two years after publication.
         </p>
       </div>
       <ChatWidget />

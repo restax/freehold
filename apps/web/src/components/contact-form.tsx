@@ -6,6 +6,8 @@ import {
   MONTHS,
   type MonthDay,
   type PersonFields,
+  SOCIAL_LABELS,
+  type SocialLinks,
   SUGGESTED_CATEGORIES,
   type TouchDates,
 } from "@/lib/crm";
@@ -196,6 +198,7 @@ export function ContactForm({
       }
     : null;
   const touchDates = (contact?.touchDates as TouchDates | null) ?? null;
+  const social = (contact?.socialLinks as SocialLinks | null) ?? null;
   const extra = (contact?.extraContacts as { phones?: string[]; emails?: string[] } | null) ?? null;
   const lead = (contact?.leadDetails as Record<string, string> | null) ?? null;
   const categories = contact?.categories ?? [];
@@ -250,6 +253,33 @@ export function ContactForm({
                   <input
                     name="extraEmail"
                     defaultValue={extra?.emails?.[i] ?? ""}
+                    className={input}
+                  />
+                </label>
+              ))}
+            </div>
+          </details>
+          <details open={Boolean(contact?.photoUrl || social)}>
+            <summary className="cursor-pointer select-none text-sm font-medium text-brand-700 hover:text-brand-600">
+              + Photo &amp; social profiles
+            </summary>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label className={label}>
+                Profile photo URL
+                <input
+                  name="photoUrl"
+                  defaultValue={contact?.photoUrl ?? ""}
+                  placeholder="https://…/headshot.jpg"
+                  className={input}
+                />
+              </label>
+              {(Object.keys(SOCIAL_LABELS) as Array<keyof SocialLinks>).map((k) => (
+                <label key={k} className={label}>
+                  {SOCIAL_LABELS[k]}
+                  <input
+                    name={`social${k[0].toUpperCase()}${k.slice(1)}`}
+                    defaultValue={social?.[k] ?? ""}
+                    placeholder="https://…"
                     className={input}
                   />
                 </label>

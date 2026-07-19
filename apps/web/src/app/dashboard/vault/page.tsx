@@ -16,12 +16,19 @@ export const dynamic = "force-dynamic";
 
 export default async function VaultPage() {
   const { tenantId } = await requireTenant();
-  const { credentials, clients, log } = await withTenant(tenantId, async (tx) => ({
+  const { credentials, clients, contacts, log } = await withTenant(tenantId, async (tx) => ({
     credentials: await tx.vaultCredential.findMany({
       orderBy: [{ clientId: "asc" }, { system: "asc" }],
-      include: { client: { select: { name: true } } },
+      include: {
+        client: { select: { name: true } },
+        contact: { select: { id: true, name: true } },
+      },
     }),
     clients: await tx.client.findMany({ orderBy: { name: "asc" } }),
+    contacts: await tx.contact.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
     log: await tx.vaultAccessLog.findMany({
       orderBy: { createdAt: "desc" },
       take: 20,
@@ -66,6 +73,17 @@ export default async function VaultPage() {
             </select>
           </label>
           <label className={label}>
+            Agent / contact
+            <select name="contactId" className={input} defaultValue="">
+              <option value="">—</option>
+              {contacts.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={label}>
             Username *
             <input name="username" required className={input} />
           </label>
@@ -100,7 +118,7 @@ export default async function VaultPage() {
             <thead>
               <tr>
                 <th className={th}>System</th>
-                <th className={th}>Client</th>
+                <th className={th}>Belongs to</th>
                 <th className={th}>Username</th>
                 <th className={th}>Secret</th>
                 <th className={th}>URL</th>
@@ -111,7 +129,18 @@ export default async function VaultPage() {
               {credentials.map((c) => (
                 <tr key={c.id} className={trHover}>
                   <td className={`${td} font-medium`}>{c.system}</td>
-                  <td className={td}>{c.client?.name ?? "—"}</td>
+                  <td className={td}>
+                    {c.contact ? (
+                      <a
+                        href={`/dashboard/contacts/${c.contact.id}?tab=credentials`}
+                        className="text-brand-700 hover:underline"
+                      >
+                        {c.contact.name}
+                      </a>
+                    ) : (
+                      (c.client?.name ?? "—")
+                    )}
+                  </td>
                   <td className={td}>{c.username}</td>
                   <td className={td}>
                     <RevealCredential credentialId={c.id} />

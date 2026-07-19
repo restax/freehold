@@ -31,8 +31,8 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
         "today",
       ],
       [
-        "Open source",
-        "The entire product is Apache-2.0. Self-host free forever, or read every line we ship.",
+        "Fair source",
+        "The full code is public under the Functional Source License. Self-host free forever, read every line we ship — and each release becomes Apache-2.0 two years on.",
         "today",
       ],
       [
@@ -74,6 +74,11 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       [
         "Deadlines that compute themselves",
         "Template tasks anchor to the contract and close dates and land dated.",
+        "today",
+      ],
+      [
+        "Email that comes back",
+        "Send from your workspace's address; replies thread straight onto the transaction. Your inbox stops being the system of record.",
         "today",
       ],
       [
@@ -156,8 +161,13 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
     "Client & agent portals",
     [
       [
-        "Branded portal subdomains",
-        "Every workspace gets its own address \u2014 yourname.freeholdtc.dev \u2014 for client-facing pages.",
+        "Your own website on your subdomain",
+        "Every workspace gets its own address — yourname.freeholdtc.dev — with a publishable promotional page: your logo, services, contact info, and a new-client registration form that lands in your contacts as a lead with a same-day follow-up task. Most TC platforms don't give you a website at all. See the live example at freeholdtc.dev/example-site.",
+        "today",
+      ],
+      [
+        "QR codes for your marketing",
+        "One click generates print-quality QR codes for your site — business cards, yard signs, open-house flyers. A scan becomes a registered lead.",
         "today",
       ],
       [
@@ -268,7 +278,7 @@ export default function FeaturesPage() {
         </h1>
         <p className="mt-5 max-w-xl leading-relaxed text-stone-600">
           Most feature pages are fiction. This one has two labels: things Freehold does today, and
-          things we build when a working TC asks for them. Open source means the roadmap belongs to
+          things we build when a working TC asks for them. Public code means the roadmap belongs to
           the people who use it.
         </p>
         <div className="mt-6 flex flex-wrap gap-4 text-sm">
@@ -349,8 +359,8 @@ export default function FeaturesPage() {
               Here's the math: if you need a feature to run your files, hundreds of other TCs almost
               certainly need the same thing. So a real request from a working TC goes straight to
               the top of the list, and most ship in days. Not weeks, not &quot;on the roadmap for
-              next year.&quot; That speed is the whole advantage of a small, open-source team over a
-              legacy vendor.
+              next year.&quot; That speed is the whole advantage of a small team building in the
+              open over a legacy vendor.
             </p>
             <p>
               And two things we'll always be straight with you about. First, we build what we

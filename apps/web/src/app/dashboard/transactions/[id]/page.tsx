@@ -5,6 +5,7 @@ import { Badge, EnvelopeBadge, ExtractionBadge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
 import { VisibilityToggles } from "@/components/visibility-toggles";
 import { deleteDocument, uploadDocument } from "@/lib/actions/documents";
+import { sendTransactionEmail } from "@/lib/actions/emails";
 import {
   deleteEnvelope,
   markEnvelopeSigned,
@@ -32,6 +33,7 @@ import {
   updateTransaction,
   withdrawDateChange,
 } from "@/lib/actions/transactions";
+import { emailEnabled } from "@/lib/email";
 import { fmtDate, fmtMoney, ROLE_LABEL, SIDE_LABEL, STATUS_LABEL } from "@/lib/format";
 import { extractionCreditState } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
@@ -97,6 +99,7 @@ export default async function TransactionDetailPage({
           include: { document: { select: { filename: true } } },
         },
         portalLinks: { orderBy: { createdAt: "desc" } },
+        emails: { orderBy: { createdAt: "desc" }, take: 50 },
       },
     });
     if (!txn) return null;
@@ -806,14 +809,113 @@ export default async function TransactionDetailPage({
             </>
           )}
           {tab === "emails" && (
-            <section className={card}>
-              <h2 className="mb-1 font-medium">Emails</h2>
-              <p className="text-sm text-stone-500">
-                Outgoing email for this transaction will log here once mailbox connections
-                (IMAP/SMTP — no big-tech OAuth reviews) ship. It's on the roadmap; portal links and
-                e-sign requests already reach people without it.
-              </p>
-            </section>
+            <>
+              <section className={card}>
+                <h2 className="mb-1 font-medium">Send an email</h2>
+                {!emailEnabled() ? (
+                  <p className="text-sm text-stone-500">
+                    Email isn't configured on this install — set{" "}
+                    <code className="font-mono text-xs">RESEND_API_KEY</code>,{" "}
+                    <code className="font-mono text-xs">EMAIL_FROM_DOMAIN</code>, and{" "}
+                    <code className="font-mono text-xs">EMAIL_REPLY_DOMAIN</code>. Replies come
+                    straight back onto this transaction.
+                  </p>
+                ) : (
+                  <>
+                    <p className="mb-3 text-sm text-stone-500">
+                      Sends from your workspace's address; replies land right back on this
+                      transaction.
+                    </p>
+                    <form action={sendTransactionEmail} className="flex flex-col gap-3">
+                      <input type="hidden" name="transactionId" value={txn.id} />
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className={label}>
+                          To
+                          <input
+                            name="to"
+                            required
+                            list={`party-emails-${txn.id}`}
+                            placeholder="name@example.com"
+                            className={input}
+                          />
+                        </label>
+                        <datalist id={`party-emails-${txn.id}`}>
+                          {txn.parties
+                            .filter((p) => p.contact.email)
+                            .map((p) => (
+                              <option key={p.id} value={p.contact.email ?? ""}>
+                                {p.contact.name}
+                              </option>
+                            ))}
+                        </datalist>
+                        <label className={label}>
+                          Subject
+                          <input name="subject" required className={input} />
+                        </label>
+                      </div>
+                      <label className={label}>
+                        Message
+                        <textarea name="body" required rows={5} className={input} />
+                      </label>
+                      <div>
+                        <button type="submit" className={btn}>
+                          Send email
+                        </button>
+                      </div>
+                    </form>
+                  </>
+                )}
+              </section>
+
+              <section className={card}>
+                <h2 className="mb-3 font-medium">Thread</h2>
+                {txn.emails.length === 0 ? (
+                  <p className="text-sm text-stone-500">No email on this transaction yet.</p>
+                ) : (
+                  <ul className="flex flex-col gap-3">
+                    {txn.emails.map((e) => (
+                      <li
+                        key={e.id}
+                        className={`rounded-xl border p-3.5 text-sm ${
+                          e.direction === "INBOUND"
+                            ? "border-brand-600/20 bg-brand-50/50"
+                            : "border-stone-200/70 bg-white"
+                        }`}
+                      >
+                        <div className="mb-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                          <span className="font-medium">
+                            {e.direction === "INBOUND" ? "↩ Reply" : "→ Sent"}
+                          </span>
+                          <span className="text-stone-500">
+                            {e.direction === "INBOUND" ? `from ${e.fromAddr}` : `to ${e.toAddr}`}
+                          </span>
+                          <span className="ml-auto flex items-center gap-2">
+                            {e.status !== "SENT" && e.status !== "RECEIVED" && (
+                              <span
+                                className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                                  e.status === "DELIVERED"
+                                    ? "bg-brand-50 text-brand-700"
+                                    : "bg-red-100 text-red-700"
+                                }`}
+                              >
+                                {e.status.toLowerCase()}
+                              </span>
+                            )}
+                            <span className="font-mono text-xs tabular-nums text-stone-400">
+                              {fmtDate(e.createdAt)}
+                            </span>
+                          </span>
+                        </div>
+                        <p className="font-medium">{e.subject}</p>
+                        <p className="mt-1 max-w-prose whitespace-pre-wrap leading-relaxed text-stone-600">
+                          {e.bodyText.length > 800 ? `${e.bodyText.slice(0, 800)}…` : e.bodyText}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </>
           )}
           {tab === "notes" && (
             <section className={card}>
