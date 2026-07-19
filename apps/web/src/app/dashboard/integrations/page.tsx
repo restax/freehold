@@ -6,9 +6,13 @@ import type { ReactNode } from "react";
 import { CopyButton } from "@/components/copy-button";
 import { createSkillKey, readNewSkillKey } from "@/lib/actions/api-keys";
 import { connectDocumenso, disconnectDocumenso } from "@/lib/actions/esign-config";
+import { connectFub, disconnectFub, importFubContacts } from "@/lib/actions/fub";
+import { connectTwenty, disconnectTwenty, importTwentyContacts } from "@/lib/actions/twenty";
 import { emailEnabled } from "@/lib/email";
 import { documensoStatus } from "@/lib/esign-config";
+import { fubStatus } from "@/lib/fub";
 import { requireAdminTenant } from "@/lib/tenant";
+import { twentyStatus } from "@/lib/twenty";
 import { btn, btnGhost, card, input, label as labelCls } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -55,6 +59,8 @@ export default async function IntegrationsPage() {
     select: { slug: true },
   });
   const documenso = await documensoStatus(tenantId);
+  const fub = await fubStatus(tenantId);
+  const twenty = await twentyStatus(tenantId);
 
   const cards: Array<{
     name: string;
@@ -140,6 +146,80 @@ export default async function IntegrationsPage() {
       body: "Connect DocuSign, Dotloop, and 7,000+ apps using your own accounts — instant triggers from Freehold's signed webhooks, actions through the API. No approval processes anywhere.",
       href: "/docs/zapier",
       hrefLabel: "Setup guide & recipes",
+    },
+    {
+      name: "Follow Up Boss",
+      mono: "FB",
+      tone: (fub.connected ? "active" : "setup") as Tone,
+      status: fub.connected ? "Connected" : "Needs connection",
+      body: fub.connected
+        ? `Website leads flow into your Follow Up Boss automations, and you can pull your people into contacts.${fub.importedAt ? ` Last import: ${fub.importedCount} new contact${fub.importedCount === 1 ? "" : "s"} on ${fub.importedAt.slice(0, 10)}.` : ""}`
+        : "Connect with your API key (Follow Up Boss → Admin → API) — website leads flow into your FUB automations and your people import as contacts. Verified before saving.",
+      href: "/docs/followupboss",
+      hrefLabel: "How it works",
+      extra: fub.connected ? (
+        <div className="mt-2 flex items-center gap-4">
+          <form action={importFubContacts}>
+            <button type="submit" className={`${btnGhost} px-2.5 py-1 text-xs`}>
+              Import contacts now
+            </button>
+          </form>
+          <form action={disconnectFub}>
+            <button type="submit" className="text-xs text-stone-400 hover:text-red-600">
+              Disconnect
+            </button>
+          </form>
+        </div>
+      ) : (
+        <form action={connectFub} className="mt-3 flex flex-col gap-2">
+          <label className={labelCls}>
+            API key
+            <input name="apiKey" type="password" required placeholder="fka_…" className={input} />
+          </label>
+          <button type="submit" className={`${btn} self-start`}>
+            Verify &amp; connect
+          </button>
+        </form>
+      ),
+    },
+    {
+      name: "Twenty CRM",
+      mono: "Tw",
+      tone: (twenty.connected ? "active" : "setup") as Tone,
+      status: twenty.connected ? "Connected" : "Needs connection",
+      body: twenty.connected
+        ? `Connected to ${twenty.url}. Website leads land in Twenty as people, and you can pull your people into contacts.${twenty.importedAt ? ` Last import: ${twenty.importedCount} new contact${twenty.importedCount === 1 ? "" : "s"} on ${twenty.importedAt.slice(0, 10)}.` : ""}`
+        : "The open-source CRM. Connect your instance URL (or https://api.twenty.com) and an API key from Twenty's Settings → API & Webhooks — website leads flow in as people, and your people import as contacts. Verified before saving.",
+      href: "/docs/twenty",
+      hrefLabel: "How it works",
+      extra: twenty.connected ? (
+        <div className="mt-2 flex items-center gap-4">
+          <form action={importTwentyContacts}>
+            <button type="submit" className={`${btnGhost} px-2.5 py-1 text-xs`}>
+              Import contacts now
+            </button>
+          </form>
+          <form action={disconnectTwenty}>
+            <button type="submit" className="text-xs text-stone-400 hover:text-red-600">
+              Disconnect
+            </button>
+          </form>
+        </div>
+      ) : (
+        <form action={connectTwenty} className="mt-3 flex flex-col gap-2">
+          <label className={labelCls}>
+            Twenty URL
+            <input name="url" required placeholder="https://api.twenty.com" className={input} />
+          </label>
+          <label className={labelCls}>
+            API key
+            <input name="apiKey" type="password" required className={input} />
+          </label>
+          <button type="submit" className={`${btn} self-start`}>
+            Verify &amp; connect
+          </button>
+        </form>
+      ),
     },
     {
       name: "Claude Skill",

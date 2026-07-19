@@ -6,8 +6,10 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { logAudit } from "@/lib/audit";
 import { optStr, str } from "@/lib/forms";
+import { loadFubKey, sendFubLead } from "@/lib/fub";
 import { parseSiteConfig, type TenantSiteConfig } from "@/lib/site-config";
 import { requireAdminTenant } from "@/lib/tenant";
+import { loadTwentyConnection, sendTwentyLead } from "@/lib/twenty";
 
 export async function saveSiteConfig(formData: FormData) {
   const { tenantId, isAdmin, session } = await requireAdminTenant();
@@ -103,6 +105,15 @@ export async function submitTenantLead(formData: FormData) {
       },
     });
   });
+  // Connected Follow Up Boss accounts get the lead too, through the events
+  // API so the tenant's FUB automations fire. Fire-and-forget.
+  loadFubKey(org.id)
+    .then((key) => (key ? sendFubLead(key, { name, email, phone, message }) : undefined))
+    .catch(() => {});
+  loadTwentyConnection(org.id)
+    .then((conn) => (conn ? sendTwentyLead(conn, { name, email, phone }) : undefined))
+    .catch(() => {});
+
   // On the subdomain the site lives at "/"; direct apex previews at /t/<slug>.
   const host = (await headers()).get("host") ?? "";
   redirect(host.startsWith(`${slug}.`) ? "/?thanks=1" : `/t/${slug}?thanks=1`);

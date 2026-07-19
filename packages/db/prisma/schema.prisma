@@ -105,6 +105,11 @@ model Organization {
   aiExtractionsUsed       Int                  @default(0) @map("ai_extractions_used")
   /// Admin setting: when true, members only see contacts they own.
   restrictContactsToOwner Boolean              @default(false) @map("restrict_contacts_to_owner")
+  /// Per-tenant Follow Up Boss connection: {enc:{...}, importedAt?, importedCount?}.
+  /// API key encrypted with VAULT_MASTER_KEY.
+  fubConfig               Json?                @map("fub_config")
+  /// Per-tenant Twenty CRM connection: {url, enc:{...}, importedAt?, importedCount?}.
+  twentyConfig            Json?                @map("twenty_config")
   /// Tenant mini-site at <slug>.<root>: {published, tagline, about, phone, email, services, showRegistration}.
   siteConfig              Json?                @map("site_config")
   /// Per-tenant Documenso connection: {url, enc:{ciphertext,iv,tag,wrappedKey,wrapIv,wrapTag,keyVersion}}.

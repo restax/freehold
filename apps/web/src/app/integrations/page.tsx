@@ -41,6 +41,16 @@ const LIVE: Integration[] = [
     "REST API with signed webhooks: read and write transactions, contacts, tasks, clients, and your account — plus a ready-made Claude skill.",
   ],
   [
+    "Follow Up Boss",
+    "FB",
+    "Working today: connect with your API key — website leads flow straight into your Follow Up Boss automations, and your people import into Freehold contacts.",
+  ],
+  [
+    "Twenty CRM",
+    "Tw",
+    "Working today: connect your Twenty instance with an API key — website leads land in Twenty as people, and your people import into Freehold contacts.",
+  ],
+  [
     "Zapier",
     "Z",
     "Working today: instant triggers (new transaction, document uploaded, envelope completed, website leads) and actions into 7,000+ apps — including DocuSign and Dotloop through your own accounts.",
@@ -53,11 +63,6 @@ const LIVE: Integration[] = [
 ];
 
 const COMING: Integration[] = [
-  [
-    "Follow Up Boss",
-    "FB",
-    "Move transaction data, notes, and contacts both directions with your Follow Up Boss account.",
-  ],
   [
     "SkySlope",
     "Sk",
@@ -82,11 +87,6 @@ const COMING: Integration[] = [
     "Mailchimp and SendGrid",
     "M",
     "Send bulk campaigns to your database through the email tools you already use.",
-  ],
-  [
-    "Twenty CRM",
-    "Tw",
-    "Two-way sync with the open-source CRM for teams that run deeper sales pipelines.",
   ],
 ];
 

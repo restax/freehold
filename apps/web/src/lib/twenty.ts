@@ -1,0 +1,136 @@
+import { prisma } from "@freehold/db";
+import { decryptSecret, type EncryptedSecret, loadMasterKey } from "@freehold/vault";
+
+/**
+ * Twenty CRM connection, per tenant. Twenty is the open-source CRM — cloud
+ * (https://api.twenty.com) or self-hosted — with plain Bearer API-key auth
+ * (Settings → API & Webhooks in Twenty). No OAuth, no approval process.
+ * The key is encrypted on the organization row with VAULT_MASTER_KEY.
+ */
+
+interface StoredTwentyConfig {
+  url: string;
+  enc: EncryptedSecret;
+  importedAt?: string;
+  importedCount?: number;
+}
+
+export interface TwentyConnection {
+  url: string;
+  apiKey: string;
+}
+
+export function parseTwentyConfig(raw: unknown): StoredTwentyConfig | null {
+  const c = raw as StoredTwentyConfig | null;
+  return c?.url && c.enc ? c : null;
+}
+
+export async function loadTwentyConnection(tenantId: string): Promise<TwentyConnection | null> {
+  const org = await prisma.organization.findUnique({
+    where: { id: tenantId },
+    select: { twentyConfig: true },
+  });
+  const stored = parseTwentyConfig(org?.twentyConfig);
+  if (!stored) return null;
+  try {
+    return { url: stored.url, apiKey: decryptSecret(stored.enc, loadMasterKey()) };
+  } catch {
+    return null;
+  }
+}
+
+export async function twentyStatus(
+  tenantId: string,
+): Promise<{ connected: boolean; url?: string; importedAt?: string; importedCount?: number }> {
+  const org = await prisma.organization.findUnique({
+    where: { id: tenantId },
+    select: { twentyConfig: true },
+  });
+  const stored = parseTwentyConfig(org?.twentyConfig);
+  return stored
+    ? {
+        connected: true,
+        url: stored.url,
+        importedAt: stored.importedAt,
+        importedCount: stored.importedCount,
+      }
+    : { connected: false };
+}
+
+function headers(apiKey: string): Record<string, string> {
+  return { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
+}
+
+const rest = (url: string) => `${url.replace(/\/$/, "")}/rest`;
+
+export async function verifyTwenty(conn: TwentyConnection): Promise<boolean> {
+  try {
+    const res = await fetch(`${rest(conn.url)}/people?limit=1`, {
+      headers: headers(conn.apiKey),
+      signal: AbortSignal.timeout(10_000),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export interface TwentyPerson {
+  id: string;
+  name?: { firstName?: string; lastName?: string };
+  emails?: { primaryEmail?: string };
+  phones?: { primaryPhoneNumber?: string };
+}
+
+/**
+ * Pull people, cursor-paginated (Twenty caps pages at 60). Defensive about
+ * response shape — workspaces have their own schemas, so only the standard
+ * person fields are read.
+ */
+export async function fetchTwentyPeople(
+  conn: TwentyConnection,
+  max = 1000,
+): Promise<TwentyPerson[]> {
+  const people: TwentyPerson[] = [];
+  let cursor: string | null = null;
+  while (people.length < max) {
+    const qs = `limit=60${cursor ? `&starting_after=${encodeURIComponent(cursor)}` : ""}`;
+    const res = await fetch(`${rest(conn.url)}/people?${qs}`, {
+      headers: headers(conn.apiKey),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) break;
+    const body = (await res.json()) as {
+      data?: { people?: TwentyPerson[] } | TwentyPerson[];
+      pageInfo?: { hasNextPage?: boolean; endCursor?: string };
+    };
+    const batch = Array.isArray(body.data) ? body.data : (body.data?.people ?? []);
+    people.push(...batch);
+    if (!body.pageInfo?.hasNextPage || !body.pageInfo.endCursor || batch.length === 0) break;
+    cursor = body.pageInfo.endCursor;
+  }
+  return people.slice(0, max);
+}
+
+/** Create a person in Twenty — used to push website leads across. */
+export async function sendTwentyLead(
+  conn: TwentyConnection,
+  lead: { name: string; email?: string | null; phone?: string | null },
+): Promise<boolean> {
+  const [firstName, ...rest_] = lead.name.split(" ");
+  try {
+    const res = await fetch(`${rest(conn.url)}/people`, {
+      method: "POST",
+      headers: headers(conn.apiKey),
+      body: JSON.stringify({
+        name: { firstName, lastName: rest_.join(" ") || undefined },
+        ...(lead.email ? { emails: { primaryEmail: lead.email } } : {}),
+        ...(lead.phone ? { phones: { primaryPhoneNumber: lead.phone } } : {}),
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
