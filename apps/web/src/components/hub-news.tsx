@@ -16,6 +16,16 @@ interface NewsItem {
 
 const FALLBACK: NewsItem[] = [
   {
+    title: "Ask Claude about your deals",
+    body: "A ready-made Claude skill queries your workspace through the API — closings this week, client portal activity, workspace stats. Grab it from the repo's skills/ folder.",
+    date: "2026-07-19",
+  },
+  {
+    title: "Portals, calendars, and a real CRM",
+    body: "Agent portals with pipeline stats, buyer/seller timelines, subscribe-once calendar feeds, per-item visibility, and dual-person contact records with auto-prospecting.",
+    date: "2026-07-19",
+  },
+  {
     title: "Your day, redesigned",
     body: "The dashboard now leads with today: closings, overdue items, and a 7-day agenda. Completed tasks stay visible and undoable.",
     date: "2026-07-19",

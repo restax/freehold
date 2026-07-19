@@ -19,7 +19,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Demo sign-in failed" }, { status: 500 });
   }
 
-  const redirect = NextResponse.redirect(new URL("/dashboard", req.url), 303);
+  const nextParam = new URL(req.url).searchParams.get("next");
+  const target = nextParam?.startsWith("/dashboard") ? nextParam : "/dashboard";
+  const redirect = NextResponse.redirect(new URL(target, req.url), 303);
   for (const cookie of signIn.headers.getSetCookie()) {
     redirect.headers.append("set-cookie", cookie);
   }

@@ -66,12 +66,22 @@ export default function ApiDocsPage() {
         <CodeBlock>{`curl https://your-freehold-host/v1/transactions \\
   -H "Authorization: Bearer fh_live_your_key_here"`}</CodeBlock>
         <p className="mt-2 text-sm leading-relaxed text-stone-600">
-          Self-hosting: the API service listens on port 3001 by default. On Freehold Cloud the base
-          URL is your workspace's API host.
+          On Freehold Cloud the base URL is{" "}
+          <code className="font-mono text-xs">https://freeholdtc.dev/api/v1</code>. Self-hosting has
+          the same routes under <code className="font-mono text-xs">/api/v1</code>, plus a
+          standalone API service on port 3001 (paths start at{" "}
+          <code className="font-mono text-xs">/v1</code>).
         </p>
 
         <h2 className="font-display mt-12 text-2xl font-bold tracking-tight">Endpoints</h2>
         <div className="mt-2">
+          <Endpoint method="GET" path="/v1/account">
+            Workspace overview: name, plan, and counts of active/closed transactions, contacts,
+            clients, and open tasks.
+          </Endpoint>
+          <Endpoint method="GET" path="/v1/clients">
+            Your clients with transaction counts and portal links (audience, active, last opened).
+          </Endpoint>
           <Endpoint method="GET" path="/v1/transactions?status=UNDER_CONTRACT">
             List transactions, newest first (up to 200). Optional <code>status</code> filter:
             LISTING, UNDER_CONTRACT, PENDING, CLOSED, CANCELLED.
@@ -134,6 +144,17 @@ function verify(secret, header, body) {
   const b = Buffer.from(v1, "hex");
   return a.length === b.length && timingSafeEqual(a, b);
 }`}</CodeBlock>
+
+        <h2 className="font-display mt-12 text-2xl font-bold tracking-tight">Use it from Claude</h2>
+        <p className="mt-2 text-sm leading-relaxed text-stone-600">
+          The repo ships a ready-made Claude skill (
+          <code className="font-mono text-xs">skills/freehold/</code>): drop it into{" "}
+          <code className="font-mono text-xs">~/.claude/skills/</code>, set{" "}
+          <code className="font-mono text-xs">FREEHOLD_API_KEY</code> and{" "}
+          <code className="font-mono text-xs">FREEHOLD_API_URL</code>, and ask Claude things like
+          "what closes this week?" or "has my client opened their portal?" — answered live from your
+          workspace.
+        </p>
 
         <h2 className="font-display mt-12 text-2xl font-bold tracking-tight">Honest notes</h2>
         <ul className="mt-2 flex list-disc flex-col gap-1.5 pl-5 text-sm leading-relaxed text-stone-600">

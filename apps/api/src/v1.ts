@@ -66,6 +66,59 @@ function transactionJson(t: {
 }
 
 export function registerV1(app: FastifyInstance) {
+  app.get("/v1/account", async (req, reply) => {
+    const tenantId = await authenticate(req, reply);
+    if (!tenantId) return;
+    const org = await prisma.organization.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { name: true, slug: true, planTier: true },
+    });
+    const counts = await withTenant(tenantId, async (tx) => ({
+      activeTransactions: await tx.transaction.count({
+        where: { status: { notIn: ["CLOSED", "CANCELLED"] } },
+      }),
+      closedTransactions: await tx.transaction.count({ where: { status: "CLOSED" } }),
+      contacts: await tx.contact.count(),
+      clients: await tx.client.count(),
+      openTasks: await tx.task.count({ where: { status: "OPEN" } }),
+    }));
+    reply.send({ workspace: org.name, slug: org.slug, plan: org.planTier, ...counts });
+  });
+
+  app.get("/v1/clients", async (req, reply) => {
+    const tenantId = await authenticate(req, reply);
+    if (!tenantId) return;
+    const clients = await withTenant(tenantId, (tx) =>
+      tx.client.findMany({
+        orderBy: { name: "asc" },
+        take: 200,
+        include: {
+          _count: { select: { transactions: true, clientNotes: true } },
+          portalLinks: {
+            select: { label: true, audience: true, revokedAt: true, lastAccessedAt: true },
+          },
+        },
+      }),
+    );
+    reply.send({
+      clients: clients.map((c) => ({
+        id: c.id,
+        name: c.name,
+        type: c.type,
+        email: c.email,
+        phone: c.phone,
+        transactions: c._count.transactions,
+        notes: c._count.clientNotes,
+        portals: c.portalLinks.map((pl) => ({
+          label: pl.label,
+          audience: pl.audience,
+          active: !pl.revokedAt,
+          lastOpenedAt: pl.lastAccessedAt?.toISOString() ?? null,
+        })),
+      })),
+    });
+  });
+
   app.get("/v1/transactions", async (req, reply) => {
     const tenantId = await authenticate(req, reply);
     if (!tenantId) return;

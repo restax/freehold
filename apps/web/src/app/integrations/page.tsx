@@ -23,12 +23,22 @@ const LIVE: Integration[] = [
   [
     "Claude AI",
     "AI",
-    "The AI that reads your contracts, built in. Included on Cloud; bring your own key when self-hosting.",
+    "Reads contracts with page-cited extraction, powers the site assistant, and ships as a Claude skill so you can ask about your own deals from Claude.",
   ],
   [
     "S3-compatible storage",
     "S3",
     "Keep documents on any S3-compatible service you choose, or the bundled default when self-hosting.",
+  ],
+  [
+    "Calendar feeds (ICS)",
+    "Ca",
+    "Every client and agent portal has a subscribe-once calendar feed — deadlines land in Google, Outlook, or Apple Calendar and stay current.",
+  ],
+  [
+    "Freehold API",
+    "{}",
+    "REST API with signed webhooks: read and write transactions, contacts, tasks, clients, and your account — plus a ready-made Claude skill.",
   ],
   [
     "Stripe",
@@ -42,11 +52,6 @@ const COMING: Integration[] = [
     "Email (IMAP/SMTP)",
     "@",
     "Connect any mailbox with the standard settings every provider publishes. Send from your own address — no big-tech app approvals standing between you and your email.",
-  ],
-  [
-    "Calendar feeds (ICS)",
-    "Ca",
-    "Subscribe once from whatever calendar you already live in, and every deadline Freehold computes shows up there automatically.",
   ],
   [
     "Follow Up Boss",
@@ -92,11 +97,6 @@ const COMING: Integration[] = [
     "Twenty CRM",
     "Tw",
     "Two-way sync with the open-source CRM for teams that run deeper sales pipelines.",
-  ],
-  [
-    "Freehold API",
-    "{}",
-    "Read and write everything in your workspace: transactions, contacts, tasks, and documents.",
   ],
 ];
 

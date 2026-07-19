@@ -1,4 +1,5 @@
 import { Check } from "@phosphor-icons/react/dist/ssr";
+import Image from "next/image";
 import Link from "next/link";
 import { MarketingFooter, MarketingNav } from "@/components/marketing";
 
@@ -39,6 +40,16 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
         "Nobody is paid a commission to recommend Freehold, so every recommendation is a real one.",
         "today",
       ],
+      [
+        "Ask Claude about your deals",
+        "A ready-made Claude skill queries your workspace through the API: closings this week, client portal activity, workspace stats.",
+        "today",
+      ],
+      [
+        "Dual-person contact records",
+        "One CRM entry holds a couple or a client and their assistant, so mailings and merges address both.",
+        "today",
+      ],
     ],
   ],
   [
@@ -77,8 +88,8 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
     "CRM",
     [
       [
-        "Contact categories and ratings",
-        "Organize agents, lenders, title, and inspectors, and rate who's worth your time.",
+        "Categories, grades, and auto-prospecting",
+        "Tag contacts, grade relationships A\u2013D, and Freehold queues who to touch and when.",
         "today",
       ],
       [
@@ -95,8 +106,8 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ["Targeted mass email", "Keep your database engaged with bulk campaigns.", "request"],
       [
         "Shared contact ownership",
-        "Individual or team-owned contacts with clear ownership.",
-        "request",
+        "Owner assignment with an admin switch restricting members to contacts they own.",
+        "today",
       ],
     ],
   ],
@@ -123,6 +134,41 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
         "Email templates attached to tasks",
         "A task fires with its message ready to send.",
         "request",
+      ],
+    ],
+  ],
+  [
+    "Client & agent portals",
+    [
+      [
+        "Branded portal subdomains",
+        "Every workspace gets its own address \u2014 yourname.freeholdtc.dev \u2014 for client-facing pages.",
+        "today",
+      ],
+      [
+        "Buyer & seller portals",
+        "A simple milestone timeline, the deal team, and documents \u2014 on a private, revocable link. No passwords.",
+        "today",
+      ],
+      [
+        "Managed agent portals",
+        "Agents see every deal you run for them: pipeline, on-track projection, activity, closed history, files with one-click ZIP.",
+        "today",
+      ],
+      [
+        "Per-item visibility controls",
+        "Two toggles beside every task and document decide exactly what agents and clients see.",
+        "today",
+      ],
+      [
+        "Calendar feeds",
+        "Every portal has a subscribe-once calendar feed \u2014 dates sync to Google, Outlook, or Apple Calendar and stay current.",
+        "today",
+      ],
+      [
+        "Audit trail",
+        "Deletions and portal access changes recorded with who and when, viewable by admins.",
+        "today",
       ],
     ],
   ],
@@ -173,6 +219,29 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
   ],
 ];
 
+const SCREENS: Array<[string, string, string]> = [
+  [
+    "/marketing/screens/dashboard-day.png",
+    "Freehold dashboard showing today's overdue and due tasks, a 7-day agenda, and pipeline counts",
+    "Your day: overdue first, closings and deadlines grouped by day, pipeline at a glance.",
+  ],
+  [
+    "/marketing/screens/transaction-workspace.png",
+    "Transaction workspace with listing details, tabbed tasks, and key dates in three columns",
+    "The transaction workspace: checklist, files, participants, payout \u2014 with per-portal visibility toggles on every row.",
+  ],
+  [
+    "/marketing/screens/portal-agent.png",
+    "Managed agent portal with pipeline stats, on-track projection, and upcoming dates",
+    "What your agents see: their whole book with you, live \u2014 pipeline, next 30 days, closed history.",
+  ],
+  [
+    "/marketing/screens/portal-client.png",
+    "Buyer and seller portal with a milestone timeline and deal team",
+    "What buyers and sellers see: a calm timeline, their team, their documents. No login, no clutter.",
+  ],
+];
+
 export default function FeaturesPage() {
   return (
     <main className="bg-stone-50 text-stone-900">
@@ -198,6 +267,32 @@ export default function FeaturesPage() {
             </span>
             <span className="text-stone-600">Ask, and it usually ships in days</span>
           </span>
+        </div>
+
+        {/* Real screens — actual product, demo-workspace data */}
+        <div className="mt-14">
+          <h2 className="font-display text-2xl font-bold tracking-tight">
+            Real screenshots, not mockups
+          </h2>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-stone-600">
+            Straight from the live demo workspace \u2014 what you see is what ships.{" "}
+            <a href="/api/demo" className="font-medium text-brand-700 hover:text-brand-600">
+              Click around it yourself \u2192
+            </a>
+          </p>
+          <div className="mt-6 grid gap-5 md:grid-cols-2">
+            {SCREENS.map(([src, alt, caption]) => (
+              <figure
+                key={src}
+                className="overflow-hidden rounded-2xl border border-stone-200/70 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_8px_rgb(41_37_36/0.04)]"
+              >
+                <Image src={src} alt={alt} width={1360} height={860} className="w-full" />
+                <figcaption className="border-t border-stone-100 px-4 py-2.5 text-xs text-stone-500">
+                  {caption}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
         </div>
 
         <div className="mt-12 flex flex-col gap-12">
