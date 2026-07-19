@@ -24,14 +24,14 @@ export const PLAN_INFO: Record<
     label: "Free",
     priceMonthly: 0,
     includedSeats: 2,
-    activeTransactionLimit: 10,
+    activeTransactionLimit: 5,
     aiExtractionCredits: 10,
   },
   PRO: {
     label: "Pro",
-    priceMonthly: 29,
+    priceMonthly: 35,
     includedSeats: 2,
-    activeTransactionLimit: 50,
+    activeTransactionLimit: 100,
     aiExtractionCredits: null,
   },
   BUSINESS: {

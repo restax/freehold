@@ -34,10 +34,11 @@ import {
   withdrawDateChange,
 } from "@/lib/actions/transactions";
 import { emailEnabled } from "@/lib/email";
-import { fmtDate, fmtMoney, ROLE_LABEL, SIDE_LABEL, STATUS_LABEL } from "@/lib/format";
+import { fmtDate, fmtMoney, ROLE_LABEL, STATUS_LABEL } from "@/lib/format";
 import { extractionCreditState } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
 import { PRIORITY_BADGE, PRIORITY_LABEL } from "@/lib/priority";
+import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
 import { requireTenant } from "@/lib/tenant";
 import { btn, btnDanger, btnGhost, card, input, label } from "@/lib/ui";
 
@@ -67,6 +68,7 @@ export default async function TransactionDetailPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { tenantId } = await requireTenant();
+  const labels = await tenantSideLabels(tenantId);
   const { id } = await params;
   const { tab: tabRaw } = await searchParams;
   const tab: TxnTab = (TXN_TABS.some(([t]) => t === tabRaw) ? tabRaw : "tasks") as TxnTab;
@@ -76,6 +78,7 @@ export default async function TransactionDetailPage({
       where: { id },
       include: {
         client: true,
+        intakeSubmissions: { orderBy: { createdAt: "desc" } },
         parties: { include: { contact: true }, orderBy: { createdAt: "asc" } },
         tasks: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
         documents: {
@@ -133,7 +136,7 @@ export default async function TransactionDetailPage({
           <h1 className="text-xl font-semibold">{txn.propertyAddress}</h1>
           <p className="text-sm text-stone-500">
             {[txn.city, txn.state, txn.zip].filter(Boolean).join(", ") || "No location set"} ·{" "}
-            {SIDE_LABEL[txn.side]} · contract {fmtMoney(txn.purchasePrice)} · list{" "}
+            {sideLabel(txn.side, labels)} · contract {fmtMoney(txn.purchasePrice)} · list{" "}
             {fmtMoney(txn.listPrice)}
           </p>
         </div>
@@ -693,7 +696,7 @@ export default async function TransactionDetailPage({
                     <select name="side" defaultValue={txn.side} className={input}>
                       {SIDES.map((s) => (
                         <option key={s} value={s}>
-                          {SIDE_LABEL[s]}
+                          {sideLabel(s, labels)}
                         </option>
                       ))}
                     </select>
@@ -954,7 +957,7 @@ export default async function TransactionDetailPage({
                     <input type="hidden" name="id" value={txn.id} />
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className={label}>
-                        List side %
+                        {labels.sell} %
                         <input
                           name="listPct"
                           defaultValue={payout.listPct ?? ""}
@@ -963,7 +966,7 @@ export default async function TransactionDetailPage({
                         />
                       </label>
                       <label className={label}>
-                        Buy side %
+                        {labels.buy} %
                         <input
                           name="buyPct"
                           defaultValue={payout.buyPct ?? ""}
@@ -992,6 +995,45 @@ export default async function TransactionDetailPage({
           )}
           {tab === "misc" && (
             <>
+              {txn.intakeSubmissions.length > 0 && (
+                <section className={card}>
+                  <h2 className="mb-1 font-medium">Intake submissions</h2>
+                  <p className="mb-3 text-sm text-stone-500">
+                    Submitted by your clients through the portal. Uploaded files are on the
+                    Attachments tab, prefixed “Intake —”.
+                  </p>
+                  <ul className="flex flex-col gap-4">
+                    {txn.intakeSubmissions.map((sub) => {
+                      const answers = (sub.data ?? {}) as Record<string, string>;
+                      return (
+                        <li key={sub.id} className="rounded-lg border border-stone-200/70 p-3">
+                          <p className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+                            <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-800">
+                              {sideLabel(sub.side, labels)}
+                            </span>
+                            <span className="font-medium">{answers.legalNames ?? "Client"}</span>
+                            <span className="text-xs text-stone-400">
+                              {fmtDate(sub.createdAt)}
+                              {sub.documentIds.length > 0 &&
+                                ` · ${sub.documentIds.length} file${sub.documentIds.length === 1 ? "" : "s"}`}
+                            </span>
+                          </p>
+                          <dl className="grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+                            {Object.entries(answers).map(([k, v]) => (
+                              <div key={k} className="flex flex-col">
+                                <dt className="text-xs uppercase tracking-wide text-stone-400">
+                                  {k.replace(/([A-Z])/g, " $1")}
+                                </dt>
+                                <dd className="whitespace-pre-wrap">{v}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              )}
               <section className={card}>
                 <h2 className="mb-1 font-medium">Client portal links</h2>
                 <p className="mb-3 text-sm text-stone-500">
@@ -1092,6 +1134,15 @@ export default async function TransactionDetailPage({
                       className="h-4 w-4 accent-brand-600"
                     />
                     Documents
+                  </label>
+                  <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
+                    <input
+                      type="checkbox"
+                      name="showIntake"
+                      defaultChecked
+                      className="h-4 w-4 accent-brand-600"
+                    />
+                    Intake forms
                   </label>
                   <button type="submit" className={btnGhost}>
                     Create link

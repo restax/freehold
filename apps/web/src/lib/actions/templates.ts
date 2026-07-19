@@ -93,3 +93,21 @@ export async function generateDocument(formData: FormData) {
   );
   revalidatePath(`/dashboard/transactions/${transactionId}`);
 }
+
+/** Tenant overrides for the automated email templates (intro / post-close). */
+export async function saveEmailTemplates(formData: FormData) {
+  const { tenantId, isAdmin } = await requireAdminTenant();
+  if (!isAdmin) return;
+  const val = (k: string) => String(formData.get(k) ?? "").trim();
+  const { prisma } = await import("@freehold/db");
+  await prisma.organization.update({
+    where: { id: tenantId },
+    data: {
+      emailTemplates: {
+        intro: { subject: val("introSubject"), body: val("introBody") },
+        postClose: { subject: val("postCloseSubject"), body: val("postCloseBody") },
+      },
+    },
+  });
+  revalidatePath("/dashboard/templates");
+}

@@ -27,6 +27,8 @@ export interface SendEmailInput {
   to: string;
   subject: string;
   body: string;
+  /** Optional branded HTML rendering; `body` remains the text fallback. */
+  html?: string;
 }
 
 /** Send + record. Returns the stored Email id, or throws on provider errors. */
@@ -52,6 +54,7 @@ export async function sendTenantEmail(input: SendEmailInput): Promise<string> {
       reply_to: replyTo,
       subject: input.subject,
       text: input.body,
+      ...(input.html ? { html: input.html } : {}),
     }),
   });
   if (!res.ok) {

@@ -166,6 +166,11 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
         "today",
       ],
       [
+        "Intake forms with document upload",
+        "Buyer and seller intake forms live on the client portal: legal names, lender, attorney, HOA — plus uploads like pre-approvals and deeds. Submissions land on the transaction with a review task, and every workspace can rename its sides (sell side, sale side, list side) everywhere.",
+        "today",
+      ],
+      [
         "QR codes for your marketing",
         "One click generates print-quality QR codes for your site — business cards, yard signs, open-house flyers. A scan becomes a registered lead.",
         "today",

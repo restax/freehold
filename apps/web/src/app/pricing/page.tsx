@@ -5,7 +5,7 @@ import { ExtractionReviewCard, MarketingFooter, MarketingNav } from "@/component
 export const metadata = {
   title: "Pricing | Freehold",
   description:
-    "Simple pricing with one honest free tier. Cloud from $0, Pro $29 a month for a 2-person team, self-hosting free forever.",
+    "Simple pricing with one honest free tier. Cloud from $0, Pro $35 a month for a 2-person team, self-hosting free forever.",
 };
 
 const TIERS: Array<{
@@ -23,8 +23,8 @@ const TIERS: Array<{
     price: "$0",
     period: "forever",
     features: [
-      "2 users",
-      "10 active transactions a month",
+      "2 users — client & agent portal logins don't count",
+      "5 active transactions at a time",
       "10 AI contract extractions to try it",
       "Client portals and e-sign",
       "Data always readable and exportable",
@@ -34,11 +34,11 @@ const TIERS: Array<{
   {
     name: "Cloud Pro",
     audience: "For working TCs and small teams.",
-    price: "$29",
+    price: "$35",
     period: "/ month",
     features: [
-      "2 users included",
-      "50 active transactions a month",
+      "2 users included — client & agent portal logins are unlimited and never count as users",
+      "100 active transactions at a time",
       "Up to 200 active clients",
       "AI contract extraction, fair use included",
       "Merge-field document templates",
@@ -57,7 +57,7 @@ const TIERS: Array<{
     features: [
       "Everything in Pro",
       "10 users included",
-      "200 active transactions a month",
+      "200 active transactions at a time",
       "Up to 200 active clients",
       "Priority, real-estate-focused support",
       "Onboarding done with you: send your exports, we set up your workspace on a call",

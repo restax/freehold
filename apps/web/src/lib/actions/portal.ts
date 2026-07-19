@@ -23,6 +23,7 @@ export async function createPortalLink(formData: FormData) {
         showTasks: formData.get("showTasks") === "on",
         showDocuments: formData.get("showDocuments") === "on",
         showParties: formData.get("showParties") === "on",
+        showIntake: formData.get("showIntake") === "on",
       },
     }),
   );

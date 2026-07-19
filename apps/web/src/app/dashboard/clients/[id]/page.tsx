@@ -10,8 +10,10 @@ import {
   addClientNote,
   deleteClient,
   removeClientAgent,
+  saveClientEmailPrefs,
 } from "@/lib/actions/clients";
 import { createAgentPortalLink, setPortalLinkActive } from "@/lib/actions/portal";
+import { parseEmailPrefs } from "@/lib/auto-emails";
 import { fmtDate, fmtMoney } from "@/lib/format";
 import { portalOrigin } from "@/lib/portal";
 import { requireAdminTenant } from "@/lib/tenant";
@@ -72,6 +74,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const agentIds = new Set(client.agents.map((a) => a.contact.id));
   const addableContacts = contacts.filter((c) => !agentIds.has(c.id));
   const legacyAgentLinks = client.portalLinks.filter((pl) => !pl.contactId);
+  const emailPrefs = parseEmailPrefs(client.emailPrefs);
 
   const portalLinks = client.transactions.flatMap((t) =>
     t.portalLinks.filter((pl) => pl.audience === "CLIENT").map((pl) => ({ ...pl, transaction: t })),
@@ -466,6 +469,41 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             })}
           </ul>
         )}
+      </section>
+
+      <section className={card}>
+        <h2 className="mb-1 font-medium">Automated emails</h2>
+        <p className="mb-3 text-sm text-stone-500">
+          Lifecycle emails {client.name} receives automatically. Wording is editable under{" "}
+          <Link href="/dashboard/templates" className="text-brand-700 hover:underline">
+            Templates
+          </Link>
+          .
+        </p>
+        <form action={saveClientEmailPrefs} className="flex flex-wrap items-center gap-6">
+          <input type="hidden" name="id" value={client.id} />
+          <label className="flex items-center gap-2 text-sm font-medium text-stone-700">
+            <input
+              type="checkbox"
+              name="intro"
+              defaultChecked={emailPrefs.intro}
+              className="accent-brand-600"
+            />
+            Intro email (new file opened)
+          </label>
+          <label className="flex items-center gap-2 text-sm font-medium text-stone-700">
+            <input
+              type="checkbox"
+              name="postClose"
+              defaultChecked={emailPrefs.postClose}
+              className="accent-brand-600"
+            />
+            Post-close email
+          </label>
+          <button type="submit" className={`${btnGhost} px-3 py-1.5 text-xs`}>
+            Save
+          </button>
+        </form>
       </section>
 
       <section className={card}>

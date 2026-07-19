@@ -124,3 +124,23 @@ export async function submitExampleLead(formData: FormData) {
   optStr(formData, "noop");
   redirect("/example-site?thanks=1");
 }
+
+/** Workspace wording for transaction sides (buy side / sell side / list side…). */
+export async function saveSideLabels(formData: FormData) {
+  const { tenantId, isAdmin, session } = await requireAdminTenant();
+  if (!isAdmin) return;
+  const buy = optStr(formData, "buyLabel")?.slice(0, 30);
+  const sell = optStr(formData, "sellLabel")?.slice(0, 30);
+  await prisma.organization.update({
+    where: { id: tenantId },
+    data: { sideLabels: { buy: buy ?? "Buy side", sell: sell ?? "Sell side" } },
+  });
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "settings.side_labels",
+    summary: `Side wording set to "${buy ?? "Buy side"}" / "${sell ?? "Sell side"}"`,
+  });
+  revalidatePath("/dashboard", "layout");
+}

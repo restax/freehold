@@ -4,6 +4,7 @@ import { type TenantTx, TransactionSide, TransactionStatus, withTenant } from "@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logAudit } from "@/lib/audit";
+import { fireIntroEmail, firePostCloseEmail } from "@/lib/auto-emails";
 import { confirmed, dateOnly, intOr, oneOf, optStr, str } from "@/lib/forms";
 import { transactionLimit } from "@/lib/plans";
 import { requireAdminTenant, requireTenant } from "@/lib/tenant";
@@ -60,7 +61,7 @@ export async function updatePayout(formData: FormData) {
 }
 
 export async function createTransaction(formData: FormData) {
-  const { tenantId } = await requireTenant();
+  const { tenantId, session } = await requireTenant();
   const propertyAddress = str(formData, "propertyAddress");
   if (!propertyAddress) return;
   const limit = await transactionLimit(tenantId);
@@ -76,6 +77,8 @@ export async function createTransaction(formData: FormData) {
     status: created.status,
     side: created.side,
   });
+  // Automated intro email to the client, unless switched off on their profile.
+  fireIntroEmail(tenantId, created.id, session.user);
   revalidatePath("/dashboard/transactions");
   redirect(`/dashboard/transactions/${created.id}`);
 }
@@ -88,11 +91,14 @@ export async function updateTransaction(formData: FormData) {
   const fields = commonFields(formData);
 
   const redirected: string[] = [];
+  let closedNow = false;
   await withTenant(tenantId, async (tx) => {
     const existing = await tx.transaction.findUniqueOrThrow({
       where: { id },
-      select: { contractDate: true, closeDate: true, proposedDates: true },
+      select: { contractDate: true, closeDate: true, proposedDates: true, status: true },
     });
+
+    closedNow = existing.status !== "CLOSED" && fields.status === "CLOSED";
 
     // The contract is the source of truth: once a governed date exists,
     // editing it in the form becomes a proposal (amendment to-do), never a
@@ -146,6 +152,7 @@ export async function updateTransaction(formData: FormData) {
     });
     await recomputeAnchoredTasks(tx, id, updated);
   });
+  if (closedNow) firePostCloseEmail(tenantId, id, session.user);
 
   if (redirected.length > 0) {
     logAudit({

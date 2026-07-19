@@ -41,8 +41,9 @@ can't be silently bypassed (a mistake we caught live in development).
 
 Self-hosting is free forever with every feature: `docker compose up` on any
 box, including the dusty PC in your office closet. Revenue is Freehold
-Cloud ($0 for 2 users / 10 transactions a month; Pro is a flat $29/month
-for 2 users and 50 transactions; both paid plans fit 200 active clients) —
+Cloud ($0 for 2 users / 5 active transactions; Pro is a flat $35/month
+for 2 users and 100 active transactions; client portal logins never count
+as users; both paid plans fit 200 active clients) —
 hosting convenience, not feature ransom. Your data exports in full either way, and
 we don't pay commissions to people who recommend us — a common practice in
 this niche that I think distorts every review you'll read about TC

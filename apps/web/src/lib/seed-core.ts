@@ -171,5 +171,24 @@ export async function seedTenantData(tenantId: string, userId: string) {
         isSample: true,
       })),
     });
+
+    await tx.docTemplate.create({
+      data: {
+        tenantId,
+        name: "Closing intro letter (Sample)",
+        description: "Shows merge fields — generate a filled PDF from any transaction.",
+        isSample: true,
+        body: `{{today}}
+
+Dear {{party.BUYER.name}},
+
+{{tenant.name}} is coordinating your purchase of {{transaction.propertyAddress}}. From contract to closing on {{transaction.closeDate}}, we track every deadline and document so nothing slips.
+
+You can reach your agent, {{client.name}}, at {{client.email}} — and reply to any email from us to reach the file directly.
+
+Warm regards,
+{{tenant.name}}`,
+      },
+    });
   });
 }

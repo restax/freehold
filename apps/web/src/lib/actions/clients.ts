@@ -119,3 +119,22 @@ export async function removeClientAgent(formData: FormData) {
   });
   revalidatePath(`/dashboard/clients/${gone.clientId}`);
 }
+
+/** Per-client automated-email switches (intro, post-close). */
+export async function saveClientEmailPrefs(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  if (!id) return;
+  await withTenant(tenantId, (tx) =>
+    tx.client.update({
+      where: { id },
+      data: {
+        emailPrefs: {
+          intro: formData.get("intro") === "on",
+          postClose: formData.get("postClose") === "on",
+        },
+      },
+    }),
+  );
+  revalidatePath(`/dashboard/clients/${id}`);
+}

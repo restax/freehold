@@ -260,11 +260,11 @@ export default async function IntegrationsPage() {
             </summary>
             <div className="mt-2 flex flex-col gap-2 rounded-lg bg-stone-50 p-3 text-xs leading-relaxed text-stone-600">
               <p>
-                <strong className="text-stone-800">How it works.</strong> The button creates a
-                private access key for your workspace and wraps it in a short prompt. Paste that
-                prompt into Claude once per conversation (or save it in a Claude project so it's
-                always on). From then on, questions like "what's closing this week?" make Claude
-                look at your live Freehold data and answer from it.
+                <strong className="text-stone-800">How it works.</strong> Setting up the skill (one
+                click for a workspace admin) creates a private access key and wraps it in a short
+                prompt. Paste that prompt into Claude once per conversation (or save it in a Claude
+                project so it's always on). From then on, questions like "what's closing this week?"
+                make Claude look at your live Freehold data and answer from it.
               </p>
               <p>
                 <strong className="text-stone-800">Is my data safe?</strong> The key works like a

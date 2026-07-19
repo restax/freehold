@@ -88,7 +88,7 @@ const BENTO = [
 const FAQ: Array<[string, string]> = [
   [
     "How can all of this be free?",
-    "Freehold is fair source: the full product's code is public under the Functional Source License, self-hosting it for your own business costs nothing and always will, and every release becomes Apache-2.0 open source two years after publication. Freehold Cloud, the hosted version, has a real free tier (2 users, 10 active transactions) funded by the paid plans of teams that grow. We make money when you upgrade because you want to, not because your data is trapped.",
+    "Freehold is fair source: the full product's code is public under the Functional Source License, self-hosting it for your own business costs nothing and always will, and every release becomes Apache-2.0 open source two years after publication. Freehold Cloud, the hosted version, has a real free tier (2 users, 5 active transactions) funded by the paid plans of teams that grow. We make money when you upgrade because you want to, not because your data is trapped.",
   ],
   [
     "What happens when I hit the free limits?",
@@ -404,6 +404,38 @@ export default async function LandingPage() {
         </div>
       </section>
 
+      {/* Aged: cheese yes, software no */}
+      <section className="relative min-h-[420px] overflow-hidden lg:min-h-[520px]">
+        <Image
+          src="/marketing/parmesan.jpg"
+          alt="Rows of Parmesan wheels aging on wooden shelves in a maturing room"
+          fill
+          sizes="100vw"
+          className="object-cover"
+        />
+        <div
+          aria-hidden
+          className="absolute inset-0 bg-gradient-to-t from-stone-950/85 via-stone-950/30 to-transparent"
+        />
+        <div className="relative mx-auto flex min-h-[420px] max-w-6xl flex-col justify-end px-4 pb-14 pt-24 sm:px-6 lg:min-h-[520px] lg:pb-16">
+          <h2 className="max-w-xl text-4xl font-semibold tracking-tight text-white md:text-5xl">
+            Age cheese, <em className="italic">not</em> your software.
+          </h2>
+          <p className="mt-4 max-w-md text-sm leading-relaxed text-stone-200">
+            Most TC platforms were built a generation ago. Freehold ships every week — and you can
+            read the code.
+          </p>
+          <p className="mt-5">
+            <Link
+              href="/features"
+              className="text-sm font-medium text-white underline underline-offset-4 hover:text-brand-200"
+            >
+              See what's already shipped →
+            </Link>
+          </p>
+        </div>
+      </section>
+
       {/* Freehold Cloud sell */}
       <section className="border-t border-brand-600/15 bg-brand-50/50">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
@@ -444,8 +476,8 @@ export default async function LandingPage() {
             <div>
               <h3 className="font-medium">Never locked in</h3>
               <p className="mt-1.5 max-w-md text-sm leading-relaxed text-stone-600">
-                Your data exports any time and there are no contracts. Because Freehold is open
-                source, the escape hatch is real. We keep you by being good, not by holding your
+                Your data exports any time and there are no contracts. Because Freehold is free to
+                self-host, the escape hatch is real. We keep you by being good, not by holding your
                 files.
               </p>
             </div>
@@ -528,7 +560,7 @@ export default async function LandingPage() {
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
         <div className="rounded-3xl bg-[radial-gradient(80%_120%_at_50%_0%,#0b7a49_0%,#054f30_100%)] px-6 py-16 text-center sm:px-12">
           <h2 className="font-display mx-auto max-w-2xl text-3xl font-bold tracking-tight text-white md:text-4xl">
-            Free for 2 users and 10 transactions a month. No card required.
+            Free for 2 users and 5 active transactions. No card required.
           </h2>
           <p className="mx-auto mt-4 max-w-xl leading-relaxed text-brand-50/90">
             Hit a limit and your data stays readable and exportable forever. Upgrading is a choice,

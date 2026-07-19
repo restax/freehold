@@ -43,7 +43,7 @@ page-cites every extracted date and dollar for human confirmation).
 - HTTPS via whatever you already use; Caddy config in the docs.
 
 **The disclosure:** I fund this with a hosted version (free tier, then a
-flat $29/month). Nothing self-hosted phones home, nothing is gated, and the
+flat $35/month). Nothing self-hosted phones home, nothing is gated, and the
 moving-away path (full export) is documented. We also don't run an
 affiliate program — common in this niche, and in my opinion the reason its
 software reviews are worthless.

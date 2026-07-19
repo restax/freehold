@@ -3,8 +3,9 @@ import Link from "next/link";
 import { StatusBadge } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
 import { createTransaction } from "@/lib/actions/transactions";
-import { fmtDate, fmtMoney, SIDE_LABEL, STATUS_LABEL } from "@/lib/format";
+import { fmtDate, fmtMoney, STATUS_LABEL } from "@/lib/format";
 import { transactionLimit } from "@/lib/plans";
+import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
 import { requireTenant } from "@/lib/tenant";
 import { btn, btnGhost, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
 
@@ -19,6 +20,7 @@ export default async function TransactionsPage({
   searchParams: Promise<{ status?: string }>;
 }) {
   const { tenantId } = await requireTenant();
+  const labels = await tenantSideLabels(tenantId);
   const limit = await transactionLimit(tenantId);
   const { status } = await searchParams;
   const statusFilter = STATUSES.includes(status as TransactionStatus)
@@ -139,7 +141,7 @@ export default async function TransactionsPage({
             <select name="side" className={input} defaultValue="BUY_SIDE">
               {SIDES.map((s) => (
                 <option key={s} value={s}>
-                  {SIDE_LABEL[s]}
+                  {sideLabel(s, labels)}
                 </option>
               ))}
             </select>
@@ -262,7 +264,7 @@ export default async function TransactionsPage({
                       {t.propertyAddress}
                     </Link>
                   </td>
-                  <td className={td}>{SIDE_LABEL[t.side]}</td>
+                  <td className={td}>{sideLabel(t.side, labels)}</td>
                   <td className={td}>{t.parties.map((p) => p.contact.name).join(", ") || "—"}</td>
                   <td className={td}>
                     <StatusBadge status={t.status} />

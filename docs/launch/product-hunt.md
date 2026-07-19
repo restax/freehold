@@ -44,7 +44,7 @@ signed webhooks, Stripe invoicing.**
 
 💸 **The honest part:** self-hosting is free forever with every feature —
 an unused office PC works. Freehold Cloud is $0 for 2 users and 10
-transactions a month; Pro is a flat $29/month (2 users, 50 transactions)
+active transactions; Pro is a flat $35/month (2 users, 100 active transactions — client portal logins never count as users)
 and Business $80/month (10 users, 200 transactions) — both with room for
 200 active clients. Your data exports in full either way. And we never pay
 referral commissions — if someone recommends Freehold, it's because they

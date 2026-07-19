@@ -8,8 +8,9 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/badges";
-import { fmtDate, fmtMoney, ROLE_LABEL, SIDE_LABEL } from "@/lib/format";
+import { fmtDate, fmtMoney, ROLE_LABEL } from "@/lib/format";
 import { resolveAgentPortalTxn } from "@/lib/portal";
+import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ export default async function AgentPortalTxnPage({
 }) {
   const { token, txnId } = await params;
   const portal = await resolveAgentPortalTxn(token, txnId);
+  const labels = await tenantSideLabels(portal?.link.tenantId ?? "");
   if (!portal) notFound();
   const { link, txn, tenantName } = portal;
   const today = fmtDate(new Date());
@@ -59,7 +61,7 @@ export default async function AgentPortalTxnPage({
             </div>
             <div>
               <dt className="mb-1 text-xs uppercase tracking-wide text-stone-400">Side</dt>
-              <dd className="font-medium">{SIDE_LABEL[txn.side]}</dd>
+              <dd className="font-medium">{sideLabel(txn.side, labels)}</dd>
             </div>
             <div>
               <dt className="mb-1 text-xs uppercase tracking-wide text-stone-400">Closing date</dt>

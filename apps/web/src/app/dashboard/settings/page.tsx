@@ -10,8 +10,10 @@ import {
 } from "@/lib/actions/api-keys";
 import { setContactVisibilityRestriction } from "@/lib/actions/contacts";
 import { removeSampleData } from "@/lib/actions/sample-data";
+import { saveSideLabels } from "@/lib/actions/website";
 import { fmtDate } from "@/lib/format";
 import { listTenants } from "@/lib/session";
+import { tenantSideLabels } from "@/lib/side-labels";
 import { getMemberRole, requireTenant } from "@/lib/tenant";
 import { btn, btnGhost, card, input, label, td, th, trHover } from "@/lib/ui";
 import { WEBHOOK_EVENTS } from "@/lib/webhook-emit";
@@ -235,6 +237,8 @@ export default async function SettingsPage() {
     return transactions + contacts;
   });
 
+  const sideLabels = await tenantSideLabels(tenantId);
+
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Settings</h1>
@@ -247,6 +251,27 @@ export default async function SettingsPage() {
         <p className="text-sm">
           <span className="text-stone-500">Signed in as:</span> {session.user.email}
         </p>
+      </section>
+
+      <section className={card}>
+        <h2 className="mb-1 font-medium">Side wording</h2>
+        <p className="mb-3 text-sm text-stone-500">
+          Different markets say it differently — sell side, sale side, list side. Whatever you type
+          here is used everywhere sides appear: transactions, portals, and intake forms.
+        </p>
+        <form action={saveSideLabels} className="flex flex-wrap items-end gap-3">
+          <label className={label}>
+            Buy side is called
+            <input name="buyLabel" defaultValue={sideLabels.buy} className={input} />
+          </label>
+          <label className={label}>
+            Sell side is called
+            <input name="sellLabel" defaultValue={sideLabels.sell} className={input} />
+          </label>
+          <button type="submit" className={btnGhost}>
+            Save wording
+          </button>
+        </form>
       </section>
 
       <section className={card}>

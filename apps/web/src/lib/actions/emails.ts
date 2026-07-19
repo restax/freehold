@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
+import { emailContextForTransaction } from "@/lib/auto-emails";
 import { emailEnabled, sendTenantEmail } from "@/lib/email";
+import { renderEmailHtml } from "@/lib/email-template";
 import { optStr, str } from "@/lib/forms";
 import { requireTenant } from "@/lib/tenant";
 
@@ -17,7 +19,26 @@ export async function sendTransactionEmail(formData: FormData) {
   const contactId = optStr(formData, "contactId");
   if (!transactionId || !to.includes("@") || !subject || !body) return;
 
-  await sendTenantEmail({ tenantId, transactionId, contactId, to, subject, body });
+  const ctx = await emailContextForTransaction(tenantId, transactionId, session.user);
+  await sendTenantEmail({
+    tenantId,
+    transactionId,
+    contactId,
+    to,
+    subject,
+    body,
+    ...(ctx
+      ? {
+          html: renderEmailHtml({
+            tenantName: ctx.org.name,
+            body,
+            tc: ctx.tcCard,
+            agent: ctx.agentCard,
+            otherSide: ctx.otherCard,
+          }),
+        }
+      : {}),
+  });
   logAudit({
     tenantId,
     actorId: session.user.id,

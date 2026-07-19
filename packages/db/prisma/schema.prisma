@@ -110,6 +110,10 @@ model Organization {
   fubConfig               Json?                @map("fub_config")
   /// Per-tenant Twenty CRM connection: {url, enc:{...}, importedAt?, importedCount?}.
   twentyConfig            Json?                @map("twenty_config")
+  /// Tenant wording for transaction sides: {buy, sell} — e.g. sell side vs list side.
+  sideLabels              Json?                @map("side_labels")
+  /// Tenant overrides for automated email templates: {intro:{subject,body}, postClose:{subject,body}}.
+  emailTemplates          Json?                @map("email_templates")
   /// Tenant mini-site at <slug>.<root>: {published, tagline, about, phone, email, services, showRegistration}.
   siteConfig              Json?                @map("site_config")
   /// Per-tenant Documenso connection: {url, enc:{ciphertext,iv,tag,wrappedKey,wrapIv,wrapTag,keyVersion}}.
@@ -139,6 +143,7 @@ model Organization {
   contactNotes            ContactNote[]
   clientNotes             ClientNote[]
   clientAgents            ClientAgent[]
+  intakeSubmissions       IntakeSubmission[]
   emails                  Email[]
   apiKeys                 ApiKey[]
   invoices                Invoice[]
@@ -200,6 +205,8 @@ model Client {
   notes         String?
   /// Per-client e-signature provider; null = tenant default (FREEHOLD_ESIGN_DEFAULT env, else MANUAL).
   esignProvider EsignProvider?    @map("esign_provider")
+  /// Per-client automated-email switches: {intro?: boolean, postClose?: boolean}; missing = on.
+  emailPrefs    Json?             @map("email_prefs")
   isSample      Boolean           @default(false)
   transactions  Transaction[]
   credentials   VaultCredential[]
@@ -265,6 +272,26 @@ enum TaskPriority {
 /// `name` stays the denormalized display name ("Jordan & Casey Bell") used by
 /// pickers and party lists; structured person fields live alongside it, and
 /// the secondary person + overflow phones/emails live in JSON.
+/// A buyer or seller intake form submitted through a client portal.
+/// Uploaded files become Document rows on the transaction; `data` holds the
+/// answered fields keyed by field id.
+model IntakeSubmission {
+  id            String       @id @default(uuid())
+  tenantId      String       @map("tenant_id")
+  tenant        Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactionId String       @map("transaction_id")
+  transaction   Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  portalLinkId  String?      @map("portal_link_id")
+  /// BUY_SIDE | SELL_SIDE
+  side          String
+  data          Json
+  documentIds   String[]     @default([]) @map("document_ids")
+  createdAt     DateTime     @default(now())
+
+  @@index([tenantId, transactionId])
+  @@map("intake_submission")
+}
+
 /// Which agents (contacts) work under a managed client (team/brokerage).
 /// Portal access is granted per agent from the client page; agents without
 /// a portal simply have no portal_link row.
@@ -429,47 +456,48 @@ model ContactNote {
 /// The central object: one closing. Belongs to a tenant, optionally to the
 /// client (agent/brokerage) the tenant serves it for.
 model Transaction {
-  id              String               @id @default(uuid())
-  tenantId        String               @map("tenant_id")
-  tenant          Organization         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  clientId        String?
-  client          Client?              @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  status          TransactionStatus    @default(UNDER_CONTRACT)
-  side            TransactionSide      @default(BUY_SIDE)
-  propertyAddress String               @map("property_address")
-  city            String?
-  state           String?
-  zip             String?
-  purchasePrice   Int?                 @map("purchase_price")
-  listPrice       Int?                 @map("list_price")
-  listDate        DateTime?            @map("list_date") @db.Date
-  onMarketDate    DateTime?            @map("on_market_date") @db.Date
-  expireDate      DateTime?            @map("expire_date") @db.Date
-  mlsId           String?              @map("mls_id")
+  id                String               @id @default(uuid())
+  tenantId          String               @map("tenant_id")
+  tenant            Organization         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId          String?
+  client            Client?              @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  status            TransactionStatus    @default(UNDER_CONTRACT)
+  side              TransactionSide      @default(BUY_SIDE)
+  propertyAddress   String               @map("property_address")
+  city              String?
+  state             String?
+  zip               String?
+  purchasePrice     Int?                 @map("purchase_price")
+  listPrice         Int?                 @map("list_price")
+  listDate          DateTime?            @map("list_date") @db.Date
+  onMarketDate      DateTime?            @map("on_market_date") @db.Date
+  expireDate        DateTime?            @map("expire_date") @db.Date
+  mlsId             String?              @map("mls_id")
   /// Assignment roles: co-agent is a Client (managed agent); TCs are workspace users.
-  coAgentClientId String?              @map("co_agent_client_id")
-  tc1UserId       String?              @map("tc1_user_id")
-  tc2UserId       String?              @map("tc2_user_id")
+  coAgentClientId   String?              @map("co_agent_client_id")
+  tc1UserId         String?              @map("tc1_user_id")
+  tc2UserId         String?              @map("tc2_user_id")
   /// Commission breakdown: {listPct, buyPct, note} — gross computes from price.
-  payout          Json?
-  emails          Email[]
+  payout            Json?
+  emails            Email[]
   /// Contract-governed date changes awaiting an executed amendment:
   /// {closeDate?: "YYYY-MM-DD", contractDate?: "YYYY-MM-DD"}
-  proposedDates   Json?                @map("proposed_dates")
-  contractDate    DateTime?            @map("contract_date") @db.Date
-  closeDate       DateTime?            @map("close_date") @db.Date
-  notes           String?
-  customFields    Json?                @map("custom_fields")
-  isSample        Boolean              @default(false)
-  parties         TransactionParty[]
-  tasks           Task[]
-  documents       Document[]
-  extractions     ContractExtraction[]
-  envelopes       SignatureEnvelope[]
-  portalLinks     PortalLink[]
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-  invoices        Invoice[]
+  proposedDates     Json?                @map("proposed_dates")
+  contractDate      DateTime?            @map("contract_date") @db.Date
+  closeDate         DateTime?            @map("close_date") @db.Date
+  notes             String?
+  customFields      Json?                @map("custom_fields")
+  isSample          Boolean              @default(false)
+  parties           TransactionParty[]
+  tasks             Task[]
+  documents         Document[]
+  extractions       ContractExtraction[]
+  envelopes         SignatureEnvelope[]
+  portalLinks       PortalLink[]
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  invoices          Invoice[]
+  intakeSubmissions IntakeSubmission[]
 
   @@index([tenantId, status])
   @@map("transaction")
@@ -509,6 +537,7 @@ model PortalLink {
   showTasks      Boolean        @default(true) @map("show_tasks")
   showDocuments  Boolean        @default(false) @map("show_documents")
   showParties    Boolean        @default(true) @map("show_parties")
+  showIntake     Boolean        @default(true) @map("show_intake")
   revokedAt      DateTime?      @map("revoked_at")
   lastAccessedAt DateTime?      @map("last_accessed_at")
   createdAt      DateTime       @default(now())

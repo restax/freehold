@@ -12,8 +12,11 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/badges";
-import { fmtDate, fmtMoney, ROLE_LABEL, SIDE_LABEL, STATUS_LABEL } from "@/lib/format";
+import { submitIntake } from "@/lib/actions/intake";
+import { fmtDate, fmtMoney, ROLE_LABEL, STATUS_LABEL } from "@/lib/format";
+import { INTAKE_UPLOAD_HINT, intakeFields } from "@/lib/intake";
 import { resolveAgentPortal, resolvePortal } from "@/lib/portal";
+import { type SideLabels, sideLabel, tenantSideLabels } from "@/lib/side-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -52,9 +55,87 @@ function PortalHeader({
   );
 }
 
+const intakeInputCls =
+  "w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm focus:border-brand-600 focus:outline-none";
+
+function IntakeForm({
+  token,
+  kind,
+  heading,
+}: {
+  token: string;
+  kind: "buy" | "sell";
+  heading: string;
+}) {
+  return (
+    <details className="rounded-lg border border-stone-200/70">
+      <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-brand-800 hover:bg-stone-50">
+        {heading}
+      </summary>
+      <form action={submitIntake} className="flex flex-col gap-3 border-t border-stone-100 p-4">
+        <input type="hidden" name="token" value={token} />
+        <input type="hidden" name="kind" value={kind} />
+        <div className="grid gap-3 sm:grid-cols-2">
+          {intakeFields(kind).map((f) =>
+            f.type === "textarea" ? (
+              <label
+                key={f.id}
+                className="flex flex-col gap-1 text-sm font-medium text-stone-700 sm:col-span-2"
+              >
+                {f.label}
+                {f.required ? " *" : ""}
+                <textarea
+                  name={`f_${f.id}`}
+                  rows={3}
+                  placeholder={f.placeholder}
+                  className={intakeInputCls}
+                />
+              </label>
+            ) : (
+              <label key={f.id} className="flex flex-col gap-1 text-sm font-medium text-stone-700">
+                {f.label}
+                {f.required ? " *" : ""}
+                <input
+                  name={`f_${f.id}`}
+                  type={f.type ?? "text"}
+                  required={f.required}
+                  placeholder={f.placeholder}
+                  className={intakeInputCls}
+                />
+              </label>
+            ),
+          )}
+        </div>
+        <label className="flex flex-col gap-1 text-sm font-medium text-stone-700">
+          Documents
+          <input
+            type="file"
+            name="files"
+            multiple
+            className="text-sm text-stone-600 file:mr-3 file:rounded-lg file:border-0 file:bg-stone-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-stone-700 hover:file:bg-stone-200"
+          />
+          <span className="text-xs font-normal text-stone-400">
+            {INTAKE_UPLOAD_HINT[kind]} Up to 5 files, 10&nbsp;MB each.
+          </span>
+        </label>
+        <button
+          type="submit"
+          className="self-start rounded-lg bg-brand-700 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+        >
+          Submit
+        </button>
+      </form>
+    </details>
+  );
+}
+
 /* ---------------- Buyer & Seller portal ---------------- */
 
-function ClientPortal(portal: NonNullable<Awaited<ReturnType<typeof resolvePortal>>>) {
+function ClientPortal(
+  portal: NonNullable<Awaited<ReturnType<typeof resolvePortal>>>,
+  labels: SideLabels,
+  intakeDone: boolean,
+) {
   const { link, txn, tenantName } = portal;
   const today = fmtDate(new Date());
 
@@ -111,7 +192,7 @@ function ClientPortal(portal: NonNullable<Awaited<ReturnType<typeof resolvePorta
             </div>
             <div>
               <dt className="mb-1 text-xs uppercase tracking-wide text-stone-400">Side</dt>
-              <dd className="font-medium">{SIDE_LABEL[txn.side]}</dd>
+              <dd className="font-medium">{sideLabel(txn.side, labels)}</dd>
             </div>
             <div>
               <dt className="mb-1 text-xs uppercase tracking-wide text-stone-400">Closing date</dt>
@@ -237,6 +318,35 @@ function ClientPortal(portal: NonNullable<Awaited<ReturnType<typeof resolvePorta
                 </li>
               ))}
             </ul>
+          </section>
+        )}
+
+        {link.showIntake && (
+          <section className={cardCls}>
+            <h2 className="mb-1 font-medium">Intake forms</h2>
+            <p className="mb-3 text-sm text-stone-500">
+              A few details {tenantName} needs to keep your closing moving — takes about five
+              minutes, and you can attach documents as you go.
+            </p>
+            {intakeDone ? (
+              <p className="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-900">
+                Thank you — your intake form is in. {tenantName} has been notified and will follow
+                up if anything else is needed.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {(txn.side === "BUY_SIDE" || txn.side === "DUAL") && (
+                  <IntakeForm token={link.token} kind="buy" heading={`${labels.buy} intake form`} />
+                )}
+                {(txn.side === "SELL_SIDE" || txn.side === "DUAL") && (
+                  <IntakeForm
+                    token={link.token}
+                    kind="sell"
+                    heading={`${labels.sell} intake form`}
+                  />
+                )}
+              </div>
+            )}
           </section>
         )}
 
@@ -495,13 +605,16 @@ export default async function PortalPage({
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; intake?: string }>;
 }) {
   const { token } = await params;
-  const { q } = await searchParams;
+  const { q, intake } = await searchParams;
 
   const clientPortal = await resolvePortal(token);
-  if (clientPortal) return ClientPortal(clientPortal);
+  if (clientPortal) {
+    const labels = await tenantSideLabels(clientPortal.link.tenantId);
+    return ClientPortal(clientPortal, labels, intake === "done");
+  }
 
   const agentPortal = await resolveAgentPortal(token);
   if (agentPortal) return AgentPortal(agentPortal, q ?? "");
