@@ -1,6 +1,7 @@
 import { ClientType, EsignProvider, withTenant } from "@freehold/db";
+import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
-import { createClient, deleteClient, updateClientEsign } from "@/lib/actions/clients";
+import { createClient, updateClientEsign } from "@/lib/actions/clients";
 import { requireTenant } from "@/lib/tenant";
 import { btn, btnGhost, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
 
@@ -104,7 +105,14 @@ export default async function ClientsPage() {
             <tbody>
               {clients.map((c) => (
                 <tr key={c.id} className={trHover}>
-                  <td className={`${td} font-medium`}>{c.name}</td>
+                  <td className={`${td} font-medium`}>
+                    <Link
+                      href={`/dashboard/clients/${c.id}`}
+                      className="text-brand-700 hover:text-brand-600 hover:underline"
+                    >
+                      {c.name}
+                    </Link>
+                  </td>
                   <td className={td}>{TYPE_LABEL[c.type]}</td>
                   <td className={td}>{c.email ?? "—"}</td>
                   <td className={td}>{c.phone ?? "—"}</td>
@@ -130,12 +138,12 @@ export default async function ClientsPage() {
                   </td>
                   <td className={td}>{c._count.transactions}</td>
                   <td className={td}>
-                    <form action={deleteClient}>
-                      <input type="hidden" name="id" value={c.id} />
-                      <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
-                        delete
-                      </button>
-                    </form>
+                    <Link
+                      href={`/dashboard/clients/${c.id}`}
+                      className="text-xs text-brand-700 hover:underline"
+                    >
+                      Open →
+                    </Link>
                   </td>
                 </tr>
               ))}

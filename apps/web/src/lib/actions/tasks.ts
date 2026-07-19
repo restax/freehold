@@ -3,7 +3,7 @@
 import { TaskStatus, withTenant } from "@freehold/db";
 import { instantiatePlan, type PlanTaskTemplate } from "@freehold/workflows";
 import { revalidatePath } from "next/cache";
-import { dateOnly, str } from "@/lib/forms";
+import { confirmed, dateOnly, str } from "@/lib/forms";
 import { requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
 
@@ -60,7 +60,7 @@ export async function toggleTask(formData: FormData) {
 export async function deleteTask(formData: FormData) {
   const { tenantId } = await requireTenant();
   const id = str(formData, "id");
-  if (!id) return;
+  if (!id || !confirmed(formData)) return;
   const transactionId = str(formData, "transactionId") || null;
   await withTenant(tenantId, (tx) => tx.task.delete({ where: { id } }));
   revalidateTaskViews(transactionId);

@@ -1,6 +1,7 @@
 import { withTenant } from "@freehold/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { DangerDelete } from "@/components/danger-delete";
 import { deleteTemplate, updateTemplate } from "@/lib/actions/templates";
 import { MERGE_FIELD_REFERENCE } from "@/lib/templates";
 import { requireTenant } from "@/lib/tenant";
@@ -23,12 +24,13 @@ export default async function TemplateEditPage({ params }: { params: Promise<{ i
           </Link>
           <h1 className="text-xl font-semibold">{template.name}</h1>
         </div>
-        <form action={deleteTemplate}>
-          <input type="hidden" name="id" value={template.id} />
-          <button type="submit" className={btnDanger}>
-            Delete template
-          </button>
-        </form>
+        <DangerDelete
+          compact
+          action={deleteTemplate}
+          label="Delete template"
+          description="Removes this document template."
+          hidden={{ id: template.id }}
+        />
       </div>
 
       <section className={card}>

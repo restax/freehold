@@ -3,7 +3,7 @@
 import { withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { optStr, str } from "@/lib/forms";
+import { confirmed, optStr, str } from "@/lib/forms";
 import { listTenants } from "@/lib/session";
 import { putObject } from "@/lib/storage";
 import { buildMergeContext, renderTemplatePdf, resolveTemplate } from "@/lib/templates";
@@ -48,7 +48,7 @@ export async function updateTemplate(formData: FormData) {
 export async function deleteTemplate(formData: FormData) {
   const { tenantId, isAdmin } = await requireAdminTenant();
   const id = str(formData, "id");
-  if (!id || !isAdmin) return;
+  if (!id || !isAdmin || !confirmed(formData)) return;
   await withTenant(tenantId, (tx) => tx.docTemplate.delete({ where: { id } }));
   revalidatePath("/dashboard/templates");
   redirect("/dashboard/templates");

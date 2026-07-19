@@ -3,7 +3,7 @@
 import { EnvelopeStatus, EsignProvider, withTenant } from "@freehold/db";
 import { getEsignAdapter } from "@freehold/integrations";
 import { revalidatePath } from "next/cache";
-import { str } from "@/lib/forms";
+import { confirmed, str } from "@/lib/forms";
 import { getObjectBytes } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
 
@@ -143,7 +143,7 @@ export async function deleteEnvelope(formData: FormData) {
   const { tenantId } = await requireTenant();
   const id = str(formData, "id");
   const transactionId = str(formData, "transactionId");
-  if (!id) return;
+  if (!id || !confirmed(formData)) return;
   await withTenant(tenantId, (tx) => tx.signatureEnvelope.delete({ where: { id } }));
   revalidatePath(`/dashboard/transactions/${transactionId}`);
 }

@@ -2,7 +2,7 @@
 
 import { withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
-import { str } from "@/lib/forms";
+import { confirmed, str } from "@/lib/forms";
 import { deleteObject, putObject } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
 
@@ -40,7 +40,7 @@ export async function deleteDocument(formData: FormData) {
   const { tenantId } = await requireTenant();
   const id = str(formData, "id");
   const transactionId = str(formData, "transactionId");
-  if (!id) return;
+  if (!id || !confirmed(formData)) return;
   const doc = await withTenant(tenantId, (tx) =>
     tx.document.delete({ where: { id }, select: { storageKey: true, data: true } }),
   );

@@ -123,6 +123,7 @@ model Organization {
   portalLinks          PortalLink[]
   vaultCredentials     VaultCredential[]
   vaultAccessLogs      VaultAccessLog[]
+  auditLogs            AuditLog[]
   apiKeys              ApiKey[]
   invoices             Invoice[]
   webhookEndpoints     WebhookEndpoint[]
@@ -418,6 +419,22 @@ model VaultCredential {
 
   @@index([tenantId])
   @@map("vault_credential")
+}
+
+model AuditLog {
+  id          String       @id @default(uuid())
+  tenantId    String       @map("tenant_id")
+  tenant      Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actorId     String?      @map("actor_id")
+  actorEmail  String?      @map("actor_email")
+  action      String
+  subjectType String?      @map("subject_type")
+  subjectId   String?      @map("subject_id")
+  summary     String
+  createdAt   DateTime     @default(now())
+
+  @@index([tenantId, createdAt])
+  @@map("audit_log")
 }
 
 model VaultAccessLog {

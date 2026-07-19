@@ -2,7 +2,8 @@
 
 import { withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
-import { dateOnly, intOr, optStr, str } from "@/lib/forms";
+import { logAudit } from "@/lib/audit";
+import { confirmed, dateOnly, intOr, optStr, str } from "@/lib/forms";
 import { requireTenant } from "@/lib/tenant";
 
 export async function createContact(formData: FormData) {
@@ -28,9 +29,20 @@ export async function createContact(formData: FormData) {
 }
 
 export async function deleteContact(formData: FormData) {
-  const { tenantId } = await requireTenant();
+  const { tenantId, session } = await requireTenant();
   const id = str(formData, "id");
-  if (!id) return;
-  await withTenant(tenantId, (tx) => tx.contact.delete({ where: { id } }));
+  if (!id || !confirmed(formData)) return;
+  const gone = await withTenant(tenantId, (tx) =>
+    tx.contact.delete({ where: { id }, select: { name: true } }),
+  );
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "contact.deleted",
+    summary: `Deleted contact "${gone.name}"`,
+    subjectType: "contact",
+    subjectId: id,
+  });
   revalidatePath("/dashboard/contacts");
 }

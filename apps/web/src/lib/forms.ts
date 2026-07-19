@@ -33,3 +33,15 @@ export function oneOf<T extends string>(
   const v = str(fd, key) as T;
   return values.includes(v) ? v : fallback;
 }
+
+/**
+ * Server-side half of the DangerDelete contract: destructive actions no-op
+ * unless the user typed DELETE. UI hiding is never the enforcement.
+ */
+export function confirmed(formData: FormData): boolean {
+  return (
+    String(formData.get("confirm") ?? "")
+      .trim()
+      .toUpperCase() === "DELETE"
+  );
+}

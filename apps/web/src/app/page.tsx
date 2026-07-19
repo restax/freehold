@@ -14,7 +14,12 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ExtractionReviewCard, MarketingFooter, MarketingNav } from "@/components/marketing";
+import {
+  CloudWordmark,
+  ExtractionReviewCard,
+  MarketingFooter,
+  MarketingNav,
+} from "@/components/marketing";
 import { getSession } from "@/lib/session";
 import brokerageDusk from "../../public/marketing/brokerage-dusk.jpg";
 import closingKeys from "../../public/marketing/closing-keys.jpg";
@@ -402,8 +407,11 @@ export default async function LandingPage() {
       <section className="border-t border-brand-600/15 bg-brand-50/50">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
           <div className="max-w-2xl">
+            <div className="mb-4">
+              <CloudWordmark size="md" />
+            </div>
             <h2 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
-              Freehold Cloud handles the parts you never wanted to think about
+              The parts you never wanted to think about, handled
             </h2>
             <p className="mt-3 max-w-xl leading-relaxed text-stone-600">
               Sign up, upload your first contract, and you're working. Everything below is our job,

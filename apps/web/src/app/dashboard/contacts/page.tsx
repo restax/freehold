@@ -1,4 +1,5 @@
 import { withTenant } from "@freehold/db";
+import { DangerDelete } from "@/components/danger-delete";
 import { EmptyState } from "@/components/empty-state";
 import { createContact, deleteContact } from "@/lib/actions/contacts";
 import { fmtDate } from "@/lib/format";
@@ -104,12 +105,13 @@ export default async function ContactsPage() {
                   <td className={td}>{c.rating ? "★".repeat(c.rating) : "—"}</td>
                   <td className={td}>{fmtDate(c.touchDate)}</td>
                   <td className={td}>
-                    <form action={deleteContact}>
-                      <input type="hidden" name="id" value={c.id} />
-                      <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
-                        delete
-                      </button>
-                    </form>
+                    <DangerDelete
+                      compact
+                      action={deleteContact}
+                      label="Delete"
+                      description="Removes this contact from your CRM."
+                      hidden={{ id: c.id }}
+                    />
                   </td>
                 </tr>
               ))}

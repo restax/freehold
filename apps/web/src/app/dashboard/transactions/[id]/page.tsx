@@ -2,6 +2,7 @@ import { PartyRole, TransactionSide, TransactionStatus, withTenant } from "@free
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, EnvelopeBadge, ExtractionBadge } from "@/components/badges";
+import { DangerDelete } from "@/components/danger-delete";
 import { deleteDocument, uploadDocument } from "@/lib/actions/documents";
 import {
   deleteEnvelope,
@@ -11,7 +12,7 @@ import {
 } from "@/lib/actions/esign";
 import { runExtraction } from "@/lib/actions/extractions";
 import { addParty, removeParty } from "@/lib/actions/parties";
-import { createPortalLink, deletePortalLink, revokePortalLink } from "@/lib/actions/portal";
+import { createPortalLink, deletePortalLink, setPortalLinkActive } from "@/lib/actions/portal";
 import { applyActionPlan, createTask, deleteTask, toggleTask } from "@/lib/actions/tasks";
 import { generateDocument } from "@/lib/actions/templates";
 import {
@@ -96,12 +97,6 @@ export default async function TransactionDetailPage({
             {SIDE_LABEL[txn.side]} · {fmtMoney(txn.purchasePrice)}
           </p>
         </div>
-        <form action={deleteTransaction}>
-          <input type="hidden" name="id" value={txn.id} />
-          <button type="submit" className={btnDanger}>
-            Delete transaction
-          </button>
-        </form>
       </div>
 
       <section className={card}>
@@ -348,13 +343,15 @@ export default async function TransactionDetailPage({
                   <span className={`text-sm ${done ? "text-stone-400 line-through" : ""}`}>
                     {t.title}
                   </span>
-                  <form action={deleteTask} className="ml-auto">
-                    <input type="hidden" name="id" value={t.id} />
-                    <input type="hidden" name="transactionId" value={txn.id} />
-                    <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
-                      delete
-                    </button>
-                  </form>
+                  <div className="ml-auto">
+                    <DangerDelete
+                      compact
+                      action={deleteTask}
+                      label="Delete"
+                      description="Removes this task from the checklist."
+                      hidden={{ id: t.id, transactionId: txn.id }}
+                    />
+                  </div>
                 </li>
               );
             })}
@@ -431,13 +428,15 @@ export default async function TransactionDetailPage({
                       )}
                     </form>
                   ))}
-                <form action={deleteDocument} className="ml-auto">
-                  <input type="hidden" name="id" value={doc.id} />
-                  <input type="hidden" name="transactionId" value={txn.id} />
-                  <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
-                    delete
-                  </button>
-                </form>
+                <div className="ml-auto">
+                  <DangerDelete
+                    compact
+                    action={deleteDocument}
+                    label="Delete"
+                    description="Permanently deletes this file."
+                    hidden={{ id: doc.id, transactionId: txn.id }}
+                  />
+                </div>
                 <details className="w-full">
                   <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
                     Send for signature
@@ -540,13 +539,13 @@ export default async function TransactionDetailPage({
                           </button>
                         </form>
                       )}
-                      <form action={deleteEnvelope}>
-                        <input type="hidden" name="id" value={env.id} />
-                        <input type="hidden" name="transactionId" value={txn.id} />
-                        <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
-                          delete
-                        </button>
-                      </form>
+                      <DangerDelete
+                        compact
+                        action={deleteEnvelope}
+                        label="Delete"
+                        description="Removes this signature record (the provider envelope is not cancelled)."
+                        hidden={{ id: env.id, transactionId: txn.id }}
+                      />
                     </span>
                   </li>
                 );
@@ -613,26 +612,24 @@ export default async function TransactionDetailPage({
                           : "never viewed"}
                       </span>
                     )}
-                    <span className="ml-auto flex items-center gap-2">
-                      {!pl.revokedAt && (
-                        <form action={revokePortalLink}>
-                          <input type="hidden" name="id" value={pl.id} />
-                          <input type="hidden" name="transactionId" value={txn.id} />
-                          <button
-                            type="submit"
-                            className="text-xs text-stone-400 hover:text-red-600"
-                          >
-                            revoke
-                          </button>
-                        </form>
-                      )}
-                      <form action={deletePortalLink}>
+                    <span className="ml-auto flex items-center gap-3">
+                      <form action={setPortalLinkActive}>
                         <input type="hidden" name="id" value={pl.id} />
-                        <input type="hidden" name="transactionId" value={txn.id} />
-                        <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
-                          delete
+                        <input type="hidden" name="active" value={pl.revokedAt ? "1" : "0"} />
+                        <button
+                          type="submit"
+                          className="text-xs font-medium text-stone-500 hover:text-brand-700"
+                        >
+                          {pl.revokedAt ? "Activate" : "Deactivate"}
                         </button>
                       </form>
+                      <DangerDelete
+                        compact
+                        action={deletePortalLink}
+                        label="Delete"
+                        description="Permanently removes this portal link."
+                        hidden={{ id: pl.id, transactionId: txn.id }}
+                      />
                     </span>
                   </div>
                   {!pl.revokedAt && (
@@ -680,6 +677,12 @@ export default async function TransactionDetailPage({
           </button>
         </form>
       </section>
+      <DangerDelete
+        action={deleteTransaction}
+        label="Delete this transaction"
+        description={`Removes ${txn.propertyAddress} with its tasks, documents, parties, and portal links. This cannot be undone.`}
+        hidden={{ id: txn.id }}
+      />
     </div>
   );
 }

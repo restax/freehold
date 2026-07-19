@@ -20,6 +20,27 @@ export function Wordmark({ href = "/", size = "md" }: { href?: string; size?: "s
   );
 }
 
+/** Freehold Cloud lockup: the F-mark plus a two-tone wordmark. */
+export function CloudWordmark({ size = "sm" }: { size?: "sm" | "md" }) {
+  const mark =
+    size === "sm"
+      ? "grid h-5 w-5 place-items-center rounded-md bg-brand-700 font-display text-[11px] font-extrabold text-white"
+      : "grid h-7 w-7 place-items-center rounded-lg bg-brand-700 font-display text-sm font-extrabold text-white";
+  const text =
+    size === "sm"
+      ? "font-display text-sm font-bold tracking-tight"
+      : "font-display text-base font-bold tracking-tight";
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={mark}>F</span>
+      <span className={text}>
+        <span className="text-stone-900">Freehold</span>{" "}
+        <span className="text-brand-600">Cloud</span>
+      </span>
+    </span>
+  );
+}
+
 export function MarketingNav() {
   return (
     <header className="border-b border-stone-200/70 bg-white">

@@ -43,9 +43,11 @@ export default async function DashboardPage() {
     async (tx) => ({
       counts: await tx.transaction.groupBy({ by: ["status"], _count: { _all: true } }),
       openTasks: await tx.task.findMany({
-        where: { status: TaskStatus.OPEN, dueDate: { lte: soon } },
-        orderBy: { dueDate: "asc" },
-        take: 30,
+        // Undated tasks are included so a reopened task always lands
+        // somewhere visible — nothing on this page may silently vanish.
+        where: { status: TaskStatus.OPEN, OR: [{ dueDate: { lte: soon } }, { dueDate: null }] },
+        orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
+        take: 40,
         include: { transaction: { select: { id: true, propertyAddress: true } } },
       }),
       closings: await tx.transaction.findMany({
@@ -72,6 +74,7 @@ export default async function DashboardPage() {
 
   const countFor = (s: TransactionStatus) => counts.find((c) => c.status === s)?._count._all ?? 0;
 
+  const noDate = openTasks.filter((t) => !t.dueDate);
   const overdue = openTasks.filter((t) => t.dueDate && dayKey(t.dueDate) < todayKey);
   const dueToday = openTasks.filter((t) => t.dueDate && dayKey(t.dueDate) === todayKey);
   const upcoming = openTasks.filter((t) => t.dueDate && dayKey(t.dueDate) > todayKey);
@@ -92,6 +95,10 @@ export default async function DashboardPage() {
     }
   }
   const todayClosings = closings.filter((c) => c.closeDate && dayKey(c.closeDate) === todayKey);
+  const doneToday = doneThisWeek.filter((t) => t.completedAt && dayKey(t.completedAt) === todayKey);
+  const doneEarlier = doneThisWeek.filter(
+    (t) => !(t.completedAt && dayKey(t.completedAt) === todayKey),
+  );
 
   const heading = now.toLocaleDateString("en-US", {
     weekday: "long",
@@ -179,9 +186,93 @@ export default async function DashboardPage() {
           </ul>
         ) : (
           overdue.length === 0 &&
-          todayClosings.length === 0 && (
+          todayClosings.length === 0 &&
+          doneToday.length === 0 &&
+          noDate.length === 0 && (
             <p className="text-sm text-stone-500">Nothing due today. Enjoy the quiet.</p>
           )
+        )}
+
+        {noDate.length > 0 && (
+          <div
+            className={
+              dueToday.length > 0 || overdue.length > 0 ? "mt-3 border-t border-stone-100 pt-2" : ""
+            }
+          >
+            <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-stone-400">
+              Anytime — no due date
+            </h3>
+            <ul className="flex flex-col">
+              {noDate.map((t) => (
+                <li
+                  key={t.id}
+                  className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0"
+                >
+                  <form action={toggleTask}>
+                    <input type="hidden" name="id" value={t.id} />
+                    <input type="hidden" name="transactionId" value={t.transactionId ?? ""} />
+                    <button
+                      type="submit"
+                      title="Mark done"
+                      className="h-5 w-5 rounded border border-stone-300 transition-colors hover:border-brand-600"
+                    />
+                  </form>
+                  <span className="text-sm">{t.title}</span>
+                  {t.transaction && (
+                    <Link
+                      href={`/dashboard/transactions/${t.transaction.id}`}
+                      className="ml-auto truncate text-sm text-brand-600 hover:underline"
+                    >
+                      {t.transaction.propertyAddress}
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {doneToday.length > 0 && (
+          <div
+            className={
+              dueToday.length > 0 || overdue.length > 0 || noDate.length > 0
+                ? "mt-3 border-t border-stone-100 pt-2"
+                : ""
+            }
+          >
+            <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-stone-400">
+              Done today — click a check to undo
+            </h3>
+            <ul className="flex flex-col">
+              {doneToday.map((t) => (
+                <li
+                  key={t.id}
+                  className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0"
+                >
+                  <form action={toggleTask}>
+                    <input type="hidden" name="id" value={t.id} />
+                    <input type="hidden" name="transactionId" value={t.transactionId ?? ""} />
+                    <button
+                      type="submit"
+                      title="Undo — reopen this task"
+                      className="flex h-5 w-5 items-center justify-center rounded border border-brand-600 bg-brand-600 text-xs text-white transition hover:bg-brand-700"
+                    >
+                      ✓
+                    </button>
+                  </form>
+                  <span className="text-sm text-stone-400 line-through">{t.title}</span>
+                  {t.transaction && (
+                    <Link
+                      href={`/dashboard/transactions/${t.transaction.id}`}
+                      className="ml-auto truncate text-sm text-stone-400 hover:text-brand-600 hover:underline"
+                    >
+                      {t.transaction.propertyAddress}
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </section>
 
@@ -252,17 +343,16 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      {/* Done this week */}
-      {doneThisWeek.length > 0 && (
+      {/* Done earlier this week */}
+      {doneEarlier.length > 0 && (
         <section className={card}>
           <h2 className="mb-1 flex items-center gap-2 font-medium">
             <CheckCircle size={18} weight="fill" className="text-brand-600" aria-hidden />
-            Done this week
+            Done earlier this week
           </h2>
           <p className="mb-2 text-xs text-stone-400">Click a check to undo.</p>
           <ul className="flex flex-col">
-            {doneThisWeek.map((t) => {
-              const doneToday = t.completedAt && dayKey(t.completedAt) === todayKey;
+            {doneEarlier.map((t) => {
               return (
                 <li
                   key={t.id}
@@ -280,7 +370,7 @@ export default async function DashboardPage() {
                     </button>
                   </form>
                   <span className="whitespace-nowrap text-sm tabular-nums text-stone-400">
-                    {doneToday ? "today" : fmtDate(t.completedAt)}
+                    {fmtDate(t.completedAt)}
                   </span>
                   <span className="text-sm text-stone-400 line-through">{t.title}</span>
                   {t.transaction && (

@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { CloudWordmark } from "@/components/marketing";
+
 /**
  * Hub news panel (server component). When FREEHOLD_HUB_URL is set, pulls the
  * central feed (release notes, Cloud announcements) — cached an hour and
@@ -13,16 +16,24 @@ interface NewsItem {
 
 const FALLBACK: NewsItem[] = [
   {
+    title: "Your day, redesigned",
+    body: "The dashboard now leads with today: closings, overdue items, and a 7-day agenda. Completed tasks stay visible and undoable.",
+    date: "2026-07-19",
+  },
+  {
+    title: "Branded client portal subdomains",
+    body: "Every workspace now has its own address — yourname.freeholdtc.dev — and portal links carry your brand.",
+    date: "2026-07-19",
+  },
+  {
     title: "AI contract extraction is live",
     body: "Upload a purchase contract on any transaction — every date and figure comes back page-cited for your review.",
+    date: "2026-07-18",
   },
   {
     title: "Client portals & credential vault",
     body: "Share read-only closing trackers with buyers and sellers, and keep client logins encrypted with audited reveals.",
-  },
-  {
-    title: "E-signatures via Documenso",
-    body: "Send generated documents for signature without leaving Freehold; DocuSign support lands with provider credentials.",
+    date: "2026-07-18",
   },
 ];
 
@@ -41,22 +52,61 @@ async function fetchHubFeed(): Promise<NewsItem[] | null> {
   }
 }
 
+function fmtNewsDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
 export async function HubNews() {
   const items = (await fetchHubFeed()) ?? FALLBACK;
   return (
-    <section className="rounded-xl border border-stone-200/70 bg-white p-5 shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_8px_rgb(41_37_36/0.04)]">
-      <h2 className="mb-3 font-medium">What's new in Freehold</h2>
-      <ul className="flex flex-col divide-y divide-stone-100">
-        {items.map((item) => (
-          <li key={item.title} className="py-2 text-sm first:pt-0 last:pb-0">
-            <span className="font-medium">{item.title}</span>
-            {item.date && (
-              <span className="ml-2 text-xs tabular-nums text-stone-400">{item.date}</span>
-            )}
-            <p className="max-w-prose leading-relaxed text-stone-500">{item.body}</p>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <div>
+      <section className="rounded-xl border border-stone-200/70 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_8px_rgb(41_37_36/0.04)]">
+        <div className="flex items-center justify-between border-b border-stone-100 px-5 py-3.5">
+          <h2 className="font-medium">What's new</h2>
+          <span className="flex items-center gap-1.5 text-xs text-stone-400">
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+            Updates automatically
+          </span>
+        </div>
+        <ul className="flex flex-col divide-y divide-stone-100 px-5 py-1">
+          {items.map((item, i) => (
+            <li key={item.title} className="py-3 text-sm">
+              <div className="flex items-baseline gap-2">
+                {item.date && (
+                  <span className="w-12 shrink-0 text-xs font-medium tabular-nums text-stone-400">
+                    {fmtNewsDate(item.date)}
+                  </span>
+                )}
+                <span className="font-medium">{item.title}</span>
+                {i === 0 && (
+                  <span className="rounded-full bg-brand-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
+                    New
+                  </span>
+                )}
+              </div>
+              <p
+                className={`max-w-prose leading-relaxed text-stone-500 ${item.date ? "pl-14" : ""}`}
+              >
+                {item.body}
+              </p>
+            </li>
+          ))}
+        </ul>
+        <div className="flex items-center justify-between border-t border-stone-100 px-5 py-3">
+          <span className="text-xs text-stone-400">Powered by</span>
+          <CloudWordmark size="sm" />
+        </div>
+      </section>
+      <p className="mt-2 text-center text-xs text-stone-400">
+        Love Freehold?{" "}
+        <Link
+          href="/recommend"
+          className="font-medium text-stone-500 underline decoration-stone-300 underline-offset-2 hover:text-brand-700"
+        >
+          Recommend us
+        </Link>
+      </p>
+    </div>
   );
 }

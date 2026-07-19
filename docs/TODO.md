@@ -33,6 +33,9 @@ The single list of everything open across stages. Items move to ~~struck~~ with 
 - [ ] Extraction prompt: request 2-letter state codes
 - [ ] Duplicate party roles (two sellers) collide on one custom-field key — needs suffixing
 - [ ] Member-role button hiding in UI (server-side gating exists; buttons still render)
+- [x] Client detail pages *(2026-07-19)* — clients are clickable: transactions list + portal access panel (activate/deactivate any sign-in; same link resumes on reactivate); delete moved off the list page into an admin-only, type-DELETE-to-confirm danger zone
+- [x] Delete safeguards everywhere *(2026-07-19)* — every destructive delete (client, transaction, contact, task, document, envelope, action plan, template, portal link, webhook endpoint) now requires typing DELETE, enforced server-side (`confirmed()` in lib/forms) with the DangerDelete component as the UI
+- [x] Audit trail (foundation) *(2026-07-19)* — audit_log table (RLS'd) + logAudit() helper; deletions and portal access changes recorded with actor; viewer in Settings (admin-only, last 100). Future: instrument creates/updates, invoicing, sign-ins; retention policy
 - [ ] Data export (site promises "exports in full"; needs a real one-click export)
 - [ ] Custom 404 exists; add error.tsx boundary pages
 - [ ] "Add sample data" button in Settings (inverse of Remove — useful after the onboarding seed was skipped/failed, e.g. Paul's own workspace 2026-07-19)

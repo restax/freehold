@@ -1,6 +1,7 @@
 import { DateAnchor, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { DangerDelete } from "@/components/danger-delete";
 import { addTemplateTask, deletePlan, deleteTemplateTask } from "@/lib/actions/action-plans";
 import { requireTenant } from "@/lib/tenant";
 import { btnDanger, btnGhost, card, input, label, td, th } from "@/lib/ui";
@@ -42,12 +43,13 @@ export default async function ActionPlanDetailPage({
           <h1 className="text-xl font-semibold">{plan.name}</h1>
           {plan.description && <p className="text-sm text-stone-500">{plan.description}</p>}
         </div>
-        <form action={deletePlan}>
-          <input type="hidden" name="id" value={plan.id} />
-          <button type="submit" className={btnDanger}>
-            Delete plan
-          </button>
-        </form>
+        <DangerDelete
+          compact
+          action={deletePlan}
+          label="Delete plan"
+          description="Removes this checklist template (tasks already applied to transactions are kept)."
+          hidden={{ id: plan.id }}
+        />
       </div>
 
       <section className={card}>

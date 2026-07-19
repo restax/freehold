@@ -3,7 +3,8 @@
 import { TransactionSide, TransactionStatus, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { dateOnly, intOr, oneOf, optStr, str } from "@/lib/forms";
+import { logAudit } from "@/lib/audit";
+import { confirmed, dateOnly, intOr, oneOf, optStr, str } from "@/lib/forms";
 import { transactionLimit } from "@/lib/plans";
 import { requireAdminTenant, requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
@@ -100,10 +101,21 @@ export async function removeCustomField(formData: FormData) {
 }
 
 export async function deleteTransaction(formData: FormData) {
-  const { tenantId, isAdmin } = await requireAdminTenant();
+  const { tenantId, isAdmin, session } = await requireAdminTenant();
   const id = str(formData, "id");
-  if (!id || !isAdmin) return;
-  await withTenant(tenantId, (tx) => tx.transaction.delete({ where: { id } }));
+  if (!id || !isAdmin || !confirmed(formData)) return;
+  const gone = await withTenant(tenantId, (tx) =>
+    tx.transaction.delete({ where: { id }, select: { propertyAddress: true } }),
+  );
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "transaction.deleted",
+    summary: `Deleted transaction "${gone.propertyAddress}"`,
+    subjectType: "transaction",
+    subjectId: id,
+  });
   revalidatePath("/dashboard/transactions");
   redirect("/dashboard/transactions");
 }

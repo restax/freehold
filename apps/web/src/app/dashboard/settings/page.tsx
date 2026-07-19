@@ -1,5 +1,6 @@
 import { prisma, withTenant } from "@freehold/db";
 import { Badge } from "@/components/badges";
+import { DangerDelete } from "@/components/danger-delete";
 import {
   createApiKey,
   createWebhookEndpoint,
@@ -109,12 +110,15 @@ async function ApiSection({ tenantId, userId }: { tenantId: string; userId: stri
                 <div className="flex flex-wrap items-center gap-3 text-sm">
                   <span className="font-mono text-xs">{e.url}</span>
                   <span className="text-xs text-stone-400">{e.events.join(", ")}</span>
-                  <form action={deleteWebhookEndpoint} className="ml-auto">
-                    <input type="hidden" name="id" value={e.id} />
-                    <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
-                      delete
-                    </button>
-                  </form>
+                  <div className="ml-auto">
+                    <DangerDelete
+                      compact
+                      action={deleteWebhookEndpoint}
+                      label="Delete"
+                      description="Stops all deliveries to this endpoint."
+                      hidden={{ id: e.id }}
+                    />
+                  </div>
                 </div>
                 <code className="break-all font-mono text-xs text-stone-400">
                   secret: {e.secret}
@@ -147,6 +151,41 @@ async function ApiSection({ tenantId, userId }: { tenantId: string; userId: stri
         </form>
       </section>
     </>
+  );
+}
+
+async function AuditSection({ tenantId, userId }: { tenantId: string; userId: string }) {
+  const role = await getMemberRole(tenantId, userId);
+  if (role !== "owner" && role !== "admin") return null;
+  const entries = await withTenant(tenantId, (tx) =>
+    tx.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
+  );
+  return (
+    <section className={card}>
+      <h2 className="mb-1 font-medium">Audit trail</h2>
+      <p className="mb-3 text-sm text-stone-500">
+        Who did what, newest first. Deletions, portal access changes, and other significant actions
+        are recorded automatically. Last 100 entries.
+      </p>
+      {entries.length === 0 ? (
+        <p className="text-sm text-stone-500">Nothing recorded yet.</p>
+      ) : (
+        <ul className="flex flex-col">
+          {entries.map((e) => (
+            <li
+              key={e.id}
+              className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-stone-100 py-1.5 text-sm last:border-0"
+            >
+              <span className="whitespace-nowrap font-mono text-xs tabular-nums text-stone-400">
+                {e.createdAt.toISOString().slice(0, 16).replace("T", " ")}
+              </span>
+              <span>{e.summary}</span>
+              <span className="text-xs text-stone-400">{e.actorEmail ?? "system"}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -193,6 +232,8 @@ export default async function SettingsPage() {
       </section>
 
       <ApiSection tenantId={tenantId} userId={session.user.id} />
+
+      <AuditSection tenantId={tenantId} userId={session.user.id} />
 
       <section className={card}>
         <h2 className="mb-2 font-medium">System health</h2>

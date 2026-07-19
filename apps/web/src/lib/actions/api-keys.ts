@@ -5,7 +5,7 @@ import { prisma, withTenant } from "@freehold/db";
 import { generateWebhookSecret } from "@freehold/integrations";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
-import { str } from "@/lib/forms";
+import { confirmed, str } from "@/lib/forms";
 import { requireAdminTenant } from "@/lib/tenant";
 
 const NEW_KEY_COOKIE = "freehold-new-api-key";
@@ -59,6 +59,7 @@ export async function deleteWebhookEndpoint(formData: FormData) {
   const { tenantId, isAdmin } = await requireAdminTenant();
   if (!isAdmin) return;
   const id = str(formData, "id");
+  if (!confirmed(formData)) return;
   await withTenant(tenantId, (tx) => tx.webhookEndpoint.deleteMany({ where: { id } }));
   revalidatePath("/dashboard/settings");
 }
