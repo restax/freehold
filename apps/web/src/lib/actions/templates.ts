@@ -109,33 +109,48 @@ export async function saveEmailTemplates(formData: FormData) {
       },
     },
   });
-  revalidatePath("/dashboard/templates");
+  revalidatePath("/dashboard/emails");
 }
 
 /** Email template library CRUD (reusable merge-field emails). */
+const EMAIL_CATEGORIES = [
+  "STATUS",
+  "INTRO",
+  "PORTAL",
+  "MILESTONE",
+  "LISTING",
+  "POST_CLOSE",
+  "OTHER",
+];
+
+function templateFields(formData: FormData) {
+  const cat = str(formData, "category");
+  return {
+    name: str(formData, "name"),
+    subject: str(formData, "subject"),
+    body: str(formData, "body"),
+    category: EMAIL_CATEGORIES.includes(cat) ? cat : "OTHER",
+    taskMatch: optStr(formData, "taskMatch"),
+  };
+}
+
 export async function createEmailTemplateLib(formData: FormData) {
   const { tenantId } = await requireTenant();
-  const name = str(formData, "name");
-  const subject = str(formData, "subject");
-  const body = str(formData, "body");
-  if (!name || !subject || !body) return;
-  await withTenant(tenantId, (tx) =>
-    tx.emailTemplate.create({ data: { tenantId, name, subject, body } }),
-  );
-  revalidatePath("/dashboard/templates");
+  const f = templateFields(formData);
+  if (!f.name || !f.subject || !f.body) return;
+  await withTenant(tenantId, (tx) => tx.emailTemplate.create({ data: { tenantId, ...f } }));
+  revalidatePath("/dashboard/emails");
 }
 
 export async function updateEmailTemplateLib(formData: FormData) {
   const { tenantId } = await requireTenant();
   const id = str(formData, "id");
-  const name = str(formData, "name");
-  const subject = str(formData, "subject");
-  const body = str(formData, "body");
-  if (!id || !name || !subject || !body) return;
+  const f = templateFields(formData);
+  if (!id || !f.name || !f.subject || !f.body) return;
   await withTenant(tenantId, (tx) =>
-    tx.emailTemplate.update({ where: { id }, data: { name, subject, body } }),
+    tx.emailTemplate.update({ where: { id }, data: { ...f, isSample: false } }),
   );
-  revalidatePath("/dashboard/templates");
+  revalidatePath("/dashboard/emails");
 }
 
 export async function deleteEmailTemplateLib(formData: FormData) {
@@ -143,5 +158,22 @@ export async function deleteEmailTemplateLib(formData: FormData) {
   const id = str(formData, "id");
   if (!id || !confirmed(formData)) return;
   await withTenant(tenantId, (tx) => tx.emailTemplate.delete({ where: { id } }));
-  revalidatePath("/dashboard/templates");
+  revalidatePath("/dashboard/emails");
+}
+
+/** Workspace signature + global footer, applied to every outgoing email. */
+export async function saveEmailSettings(formData: FormData) {
+  const { tenantId, isAdmin } = await requireAdminTenant();
+  if (!isAdmin) return;
+  const { prisma } = await import("@freehold/db");
+  await prisma.organization.update({
+    where: { id: tenantId },
+    data: {
+      emailSettings: {
+        signature: String(formData.get("signature") ?? "").trim(),
+        footer: String(formData.get("footer") ?? "").trim(),
+      },
+    },
+  });
+  revalidatePath("/dashboard/emails");
 }

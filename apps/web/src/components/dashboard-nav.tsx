@@ -5,6 +5,7 @@ import {
   Buildings,
   CreditCard,
   DownloadSimple,
+  EnvelopeSimple,
   FileText,
   GearSix,
   Globe,
@@ -48,7 +49,8 @@ const GROUPS: NavGroup[] = [
     label: "Library",
     items: [
       { href: "/dashboard/action-plans", label: "Action plans", icon: ListChecks },
-      { href: "/dashboard/templates", label: "Templates", icon: FileText },
+      { href: "/dashboard/templates", label: "Doc templates", icon: FileText },
+      { href: "/dashboard/emails", label: "Email templates", icon: EnvelopeSimple },
       { href: "/dashboard/vault", label: "Vault", icon: LockKey },
       { href: "/dashboard/import", label: "Import", icon: DownloadSimple },
     ],

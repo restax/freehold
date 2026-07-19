@@ -37,6 +37,7 @@ import {
 import { emailContextForTransaction, transactionMergeContext } from "@/lib/auto-emails";
 import { emailEnabled } from "@/lib/email";
 import { EMAIL_MERGE_CODES, renderMerge } from "@/lib/email-template";
+import { suggestForTask } from "@/lib/email-template-library";
 import { fmtDate, fmtMoney, ROLE_LABEL, STATUS_LABEL } from "@/lib/format";
 import { extractionCreditState } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
@@ -128,6 +129,11 @@ export default async function TransactionDetailPage({
 
   // Template-driven compose prefill: merge fields render server-side so the
   // TC sees (and can edit) the final text before sending.
+  const emailTaskTitle = emailTask ? txn.tasks.find((t) => t.id === emailTask)?.title : undefined;
+  const { suggested: suggestedTemplates, rest: restTemplates } = suggestForTask(
+    emailTemplates,
+    emailTaskTitle,
+  );
   let composeSubject = "";
   let composeBody = "";
   const selectedEmailTemplate = emailTemplate
@@ -862,24 +868,48 @@ export default async function TransactionDetailPage({
                       transaction.
                     </p>
                     {emailTemplates.length > 0 && (
-                      <p className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-                        <span className="font-medium uppercase tracking-wide text-stone-400">
-                          Start from a template
-                        </span>
-                        {emailTemplates.map((t) => (
-                          <Link
-                            key={t.id}
-                            href={`/dashboard/transactions/${txn.id}?tab=emails&emailTemplate=${t.id}${emailTask ? `&emailTask=${emailTask}` : ""}`}
-                            className={`rounded-full border px-2.5 py-1 transition-colors ${
-                              t.id === emailTemplate
-                                ? "border-brand-600 bg-brand-50 font-medium text-brand-800"
-                                : "border-stone-200 text-stone-600 hover:border-brand-600 hover:text-brand-700"
-                            }`}
-                          >
-                            {t.name.replace(" (Sample)", "")}
-                          </Link>
-                        ))}
-                      </p>
+                      <div className="mb-3 flex flex-col gap-1.5 text-xs">
+                        {emailTaskTitle && suggestedTemplates.length > 0 && (
+                          <p className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium uppercase tracking-wide text-brand-700">
+                              Suggested for “{emailTaskTitle.slice(0, 40)}”
+                            </span>
+                            {suggestedTemplates.map((t) => (
+                              <Link
+                                key={t.id}
+                                href={`/dashboard/transactions/${txn.id}?tab=emails&emailTemplate=${t.id}${emailTask ? `&emailTask=${emailTask}` : ""}`}
+                                className={`rounded-full border px-2.5 py-1 transition-colors ${
+                                  t.id === emailTemplate
+                                    ? "border-brand-600 bg-brand-50 font-medium text-brand-800"
+                                    : "border-brand-300 bg-brand-50/50 text-brand-800 hover:border-brand-600"
+                                }`}
+                              >
+                                {t.name.replace(" (Sample)", "")}
+                              </Link>
+                            ))}
+                          </p>
+                        )}
+                        <p className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium uppercase tracking-wide text-stone-400">
+                            {emailTaskTitle && suggestedTemplates.length > 0
+                              ? "All templates"
+                              : "Start from a template"}
+                          </span>
+                          {restTemplates.map((t) => (
+                            <Link
+                              key={t.id}
+                              href={`/dashboard/transactions/${txn.id}?tab=emails&emailTemplate=${t.id}${emailTask ? `&emailTask=${emailTask}` : ""}`}
+                              className={`rounded-full border px-2.5 py-1 transition-colors ${
+                                t.id === emailTemplate
+                                  ? "border-brand-600 bg-brand-50 font-medium text-brand-800"
+                                  : "border-stone-200 text-stone-600 hover:border-brand-600 hover:text-brand-700"
+                              }`}
+                            >
+                              {t.name.replace(" (Sample)", "")}
+                            </Link>
+                          ))}
+                        </p>
+                      </div>
                     )}
                     <form
                       action={sendTransactionEmail}

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
 import { emailContextForTransaction } from "@/lib/auto-emails";
 import { emailEnabled, sendTenantEmail } from "@/lib/email";
-import { renderEmailHtml } from "@/lib/email-template";
+import { parseEmailSettings, renderEmailHtml } from "@/lib/email-template";
 import { optStr, str } from "@/lib/forms";
 import { requireTenant } from "@/lib/tenant";
 
@@ -35,6 +35,7 @@ export async function sendTransactionEmail(formData: FormData) {
             tc: ctx.tcCard,
             agent: ctx.agentCard,
             otherSide: ctx.otherCard,
+            ...parseEmailSettings(ctx.org.emailSettings),
           }),
         }
       : {}),

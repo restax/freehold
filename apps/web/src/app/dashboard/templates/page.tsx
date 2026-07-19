@@ -1,4 +1,4 @@
-import { prisma, withTenant } from "@freehold/db";
+import { withTenant } from "@freehold/db";
 import Link from "next/link";
 import { DangerDelete } from "@/components/danger-delete";
 import { EmptyState } from "@/components/empty-state";
@@ -21,22 +21,18 @@ export default async function TemplatesPage() {
   const templates = await withTenant(tenantId, (tx) =>
     tx.docTemplate.findMany({ orderBy: { name: "asc" } }),
   );
-  const emailTemplateLib = await withTenant(tenantId, (tx) =>
-    tx.emailTemplate.findMany({ orderBy: { name: "asc" } }),
-  );
-  const org = await prisma.organization.findUniqueOrThrow({
-    where: { id: tenantId },
-    select: { emailTemplates: true },
-  });
-  const emailTemplates = parseEmailTemplates(org.emailTemplates);
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold">Document templates</h1>
+        <h1 className="text-xl font-semibold">Doc templates</h1>
         <p className="text-sm text-stone-500">
           Reusable letters and forms with merge fields like{" "}
           <code>{"{{transaction.closeDate}}"}</code> — generate a filled PDF on any transaction.
+          Looking for emails?{" "}
+          <Link href="/dashboard/emails" className="text-brand-700 hover:underline">
+            Email templates →
+          </Link>
         </p>
       </div>
 
@@ -90,166 +86,6 @@ export default async function TemplatesPage() {
             </tbody>
           </table>
         )}
-      </section>
-
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Email templates</h2>
-        <p className="mb-1 text-sm text-stone-500">
-          Reusable emails available on every transaction's Emails tab — and one click from any task.
-          Merge codes fill themselves from the file: {EMAIL_MERGE_CODES.join(" ")}
-        </p>
-        <p className="mb-4 text-xs text-stone-400">
-          Formatting works too: **bold**, _italic_, "# " headings, "- " bullet lists.
-        </p>
-        <details className="mb-4">
-          <summary className="cursor-pointer select-none text-sm font-medium text-brand-700 hover:text-brand-600">
-            + New email template
-          </summary>
-          <form action={createEmailTemplateLib} className="mt-3 flex flex-col gap-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className={label}>
-                Name *
-                <input name="name" required placeholder="Appraisal ordered" className={input} />
-              </label>
-              <label className={label}>
-                Subject *
-                <input
-                  name="subject"
-                  required
-                  placeholder="Appraisal ordered — {{property_address}}"
-                  className={input}
-                />
-              </label>
-            </div>
-            <label className={label}>
-              Body *
-              <textarea name="body" required rows={6} className={input} />
-            </label>
-            <button type="submit" className={`${btn} self-start`}>
-              Create template
-            </button>
-          </form>
-        </details>
-        {emailTemplateLib.length === 0 ? (
-          <p className="text-sm text-stone-400">No email templates yet.</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {emailTemplateLib.map((t) => (
-              <li key={t.id} className="rounded-lg border border-stone-200/70">
-                <details>
-                  <summary className="cursor-pointer select-none px-4 py-2.5 text-sm font-medium hover:bg-stone-50">
-                    {t.name} <span className="ml-2 font-normal text-stone-400">{t.subject}</span>
-                  </summary>
-                  <div className="border-t border-stone-100 p-4">
-                    <form action={updateEmailTemplateLib} className="flex flex-col gap-3">
-                      <input type="hidden" name="id" value={t.id} />
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <label className={label}>
-                          Name
-                          <input name="name" defaultValue={t.name} required className={input} />
-                        </label>
-                        <label className={label}>
-                          Subject
-                          <input
-                            name="subject"
-                            defaultValue={t.subject}
-                            required
-                            className={input}
-                          />
-                        </label>
-                      </div>
-                      <label className={label}>
-                        Body
-                        <textarea
-                          name="body"
-                          defaultValue={t.body}
-                          required
-                          rows={8}
-                          className={input}
-                        />
-                      </label>
-                      <button type="submit" className={`${btn} self-start`}>
-                        Save
-                      </button>
-                    </form>
-                    <div className="mt-3">
-                      <DangerDelete
-                        action={deleteEmailTemplateLib}
-                        label="Delete this email template"
-                        description={`Removes "${t.name}". Sent emails are unaffected. This cannot be undone.`}
-                        hidden={{ id: t.id }}
-                      />
-                    </div>
-                  </div>
-                </details>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Automated email templates</h2>
-        <p className="mb-1 text-sm text-stone-500">
-          The wording of the lifecycle emails Freehold sends for you — the intro when a file opens
-          and the congratulations after closing. Per-client on/off switches live on each client's
-          page.
-        </p>
-        <p className="mb-4 text-xs text-stone-400">
-          Merge codes:{" "}
-          {EMAIL_MERGE_CODES.map((c) => (
-            <code key={c} className="mr-2">
-              {c}
-            </code>
-          ))}
-        </p>
-        <form action={saveEmailTemplates} className="flex flex-col gap-5">
-          <div className="grid gap-5 lg:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <h3 className="text-sm font-semibold text-stone-700">Intro email</h3>
-              <label className={label}>
-                Subject
-                <input
-                  name="introSubject"
-                  defaultValue={emailTemplates.intro.subject}
-                  className={input}
-                />
-              </label>
-              <label className={label}>
-                Body
-                <textarea
-                  name="introBody"
-                  rows={8}
-                  defaultValue={emailTemplates.intro.body}
-                  className={input}
-                />
-              </label>
-            </div>
-            <div className="flex flex-col gap-2">
-              <h3 className="text-sm font-semibold text-stone-700">Post-close email</h3>
-              <label className={label}>
-                Subject
-                <input
-                  name="postCloseSubject"
-                  defaultValue={emailTemplates.postClose.subject}
-                  className={input}
-                />
-              </label>
-              <label className={label}>
-                Body
-                <textarea
-                  name="postCloseBody"
-                  rows={8}
-                  defaultValue={emailTemplates.postClose.body}
-                  className={input}
-                />
-              </label>
-            </div>
-          </div>
-          <button type="submit" className={`${btn} self-start`}>
-            Save email templates
-          </button>
-        </form>
       </section>
     </div>
   );

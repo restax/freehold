@@ -1,5 +1,6 @@
 import { ClientType, DateAnchor, PartyRole, withTenant } from "@freehold/db";
 import { instantiatePlan } from "@freehold/workflows";
+import { EMAIL_TEMPLATE_LIBRARY } from "@/lib/email-template-library";
 
 export const SAMPLE_PLAN: Array<{ title: string; anchor: DateAnchor; offsetDays: number }> = [
   {
@@ -304,71 +305,17 @@ Warm regards,
       });
     }
 
-    const sampleEmailTemplates = [
-      {
-        name: "Status update (Sample)",
-        subject: "Update on {{property_address}}",
-        body: `Hi {{client_name}},
-
-A quick status update on **{{property_address}}**:
-
-- Contract date: {{contract_date}}
-- Closing date: {{close_date}}
-
-Everything is on track. Reply to this email with any questions — it lands right on the file.
-
-{{tc_name}}
-{{tenant_name}}`,
-      },
-      {
-        name: "Introductions — lender & title (Sample)",
-        subject: "Introductions: {{property_address}}",
-        body: `Hello all,
-
-Introducing the team for **{{property_address}}**:
-
-- Buyer's agent: {{buyer_agent_name}}
-- Lender: {{lender_name}}
-- Title: {{title_company_name}}
-
-I'm coordinating this file for {{tenant_name}} and will keep everyone on schedule toward the {{close_date}} closing. Reply-all works — replies land on the transaction record.
-
-{{tc_name}}`,
-      },
-      {
-        name: "Inspection scheduled (Sample)",
-        subject: "Inspection scheduled — {{property_address}}",
-        body: `Hi {{buyer_name}},
-
-Your inspection for **{{property_address}}** is scheduled. A few reminders:
-
-- Plan for 2–3 hours on site
-- Bring questions — the inspector will walk you through findings
-- The written report follows within 24–48 hours
-
-We'll review the report together as soon as it lands.
-
-{{tc_name}}
-{{tenant_name}}`,
-      },
-      {
-        name: "Portal invitation (Sample)",
-        subject: "Your transaction portal — {{property_address}}",
-        body: `Hi {{client_name}},
-
-Here's your private portal for **{{property_address}}** — every date, document, and milestone, always current:
-
-[paste portal link here]
-
-Bookmark it. When something changes, the portal already knows.
-
-{{tc_name}}
-{{tenant_name}}`,
-      },
-    ];
-    for (const t of sampleEmailTemplates) {
+    for (const t of EMAIL_TEMPLATE_LIBRARY) {
       await tx.emailTemplate.create({
-        data: { tenantId, name: t.name, subject: t.subject, body: t.body, isSample: true },
+        data: {
+          tenantId,
+          name: `${t.name} (Sample)`,
+          subject: t.subject,
+          body: t.body,
+          category: t.category,
+          taskMatch: t.taskMatch,
+          isSample: true,
+        },
       });
     }
   });

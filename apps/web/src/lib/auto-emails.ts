@@ -2,6 +2,7 @@ import { prisma, withTenant } from "@freehold/db";
 import { emailEnabled, sendTenantEmail } from "@/lib/email";
 import {
   type EmailContact,
+  parseEmailSettings,
   parseEmailTemplates,
   renderEmailHtml,
   renderMerge,
@@ -42,7 +43,7 @@ export async function emailContextForTransaction(
 
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: tenantId },
-    select: { name: true, emailTemplates: true },
+    select: { name: true, emailTemplates: true, emailSettings: true },
   });
 
   const tcCard: EmailContact = {
@@ -132,6 +133,7 @@ async function sendLifecycleEmail(
       tc: ctx.tcCard,
       agent: ctx.agentCard,
       otherSide: ctx.otherCard,
+      ...parseEmailSettings(ctx.org.emailSettings),
     }),
   });
 }

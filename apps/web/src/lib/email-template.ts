@@ -21,6 +21,21 @@ export interface EmailRenderInput {
   tc?: EmailContact | null;
   agent?: EmailContact | null;
   otherSide?: EmailContact | null;
+  /** Workspace signature (markdown-lite), rendered under the body. */
+  signature?: string | null;
+  /** Workspace footer line, rendered above the powered-by line. */
+  footer?: string | null;
+}
+
+/** Workspace-wide signature + footer, stored on organization.emailSettings. */
+export interface EmailSettings {
+  signature?: string;
+  footer?: string;
+}
+
+export function parseEmailSettings(raw: unknown): EmailSettings {
+  const c = raw as EmailSettings | null;
+  return { signature: c?.signature ?? "", footer: c?.footer ?? "" };
 }
 
 const esc = (s: string) =>
@@ -77,7 +92,11 @@ export function renderLiteMarkdown(body: string): string {
 }
 
 export function renderEmailHtml(input: EmailRenderInput): string {
-  const paragraphs = renderLiteMarkdown(input.body);
+  const paragraphs =
+    renderLiteMarkdown(input.body) +
+    (input.signature?.trim()
+      ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="border-top:1px solid #e7e5e4;padding-top:12px;">${renderLiteMarkdown(input.signature)}</td></tr></table>`
+      : "");
 
   const cards: string[] = [];
   if (input.tc) cards.push(contactCell(input.tc));
@@ -120,7 +139,12 @@ export function renderEmailHtml(input: EmailRenderInput): string {
   }
   <tr>
     <td style="background:#ffffff;border-radius:0 0 12px 12px;padding:18px 28px 22px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
-      <p style="margin:0;border-top:1px solid #e7e5e4;padding-top:14px;font-size:11px;color:#a8a29e;">
+      ${
+        input.footer?.trim()
+          ? `<p style="margin:0 0 8px;border-top:1px solid #e7e5e4;padding-top:14px;font-size:11px;line-height:1.5;color:#78716c;">${esc(input.footer)}</p>`
+          : ""
+      }
+      <p style="margin:0;${input.footer?.trim() ? "" : "border-top:1px solid #e7e5e4;padding-top:14px;"}font-size:11px;color:#a8a29e;">
         Powered by <a href="https://freeholdtc.dev" style="color:#78716c;text-decoration:none;font-weight:600;">Freehold</a>
         — reply to this email and it lands right back on your file.
       </p>

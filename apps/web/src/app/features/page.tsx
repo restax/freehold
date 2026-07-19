@@ -162,7 +162,7 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ["Task assignment by role", "New tasks route to the right person automatically.", "request"],
       [
         "Email templates attached to tasks",
-        "One click on any task opens a merge-filled email — buyer names, dates, and addresses filled from the file, editable before sending. Build your own template library.",
+        "One click on any task opens a merge-filled email, with the right templates suggested for that task. A 14-template starter library covers contract-to-close, listing, and post-close — plus a formatting editor with live preview, merge-field picker, and a workspace signature and footer you set once.",
         "today",
       ],
       [
