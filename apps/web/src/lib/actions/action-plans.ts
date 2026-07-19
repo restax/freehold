@@ -47,6 +47,8 @@ export async function addTemplateTask(formData: FormData) {
         title,
         anchor: oneOf(formData, "anchor", ANCHORS, DateAnchor.CLOSE_DATE),
         offsetDays: intOr(formData, "offsetDays", 0) ?? 0,
+        emailTemplateId: optStr(formData, "emailTemplateId"),
+        autoSendEmail: formData.get("autoSendEmail") === "on",
         sortOrder: (max._max.sortOrder ?? 0) + 1,
       },
     });

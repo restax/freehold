@@ -736,6 +736,9 @@ model Task {
   dueDateEdited   Boolean      @default(false) @map("due_date_edited")
   /// Set when this task exists to get a date amendment executed ("closeDate"/"contractDate").
   proposedFor     String?      @map("proposed_for")
+  /// Carried from the action-plan template task: default email template.
+  emailTemplateId String?      @map("email_template_id")
+  autoSendEmail   Boolean      @default(false) @map("auto_send_email")
   completedAt     DateTime?    @map("completed_at")
   contactId       String?      @map("contact_id")
   contact         Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
@@ -770,16 +773,20 @@ model ActionPlan {
 }
 
 model ActionPlanTask {
-  id           String       @id @default(uuid())
-  tenantId     String       @map("tenant_id")
-  tenant       Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  actionPlanId String
-  actionPlan   ActionPlan   @relation(fields: [actionPlanId], references: [id], onDelete: Cascade)
-  title        String
-  anchor       DateAnchor   @default(CLOSE_DATE)
-  offsetDays   Int          @default(0) @map("offset_days")
-  assigneeRole String?      @map("assignee_role")
-  sortOrder    Int          @default(0) @map("sort_order")
+  id              String       @id @default(uuid())
+  tenantId        String       @map("tenant_id")
+  tenant          Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actionPlanId    String
+  actionPlan      ActionPlan   @relation(fields: [actionPlanId], references: [id], onDelete: Cascade)
+  title           String
+  anchor          DateAnchor   @default(CLOSE_DATE)
+  offsetDays      Int          @default(0) @map("offset_days")
+  assigneeRole    String?      @map("assignee_role")
+  /// Default email template: instantiated tasks open compose with it ready.
+  emailTemplateId String?      @map("email_template_id")
+  /// Auto-send the template to the client when the task is completed.
+  autoSendEmail   Boolean      @default(false) @map("auto_send_email")
+  sortOrder       Int          @default(0) @map("sort_order")
 
   @@index([tenantId])
   @@map("action_plan_task")
@@ -881,20 +888,25 @@ enum EnvelopeStatus {
 /// any transaction's compose (and from task rows). Distinct from the two
 /// automated lifecycle templates on the organization row.
 model EmailTemplate {
-  id        String       @id @default(uuid())
-  tenantId  String       @map("tenant_id")
-  tenant    Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name      String
-  subject   String
-  body      String
+  id          String       @id @default(uuid())
+  tenantId    String       @map("tenant_id")
+  tenant      Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  subject     String
+  body        String
   /// STATUS | INTRO | PORTAL | MILESTONE | LISTING | POST_CLOSE | OTHER
-  category  String       @default("OTHER")
+  category    String       @default("OTHER")
   /// Comma-separated keywords matched against task titles to suggest this
   /// template when emailing from a task (e.g. "inspection" or "earnest,emd").
-  taskMatch String?      @map("task_match")
-  isSample  Boolean      @default(false)
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  taskMatch   String?      @map("task_match")
+  /// Comma-separated keywords: transaction documents whose filename matches
+  /// get pre-checked as attachments when this template is selected.
+  attachMatch String?      @map("attach_match")
+  /// Times this template has been used to send an email.
+  usageCount  Int          @default(0) @map("usage_count")
+  isSample    Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   @@index([tenantId])
   @@map("email_template")
@@ -914,6 +926,27 @@ model CheckoutAttempt {
 
   @@index([createdAt])
   @@map("checkout_attempt")
+}
+
+/// Scheduled/queued outgoing email. NO RLS on purpose: the hourly cron
+/// flushes due rows across tenants (CRON_SECRET-guarded route); rows are
+/// created only by tenant-scoped actions that stamp tenantId themselves.
+model EmailOutbox {
+  id            String    @id @default(uuid())
+  tenantId      String    @map("tenant_id")
+  transactionId String?   @map("transaction_id")
+  toAddr        String    @map("to_addr")
+  subject       String
+  body          String
+  sendAt        DateTime  @map("send_at")
+  sentAt        DateTime? @map("sent_at")
+  canceledAt    DateTime? @map("canceled_at")
+  attempts      Int       @default(0)
+  lastError     String?   @map("last_error")
+  createdAt     DateTime  @default(now())
+
+  @@index([sendAt, sentAt])
+  @@map("email_outbox")
 }
 
 model DocTemplate {

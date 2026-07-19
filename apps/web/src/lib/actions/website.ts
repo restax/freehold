@@ -4,6 +4,7 @@ import { prisma, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { logAudit } from "@/lib/audit";
 import { optStr, str } from "@/lib/forms";
 import { loadFubKey, sendFubLead } from "@/lib/fub";
@@ -107,12 +108,12 @@ export async function submitTenantLead(formData: FormData) {
   });
   // Connected Follow Up Boss accounts get the lead too, through the events
   // API so the tenant's FUB automations fire. Fire-and-forget.
-  loadFubKey(org.id)
-    .then((key) => (key ? sendFubLead(key, { name, email, phone, message }) : undefined))
-    .catch(() => {});
-  loadTwentyConnection(org.id)
-    .then((conn) => (conn ? sendTwentyLead(conn, { name, email, phone }) : undefined))
-    .catch(() => {});
+  after(async () => {
+    const key = await loadFubKey(org.id).catch(() => null);
+    if (key) await sendFubLead(key, { name, email, phone, message }).catch(() => {});
+    const conn = await loadTwentyConnection(org.id).catch(() => null);
+    if (conn) await sendTwentyLead(conn, { name, email, phone }).catch(() => {});
+  });
 
   // On the subdomain the site lives at "/"; direct apex previews at /t/<slug>.
   const host = (await headers()).get("host") ?? "";

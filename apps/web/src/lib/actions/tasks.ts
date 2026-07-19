@@ -3,6 +3,7 @@
 import { TaskStatus, withTenant } from "@freehold/db";
 import { instantiatePlan, type PlanTaskTemplate } from "@freehold/workflows";
 import { revalidatePath } from "next/cache";
+import { fireTaskTemplateEmail } from "@/lib/auto-emails";
 import { confirmed, dateOnly, str } from "@/lib/forms";
 import { requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
@@ -32,14 +33,14 @@ export async function createTask(formData: FormData) {
 }
 
 export async function toggleTask(formData: FormData) {
-  const { tenantId } = await requireTenant();
+  const { tenantId, session } = await requireTenant();
   const id = str(formData, "id");
   if (!id) return;
   const transactionId = str(formData, "transactionId") || null;
   const completed = await withTenant(tenantId, async (tx) => {
     const task = await tx.task.findUniqueOrThrow({
       where: { id },
-      select: { status: true, title: true },
+      select: { status: true, title: true, emailTemplateId: true, autoSendEmail: true },
     });
     const nowDone = task.status !== TaskStatus.DONE;
     await tx.task.update({
@@ -51,6 +52,11 @@ export async function toggleTask(formData: FormData) {
     });
     return nowDone ? task.title : null;
   });
+  if (completed !== null && transactionId) {
+    // Optional automation: the task's email, merged and sent to the client
+    // (quiet hours respected via the outbox).
+    fireTaskTemplateEmail(tenantId, transactionId, id, session.user);
+  }
   if (completed !== null) {
     await emitWebhook(tenantId, "task.completed", { id, title: completed, transactionId });
   }
@@ -89,7 +95,10 @@ export async function applyActionPlan(formData: FormData) {
       }),
     ]);
 
-    const templates: PlanTaskTemplate[] = plan.tasks.map((t) => ({
+    // instantiatePlan sorts by sortOrder internally; sort our copy the same
+    // way so tasks[i] and sortedPlanTasks[i] stay aligned.
+    const sortedPlanTasks = [...plan.tasks].sort((a, b) => a.sortOrder - b.sortOrder);
+    const sortedTemplates: PlanTaskTemplate[] = sortedPlanTasks.map((t) => ({
       title: t.title,
       anchor: t.anchor,
       offsetDays: t.offsetDays,
@@ -97,9 +106,6 @@ export async function applyActionPlan(formData: FormData) {
       assigneeRole: t.assigneeRole,
     }));
     const base = (maxSort._max.sortOrder ?? 0) + 1;
-    // instantiatePlan sorts by sortOrder internally; sort our copy the same
-    // way so tasks[i] and sortedTemplates[i] stay aligned.
-    const sortedTemplates = [...templates].sort((a, b) => a.sortOrder - b.sortOrder);
     const tasks = instantiatePlan(sortedTemplates, {
       contractDate: txn.contractDate,
       closeDate: txn.closeDate,
@@ -114,6 +120,8 @@ export async function applyActionPlan(formData: FormData) {
         // Provenance for domino recomputation on confirmed date changes.
         anchor: sortedTemplates[i]?.anchor ?? null,
         offsetDays: sortedTemplates[i]?.offsetDays ?? null,
+        emailTemplateId: sortedPlanTasks[i]?.emailTemplateId ?? null,
+        autoSendEmail: sortedPlanTasks[i]?.autoSendEmail ?? false,
         sortOrder: base + i,
         // Role-based auto-assignment lands with multi-user teams; for now the
         // applying user owns every instantiated task.

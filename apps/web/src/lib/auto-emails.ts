@@ -1,4 +1,5 @@
 import { prisma, withTenant } from "@freehold/db";
+import { after } from "next/server";
 import { emailEnabled, sendTenantEmail } from "@/lib/email";
 import {
   type EmailContact,
@@ -138,12 +139,15 @@ async function sendLifecycleEmail(
   });
 }
 
+// Fire-and-forget helpers schedule through next/server's after(): work
+// queued this way survives the server action's response (waitUntil on
+// Vercel) — a bare floating promise gets dropped when the request ends.
 export function fireIntroEmail(
   tenantId: string,
   transactionId: string,
   tc: { name?: string | null; email?: string | null },
 ) {
-  sendLifecycleEmail("intro", tenantId, transactionId, tc).catch(() => {});
+  after(() => sendLifecycleEmail("intro", tenantId, transactionId, tc).catch(() => {}));
 }
 
 export function firePostCloseEmail(
@@ -151,5 +155,53 @@ export function firePostCloseEmail(
   transactionId: string,
   tc: { name?: string | null; email?: string | null },
 ) {
-  sendLifecycleEmail("postClose", tenantId, transactionId, tc).catch(() => {});
+  after(() => sendLifecycleEmail("postClose", tenantId, transactionId, tc).catch(() => {}));
+}
+
+/**
+ * Task-completion auto-send: the task's template, merged and delivered to
+ * the client — deferred by quiet hours via the outbox. Fire-and-forget.
+ */
+export function fireTaskTemplateEmail(
+  tenantId: string,
+  transactionId: string,
+  taskId: string,
+  tc: { name?: string | null; email?: string | null },
+) {
+  after(async () => {
+    if (!emailEnabled()) return;
+    const ctx = await emailContextForTransaction(tenantId, transactionId, tc);
+    if (!ctx?.txn.client?.email) return;
+    if (/\.(example|test|invalid)$/i.test(ctx.txn.client.email.split("@")[1] ?? "")) return;
+    const task = await withTenant(tenantId, (tx) =>
+      tx.task.findUnique({
+        where: { id: taskId },
+        select: { title: true, dueDate: true, emailTemplateId: true, autoSendEmail: true },
+      }),
+    );
+    if (!task?.autoSendEmail || !task.emailTemplateId) return;
+    const template = await withTenant(tenantId, (tx) =>
+      tx.emailTemplate.findUnique({ where: { id: task.emailTemplateId ?? "" } }),
+    );
+    if (!template) return;
+    const merge = {
+      ...transactionMergeContext(ctx, tc),
+      task_title: task.title,
+      task_due: task.dueDate ? fmtDate(task.dueDate) : "",
+    };
+    const { enqueueOrSend } = await import("@/lib/outbox");
+    await enqueueOrSend({
+      tenantId,
+      transactionId,
+      to: ctx.txn.client.email,
+      subject: renderMerge(template.subject, merge),
+      body: renderMerge(template.body, merge),
+    });
+    await withTenant(tenantId, (tx) =>
+      tx.emailTemplate.update({
+        where: { id: template.id },
+        data: { usageCount: { increment: 1 } },
+      }),
+    ).catch(() => {});
+  });
 }

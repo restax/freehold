@@ -1,5 +1,6 @@
 import { billingEnabled } from "@freehold/ee-billing";
 import { openBillingPortal, startUpgrade } from "@/lib/actions/billing";
+import { PAYMENTS_PAUSED } from "@/lib/payments-paused";
 import {
   countActiveTransactions,
   extractionCreditState,
@@ -93,7 +94,8 @@ export default async function BillingPage({
           <code>STRIPE_WEBHOOK_SECRET</code>, and the <code>STRIPE_PRICE_*</code> ids.
         </p>
       ) : (
-        isAdmin && (
+        isAdmin &&
+        !PAYMENTS_PAUSED && (
           <div className="grid gap-4 sm:grid-cols-2">
             {(["PRO", "BUSINESS"] as const).map((tier) => (
               <section

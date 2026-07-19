@@ -11,10 +11,16 @@ import {
 } from "@/lib/actions/templates";
 import { EMAIL_MERGE_CODES, parseEmailSettings, parseEmailTemplates } from "@/lib/email-template";
 import { EMAIL_CATEGORY_LABELS } from "@/lib/email-template-library";
+import { parseQuietHours } from "@/lib/outbox";
 import { requireAdminTenant } from "@/lib/tenant";
 import { btn, card, input, label as labelCls, summaryLink } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
+
+const HOURS: Array<[number, string]> = Array.from({ length: 24 }, (_, h) => [
+  h,
+  `${((h + 11) % 12) + 1} ${h < 12 ? "AM" : "PM"}`,
+]);
 
 const CATEGORY_ORDER = ["STATUS", "INTRO", "PORTAL", "MILESTONE", "LISTING", "POST_CLOSE", "OTHER"];
 
@@ -29,6 +35,7 @@ export default async function EmailTemplatesPage() {
   });
   const automated = parseEmailTemplates(org.emailTemplates);
   const settings = parseEmailSettings(org.emailSettings);
+  const quiet = parseQuietHours(org.emailSettings);
 
   const grouped = CATEGORY_ORDER.map(
     (cat) => [cat, templates.filter((t) => t.category === cat)] as const,
@@ -71,6 +78,35 @@ export default async function EmailTemplatesPage() {
               className={input}
             />
           </label>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className={labelCls}>
+              Quiet hours start
+              <select name="quietStart" defaultValue={quiet.quietStart} className={input}>
+                {HOURS.map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={labelCls}>
+              resume at
+              <select name="quietEnd" defaultValue={quiet.quietEnd} className={input}>
+                {HOURS.map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={labelCls}>
+              Workspace time zone
+              <input name="timeZone" defaultValue={quiet.timeZone} className={input} />
+            </label>
+            <p className="pb-2 text-xs text-stone-400">
+              Automated emails wait out quiet hours — a 2am task completion becomes an 8am email.
+            </p>
+          </div>
           {isAdmin ? (
             <button type="submit" className={`${btn} self-start`}>
               Save signature &amp; footer
@@ -104,6 +140,10 @@ export default async function EmailTemplatesPage() {
               <input name="taskMatch" placeholder="appraisal, valuation" className={input} />
             </label>
             <label className={labelCls}>
+              Pre-attach documents matching
+              <input name="attachMatch" placeholder="pre-approval, inspection" className={input} />
+            </label>
+            <label className={labelCls}>
               Subject *
               <input
                 name="subject"
@@ -133,11 +173,14 @@ export default async function EmailTemplatesPage() {
                   <summary className="flex cursor-pointer select-none flex-wrap items-baseline gap-x-3 px-4 py-2.5 text-sm hover:bg-stone-50">
                     <span className="font-medium">{t.name.replace(" (Sample)", "")}</span>
                     <span className="text-stone-400">{t.subject}</span>
-                    {t.taskMatch && (
-                      <span className="ml-auto text-xs text-stone-400">
-                        suggested on: {t.taskMatch}
-                      </span>
-                    )}
+                    <span className="ml-auto flex items-center gap-3 text-xs text-stone-400">
+                      {t.usageCount > 0 && (
+                        <span className="rounded-full bg-stone-100 px-2 py-0.5">
+                          used {t.usageCount}×
+                        </span>
+                      )}
+                      {t.taskMatch && <span>suggested on: {t.taskMatch}</span>}
+                    </span>
                   </summary>
                   <div className="border-t border-stone-100 p-4">
                     <form action={updateEmailTemplateLib} className="flex flex-col gap-3">
@@ -162,6 +205,14 @@ export default async function EmailTemplatesPage() {
                           <input
                             name="taskMatch"
                             defaultValue={t.taskMatch ?? ""}
+                            className={input}
+                          />
+                        </label>
+                        <label className={labelCls}>
+                          Pre-attach documents matching
+                          <input
+                            name="attachMatch"
+                            defaultValue={t.attachMatch ?? ""}
                             className={input}
                           />
                         </label>

@@ -4,6 +4,7 @@ import { prisma } from "@freehold/db";
 import { billingEnabled, createPortalSession, createUpgradeCheckout } from "@freehold/ee-billing";
 import { redirect } from "next/navigation";
 import { oneOf } from "@/lib/forms";
+import { PAYMENTS_PAUSED } from "@/lib/payments-paused";
 import { requireAdminTenant } from "@/lib/tenant";
 
 function baseUrl(): string {
@@ -11,6 +12,7 @@ function baseUrl(): string {
 }
 
 export async function startUpgrade(formData: FormData) {
+  if (PAYMENTS_PAUSED) return;
   const { tenantId, session, isAdmin } = await requireAdminTenant();
   if (!isAdmin || !billingEnabled()) return;
   const tier = oneOf(formData, "tier", ["PRO", "BUSINESS"] as const, "PRO");

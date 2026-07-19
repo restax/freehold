@@ -70,6 +70,23 @@ export async function ensureDemo() {
   return { org, owner, visitor };
 }
 
+/**
+ * Self-healing: if a visitor deleted the sample data (transactions or the
+ * client are the skeleton everything hangs off), quietly wipe and re-seed
+ * before the next visitor signs in. One count query on the happy path.
+ */
+export async function healDemoIfGutted(): Promise<boolean> {
+  const org = await prisma.organization.findUnique({ where: { slug: DEMO_SLUG } });
+  if (!org) return false;
+  const [txns, clients] = await withTenant(org.id, async (tx) => [
+    await tx.transaction.count(),
+    await tx.client.count(),
+  ]);
+  if (txns > 0 && clients > 0) return false;
+  await resetDemoData();
+  return true;
+}
+
 /** Wipe everything in the demo tenant and re-seed the sample brokerage. */
 export async function resetDemoData() {
   const { org, visitor } = await ensureDemo();

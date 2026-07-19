@@ -1,4 +1,4 @@
-import { PartyRole, TransactionSide, TransactionStatus, withTenant } from "@freehold/db";
+import { PartyRole, prisma, TransactionSide, TransactionStatus, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, EnvelopeBadge, ExtractionBadge } from "@/components/badges";
@@ -6,7 +6,7 @@ import { DangerDelete } from "@/components/danger-delete";
 import { DictateButton } from "@/components/dictate-button";
 import { VisibilityToggles } from "@/components/visibility-toggles";
 import { deleteDocument, uploadDocument } from "@/lib/actions/documents";
-import { sendTransactionEmail } from "@/lib/actions/emails";
+import { cancelScheduledEmail, sendTransactionEmail } from "@/lib/actions/emails";
 import {
   deleteEnvelope,
   markEnvelopeSigned,
@@ -134,6 +134,11 @@ export default async function TransactionDetailPage({
     emailTemplates,
     emailTaskTitle,
   );
+  const scheduledEmails = await prisma.emailOutbox.findMany({
+    where: { tenantId, transactionId: txn.id, sentAt: null, canceledAt: null },
+    orderBy: { sendAt: "asc" },
+  });
+  const attachPrechecked = new Set<string>();
   let composeSubject = "";
   let composeBody = "";
   const selectedEmailTemplate = emailTemplate
@@ -149,6 +154,15 @@ export default async function TransactionDetailPage({
           task_due: task?.dueDate ? fmtDate(task.dueDate) : "",
         }
       : {};
+    for (const d of txn.documents) {
+      const keywords = (selectedEmailTemplate.attachMatch ?? "")
+        .split(",")
+        .map((k) => k.trim().toLowerCase())
+        .filter(Boolean);
+      if (keywords.some((k) => d.filename.toLowerCase().includes(k))) {
+        attachPrechecked.add(d.id);
+      }
+    }
     composeSubject = renderMerge(selectedEmailTemplate.subject, merge);
     composeBody = renderMerge(selectedEmailTemplate.body, merge);
   }
@@ -320,9 +334,17 @@ export default async function TransactionDetailPage({
                           )}
                           <span className="ml-auto flex items-center gap-3">
                             <Link
-                              href={`/dashboard/transactions/${txn.id}?tab=emails&emailTask=${t.id}`}
-                              title="Send an email about this task — templates available"
-                              className="text-stone-300 transition-colors hover:text-brand-700"
+                              href={`/dashboard/transactions/${txn.id}?tab=emails&emailTask=${t.id}${t.emailTemplateId ? `&emailTemplate=${t.emailTemplateId}` : ""}`}
+                              title={
+                                t.emailTemplateId
+                                  ? "Send this task's email — template ready"
+                                  : "Send an email about this task — templates available"
+                              }
+                              className={
+                                t.emailTemplateId
+                                  ? "text-brand-600 transition-colors hover:text-brand-700"
+                                  : "text-stone-300 transition-colors hover:text-brand-700"
+                              }
                             >
                               ✉
                             </Link>
@@ -917,6 +939,13 @@ export default async function TransactionDetailPage({
                       key={emailTemplate ?? "blank"}
                     >
                       <input type="hidden" name="transactionId" value={txn.id} />
+                      {selectedEmailTemplate && (
+                        <input
+                          type="hidden"
+                          name="emailTemplateId"
+                          value={selectedEmailTemplate.id}
+                        />
+                      )}
                       <div className="grid gap-3 sm:grid-cols-2">
                         <label className={label}>
                           To
@@ -958,21 +987,83 @@ export default async function TransactionDetailPage({
                           className={input}
                         />
                       </label>
+                      {txn.documents.length > 0 && (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm font-medium text-stone-700">
+                            Attach documents
+                          </span>
+                          <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+                            {txn.documents.map((d) => (
+                              <label
+                                key={d.id}
+                                className="flex items-center gap-1.5 text-sm text-stone-600"
+                              >
+                                <input
+                                  type="checkbox"
+                                  name="attachDoc"
+                                  value={d.id}
+                                  defaultChecked={attachPrechecked.has(d.id)}
+                                  className="accent-brand-600"
+                                />
+                                {d.filename}
+                                <span className="text-xs text-stone-400">
+                                  ({(d.sizeBytes / 1024).toFixed(0)} KB)
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       <p className="text-xs text-stone-400">
                         Formatting: **bold**, _italic_, "# " big heading, "- " bullet lists — the
                         sent email renders them properly. Merge codes work in templates:{" "}
                         {EMAIL_MERGE_CODES.slice(0, 4).join(" ")} …
                       </p>
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-end gap-3">
                         <button type="submit" className={btn}>
                           Send email
                         </button>
                         <DictateButton targetId="compose-body" />
+                        <label className="ml-auto flex items-center gap-2 text-xs text-stone-500">
+                          Send later
+                          <input
+                            type="datetime-local"
+                            name="sendAt"
+                            className="rounded-lg border border-stone-300 px-2 py-1.5 text-xs focus:border-brand-600 focus:outline-none"
+                          />
+                        </label>
                       </div>
                     </form>
                   </>
                 )}
               </section>
+
+              {scheduledEmails.length > 0 && (
+                <section className={card}>
+                  <h2 className="mb-1 font-medium">Scheduled</h2>
+                  <ul className="flex flex-col gap-1.5 text-sm">
+                    {scheduledEmails.map((e) => (
+                      <li key={e.id} className="flex flex-wrap items-center gap-3">
+                        <span className="font-medium">{e.subject}</span>
+                        <span className="text-stone-500">to {e.toAddr}</span>
+                        <span className="tabular-nums text-xs text-stone-400">
+                          {e.sendAt.toLocaleString()}
+                        </span>
+                        <form action={cancelScheduledEmail} className="ml-auto">
+                          <input type="hidden" name="id" value={e.id} />
+                          <input type="hidden" name="transactionId" value={txn.id} />
+                          <button
+                            type="submit"
+                            className="text-xs text-stone-400 hover:text-red-600"
+                          >
+                            Cancel
+                          </button>
+                        </form>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
 
               <section className={card}>
                 <h2 className="mb-3 font-medium">Thread</h2>

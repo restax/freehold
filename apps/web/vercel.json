@@ -3,6 +3,10 @@
     {
       "path": "/api/demo/reset",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/outbox/run",
+      "schedule": "0 13 * * *"
     }
   ]
 }

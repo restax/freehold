@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { DEMO_EMAIL, demoEnabled, ensureDemo } from "@/lib/demo";
+import { DEMO_EMAIL, demoEnabled, ensureDemo, healDemoIfGutted } from "@/lib/demo";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +10,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Demo is not enabled on this install" }, { status: 404 });
   }
   await ensureDemo();
+  // A gutted demo is the worst first impression; re-seed before letting the
+  // visitor in. Healing failures never block entry — the cron catches up.
+  await healDemoIfGutted().catch(() => {});
 
   const signIn = await auth.api.signInEmail({
     body: { email: DEMO_EMAIL, password: process.env.DEMO_USER_PASSWORD as string },

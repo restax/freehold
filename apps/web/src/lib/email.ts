@@ -29,6 +29,8 @@ export interface SendEmailInput {
   body: string;
   /** Optional branded HTML rendering; `body` remains the text fallback. */
   html?: string;
+  /** Optional attachments (base64 content), capped by the caller. */
+  attachments?: Array<{ filename: string; content: string }>;
 }
 
 /** Send + record. Returns the stored Email id, or throws on provider errors. */
@@ -55,6 +57,7 @@ export async function sendTenantEmail(input: SendEmailInput): Promise<string> {
       subject: input.subject,
       text: input.body,
       ...(input.html ? { html: input.html } : {}),
+      ...(input.attachments?.length ? { attachments: input.attachments } : {}),
     }),
   });
   if (!res.ok) {

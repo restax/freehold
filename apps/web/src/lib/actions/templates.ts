@@ -131,6 +131,7 @@ function templateFields(formData: FormData) {
     body: str(formData, "body"),
     category: EMAIL_CATEGORIES.includes(cat) ? cat : "OTHER",
     taskMatch: optStr(formData, "taskMatch"),
+    attachMatch: optStr(formData, "attachMatch"),
   };
 }
 
@@ -172,6 +173,9 @@ export async function saveEmailSettings(formData: FormData) {
       emailSettings: {
         signature: String(formData.get("signature") ?? "").trim(),
         footer: String(formData.get("footer") ?? "").trim(),
+        quietStart: Number(formData.get("quietStart") ?? 20),
+        quietEnd: Number(formData.get("quietEnd") ?? 8),
+        timeZone: String(formData.get("timeZone") ?? "America/Chicago").trim(),
       },
     },
   });

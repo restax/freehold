@@ -25,13 +25,18 @@ export default async function ActionPlanDetailPage({
 }) {
   const { tenantId } = await requireTenant();
   const { id } = await params;
-  const plan = await withTenant(tenantId, (tx) =>
-    tx.actionPlan.findUnique({
+  const { plan, emailTemplates } = await withTenant(tenantId, async (tx) => ({
+    plan: await tx.actionPlan.findUnique({
       where: { id },
       include: { tasks: { orderBy: { sortOrder: "asc" } } },
     }),
-  );
+    emailTemplates: await tx.emailTemplate.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+  }));
   if (!plan) notFound();
+  const templateName = new Map(emailTemplates.map((t) => [t.id, t.name.replace(" (Sample)", "")]));
 
   return (
     <div className="flex flex-col gap-6">
@@ -65,6 +70,7 @@ export default async function ActionPlanDetailPage({
                 <th className={th}>Task</th>
                 <th className={th}>Anchor</th>
                 <th className={th}>Offset</th>
+                <th className={th}>Email template</th>
                 <th className={th} />
               </tr>
             </thead>
@@ -75,6 +81,16 @@ export default async function ActionPlanDetailPage({
                   <td className={`${td} font-medium`}>{t.title}</td>
                   <td className={td}>{ANCHOR_LABEL[t.anchor]}</td>
                   <td className={td}>{offsetLabel(t.offsetDays)}</td>
+                  <td className={td}>
+                    {t.emailTemplateId ? (
+                      <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs text-brand-800">
+                        ✉ {templateName.get(t.emailTemplateId) ?? "template"}
+                        {t.autoSendEmail && " · auto"}
+                      </span>
+                    ) : (
+                      <span className="text-stone-300">—</span>
+                    )}
+                  </td>
                   <td className={td}>
                     <form action={deleteTemplateTask}>
                       <input type="hidden" name="id" value={t.id} />
@@ -110,12 +126,28 @@ export default async function ActionPlanDetailPage({
             Offset (days)
             <input name="offsetDays" type="number" defaultValue={0} className={input} />
           </label>
+          <label className={label}>
+            Email template
+            <select name="emailTemplateId" className={input} defaultValue="">
+              <option value="">None</option>
+              {emailTemplates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name.replace(" (Sample)", "")}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
+            <input type="checkbox" name="autoSendEmail" className="accent-brand-600" />
+            Auto-send on completion
+          </label>
           <button type="submit" className={btnGhost}>
             Add template task
           </button>
         </form>
         <p className="mt-2 text-xs text-stone-400">
-          Negative offsets fall before the anchor: “Close date, −1” is the day before closing.
+          Negative offsets fall before the anchor: “Close date, −1” is the day before closing. Tasks
+          with an email template open compose with that email ready.
         </p>
       </section>
     </div>

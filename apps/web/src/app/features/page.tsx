@@ -155,7 +155,12 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ],
       [
         "Email automation",
-        "Lifecycle emails send themselves: an intro when the file opens, congratulations at closing. Wording is editable per workspace, with per-client on/off switches.",
+        "Lifecycle emails send themselves: an intro when the file opens, congratulations at closing. Any task can auto-send its template when completed. Wording is editable per workspace, with per-client on/off switches.",
+        "today",
+      ],
+      [
+        "Scheduled sends and quiet hours",
+        "Write now, deliver later: schedule any email for a future date, and set workspace quiet hours so automated emails never land at 2am — they wait for morning.",
         "today",
       ],
       ["Shared team workflows", "Everyone works the same file with the same live state.", "today"],

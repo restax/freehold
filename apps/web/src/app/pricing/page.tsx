@@ -1,6 +1,8 @@
 import { Check } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { PaidPlanCta } from "@/components/free-plan-dialog";
 import { ExtractionReviewCard, MarketingFooter, MarketingNav } from "@/components/marketing";
+import { PAYMENTS_PAUSED } from "@/lib/payments-paused";
 
 export const metadata = {
   title: "Pricing | Freehold",
@@ -17,6 +19,7 @@ const TIERS: Array<{
   cta: string;
   note?: string;
   featured?: boolean;
+  paid?: boolean;
 }> = [
   {
     name: "Cloud Free",
@@ -52,6 +55,7 @@ const TIERS: Array<{
     cta: "Start with Pro",
     note: "7-day free trial · cancel in two clicks",
     featured: true,
+    paid: true,
   },
   {
     name: "Cloud Business",
@@ -69,6 +73,7 @@ const TIERS: Array<{
     ],
     cta: "Start with Business",
     note: "7-day free trial · cancel in two clicks",
+    paid: true,
   },
 ];
 
@@ -134,17 +139,23 @@ export default function PricingPage() {
                   </li>
                 ))}
               </ul>
-              <Link href="/signup" className="mt-auto pt-7">
-                <span
-                  className={`block rounded-lg px-4 py-2.5 text-center text-sm font-medium transition active:scale-[0.98] ${
-                    tier.featured
-                      ? "bg-white text-brand-800 hover:bg-brand-50"
-                      : "bg-stone-900 text-white hover:bg-stone-700"
-                  }`}
-                >
-                  {tier.cta}
-                </span>
-              </Link>
+              {PAYMENTS_PAUSED && tier.paid ? (
+                <div className="mt-auto pt-7">
+                  <PaidPlanCta label={tier.cta} featured={tier.featured} />
+                </div>
+              ) : (
+                <Link href="/signup" className="mt-auto pt-7">
+                  <span
+                    className={`block rounded-lg px-4 py-2.5 text-center text-sm font-medium transition active:scale-[0.98] ${
+                      tier.featured
+                        ? "bg-white text-brand-800 hover:bg-brand-50"
+                        : "bg-stone-900 text-white hover:bg-stone-700"
+                    }`}
+                  >
+                    {tier.cta}
+                  </span>
+                </Link>
+              )}
               {tier.note && (
                 <p
                   className={`mt-2 text-center text-xs ${tier.featured ? "text-brand-100" : "text-stone-400"}`}
