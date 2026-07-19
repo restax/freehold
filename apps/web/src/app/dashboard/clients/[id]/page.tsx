@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
-import { deleteClient } from "@/lib/actions/clients";
+import { addClientNote, deleteClient } from "@/lib/actions/clients";
 import { createAgentPortalLink, setPortalLinkActive } from "@/lib/actions/portal";
 import { fmtDate, fmtMoney } from "@/lib/format";
 import { portalOrigin } from "@/lib/portal";
@@ -29,6 +29,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
     tx.client.findUnique({
       where: { id },
       include: {
+        clientNotes: { orderBy: { createdAt: "desc" }, take: 30 },
         portalLinks: { orderBy: { createdAt: "desc" } },
         transactions: {
           orderBy: { updatedAt: "desc" },
@@ -135,11 +136,24 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                       last opened {fmtDate(pl.lastAccessedAt)}
                     </span>
                   )}
-                  <div className="ml-auto flex items-center gap-2">
+                  <div className="ml-auto flex items-center gap-3">
                     {active && (
-                      <span className="max-w-56 truncate font-mono text-xs text-stone-400">
-                        {portalBase}/portal/{pl.token}
-                      </span>
+                      <>
+                        <a
+                          href={`${portalBase}/portal/${pl.token}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-medium text-brand-700 hover:underline"
+                        >
+                          View as agent
+                        </a>
+                        <a
+                          href={`mailto:${client.email ?? ""}?subject=${encodeURIComponent(`Your transaction portal — ${client.name}`)}&body=${encodeURIComponent(`Here's your live portal with every deal, deadline, and document:\n\n${portalBase}/portal/${pl.token}\n\nBookmark it — it's always current.`)}`}
+                          className="text-xs font-medium text-brand-700 hover:underline"
+                        >
+                          Email link
+                        </a>
+                      </>
                     )}
                     <form action={setPortalLinkActive}>
                       <input type="hidden" name="id" value={pl.id} />
@@ -233,6 +247,39 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                 </li>
               );
             })}
+          </ul>
+        )}
+      </section>
+
+      <section className={card}>
+        <h2 className="mb-1 font-medium">Notes</h2>
+        <p className="mb-3 text-sm text-stone-500">Internal only — never visible on any portal.</p>
+        <form action={addClientNote} className="mb-3 flex items-end gap-2">
+          <input type="hidden" name="clientId" value={client.id} />
+          <label className="flex flex-1 flex-col gap-1 text-sm font-medium text-stone-700">
+            Add a note
+            <input
+              name="body"
+              placeholder="Prefers text over email; closes ~4 deals a month…"
+              className="rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-none"
+            />
+          </label>
+          <button type="submit" className={btnGhost}>
+            Add
+          </button>
+        </form>
+        {client.clientNotes.length === 0 ? (
+          <p className="text-sm text-stone-400">No notes yet.</p>
+        ) : (
+          <ul className="flex flex-col">
+            {client.clientNotes.map((n) => (
+              <li key={n.id} className="border-b border-stone-100 py-2 text-sm last:border-0">
+                <span className="mr-3 font-mono text-xs tabular-nums text-stone-400">
+                  {fmtDate(n.createdAt)}
+                </span>
+                {n.body}
+              </li>
+            ))}
           </ul>
         )}
       </section>

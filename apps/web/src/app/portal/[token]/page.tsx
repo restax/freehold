@@ -240,6 +240,15 @@ function ClientPortal(portal: NonNullable<Awaited<ReturnType<typeof resolvePorta
           </section>
         )}
 
+        <p className="text-center text-xs text-stone-400">
+          <a
+            href={`/portal/${link.token}/calendar.ics`}
+            className="font-medium text-brand-700 hover:underline"
+          >
+            Subscribe to these dates
+          </a>{" "}
+          in Google Calendar, Outlook, or Apple Calendar — changes sync automatically.
+        </p>
         <footer className="mt-2 text-center text-xs text-stone-400">
           Prepared by {tenantName} · read-only view · powered by{" "}
           <a
@@ -330,6 +339,32 @@ function AgentPortal(
               <>No closings recorded yet this year — the projection appears after your first.</>
             )}
           </p>
+        </section>
+
+        <section className={cardCls}>
+          <h2 className="mb-3 font-medium">Next 30 days</h2>
+          {portal.upcoming.length === 0 ? (
+            <p className="text-sm text-stone-500">No dated items in the next month.</p>
+          ) : (
+            <ul className="flex flex-col gap-1.5 text-sm">
+              {portal.upcoming.map((u) => (
+                <li key={u.id} className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="w-24 shrink-0 font-mono text-xs tabular-nums text-stone-400">
+                    {fmtDate(u.dueDate)}
+                  </span>
+                  <span>{u.title}</span>
+                  {u.transaction && (
+                    <Link
+                      href={`/portal/${link.token}/t/${u.transaction.id}`}
+                      className="text-xs text-brand-700 hover:underline"
+                    >
+                      {u.transaction.propertyAddress}
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         <section className={cardCls}>
@@ -432,6 +467,15 @@ function AgentPortal(
           )}
         </section>
 
+        <p className="text-center text-xs text-stone-400">
+          <a
+            href={`/portal/${link.token}/calendar.ics`}
+            className="font-medium text-brand-700 hover:underline"
+          >
+            Subscribe to all your dates
+          </a>{" "}
+          in Google Calendar, Outlook, or Apple Calendar — changes sync automatically.
+        </p>
         <footer className="mt-2 text-center text-xs text-stone-400">
           Coordinated by {tenantName} · powered by{" "}
           <a

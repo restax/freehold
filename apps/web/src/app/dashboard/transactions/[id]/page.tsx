@@ -20,6 +20,7 @@ import {
   deleteTransaction,
   removeCustomField,
   setCustomField,
+  updatePayout,
   updateTransaction,
 } from "@/lib/actions/transactions";
 import { fmtDate, fmtMoney, ROLE_LABEL, SIDE_LABEL, STATUS_LABEL } from "@/lib/format";
@@ -34,13 +35,29 @@ const STATUSES = Object.values(TransactionStatus);
 const SIDES = Object.values(TransactionSide);
 const ROLES = Object.values(PartyRole);
 
+const TXN_TABS = [
+  ["tasks", "Tasks"],
+  ["attachments", "Attachments"],
+  ["dates", "Dates & details"],
+  ["participants", "Participants"],
+  ["emails", "Emails"],
+  ["notes", "Notes"],
+  ["payout", "Payout"],
+  ["misc", "Portals & misc"],
+] as const;
+type TxnTab = (typeof TXN_TABS)[number][0];
+
 export default async function TransactionDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const { tenantId } = await requireTenant();
   const { id } = await params;
+  const { tab: tabRaw } = await searchParams;
+  const tab: TxnTab = (TXN_TABS.some(([t]) => t === tabRaw) ? tabRaw : "tasks") as TxnTab;
 
   const data = await withTenant(tenantId, async (tx) => {
     const txn = await tx.transaction.findUnique({
@@ -103,607 +120,825 @@ export default async function TransactionDetailPage({
           <h1 className="text-xl font-semibold">{txn.propertyAddress}</h1>
           <p className="text-sm text-stone-500">
             {[txn.city, txn.state, txn.zip].filter(Boolean).join(", ") || "No location set"} ·{" "}
-            {SIDE_LABEL[txn.side]} · {fmtMoney(txn.purchasePrice)}
+            {SIDE_LABEL[txn.side]} · contract {fmtMoney(txn.purchasePrice)} · list{" "}
+            {fmtMoney(txn.listPrice)}
           </p>
         </div>
       </div>
 
-      <section className={card}>
-        <h2 className="mb-3 font-medium">Details</h2>
-        <form action={updateTransaction} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <input type="hidden" name="id" value={txn.id} />
-          <label className={`${label} lg:col-span-2`}>
-            Property address
-            <input name="propertyAddress" defaultValue={txn.propertyAddress} className={input} />
-          </label>
-          <label className={label}>
-            Client
-            <select name="clientId" defaultValue={txn.clientId ?? ""} className={input}>
-              <option value="">—</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={label}>
-            Status
-            <select name="status" defaultValue={txn.status} className={input}>
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {STATUS_LABEL[s]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={label}>
-            City
-            <input name="city" defaultValue={txn.city ?? ""} className={input} />
-          </label>
-          <label className={label}>
-            State
-            <input name="state" defaultValue={txn.state ?? ""} maxLength={2} className={input} />
-          </label>
-          <label className={label}>
-            ZIP
-            <input name="zip" defaultValue={txn.zip ?? ""} className={input} />
-          </label>
-          <label className={label}>
-            Side
-            <select name="side" defaultValue={txn.side} className={input}>
-              {SIDES.map((s) => (
-                <option key={s} value={s}>
-                  {SIDE_LABEL[s]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={label}>
-            Purchase price ($)
-            <input
-              name="purchasePrice"
-              inputMode="numeric"
-              defaultValue={txn.purchasePrice ?? ""}
-              className={input}
-            />
-          </label>
-          <label className={label}>
-            Contract date
-            <input
-              name="contractDate"
-              type="date"
-              defaultValue={txn.contractDate ? fmtDate(txn.contractDate) : ""}
-              className={input}
-            />
-          </label>
-          <label className={label}>
-            Close date
-            <input
-              name="closeDate"
-              type="date"
-              defaultValue={txn.closeDate ? fmtDate(txn.closeDate) : ""}
-              className={input}
-            />
-          </label>
-          <label className={`${label} lg:col-span-3`}>
-            Notes
-            <input name="notes" defaultValue={txn.notes ?? ""} className={input} />
-          </label>
-          <div className="flex items-end">
-            <button type="submit" className={btn}>
-              Save changes
-            </button>
-          </div>
-        </form>
-      </section>
-
-      <section className={card}>
-        <h2 className="mb-3 font-medium">Custom fields</h2>
-        {Object.keys(customFields).length > 0 && (
-          <ul className="mb-3 flex flex-col gap-1">
-            {Object.entries(customFields).map(([k, v]) => (
-              <li key={k} className="flex items-center gap-2 text-sm">
-                <span className="font-medium">{k}:</span> <span>{v}</span>
-                <form action={removeCustomField}>
-                  <input type="hidden" name="id" value={txn.id} />
-                  <input type="hidden" name="key" value={k} />
-                  <button type="submit" className="text-xs text-stone-400 hover:text-red-600">
-                    remove
-                  </button>
-                </form>
-              </li>
-            ))}
-          </ul>
-        )}
-        <form action={setCustomField} className="flex flex-wrap items-end gap-2">
-          <input type="hidden" name="id" value={txn.id} />
-          <label className={label}>
-            Field
-            <input name="key" placeholder="MLS #" className={input} />
-          </label>
-          <label className={label}>
-            Value
-            <input name="value" placeholder="MLS-102938" className={input} />
-          </label>
-          <button type="submit" className={btnGhost}>
-            Add field
-          </button>
-        </form>
-      </section>
-
-      <section className={card}>
-        <h2 className="mb-3 font-medium">Parties</h2>
-        {txn.parties.length === 0 ? (
-          <p className="mb-3 text-sm text-stone-500">No parties attached yet.</p>
-        ) : (
-          <ul className="mb-4 flex flex-col gap-1">
-            {txn.parties.map((p) => (
-              <li key={p.id} className="flex items-center gap-3 text-sm">
-                <span className="w-36 shrink-0 text-stone-500">{ROLE_LABEL[p.role]}</span>
-                <span className="font-medium">{p.contact.name}</span>
-                <span className="text-stone-500">{p.contact.email ?? p.contact.phone ?? ""}</span>
-                <form action={removeParty} className="ml-auto">
-                  <input type="hidden" name="id" value={p.id} />
-                  <input type="hidden" name="transactionId" value={txn.id} />
-                  <button type="submit" className="text-xs text-stone-400 hover:text-red-600">
-                    remove
-                  </button>
-                </form>
-              </li>
-            ))}
-          </ul>
-        )}
-        <form action={addParty} className="flex flex-wrap items-end gap-2">
-          <input type="hidden" name="transactionId" value={txn.id} />
-          <label className={label}>
-            Contact
-            <select name="contactId" className={input} defaultValue="">
-              <option value="" disabled>
-                Choose…
-              </option>
-              {contacts.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={label}>
-            Role
-            <select name="role" className={input} defaultValue="BUYER">
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {ROLE_LABEL[r]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="submit" className={btnGhost}>
-            Add party
-          </button>
-        </form>
-        {contacts.length === 0 && (
-          <p className="mt-2 text-xs text-stone-400">
-            No contacts yet —{" "}
-            <Link href="/dashboard/contacts" className="text-brand-600 hover:underline">
-              add some first
-            </Link>
-            .
-          </p>
-        )}
-      </section>
-
-      <section className={card}>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-medium">
-            Tasks <span className="text-sm text-stone-400">({openCount} open)</span>
-          </h2>
-          {plans.length > 0 && (
-            <form action={applyActionPlan} className="flex items-center gap-2">
-              <input type="hidden" name="transactionId" value={txn.id} />
-              <select name="planId" className={input} defaultValue={plans[0]?.id}>
-                {plans.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p._count.tasks})
-                  </option>
+      <div className="grid gap-5 xl:grid-cols-[280px_minmax(0,1fr)_280px]">
+        <aside className="flex flex-col gap-4 xl:order-1">
+          <section className={card}>
+            <details open>
+              <summary className="cursor-pointer select-none text-sm font-semibold uppercase tracking-wide text-stone-400">
+                Listing details
+              </summary>
+              <dl className="mt-2 flex flex-col gap-1.5 text-sm">
+                <div className="flex justify-between gap-2">
+                  <dt className="text-stone-500">MLS ID</dt>
+                  <dd className="font-medium">{txn.mlsId ?? "—"}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-stone-500">List price</dt>
+                  <dd className="tabular-nums font-medium">{fmtMoney(txn.listPrice)}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-stone-500">Contract price</dt>
+                  <dd className="tabular-nums font-medium">{fmtMoney(txn.purchasePrice)}</dd>
+                </div>
+              </dl>
+            </details>
+          </section>
+          <section className={card}>
+            <h2 className="mb-1 font-medium">Custom fields</h2>
+            <p className="mb-3 text-xs text-stone-400">
+              Any field works in document templates as{" "}
+              <code className="font-mono">{"{{field_key}}"}</code>.
+            </p>
+            {Object.keys(customFields).length > 0 && (
+              <ul className="mb-3 flex flex-col gap-1">
+                {Object.entries(customFields).map(([k, v]) => (
+                  <li key={k} className="flex items-center gap-2 text-sm">
+                    <span className="font-medium">{k}:</span> <span>{v}</span>
+                    <form action={removeCustomField}>
+                      <input type="hidden" name="id" value={txn.id} />
+                      <input type="hidden" name="key" value={k} />
+                      <button type="submit" className="text-xs text-stone-400 hover:text-red-600">
+                        remove
+                      </button>
+                    </form>
+                  </li>
                 ))}
-              </select>
+              </ul>
+            )}
+            <form action={setCustomField} className="flex flex-wrap items-end gap-2">
+              <input type="hidden" name="id" value={txn.id} />
+              <label className={label}>
+                Field
+                <input name="key" placeholder="MLS #" className={input} />
+              </label>
+              <label className={label}>
+                Value
+                <input name="value" placeholder="MLS-102938" className={input} />
+              </label>
               <button type="submit" className={btnGhost}>
-                Apply plan
+                Add field
               </button>
             </form>
-          )}
-        </div>
-        {txn.tasks.length === 0 ? (
-          <p className="mb-3 text-sm text-stone-500">
-            No tasks yet — add one below or apply an action plan.
-          </p>
-        ) : (
-          <ul className="mb-4 flex flex-col">
-            {txn.tasks.map((t) => {
-              const done = t.status === "DONE";
-              const overdue = !done && t.dueDate && fmtDate(t.dueDate) < today;
-              return (
-                <li
-                  key={t.id}
-                  className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0"
-                >
-                  <form action={toggleTask}>
-                    <input type="hidden" name="id" value={t.id} />
-                    <input type="hidden" name="transactionId" value={txn.id} />
-                    <button
-                      type="submit"
-                      title={done ? "Reopen" : "Mark done"}
-                      className={`flex h-5 w-5 items-center justify-center rounded border text-xs ${
-                        done
-                          ? "border-brand-600 bg-brand-600 text-white"
-                          : "border-stone-300 hover:border-brand-600"
-                      }`}
-                    >
-                      {done ? "✓" : ""}
-                    </button>
-                  </form>
-                  <span
-                    className={`w-24 shrink-0 text-sm ${overdue ? "font-medium text-red-600" : "text-stone-500"}`}
-                  >
-                    {fmtDate(t.dueDate)}
-                  </span>
-                  <span className={`text-sm ${done ? "text-stone-400 line-through" : ""}`}>
-                    {t.title}
-                  </span>
-                  <span className="ml-auto flex items-center gap-3">
-                    <VisibilityToggles
-                      kind="task"
-                      id={t.id}
-                      transactionId={txn.id}
-                      visibleToAgent={t.visibleToAgent}
-                      visibleToClient={t.visibleToClient}
-                    />
-                  </span>
-                  <div>
-                    <DangerDelete
-                      compact
-                      action={deleteTask}
-                      label="Delete"
-                      description="Removes this task from the checklist."
-                      hidden={{ id: t.id, transactionId: txn.id }}
-                    />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        <form action={createTask} className="flex flex-wrap items-end gap-2">
-          <input type="hidden" name="transactionId" value={txn.id} />
-          <label className={`${label} min-w-64 flex-1`}>
-            New task
-            <input name="title" placeholder="Order home warranty" className={input} />
-          </label>
-          <label className={label}>
-            Due
-            <input name="dueDate" type="date" className={input} />
-          </label>
-          <button type="submit" className={btnGhost}>
-            Add task
-          </button>
-        </form>
-      </section>
-
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Documents &amp; contract extraction</h2>
-        <p className="mb-3 text-sm text-stone-500">
-          Upload the purchase contract and let AI pull every key date and figure — page-cited, and
-          nothing is saved until you confirm it.
-        </p>
-        {!process.env.ANTHROPIC_API_KEY && (
-          <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            No <code>ANTHROPIC_API_KEY</code> is configured — extraction runs will fail until one is
-            added to <code>.env</code>.
-          </p>
-        )}
-        {txn.documents.length > 0 && (
-          <ul className="mb-4 flex flex-col">
-            {txn.documents.map((doc) => (
-              <li
-                key={doc.id}
-                className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 last:border-0"
+          </section>
+        </aside>
+        <div className="flex min-w-0 flex-col gap-3 xl:order-2">
+          <nav className="flex flex-wrap gap-1 border-b border-stone-200">
+            {TXN_TABS.map(([key, labelText]) => (
+              <Link
+                key={key}
+                href={`/dashboard/transactions/${txn.id}?tab=${key}`}
+                aria-current={tab === key ? "page" : undefined}
+                className={`rounded-t-lg px-3 py-2 text-sm transition-colors ${
+                  tab === key
+                    ? "border border-b-0 border-stone-200 bg-white font-medium text-brand-800"
+                    : "text-stone-500 hover:text-stone-800"
+                }`}
               >
-                <a
-                  href={`/api/documents/${doc.id}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-medium text-brand-600 hover:underline"
-                >
-                  {doc.filename}
-                </a>
-                <span className="text-xs text-stone-400">
-                  {(doc.sizeBytes / 1024).toFixed(0)} KB · {fmtDate(doc.createdAt)}
-                </span>
-                {doc.contentType === "application/pdf" &&
-                  (aiCredits.limited ? (
-                    <span className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
-                      Trial credits used ({aiCredits.used} of {aiCredits.limit}) —{" "}
-                      <Link
-                        href="/dashboard/billing"
-                        className="font-medium text-brand-700 underline"
-                      >
-                        upgrade
-                      </Link>{" "}
-                      for included AI extraction
-                    </span>
-                  ) : (
-                    <form action={runExtraction} className="flex items-center gap-2">
-                      <input type="hidden" name="documentId" value={doc.id} />
+                {labelText}
+              </Link>
+            ))}
+          </nav>
+          {tab === "tasks" && (
+            <>
+              <section className={card}>
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="font-medium">
+                    Tasks <span className="text-sm text-stone-400">({openCount} open)</span>
+                  </h2>
+                  {plans.length > 0 && (
+                    <form action={applyActionPlan} className="flex items-center gap-2">
+                      <input type="hidden" name="transactionId" value={txn.id} />
+                      <select name="planId" className={input} defaultValue={plans[0]?.id}>
+                        {plans.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} ({p._count.tasks})
+                          </option>
+                        ))}
+                      </select>
                       <button type="submit" className={btnGhost}>
-                        Extract contract data
+                        Apply plan
                       </button>
-                      {aiCredits.limit != null && (
-                        <span className="text-xs text-stone-400">
-                          {aiCredits.limit - aiCredits.used} of {aiCredits.limit} trial credits left
-                        </span>
-                      )}
                     </form>
-                  ))}
-                <span className="ml-auto flex items-center gap-3">
-                  <VisibilityToggles
-                    kind="document"
-                    id={doc.id}
-                    transactionId={txn.id}
-                    visibleToAgent={doc.visibleToAgent}
-                    visibleToClient={doc.visibleToClient}
-                  />
-                </span>
-                <div>
-                  <DangerDelete
-                    compact
-                    action={deleteDocument}
-                    label="Delete"
-                    description="Permanently deletes this file."
-                    hidden={{ id: doc.id, transactionId: txn.id }}
-                  />
+                  )}
                 </div>
-                <details className="w-full">
-                  <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
-                    Send for signature
-                  </summary>
-                  <form
-                    action={sendForSignature}
-                    className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
-                  >
-                    <input type="hidden" name="documentId" value={doc.id} />
+                {txn.tasks.length === 0 ? (
+                  <p className="mb-3 text-sm text-stone-500">
+                    No tasks yet — add one below or apply an action plan.
+                  </p>
+                ) : (
+                  <ul className="mb-4 flex flex-col">
+                    {txn.tasks.map((t) => {
+                      const done = t.status === "DONE";
+                      const overdue = !done && t.dueDate && fmtDate(t.dueDate) < today;
+                      return (
+                        <li
+                          key={t.id}
+                          className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0"
+                        >
+                          <form action={toggleTask}>
+                            <input type="hidden" name="id" value={t.id} />
+                            <input type="hidden" name="transactionId" value={txn.id} />
+                            <button
+                              type="submit"
+                              title={done ? "Reopen" : "Mark done"}
+                              className={`flex h-5 w-5 items-center justify-center rounded border text-xs ${
+                                done
+                                  ? "border-brand-600 bg-brand-600 text-white"
+                                  : "border-stone-300 hover:border-brand-600"
+                              }`}
+                            >
+                              {done ? "✓" : ""}
+                            </button>
+                          </form>
+                          <span
+                            className={`w-24 shrink-0 text-sm ${overdue ? "font-medium text-red-600" : "text-stone-500"}`}
+                          >
+                            {fmtDate(t.dueDate)}
+                          </span>
+                          <span className={`text-sm ${done ? "text-stone-400 line-through" : ""}`}>
+                            {t.title}
+                          </span>
+                          <span className="ml-auto flex items-center gap-3">
+                            <VisibilityToggles
+                              kind="task"
+                              id={t.id}
+                              transactionId={txn.id}
+                              visibleToAgent={t.visibleToAgent}
+                              visibleToClient={t.visibleToClient}
+                            />
+                          </span>
+                          <div>
+                            <DangerDelete
+                              compact
+                              action={deleteTask}
+                              label="Delete"
+                              description="Removes this task from the checklist."
+                              hidden={{ id: t.id, transactionId: txn.id }}
+                            />
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                <form action={createTask} className="flex flex-wrap items-end gap-2">
+                  <input type="hidden" name="transactionId" value={txn.id} />
+                  <label className={`${label} min-w-64 flex-1`}>
+                    New task
+                    <input name="title" placeholder="Order home warranty" className={input} />
+                  </label>
+                  <label className={label}>
+                    Due
+                    <input name="dueDate" type="date" className={input} />
+                  </label>
+                  <button type="submit" className={btnGhost}>
+                    Add task
+                  </button>
+                </form>
+              </section>
+            </>
+          )}
+          {tab === "attachments" && (
+            <>
+              <section className={card}>
+                <h2 className="mb-1 font-medium">Documents &amp; contract extraction</h2>
+                <p className="mb-3 text-sm text-stone-500">
+                  Upload the purchase contract and let AI pull every key date and figure —
+                  page-cited, and nothing is saved until you confirm it.
+                </p>
+                {!process.env.ANTHROPIC_API_KEY && (
+                  <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    No <code>ANTHROPIC_API_KEY</code> is configured — extraction runs will fail
+                    until one is added to <code>.env</code>.
+                  </p>
+                )}
+                {txn.documents.length > 0 && (
+                  <ul className="mb-4 flex flex-col">
+                    {txn.documents.map((doc) => (
+                      <li
+                        key={doc.id}
+                        className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 last:border-0"
+                      >
+                        <a
+                          href={`/api/documents/${doc.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium text-brand-600 hover:underline"
+                        >
+                          {doc.filename}
+                        </a>
+                        <span className="text-xs text-stone-400">
+                          {(doc.sizeBytes / 1024).toFixed(0)} KB · {fmtDate(doc.createdAt)}
+                        </span>
+                        {doc.contentType === "application/pdf" &&
+                          (aiCredits.limited ? (
+                            <span className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
+                              Trial credits used ({aiCredits.used} of {aiCredits.limit}) —{" "}
+                              <Link
+                                href="/dashboard/billing"
+                                className="font-medium text-brand-700 underline"
+                              >
+                                upgrade
+                              </Link>{" "}
+                              for included AI extraction
+                            </span>
+                          ) : (
+                            <form action={runExtraction} className="flex items-center gap-2">
+                              <input type="hidden" name="documentId" value={doc.id} />
+                              <button type="submit" className={btnGhost}>
+                                Extract contract data
+                              </button>
+                              {aiCredits.limit != null && (
+                                <span className="text-xs text-stone-400">
+                                  {aiCredits.limit - aiCredits.used} of {aiCredits.limit} trial
+                                  credits left
+                                </span>
+                              )}
+                            </form>
+                          ))}
+                        <span className="ml-auto flex items-center gap-3">
+                          <VisibilityToggles
+                            kind="document"
+                            id={doc.id}
+                            transactionId={txn.id}
+                            visibleToAgent={doc.visibleToAgent}
+                            visibleToClient={doc.visibleToClient}
+                          />
+                        </span>
+                        <div>
+                          <DangerDelete
+                            compact
+                            action={deleteDocument}
+                            label="Delete"
+                            description="Permanently deletes this file."
+                            hidden={{ id: doc.id, transactionId: txn.id }}
+                          />
+                        </div>
+                        <details className="w-full">
+                          <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
+                            Send for signature
+                          </summary>
+                          <form
+                            action={sendForSignature}
+                            className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
+                          >
+                            <input type="hidden" name="documentId" value={doc.id} />
+                            <label className={label}>
+                              Signer 1 name *
+                              <input name="signer1Name" required className={input} />
+                            </label>
+                            <label className={label}>
+                              Signer 1 email *
+                              <input name="signer1Email" type="email" required className={input} />
+                            </label>
+                            <label className={label}>
+                              Signer 2 name
+                              <input name="signer2Name" className={input} />
+                            </label>
+                            <label className={label}>
+                              Signer 2 email
+                              <input name="signer2Email" type="email" className={input} />
+                            </label>
+                            <button type="submit" className={btnGhost}>
+                              Send
+                            </button>
+                          </form>
+                        </details>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <form action={uploadDocument} className="mb-4 flex flex-wrap items-end gap-2">
+                  <input type="hidden" name="transactionId" value={txn.id} />
+                  <label className={label}>
+                    Upload document (PDF, max 10 MB)
+                    <input
+                      name="file"
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      required
+                      className={input}
+                    />
+                  </label>
+                  <button type="submit" className={btnGhost}>
+                    Upload
+                  </button>
+                </form>
+                {templates.length > 0 && (
+                  <form action={generateDocument} className="mb-4 flex flex-wrap items-end gap-2">
+                    <input type="hidden" name="transactionId" value={txn.id} />
                     <label className={label}>
-                      Signer 1 name *
-                      <input name="signer1Name" required className={input} />
-                    </label>
-                    <label className={label}>
-                      Signer 1 email *
-                      <input name="signer1Email" type="email" required className={input} />
-                    </label>
-                    <label className={label}>
-                      Signer 2 name
-                      <input name="signer2Name" className={input} />
-                    </label>
-                    <label className={label}>
-                      Signer 2 email
-                      <input name="signer2Email" type="email" className={input} />
+                      Generate from template
+                      <select name="templateId" className={input} defaultValue={templates[0]?.id}>
+                        {templates.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                     <button type="submit" className={btnGhost}>
-                      Send
+                      Generate PDF
                     </button>
                   </form>
-                </details>
-              </li>
-            ))}
-          </ul>
-        )}
-        <form action={uploadDocument} className="mb-4 flex flex-wrap items-end gap-2">
-          <input type="hidden" name="transactionId" value={txn.id} />
-          <label className={label}>
-            Upload document (PDF, max 10 MB)
-            <input
-              name="file"
-              type="file"
-              accept="application/pdf,.pdf"
-              required
-              className={input}
-            />
-          </label>
-          <button type="submit" className={btnGhost}>
-            Upload
-          </button>
-        </form>
-        {templates.length > 0 && (
-          <form action={generateDocument} className="mb-4 flex flex-wrap items-end gap-2">
-            <input type="hidden" name="transactionId" value={txn.id} />
-            <label className={label}>
-              Generate from template
-              <select name="templateId" className={input} defaultValue={templates[0]?.id}>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button type="submit" className={btnGhost}>
-              Generate PDF
-            </button>
-          </form>
-        )}
-        {txn.envelopes.length > 0 && (
-          <div className="mb-4">
-            <h3 className="mb-1 text-sm font-medium text-stone-600">Signature envelopes</h3>
-            <ul className="flex flex-col">
-              {txn.envelopes.map((env) => {
-                const signers = (env.signers as Array<{ name: string; email: string }>) ?? [];
+                )}
+                {txn.envelopes.length > 0 && (
+                  <div className="mb-4">
+                    <h3 className="mb-1 text-sm font-medium text-stone-600">Signature envelopes</h3>
+                    <ul className="flex flex-col">
+                      {txn.envelopes.map((env) => {
+                        const signers =
+                          (env.signers as Array<{ name: string; email: string }>) ?? [];
+                        return (
+                          <li
+                            key={env.id}
+                            className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
+                          >
+                            <EnvelopeBadge status={env.status} />
+                            <span className="font-medium">{env.document.filename}</span>
+                            <span className="text-stone-500">
+                              {env.provider.toLowerCase()} · {signers.map((s) => s.name).join(", ")}
+                            </span>
+                            {env.error && <span className="text-xs text-red-600">{env.error}</span>}
+                            <span className="ml-auto flex items-center gap-2">
+                              {env.provider === "MANUAL" && env.status === "SENT" && (
+                                <form action={markEnvelopeSigned}>
+                                  <input type="hidden" name="id" value={env.id} />
+                                  <button type="submit" className={btnGhost}>
+                                    Mark signed
+                                  </button>
+                                </form>
+                              )}
+                              {env.provider !== "MANUAL" && env.externalId && (
+                                <form action={refreshEnvelope}>
+                                  <input type="hidden" name="id" value={env.id} />
+                                  <button type="submit" className={btnGhost}>
+                                    Refresh status
+                                  </button>
+                                </form>
+                              )}
+                              <DangerDelete
+                                compact
+                                action={deleteEnvelope}
+                                label="Delete"
+                                description="Removes this signature record (the provider envelope is not cancelled)."
+                                hidden={{ id: env.id, transactionId: txn.id }}
+                              />
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+                {txn.extractions.length > 0 && (
+                  <div>
+                    <h3 className="mb-1 text-sm font-medium text-stone-600">Extraction runs</h3>
+                    <ul className="flex flex-col">
+                      {txn.extractions.map((ex) => (
+                        <li
+                          key={ex.id}
+                          className="flex items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
+                        >
+                          <ExtractionBadge status={ex.status} />
+                          <span className="text-stone-500">
+                            {fmtDate(ex.createdAt)} · {ex._count.fields} fields · {ex.model}
+                          </span>
+                          <Link
+                            href={`/dashboard/transactions/${txn.id}/extractions/${ex.id}`}
+                            className="ml-auto text-brand-600 hover:underline"
+                          >
+                            {ex.status === "READY" ? "Review & apply" : "View"}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </section>
+            </>
+          )}
+          {tab === "dates" && (
+            <>
+              <section className={card}>
+                <h2 className="mb-3 font-medium">Details</h2>
+                <form
+                  action={updateTransaction}
+                  className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+                >
+                  <input type="hidden" name="id" value={txn.id} />
+                  <label className={`${label} lg:col-span-2`}>
+                    Property address
+                    <input
+                      name="propertyAddress"
+                      defaultValue={txn.propertyAddress}
+                      className={input}
+                    />
+                  </label>
+                  <label className={label}>
+                    Client
+                    <select name="clientId" defaultValue={txn.clientId ?? ""} className={input}>
+                      <option value="">—</option>
+                      {clients.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className={label}>
+                    Status
+                    <select name="status" defaultValue={txn.status} className={input}>
+                      {STATUSES.map((s) => (
+                        <option key={s} value={s}>
+                          {STATUS_LABEL[s]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className={label}>
+                    City
+                    <input name="city" defaultValue={txn.city ?? ""} className={input} />
+                  </label>
+                  <label className={label}>
+                    State
+                    <input
+                      name="state"
+                      defaultValue={txn.state ?? ""}
+                      maxLength={2}
+                      className={input}
+                    />
+                  </label>
+                  <label className={label}>
+                    ZIP
+                    <input name="zip" defaultValue={txn.zip ?? ""} className={input} />
+                  </label>
+                  <label className={label}>
+                    Side
+                    <select name="side" defaultValue={txn.side} className={input}>
+                      {SIDES.map((s) => (
+                        <option key={s} value={s}>
+                          {SIDE_LABEL[s]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className={label}>
+                    Purchase price ($)
+                    <input
+                      name="purchasePrice"
+                      inputMode="numeric"
+                      defaultValue={txn.purchasePrice ?? ""}
+                      className={input}
+                    />
+                  </label>
+                  <label className={label}>
+                    Contract date
+                    <input
+                      name="contractDate"
+                      type="date"
+                      defaultValue={txn.contractDate ? fmtDate(txn.contractDate) : ""}
+                      className={input}
+                    />
+                  </label>
+                  <label className={label}>
+                    Close date
+                    <input
+                      name="closeDate"
+                      type="date"
+                      defaultValue={txn.closeDate ? fmtDate(txn.closeDate) : ""}
+                      className={input}
+                    />
+                  </label>
+                  <label className={`${label} lg:col-span-3`}>
+                    Notes
+                    <input name="notes" defaultValue={txn.notes ?? ""} className={input} />
+                  </label>
+                  <div className="flex items-end">
+                    <button type="submit" className={btn}>
+                      Save changes
+                    </button>
+                  </div>
+                </form>
+              </section>
+            </>
+          )}
+          {tab === "participants" && (
+            <>
+              <section className={card}>
+                <h2 className="mb-3 font-medium">Parties</h2>
+                {txn.parties.length === 0 ? (
+                  <p className="mb-3 text-sm text-stone-500">No parties attached yet.</p>
+                ) : (
+                  <ul className="mb-4 flex flex-col gap-1">
+                    {txn.parties.map((p) => (
+                      <li key={p.id} className="flex items-center gap-3 text-sm">
+                        <span className="w-36 shrink-0 text-stone-500">{ROLE_LABEL[p.role]}</span>
+                        <span className="font-medium">{p.contact.name}</span>
+                        <span className="text-stone-500">
+                          {p.contact.email ?? p.contact.phone ?? ""}
+                        </span>
+                        <form action={removeParty} className="ml-auto">
+                          <input type="hidden" name="id" value={p.id} />
+                          <input type="hidden" name="transactionId" value={txn.id} />
+                          <button
+                            type="submit"
+                            className="text-xs text-stone-400 hover:text-red-600"
+                          >
+                            remove
+                          </button>
+                        </form>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <form action={addParty} className="flex flex-wrap items-end gap-2">
+                  <input type="hidden" name="transactionId" value={txn.id} />
+                  <label className={label}>
+                    Contact
+                    <select name="contactId" className={input} defaultValue="">
+                      <option value="" disabled>
+                        Choose…
+                      </option>
+                      {contacts.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className={label}>
+                    Role
+                    <select name="role" className={input} defaultValue="BUYER">
+                      {ROLES.map((r) => (
+                        <option key={r} value={r}>
+                          {ROLE_LABEL[r]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button type="submit" className={btnGhost}>
+                    Add party
+                  </button>
+                </form>
+                {contacts.length === 0 && (
+                  <p className="mt-2 text-xs text-stone-400">
+                    No contacts yet —{" "}
+                    <Link href="/dashboard/contacts" className="text-brand-600 hover:underline">
+                      add some first
+                    </Link>
+                    .
+                  </p>
+                )}
+              </section>
+            </>
+          )}
+          {tab === "emails" && (
+            <section className={card}>
+              <h2 className="mb-1 font-medium">Emails</h2>
+              <p className="text-sm text-stone-500">
+                Outgoing email for this transaction will log here once mailbox connections
+                (IMAP/SMTP — no big-tech OAuth reviews) ship. It's on the roadmap; portal links and
+                e-sign requests already reach people without it.
+              </p>
+            </section>
+          )}
+          {tab === "notes" && (
+            <section className={card}>
+              <h2 className="mb-1 font-medium">Notes</h2>
+              {txn.notes ? (
+                <p className="max-w-prose whitespace-pre-wrap text-sm leading-relaxed">
+                  {txn.notes}
+                </p>
+              ) : (
+                <p className="text-sm text-stone-500">No notes yet.</p>
+              )}
+              <p className="mt-3 text-xs text-stone-400">
+                Edit notes in the{" "}
+                <Link href={`/dashboard/transactions/${txn.id}?tab=dates`} className="underline">
+                  Dates &amp; details
+                </Link>{" "}
+                tab.
+              </p>
+            </section>
+          )}
+          {tab === "payout" && (
+            <section className={card}>
+              <h2 className="mb-1 font-medium">Payout</h2>
+              <p className="mb-3 text-sm text-stone-500">
+                Commission percentages against the contract price
+                {txn.purchasePrice ? ` (${fmtMoney(txn.purchasePrice)})` : ""}.
+              </p>
+              {(() => {
+                const payout =
+                  (txn.payout as { listPct?: number; buyPct?: number; note?: string } | null) ?? {};
+                const price = txn.purchasePrice ?? 0;
+                const gross = (pct?: number | null) =>
+                  pct && price ? fmtMoney(Math.round((price * pct) / 100)) : "—";
                 return (
-                  <li
-                    key={env.id}
-                    className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
-                  >
-                    <EnvelopeBadge status={env.status} />
-                    <span className="font-medium">{env.document.filename}</span>
-                    <span className="text-stone-500">
-                      {env.provider.toLowerCase()} · {signers.map((s) => s.name).join(", ")}
-                    </span>
-                    {env.error && <span className="text-xs text-red-600">{env.error}</span>}
-                    <span className="ml-auto flex items-center gap-2">
-                      {env.provider === "MANUAL" && env.status === "SENT" && (
-                        <form action={markEnvelopeSigned}>
-                          <input type="hidden" name="id" value={env.id} />
-                          <button type="submit" className={btnGhost}>
-                            Mark signed
-                          </button>
-                        </form>
-                      )}
-                      {env.provider !== "MANUAL" && env.externalId && (
-                        <form action={refreshEnvelope}>
-                          <input type="hidden" name="id" value={env.id} />
-                          <button type="submit" className={btnGhost}>
-                            Refresh status
-                          </button>
-                        </form>
-                      )}
-                      <DangerDelete
-                        compact
-                        action={deleteEnvelope}
-                        label="Delete"
-                        description="Removes this signature record (the provider envelope is not cancelled)."
-                        hidden={{ id: env.id, transactionId: txn.id }}
-                      />
+                  <form action={updatePayout} className="flex flex-col gap-3">
+                    <input type="hidden" name="id" value={txn.id} />
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className={label}>
+                        List side %
+                        <input
+                          name="listPct"
+                          defaultValue={payout.listPct ?? ""}
+                          inputMode="decimal"
+                          className={input}
+                        />
+                      </label>
+                      <label className={label}>
+                        Buy side %
+                        <input
+                          name="buyPct"
+                          defaultValue={payout.buyPct ?? ""}
+                          inputMode="decimal"
+                          className={input}
+                        />
+                      </label>
+                    </div>
+                    <p className="text-sm text-stone-600">
+                      Estimated gross — list: <strong>{gross(payout.listPct)}</strong> · buy:{" "}
+                      <strong>{gross(payout.buyPct)}</strong>
+                    </p>
+                    <label className={label}>
+                      Notes
+                      <input name="payoutNote" defaultValue={payout.note ?? ""} className={input} />
+                    </label>
+                    <div>
+                      <button type="submit" className={btn}>
+                        Save payout
+                      </button>
+                    </div>
+                  </form>
+                );
+              })()}
+            </section>
+          )}
+          {tab === "misc" && (
+            <>
+              <section className={card}>
+                <h2 className="mb-1 font-medium">Client portal links</h2>
+                <p className="mb-3 text-sm text-stone-500">
+                  Share a read-only view of this transaction — text or email the link to your buyer,
+                  seller, or agent. You choose what each link shows; revoke any time.
+                </p>
+                {txn.portalLinks.length > 0 && (
+                  <ul className="mb-4 flex flex-col">
+                    {txn.portalLinks.map((pl) => {
+                      const url = `${portalBase}/portal/${pl.token}`;
+                      return (
+                        <li key={pl.id} className="border-b border-stone-100 py-2 last:border-0">
+                          <div className="flex flex-wrap items-center gap-3 text-sm">
+                            <span className="font-medium">{pl.label}</span>
+                            <span className="text-xs text-stone-400">
+                              shows:{" "}
+                              {[
+                                pl.showTasks && "tasks",
+                                pl.showParties && "parties",
+                                pl.showDocuments && "documents",
+                              ]
+                                .filter(Boolean)
+                                .join(", ") || "summary only"}
+                            </span>
+                            {pl.revokedAt ? (
+                              <Badge tone="neutral">revoked</Badge>
+                            ) : (
+                              <span className="text-xs text-stone-400">
+                                {pl.lastAccessedAt
+                                  ? `last viewed ${fmtDate(pl.lastAccessedAt)}`
+                                  : "never viewed"}
+                              </span>
+                            )}
+                            <span className="ml-auto flex items-center gap-3">
+                              <form action={setPortalLinkActive}>
+                                <input type="hidden" name="id" value={pl.id} />
+                                <input
+                                  type="hidden"
+                                  name="active"
+                                  value={pl.revokedAt ? "1" : "0"}
+                                />
+                                <button
+                                  type="submit"
+                                  className="text-xs font-medium text-stone-500 hover:text-brand-700"
+                                >
+                                  {pl.revokedAt ? "Activate" : "Deactivate"}
+                                </button>
+                              </form>
+                              <DangerDelete
+                                compact
+                                action={deletePortalLink}
+                                label="Delete"
+                                description="Permanently removes this portal link."
+                                hidden={{ id: pl.id, transactionId: txn.id }}
+                              />
+                            </span>
+                          </div>
+                          {!pl.revokedAt && (
+                            <input
+                              readOnly
+                              value={url}
+                              className="mt-1 w-full rounded border border-stone-200 bg-stone-50 px-2 py-1 font-mono text-xs text-stone-600"
+                            />
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                <form action={createPortalLink} className="flex flex-wrap items-end gap-3">
+                  <input type="hidden" name="transactionId" value={txn.id} />
+                  <label className={label}>
+                    Label *
+                    <input name="label" required placeholder="Buyer — Jordan" className={input} />
+                  </label>
+                  <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
+                    <input
+                      type="checkbox"
+                      name="showTasks"
+                      defaultChecked
+                      className="h-4 w-4 accent-brand-600"
+                    />
+                    Tasks
+                  </label>
+                  <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
+                    <input
+                      type="checkbox"
+                      name="showParties"
+                      defaultChecked
+                      className="h-4 w-4 accent-brand-600"
+                    />
+                    Parties
+                  </label>
+                  <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
+                    <input
+                      type="checkbox"
+                      name="showDocuments"
+                      className="h-4 w-4 accent-brand-600"
+                    />
+                    Documents
+                  </label>
+                  <button type="submit" className={btnGhost}>
+                    Create link
+                  </button>
+                </form>
+              </section>
+            </>
+          )}
+        </div>
+        <aside className="flex flex-col gap-4 xl:order-3">
+          <section className={card}>
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-400">
+              Key dates
+            </h2>
+            <dl className="flex flex-col gap-1.5 text-sm">
+              {(
+                [
+                  ["List date", txn.listDate],
+                  ["On market", txn.onMarketDate],
+                  ["Contract", txn.contractDate],
+                  ["Close", txn.closeDate],
+                  ["Expires", txn.expireDate],
+                ] as const
+              ).map(([labelText, d]) => (
+                <div key={labelText} className="flex justify-between gap-2">
+                  <dt className="text-stone-500">{labelText}</dt>
+                  <dd className="tabular-nums font-medium">{fmtDate(d)}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+          <section className={card}>
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-400">
+              Next deadlines
+            </h2>
+            <ul className="flex flex-col gap-1.5 text-sm">
+              {txn.tasks
+                .filter((t) => t.status === "OPEN" && t.dueDate)
+                .slice(0, 6)
+                .map((t) => (
+                  <li key={t.id} className="flex justify-between gap-2">
+                    <span className="truncate">{t.title}</span>
+                    <span className="shrink-0 tabular-nums text-stone-400">
+                      {fmtDate(t.dueDate)}
                     </span>
                   </li>
-                );
-              })}
+                ))}
+              {txn.tasks.filter((t) => t.status === "OPEN" && t.dueDate).length === 0 && (
+                <li className="text-stone-400">Nothing dated is open.</li>
+              )}
             </ul>
-          </div>
-        )}
-        {txn.extractions.length > 0 && (
-          <div>
-            <h3 className="mb-1 text-sm font-medium text-stone-600">Extraction runs</h3>
-            <ul className="flex flex-col">
-              {txn.extractions.map((ex) => (
-                <li
-                  key={ex.id}
-                  className="flex items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
-                >
-                  <ExtractionBadge status={ex.status} />
-                  <span className="text-stone-500">
-                    {fmtDate(ex.createdAt)} · {ex._count.fields} fields · {ex.model}
-                  </span>
-                  <Link
-                    href={`/dashboard/transactions/${txn.id}/extractions/${ex.id}`}
-                    className="ml-auto text-brand-600 hover:underline"
-                  >
-                    {ex.status === "READY" ? "Review & apply" : "View"}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </section>
+          </section>
+        </aside>
+      </div>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Client portal links</h2>
-        <p className="mb-3 text-sm text-stone-500">
-          Share a read-only view of this transaction — text or email the link to your buyer, seller,
-          or agent. You choose what each link shows; revoke any time.
-        </p>
-        {txn.portalLinks.length > 0 && (
-          <ul className="mb-4 flex flex-col">
-            {txn.portalLinks.map((pl) => {
-              const url = `${portalBase}/portal/${pl.token}`;
-              return (
-                <li key={pl.id} className="border-b border-stone-100 py-2 last:border-0">
-                  <div className="flex flex-wrap items-center gap-3 text-sm">
-                    <span className="font-medium">{pl.label}</span>
-                    <span className="text-xs text-stone-400">
-                      shows:{" "}
-                      {[
-                        pl.showTasks && "tasks",
-                        pl.showParties && "parties",
-                        pl.showDocuments && "documents",
-                      ]
-                        .filter(Boolean)
-                        .join(", ") || "summary only"}
-                    </span>
-                    {pl.revokedAt ? (
-                      <Badge tone="neutral">revoked</Badge>
-                    ) : (
-                      <span className="text-xs text-stone-400">
-                        {pl.lastAccessedAt
-                          ? `last viewed ${fmtDate(pl.lastAccessedAt)}`
-                          : "never viewed"}
-                      </span>
-                    )}
-                    <span className="ml-auto flex items-center gap-3">
-                      <form action={setPortalLinkActive}>
-                        <input type="hidden" name="id" value={pl.id} />
-                        <input type="hidden" name="active" value={pl.revokedAt ? "1" : "0"} />
-                        <button
-                          type="submit"
-                          className="text-xs font-medium text-stone-500 hover:text-brand-700"
-                        >
-                          {pl.revokedAt ? "Activate" : "Deactivate"}
-                        </button>
-                      </form>
-                      <DangerDelete
-                        compact
-                        action={deletePortalLink}
-                        label="Delete"
-                        description="Permanently removes this portal link."
-                        hidden={{ id: pl.id, transactionId: txn.id }}
-                      />
-                    </span>
-                  </div>
-                  {!pl.revokedAt && (
-                    <input
-                      readOnly
-                      value={url}
-                      className="mt-1 w-full rounded border border-stone-200 bg-stone-50 px-2 py-1 font-mono text-xs text-stone-600"
-                    />
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        <form action={createPortalLink} className="flex flex-wrap items-end gap-3">
-          <input type="hidden" name="transactionId" value={txn.id} />
-          <label className={label}>
-            Label *
-            <input name="label" required placeholder="Buyer — Jordan" className={input} />
-          </label>
-          <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
-            <input
-              type="checkbox"
-              name="showTasks"
-              defaultChecked
-              className="h-4 w-4 accent-brand-600"
-            />
-            Tasks
-          </label>
-          <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
-            <input
-              type="checkbox"
-              name="showParties"
-              defaultChecked
-              className="h-4 w-4 accent-brand-600"
-            />
-            Parties
-          </label>
-          <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
-            <input type="checkbox" name="showDocuments" className="h-4 w-4 accent-brand-600" />
-            Documents
-          </label>
-          <button type="submit" className={btnGhost}>
-            Create link
-          </button>
-        </form>
-      </section>
       <DangerDelete
         action={deleteTransaction}
         label="Delete this transaction"

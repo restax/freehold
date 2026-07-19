@@ -108,7 +108,24 @@ export async function resolveAgentPortal(token: string) {
       },
     });
     const weekAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+    const in30 = new Date(Date.now() + 30 * 24 * 3600 * 1000);
     const txnIds = transactions.map((t) => t.id);
+    const upcoming = await tx.task.findMany({
+      where: {
+        transactionId: { in: txnIds },
+        visibleToAgent: true,
+        status: "OPEN",
+        dueDate: { gte: new Date(Date.now() - 24 * 3600 * 1000), lte: in30 },
+      },
+      orderBy: { dueDate: "asc" },
+      take: 12,
+      select: {
+        id: true,
+        title: true,
+        dueDate: true,
+        transaction: { select: { id: true, propertyAddress: true } },
+      },
+    });
     const recentTasks = await tx.task.findMany({
       where: {
         transactionId: { in: txnIds },
@@ -135,7 +152,7 @@ export async function resolveAgentPortal(token: string) {
         transaction: { select: { id: true, propertyAddress: true } },
       },
     });
-    return { client, transactions, recentTasks, recentDocs };
+    return { client, transactions, recentTasks, recentDocs, upcoming };
   });
   if (!data) return null;
   return { link, ...data, tenantName: await tenantName(link.tenantId) };

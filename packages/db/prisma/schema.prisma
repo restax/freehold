@@ -127,6 +127,7 @@ model Organization {
   vaultAccessLogs      VaultAccessLog[]
   auditLogs            AuditLog[]
   contactNotes         ContactNote[]
+  clientNotes          ClientNote[]
   apiKeys              ApiKey[]
   invoices             Invoice[]
   webhookEndpoints     WebhookEndpoint[]
@@ -191,6 +192,7 @@ model Client {
   transactions  Transaction[]
   credentials   VaultCredential[]
   portalLinks   PortalLink[]
+  clientNotes   ClientNote[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   invoices      Invoice[]
@@ -301,6 +303,21 @@ model Contact {
   @@map("contact")
 }
 
+/// Notes a TC keeps about a client (the backend client page).
+model ClientNote {
+  id        String       @id @default(uuid())
+  tenantId  String       @map("tenant_id")
+  tenant    Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId  String       @map("client_id")
+  client    Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  authorId  String?      @map("author_id")
+  body      String
+  createdAt DateTime     @default(now())
+
+  @@index([tenantId, clientId, createdAt])
+  @@map("client_note")
+}
+
 /// Timestamped CRM notes on a contact (the Notes tab + quick-add).
 model ContactNote {
   id        String       @id @default(uuid())
@@ -331,6 +348,17 @@ model Transaction {
   state           String?
   zip             String?
   purchasePrice   Int?                 @map("purchase_price")
+  listPrice       Int?                 @map("list_price")
+  listDate        DateTime?            @map("list_date") @db.Date
+  onMarketDate    DateTime?            @map("on_market_date") @db.Date
+  expireDate      DateTime?            @map("expire_date") @db.Date
+  mlsId           String?              @map("mls_id")
+  /// Assignment roles: co-agent is a Client (managed agent); TCs are workspace users.
+  coAgentClientId String?              @map("co_agent_client_id")
+  tc1UserId       String?              @map("tc1_user_id")
+  tc2UserId       String?              @map("tc2_user_id")
+  /// Commission breakdown: {listPct, buyPct, note} — gross computes from price.
+  payout          Json?
   contractDate    DateTime?            @map("contract_date") @db.Date
   closeDate       DateTime?            @map("close_date") @db.Date
   notes           String?

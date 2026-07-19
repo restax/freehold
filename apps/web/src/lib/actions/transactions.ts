@@ -23,8 +23,40 @@ function commonFields(formData: FormData) {
     purchasePrice: intOr(formData, "purchasePrice"),
     contractDate: dateOnly(formData, "contractDate"),
     closeDate: dateOnly(formData, "closeDate"),
+    listPrice: intOr(formData, "listPrice"),
+    listDate: dateOnly(formData, "listDate"),
+    onMarketDate: dateOnly(formData, "onMarketDate"),
+    expireDate: dateOnly(formData, "expireDate"),
+    mlsId: optStr(formData, "mlsId"),
+    coAgentClientId: optStr(formData, "coAgentClientId"),
+    tc1UserId: optStr(formData, "tc1UserId"),
+    tc2UserId: optStr(formData, "tc2UserId"),
     notes: optStr(formData, "notes"),
   };
+}
+
+/** Payout tab: commission percentages; gross computes from contract price. */
+export async function updatePayout(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  if (!id) return;
+  const num = (n: string) => {
+    const v = Number(str(formData, n));
+    return Number.isFinite(v) && v >= 0 ? v : null;
+  };
+  await withTenant(tenantId, (tx) =>
+    tx.transaction.update({
+      where: { id },
+      data: {
+        payout: {
+          listPct: num("listPct"),
+          buyPct: num("buyPct"),
+          note: optStr(formData, "payoutNote"),
+        },
+      },
+    }),
+  );
+  revalidatePath(`/dashboard/transactions/${id}`);
 }
 
 export async function createTransaction(formData: FormData) {

@@ -29,10 +29,23 @@ export default async function TransactionsPage({
     transactions: await tx.transaction.findMany({
       where: statusFilter ? { status: statusFilter } : {},
       orderBy: { updatedAt: "desc" },
-      include: { client: { select: { name: true } }, _count: { select: { tasks: true } } },
+      include: {
+        client: { select: { name: true } },
+        _count: { select: { tasks: true } },
+        parties: {
+          where: { role: { in: ["BUYER", "SELLER"] } },
+          include: { contact: { select: { name: true } } },
+        },
+      },
     }),
     clients: await tx.client.findMany({ orderBy: { name: "asc" } }),
   }));
+  const { prisma } = await import("@freehold/db");
+  const members = await prisma.member.findMany({
+    where: { organizationId: tenantId },
+    include: { user: { select: { id: true, name: true } } },
+  });
+  const todayMs = Date.now();
 
   return (
     <div className="flex flex-col gap-6">
@@ -143,6 +156,59 @@ export default async function TransactionsPage({
             Close date
             <input name="closeDate" type="date" className={input} />
           </label>
+          <label className={label}>
+            List price ($)
+            <input name="listPrice" inputMode="numeric" className={input} />
+          </label>
+          <label className={label}>
+            List date
+            <input name="listDate" type="date" className={input} />
+          </label>
+          <label className={label}>
+            On-market date
+            <input name="onMarketDate" type="date" className={input} />
+          </label>
+          <label className={label}>
+            Expire date
+            <input name="expireDate" type="date" className={input} />
+          </label>
+          <label className={label}>
+            MLS ID
+            <input name="mlsId" className={input} />
+          </label>
+          <label className={label}>
+            Co-agent (managed agent)
+            <select name="coAgentClientId" className={input} defaultValue="">
+              <option value="">—</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={label}>
+            TC / assistant 1
+            <select name="tc1UserId" className={input} defaultValue="">
+              <option value="">—</option>
+              {members.map((m) => (
+                <option key={m.user.id} value={m.user.id}>
+                  {m.user.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={label}>
+            TC / assistant 2
+            <select name="tc2UserId" className={input} defaultValue="">
+              <option value="">—</option>
+              {members.map((m) => (
+                <option key={m.user.id} value={m.user.id}>
+                  {m.user.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="flex items-end">
             <button type="submit" className={btn}>
               Create transaction
@@ -176,12 +242,13 @@ export default async function TransactionsPage({
             <thead>
               <tr>
                 <th className={th}>Property</th>
-                <th className={th}>Client</th>
-                <th className={th}>Status</th>
                 <th className={th}>Side</th>
-                <th className={th}>Close date</th>
+                <th className={th}>Buyer / Seller</th>
+                <th className={th}>Status</th>
                 <th className={th}>Price</th>
-                <th className={th}>Tasks</th>
+                <th className={th}>Closing</th>
+                <th className={th}>DOM</th>
+                <th className={th}>MLS ID</th>
               </tr>
             </thead>
             <tbody>
@@ -195,14 +262,25 @@ export default async function TransactionsPage({
                       {t.propertyAddress}
                     </Link>
                   </td>
-                  <td className={td}>{t.client?.name ?? "—"}</td>
+                  <td className={td}>{SIDE_LABEL[t.side]}</td>
+                  <td className={td}>{t.parties.map((p) => p.contact.name).join(", ") || "—"}</td>
                   <td className={td}>
                     <StatusBadge status={t.status} />
                   </td>
-                  <td className={td}>{SIDE_LABEL[t.side]}</td>
+                  <td className={td}>{fmtMoney(t.purchasePrice ?? t.listPrice)}</td>
                   <td className={td}>{fmtDate(t.closeDate)}</td>
-                  <td className={td}>{fmtMoney(t.purchasePrice)}</td>
-                  <td className={td}>{t._count.tasks}</td>
+                  <td className={td}>
+                    {(() => {
+                      const start = t.onMarketDate ?? t.listDate;
+                      if (!start) return "—";
+                      const end =
+                        t.status === "CLOSED" || t.status === "CANCELLED"
+                          ? (t.closeDate?.getTime() ?? t.updatedAt.getTime())
+                          : todayMs;
+                      return Math.max(0, Math.round((end - start.getTime()) / 86400000));
+                    })()}
+                  </td>
+                  <td className={td}>{t.mlsId ?? "—"}</td>
                 </tr>
               ))}
             </tbody>

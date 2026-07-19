@@ -63,3 +63,15 @@ export async function deleteClient(formData: FormData) {
   revalidatePath("/dashboard/clients");
   redirect("/dashboard/clients");
 }
+
+/** Notes the TC keeps about a client, shown on the client page. */
+export async function addClientNote(formData: FormData) {
+  const { tenantId, session } = await requireTenant();
+  const clientId = str(formData, "clientId");
+  const body = str(formData, "body");
+  if (!clientId || !body) return;
+  await withTenant(tenantId, (tx) =>
+    tx.clientNote.create({ data: { tenantId, clientId, authorId: session.user.id, body } }),
+  );
+  revalidatePath(`/dashboard/clients/${clientId}`);
+}
