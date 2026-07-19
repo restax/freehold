@@ -58,6 +58,24 @@ export interface TenantPlan {
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
   activeTransactionLimit: number | null;
+  /** True when the effective tier comes from a complimentary grant, not Stripe. */
+  comped: boolean;
+  /** True when the workspace is locked for a failed renewal (Cloud only). */
+  suspended: boolean;
+}
+
+/** A comp grant is in force while set and not past its expiry. */
+function compIsActive(compTier: PlanTier | null, compExpiresAt: Date | null): boolean {
+  return compTier != null && (compExpiresAt == null || compExpiresAt.getTime() > Date.now());
+}
+
+/** The tier that actually governs limits: a live comp overrides planTier. */
+function effectiveTier(org: {
+  planTier: PlanTier;
+  compTier: PlanTier | null;
+  compExpiresAt: Date | null;
+}): PlanTier {
+  return compIsActive(org.compTier, org.compExpiresAt) ? (org.compTier as PlanTier) : org.planTier;
 }
 
 export async function getTenantPlan(tenantId: string): Promise<TenantPlan> {
@@ -68,14 +86,22 @@ export async function getTenantPlan(tenantId: string): Promise<TenantPlan> {
       seatLimit: true,
       stripeCustomerId: true,
       stripeSubscriptionId: true,
+      compTier: true,
+      compExpiresAt: true,
+      billingSuspendedAt: true,
     },
   });
+  const comped = compIsActive(org.compTier, org.compExpiresAt);
+  const tier = comped ? (org.compTier as PlanTier) : org.planTier;
   return {
-    tier: org.planTier,
-    seatLimit: org.seatLimit,
+    tier,
+    seatLimit: comped ? PLAN_INFO[tier].includedSeats : org.seatLimit,
     stripeCustomerId: org.stripeCustomerId,
     stripeSubscriptionId: org.stripeSubscriptionId,
-    activeTransactionLimit: PLAN_INFO[org.planTier].activeTransactionLimit,
+    activeTransactionLimit: PLAN_INFO[tier].activeTransactionLimit,
+    comped,
+    // A comp always beats a stale suspension flag; otherwise honor the lock on Cloud.
+    suspended: !comped && isCloud() && org.billingSuspendedAt != null,
   };
 }
 
@@ -120,9 +146,9 @@ export async function extractionCreditState(tenantId: string): Promise<Extractio
   if (!isCloud()) return { limited: false, used: 0, limit: null };
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: tenantId },
-    select: { planTier: true, aiExtractionsUsed: true },
+    select: { planTier: true, aiExtractionsUsed: true, compTier: true, compExpiresAt: true },
   });
-  const limit = PLAN_INFO[org.planTier].aiExtractionCredits;
+  const limit = PLAN_INFO[effectiveTier(org)].aiExtractionCredits;
   if (limit == null) return { limited: false, used: org.aiExtractionsUsed, limit: null };
   return { limited: org.aiExtractionsUsed >= limit, used: org.aiExtractionsUsed, limit };
 }
@@ -160,9 +186,9 @@ export async function portalClientLimit(
   if (!isCloud()) return { limited: false, used: 0, limit: null };
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: tenantId },
-    select: { planTier: true },
+    select: { planTier: true, compTier: true, compExpiresAt: true },
   });
-  const limit = PLAN_INFO[org.planTier].portalClientLimit;
+  const limit = PLAN_INFO[effectiveTier(org)].portalClientLimit;
   if (limit == null) return { limited: false, used: 0, limit: null };
   const rows = await withTenant(tenantId, (tx) =>
     tx.portalLink.findMany({

@@ -141,6 +141,17 @@ model Organization {
   documensoConfig         Json?                @map("documenso_config")
   stripeCustomerId        String?              @map("stripe_customer_id")
   stripeSubscriptionId    String?              @map("stripe_subscription_id")
+  /// Last-known Stripe subscription status (active, trialing, past_due, unpaid, canceled).
+  /// Mirrored from webhooks for operator visibility; null = never had a paid sub.
+  subscriptionStatus      String?              @map("subscription_status")
+  /// Set when the workspace is locked for a failed renewal. Data is preserved;
+  /// the dashboard is gated until payment is updated. Cleared when Stripe reports paid again.
+  billingSuspendedAt      DateTime?            @map("billing_suspended_at")
+  /// Complimentary (comped) plan grant, independent of Stripe. When set (and not
+  /// past compExpiresAt), it overrides planTier — a full plan with no checkout/charge.
+  compTier                PlanTier?            @map("comp_tier")
+  /// When the comp ends; null = no expiry (until an operator revokes it).
+  compExpiresAt           DateTime?            @map("comp_expires_at")
   createdAt               DateTime             @default(now())
   members                 Member[]
   invitations             Invitation[]
@@ -926,6 +937,26 @@ model CheckoutAttempt {
 
   @@index([createdAt])
   @@map("checkout_attempt")
+}
+
+/// Redeemable complimentary-plan code. Platform-level (no RLS): operators mint
+/// codes in /admin, tenants redeem them on the billing page for a full plan with
+/// no Stripe checkout or charge. Redemption sets org.compTier + compExpiresAt.
+model CompCode {
+  id             String    @id @default(uuid())
+  code           String    @unique
+  /// The plan this code grants (PRO or BUSINESS).
+  tier           PlanTier
+  /// How long the comp lasts once redeemed, in months; null = no expiry.
+  durationMonths Int?      @map("duration_months")
+  /// Redemption deadline for the code itself; null = never expires.
+  expiresAt      DateTime? @map("expires_at")
+  maxRedemptions Int       @default(1) @map("max_redemptions")
+  timesRedeemed  Int       @default(0) @map("times_redeemed")
+  note           String?
+  createdAt      DateTime  @default(now())
+
+  @@map("comp_code")
 }
 
 /// Scheduled/queued outgoing email. NO RLS on purpose: the hourly cron

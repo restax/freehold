@@ -65,7 +65,9 @@ export async function POST(req: Request) {
   const update = planUpdateFromEvent(event);
   if (update) {
     adminAlert(
-      `💳 Plan change: tenant ${update.tenantId} → ${update.tier} (${update.seats} seats)`,
+      update.suspended
+        ? `⚠️ Payment problem: tenant ${update.tenantId} → ${update.status} (workspace locked)`
+        : `💳 Plan change: tenant ${update.tenantId} → ${update.tier} (${update.seats} seats)`,
     );
     await prisma.organization
       .update({
@@ -75,6 +77,9 @@ export async function POST(req: Request) {
           seatLimit: update.seats,
           stripeCustomerId: update.customerId,
           stripeSubscriptionId: update.subscriptionId,
+          subscriptionStatus: update.status,
+          // Lock on a failed renewal; clear the lock the moment Stripe reports paid again.
+          billingSuspendedAt: update.suspended ? new Date() : null,
         },
       })
       .catch(() => {

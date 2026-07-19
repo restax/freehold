@@ -1,5 +1,5 @@
 import { billingEnabled } from "@freehold/ee-billing";
-import { openBillingPortal, startUpgrade } from "@/lib/actions/billing";
+import { openBillingPortal, redeemCode, startUpgrade } from "@/lib/actions/billing";
 import { PAYMENTS_PAUSED } from "@/lib/payments-paused";
 import {
   countActiveTransactions,
@@ -10,17 +10,17 @@ import {
   seatState,
 } from "@/lib/plans";
 import { requireAdminTenant } from "@/lib/tenant";
-import { btn, btnGhost, card } from "@/lib/ui";
+import { btn, btnGhost, card, input } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ upgraded?: string }>;
+  searchParams: Promise<{ upgraded?: string; redeemed?: string; codeError?: string }>;
 }) {
   const { tenantId, isAdmin } = await requireAdminTenant();
-  const { upgraded } = await searchParams;
+  const { upgraded, redeemed, codeError } = await searchParams;
   const [plan, seats, activeTxns, aiCredits] = await Promise.all([
     getTenantPlan(tenantId),
     seatState(tenantId),
@@ -42,6 +42,24 @@ export default async function BillingPage({
       {upgraded && (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           Payment received — your plan updates within a few seconds of Stripe's confirmation.
+        </p>
+      )}
+
+      {redeemed && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          Code applied — your workspace is now on the complimentary{" "}
+          {PLAN_INFO[redeemed as keyof typeof PLAN_INFO]?.label ?? redeemed} plan.
+        </p>
+      )}
+
+      {codeError && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{codeError}</p>
+      )}
+
+      {plan.comped && (
+        <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800">
+          You're on a <strong>complimentary {info.label}</strong> plan — full access, no charge. No
+          credit card is needed while this is active.
         </p>
       )}
 
@@ -95,7 +113,8 @@ export default async function BillingPage({
         </p>
       ) : (
         isAdmin &&
-        !PAYMENTS_PAUSED && (
+        !PAYMENTS_PAUSED &&
+        !plan.comped && (
           <div className="grid gap-4 sm:grid-cols-2">
             {(["PRO", "BUSINESS"] as const).map((tier) => (
               <section
@@ -135,6 +154,26 @@ export default async function BillingPage({
             ))}
           </div>
         )
+      )}
+
+      {isAdmin && !plan.comped && (
+        <section className={card}>
+          <h2 className="mb-1 font-medium">Have a code?</h2>
+          <p className="mb-3 text-sm text-stone-500">
+            Enter a complimentary-plan code to unlock a full plan — no credit card, no checkout.
+          </p>
+          <form action={redeemCode} className="flex flex-wrap items-center gap-2">
+            <input
+              name="code"
+              required
+              placeholder="COMP-XXXX-XXXX"
+              className={`${input} w-56 font-mono uppercase`}
+            />
+            <button type="submit" className={btn}>
+              Redeem
+            </button>
+          </form>
+        </section>
       )}
     </div>
   );

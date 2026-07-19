@@ -2,7 +2,10 @@ import { redirect } from "next/navigation";
 import { DashboardNav, SettingsNavLink } from "@/components/dashboard-nav";
 import { Wordmark } from "@/components/marketing";
 import { SignOutButton } from "@/components/sign-out-button";
+import { openBillingPortal } from "@/lib/actions/billing";
+import { getTenantPlan } from "@/lib/plans";
 import { getSession, listTenants } from "@/lib/session";
+import { btn } from "@/lib/ui";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -10,6 +13,49 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const tenants = await listTenants();
   if (tenants.length === 0) redirect("/onboarding");
   const active = tenants.find((t) => t.id === session.session.activeOrganizationId) ?? tenants[0];
+
+  // Failed-renewal lock: access is paused until payment is fixed, but nothing
+  // is deleted and the recovery path (Stripe portal, sign-out) stays open.
+  const plan = await getTenantPlan(active.id);
+  if (plan.suspended) {
+    return (
+      <main className="flex min-h-[100dvh] items-center justify-center bg-stone-50 p-4">
+        <div className="w-full max-w-md rounded-2xl border border-stone-200/70 bg-white p-8 text-center shadow-sm">
+          <p className="font-display text-lg font-bold text-brand-800">Freehold</p>
+          <h1 className="mt-5 text-xl font-semibold text-stone-900">Your workspace is paused</h1>
+          <p className="mt-2 text-sm leading-relaxed text-stone-600">
+            A recent payment didn't go through, so access is paused. Your data is safe — nothing has
+            been deleted. Update your payment method to restore access right away.
+          </p>
+          {plan.stripeCustomerId ? (
+            <form action={openBillingPortal} className="mt-6">
+              <button type="submit" className={`${btn} w-full justify-center`}>
+                Update payment method
+              </button>
+            </form>
+          ) : (
+            <p className="mt-6 text-sm text-stone-500">
+              Ask your workspace owner to update billing, or email{" "}
+              <a href="mailto:hello@freeholdtc.dev" className="text-brand-700 hover:underline">
+                hello@freeholdtc.dev
+              </a>
+              .
+            </p>
+          )}
+          <p className="mt-4 text-xs text-stone-400">
+            Trouble? Email{" "}
+            <a href="mailto:hello@freeholdtc.dev" className="text-brand-600 hover:underline">
+              hello@freeholdtc.dev
+            </a>{" "}
+            — we'll sort it out.
+          </p>
+          <div className="mt-6 border-t border-stone-100 pt-4">
+            <SignOutButton />
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <div className="flex min-h-screen">

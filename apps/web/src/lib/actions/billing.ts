@@ -2,8 +2,11 @@
 
 import { prisma } from "@freehold/db";
 import { billingEnabled, createPortalSession, createUpgradeCheckout } from "@freehold/ee-billing";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { oneOf } from "@/lib/forms";
+import { logAudit } from "@/lib/audit";
+import { redeemCompCode } from "@/lib/comp";
+import { oneOf, str } from "@/lib/forms";
 import { PAYMENTS_PAUSED } from "@/lib/payments-paused";
 import { requireAdminTenant } from "@/lib/tenant";
 
@@ -35,6 +38,29 @@ export async function startUpgrade(formData: FormData) {
     })
     .catch(() => {});
   redirect(checkout.url);
+}
+
+/** Tenant admin: redeem a comp code for a full plan (no Stripe checkout). */
+export async function redeemCode(formData: FormData) {
+  const { tenantId, session, isAdmin } = await requireAdminTenant();
+  if (!isAdmin) {
+    redirect(
+      `/dashboard/billing?codeError=${encodeURIComponent("Only admins can redeem a code.")}`,
+    );
+  }
+  const result = await redeemCompCode(tenantId, str(formData, "code"));
+  if (!result.ok) {
+    redirect(`/dashboard/billing?codeError=${encodeURIComponent(result.error ?? "Invalid code.")}`);
+  }
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "billing.comp_redeemed",
+    summary: `Redeemed a complimentary ${result.tier} plan`,
+  });
+  revalidatePath("/dashboard", "layout");
+  redirect(`/dashboard/billing?redeemed=${result.tier}`);
 }
 
 export async function openBillingPortal(formData: FormData) {

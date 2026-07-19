@@ -4,4 +4,4 @@
  * buttons, and startUpgrade refuses to create Stripe checkout sessions.
  * Flip to false to restore paid signups.
  */
-export const PAYMENTS_PAUSED = true;
+export const PAYMENTS_PAUSED = false;
