@@ -55,9 +55,46 @@ async function briefingTransactions(tenantId: string): Promise<BriefingTxn[]> {
   }));
 }
 
+interface LicenseAlert {
+  who: string;
+  state: string;
+  expiresAt: Date;
+  expired: boolean;
+}
+
+/** Licenses expired or inside the 60-day warning window, for the briefing. */
+async function briefingLicenseAlerts(tenantId: string): Promise<LicenseAlert[]> {
+  const rows = await withTenant(tenantId, (tx) =>
+    tx.userLicense.findMany({
+      where: { expiresAt: { lte: new Date(Date.now() + 60 * 24 * 3600 * 1000) } },
+      orderBy: { expiresAt: "asc" },
+      select: { state: true, expiresAt: true, user: { select: { name: true } } },
+    }),
+  );
+  const now = new Date();
+  return rows.flatMap((r) =>
+    r.expiresAt
+      ? [{ who: r.user.name, state: r.state, expiresAt: r.expiresAt, expired: r.expiresAt < now }]
+      : [],
+  );
+}
+
+const alertLine = (a: LicenseAlert) =>
+  `${a.who} — ${a.state} license ${a.expired ? "EXPIRED" : "expires"} ${fmtDate(a.expiresAt)}`;
+
 /** Plain-text executive summary — becomes the PDF and the email text fallback. */
-function briefingText(txns: BriefingTxn[], orgName: string, dateLabel: string): string {
+function briefingText(
+  txns: BriefingTxn[],
+  orgName: string,
+  dateLabel: string,
+  alerts: LicenseAlert[] = [],
+): string {
   const lines: string[] = [`${orgName} — active transactions as of ${dateLabel}`, ""];
+  if (alerts.length > 0) {
+    lines.push("License alerts:");
+    for (const a of alerts) lines.push(`  ${alertLine(a)}`);
+    lines.push("");
+  }
   if (txns.length === 0) {
     lines.push("No active transactions today.");
     return lines.join("\n");
@@ -86,7 +123,23 @@ const esc = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
 
 /** Branded HTML so the summary is readable inline, not only in the attachment. */
-function briefingHtml(txns: BriefingTxn[], orgName: string, dateLabel: string): string {
+function briefingHtml(
+  txns: BriefingTxn[],
+  orgName: string,
+  dateLabel: string,
+  alerts: LicenseAlert[] = [],
+): string {
+  const alertBlock = alerts.length
+    ? `<div style="border:1px solid #fcd34d;background:#fffbeb;border-radius:10px;padding:10px 14px;margin:0 0 12px;">
+        <p style="margin:0;font-weight:600;font-size:13px;color:#92400e;">License alerts</p>
+        ${alerts
+          .map(
+            (a) =>
+              `<p style="margin:4px 0 0;font-size:13px;color:#78350f;">${esc(alertLine(a))}</p>`,
+          )
+          .join("")}
+      </div>`
+    : "";
   const cards = txns.length
     ? txns
         .map((t) => {
@@ -126,6 +179,7 @@ function briefingHtml(txns: BriefingTxn[], orgName: string, dateLabel: string): 
       <p style="margin:2px 0 0;font-size:13px;opacity:.9;">Active transactions as of ${dateLabel}</p>
     </div>
     <div style="padding:18px 20px;background:#fafaf9;border:1px solid #e7e5e4;border-top:0;border-radius:0 0 12px 12px;">
+      ${alertBlock}
       ${cards}
       <p style="margin:14px 0 0;color:#a8a29e;font-size:12px;">A full copy is attached as a PDF. Keep this email — it's readable offline, whatever happens to your connection or ours. Powered by Freehold.</p>
     </div>
@@ -168,8 +222,9 @@ export async function runDailyBriefings(): Promise<BriefingRunSummary> {
   for (const org of optedIn) {
     try {
       const txns = await briefingTransactions(org.id);
-      const text = briefingText(txns, org.name, dateLabel);
-      const html = briefingHtml(txns, org.name, dateLabel);
+      const alerts = await briefingLicenseAlerts(org.id);
+      const text = briefingText(txns, org.name, dateLabel, alerts);
+      const html = briefingHtml(txns, org.name, dateLabel, alerts);
       const pdf = await renderTemplatePdf(`${org.name} — Daily briefing (${dateLabel})`, text);
       const to = await recipients(org.id);
       for (const addr of to) {

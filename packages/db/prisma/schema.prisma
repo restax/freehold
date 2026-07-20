@@ -20,21 +20,29 @@ datasource db {
 // --- Better Auth core ---
 
 model User {
-  id               String       @id
+  id               String        @id
   name             String
-  email            String       @unique
-  emailVerified    Boolean      @default(false)
+  email            String        @unique
+  emailVerified    Boolean       @default(false)
   image            String?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-  twoFactorEnabled Boolean?     @map("two_factor_enabled")
+  /// Profile photo bytes, stored inline (photos are small and user-global, so
+  /// they never route to a tenant's bucket). Served by /api/users/[id]/avatar;
+  /// `image` holds that path so anything reading the auth user renders it.
+  avatarData       Bytes?        @map("avatar_data")
+  avatarType       String?       @map("avatar_type")
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  twoFactorEnabled Boolean?      @map("two_factor_enabled")
   twoFactors       TwoFactor[]
   sessions         Session[]
   accounts         Account[]
   members          Member[]
   invitations      Invitation[]
-  ownedContacts    Contact[]    @relation("ContactOwner")
-  assignedTasks    Task[]       @relation("TaskAssignee")
+  ownedContacts    Contact[]     @relation("ContactOwner")
+  assignedTasks    Task[]        @relation("TaskAssignee")
+  licenses         UserLicense[]
+  transactionAssignments TransactionAssignee[]
+  paymentRequests  PaymentRequest[]
 
   @@map("user")
 }
@@ -170,6 +178,21 @@ model Organization {
   complianceItems         ComplianceItem[]
   transactionCompliances  TransactionCompliance[]
   complianceSlots         ComplianceSlot[]
+  userLicenses            UserLicense[]
+  transactionAssignees    TransactionAssignee[]
+  states                  TenantState[]
+  paymentRequests         PaymentRequest[]
+  paymentRequestItems     PaymentRequestItem[]
+  /// What happens when a file sits in a license-required state with nobody
+  /// licensed assigned: "warn" (save it, flag it everywhere) or "block"
+  /// (refuse the write). Deliberately a tenant choice — TCs routinely open a
+  /// file before deciding who runs it.
+  licenseEnforcement      String                  @default("warn") @map("license_enforcement")
+  /// Opt-in vendor-directory listing, published to other workspaces and to the
+  /// public syndication feed: {listed, blurb, contactEmail, specializations[],
+  /// software[], availability, pricingModel, yearsExperience, remote}. States
+  /// covered come from TenantState. Null or listed:false = not listed anywhere.
+  directoryConfig         Json?                   @map("directory_config")
   documents               Document[]
   extractions             ContractExtraction[]
   extractionFields        ExtractionField[]
@@ -523,10 +546,10 @@ model Transaction {
   onMarketDate      DateTime?               @map("on_market_date") @db.Date
   expireDate        DateTime?               @map("expire_date") @db.Date
   mlsId             String?                 @map("mls_id")
-  /// Assignment roles: co-agent is a Client (managed agent); TCs are workspace users.
+  /// The co-agent is a Client (managed agent); workspace users are assigned
+  /// through TransactionAssignee rows.
   coAgentClientId   String?                 @map("co_agent_client_id")
-  tc1UserId         String?                 @map("tc1_user_id")
-  tc2UserId         String?                 @map("tc2_user_id")
+  assignees         TransactionAssignee[]
   /// Commission breakdown: {listPct, buyPct, note} — gross computes from price.
   payout            Json?
   emails            Email[]
@@ -925,6 +948,142 @@ model ComplianceSlot {
   @@index([tenantId])
   @@index([complianceId])
   @@map("compliance_slot")
+}
+
+/// Where a user's pay request stands. Freehold tracks what is owed and
+/// produces the statement; the money itself moves however the business
+/// already pays people.
+enum PaymentRequestStatus {
+  REQUESTED
+  PAID
+}
+
+/// A user asking to be paid for work already assigned to them. The tenant
+/// sets a fee per assignment; the user submits the ones that are due (company
+/// policy decides whether that's at order time or at closing — Freehold
+/// doesn't impose either). The itemized request is the statement.
+model PaymentRequest {
+  id          String               @id @default(uuid())
+  tenantId    String               @map("tenant_id")
+  tenant      Organization         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId      String               @map("user_id")
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      PaymentRequestStatus @default(REQUESTED)
+  /// What the requester wants the payer to know.
+  note        String?
+  requestedAt DateTime             @default(now()) @map("requested_at")
+  paidAt      DateTime?            @map("paid_at")
+  paidById    String?              @map("paid_by_id")
+  /// How it was settled — "check #1042", "ACH 7/22".
+  paidNote    String?              @map("paid_note")
+  items       PaymentRequestItem[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, userId])
+  @@map("payment_request")
+}
+
+/// One transaction on a pay request. Address and fee are snapshotted so a
+/// statement still reads correctly after the assignment is removed or its fee
+/// changes. The unique assignee_id is what stops the same work being billed
+/// twice — enforced by the database, not by a check that could be raced.
+model PaymentRequestItem {
+  id            String               @id @default(uuid())
+  tenantId      String               @map("tenant_id")
+  tenant        Organization         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requestId     String               @map("request_id")
+  request       PaymentRequest       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  assigneeId    String?              @unique @map("assignee_id")
+  assignee      TransactionAssignee? @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  /// Snapshot, for linking back when the assignment still exists.
+  transactionId String?              @map("transaction_id")
+  address       String
+  feeCents      Int                  @map("fee_cents")
+  createdAt     DateTime             @default(now())
+
+  @@index([tenantId])
+  @@index([requestId])
+  @@map("payment_request_item")
+}
+
+/// A state the workspace operates in, and whether it requires a licensed
+/// coordinator on every file. Freehold ships no built-in list of which states
+/// require licensing — that's a legal judgment each business makes for itself.
+/// Also the coverage list a tenant advertises in the vendor directory.
+model TenantState {
+  id              String       @id @default(uuid())
+  tenantId        String       @map("tenant_id")
+  tenant          Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Two-letter state code, uppercased.
+  state           String
+  licenseRequired Boolean      @default(false) @map("license_required")
+  createdAt       DateTime     @default(now())
+
+  @@unique([tenantId, state])
+  @@index([tenantId])
+  @@map("tenant_state")
+}
+
+/// A workspace user working a transaction. Any number per file, each with a
+/// free-text role ("Lead TC", "Support") and — later — the fee the tenant
+/// pays them for it. Replaced the old fixed tc1/tc2 slots.
+model TransactionAssignee {
+  id            String       @id @default(uuid())
+  tenantId      String       @map("tenant_id")
+  tenant        Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactionId String       @map("transaction_id")
+  transaction   Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  userId        String       @map("user_id")
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleLabel     String?      @map("role_label")
+  /// What the tenant pays this user for this file, in cents. Admin-set; the
+  /// user submits it through a PaymentRequest when it's due.
+  feeCents      Int?         @map("fee_cents")
+  /// Set once this assignment has been put on a pay request.
+  paymentItem   PaymentRequestItem?
+  createdAt     DateTime     @default(now())
+
+  @@unique([transactionId, userId])
+  @@index([tenantId])
+  @@index([tenantId, userId])
+  @@map("transaction_assignee")
+}
+
+/// A professional license a workspace user holds — some states require
+/// licensed transaction coordinators. One row per state (a user licensed in
+/// several states has several rows), stored per tenant: each workspace keeps
+/// its own records for its own people. Always "license" in code and UI —
+/// "credential" is the Vault's word for stored passwords.
+model UserLicense {
+  id              String       @id @default(uuid())
+  tenantId        String       @map("tenant_id")
+  tenant          Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId          String       @map("user_id")
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Two-letter state code, uppercased.
+  state           String
+  licenseNumber   String?      @map("license_number")
+  /// What kind of license — "Salesperson", "Broker", "TC certification".
+  label           String?
+  /// Blank = no expiry on record. An expired license never satisfies a
+  /// licensed-state check.
+  expiresAt       DateTime?    @map("expires_at") @db.Date
+  /// Uploaded copy of the license, via the storage abstraction (same fields
+  /// as Document: inline bytes for DB, key for S3/tenant buckets).
+  filename        String?
+  contentType     String?      @map("content_type")
+  sizeBytes       Int?         @map("size_bytes")
+  data            Bytes?
+  storageKey      String?      @map("storage_key")
+  storageProvider String?      @map("storage_provider")
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, userId])
+  @@map("user_license")
 }
 
 /// One required document on a compliance checklist.

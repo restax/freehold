@@ -3,6 +3,7 @@
 import {
   AddressBook,
   Buildings,
+  Compass,
   CreditCard,
   DownloadSimple,
   EnvelopeSimple,
@@ -18,6 +19,7 @@ import {
   Receipt,
   ShieldCheck,
   Sun,
+  UserCircle,
   UsersThree,
 } from "@phosphor-icons/react";
 import Link from "next/link";
@@ -63,6 +65,7 @@ const GROUPS: NavGroup[] = [
     label: "Business",
     items: [
       { href: "/dashboard/invoices", label: "Invoices", icon: Receipt },
+      { href: "/dashboard/directory", label: "Directory", icon: Compass },
       { href: "/dashboard/website", label: "Website", icon: Globe },
       { href: "/dashboard/integrations", label: "Integrations", icon: PlugsConnected },
       { href: "/dashboard/team", label: "Team", icon: UsersThree },
@@ -137,6 +140,30 @@ export function SettingsNavLink() {
         aria-hidden
       />
       Settings
+    </Link>
+  );
+}
+
+export function ProfileNavLink() {
+  const pathname = usePathname();
+  const active = pathname.startsWith("/dashboard/profile");
+  return (
+    <Link
+      href="/dashboard/profile"
+      aria-current={active ? "page" : undefined}
+      className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors ${
+        active
+          ? "bg-brand-50 font-medium text-brand-800"
+          : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+      }`}
+    >
+      <UserCircle
+        size={16}
+        weight={active ? "fill" : "regular"}
+        className={active ? "text-brand-700" : "text-stone-400"}
+        aria-hidden
+      />
+      Profile
     </Link>
   );
 }

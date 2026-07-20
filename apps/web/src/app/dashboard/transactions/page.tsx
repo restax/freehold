@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/empty-state";
 import { createFromContract } from "@/lib/actions/extractions";
 import { createTransaction } from "@/lib/actions/transactions";
 import { fmtDate, fmtMoney, STATUS_LABEL } from "@/lib/format";
+import { licenseGap, requiredStates } from "@/lib/licensing";
 import { extractionCreditState, transactionLimit } from "@/lib/plans";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
 import { requireTenant } from "@/lib/tenant";
@@ -18,9 +19,9 @@ const SIDES = Object.values(TransactionSide);
 export default async function TransactionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; mine?: string; licenseError?: string }>;
 }) {
-  const { tenantId } = await requireTenant();
+  const { tenantId, userId } = await requireTenant();
   const labels = await tenantSideLabels(tenantId);
   const [limit, credits] = await Promise.all([
     transactionLimit(tenantId),
@@ -30,32 +31,59 @@ export default async function TransactionsPage({
   // self-host. Without a key, extraction can't run, so we hide the card
   // rather than leave a stranded provisional transaction behind a failure.
   const aiAvailable = Boolean(process.env.ANTHROPIC_API_KEY);
-  const { status } = await searchParams;
+  const { status, mine, licenseError } = await searchParams;
   const statusFilter = STATUSES.includes(status as TransactionStatus)
     ? (status as TransactionStatus)
     : undefined;
+  const mineFilter = mine === "1";
 
-  const { transactions, clients } = await withTenant(tenantId, async (tx) => ({
-    transactions: await tx.transaction.findMany({
-      where: statusFilter ? { status: statusFilter } : {},
-      orderBy: { updatedAt: "desc" },
-      include: {
-        client: { select: { name: true } },
-        _count: { select: { tasks: true } },
-        parties: {
-          where: { role: { in: ["BUYER", "SELLER"] } },
-          include: { contact: { select: { name: true } } },
+  const { transactions, clients, requiredStateSet, allLicenses } = await withTenant(
+    tenantId,
+    async (tx) => ({
+      transactions: await tx.transaction.findMany({
+        where: {
+          ...(statusFilter ? { status: statusFilter } : {}),
+          ...(mineFilter ? { assignees: { some: { userId } } } : {}),
         },
-      },
+        orderBy: { updatedAt: "desc" },
+        include: {
+          client: { select: { name: true } },
+          _count: { select: { tasks: true } },
+          parties: {
+            where: { role: { in: ["BUYER", "SELLER"] } },
+            include: { contact: { select: { name: true } } },
+          },
+          assignees: { select: { userId: true } },
+        },
+      }),
+      clients: await tx.client.findMany({ orderBy: { name: "asc" } }),
+      requiredStateSet: await requiredStates(tx),
+      // Every license in the workspace; the per-row check is a set lookup.
+      allLicenses: await tx.userLicense.findMany({
+        select: { userId: true, state: true, expiresAt: true },
+      }),
     }),
-    clients: await tx.client.findMany({ orderBy: { name: "asc" } }),
-  }));
+  );
   const { prisma } = await import("@freehold/db");
   const members = await prisma.member.findMany({
     where: { organizationId: tenantId },
     include: { user: { select: { id: true, name: true } } },
   });
   const todayMs = Date.now();
+
+  const licensesByUser = new Map<string, typeof allLicenses>();
+  for (const lic of allLicenses) {
+    const list = licensesByUser.get(lic.userId) ?? [];
+    list.push(lic);
+    licensesByUser.set(lic.userId, list);
+  }
+  /** Flag files sitting in a license-required state with nobody licensed. */
+  const gapFor = (t: (typeof transactions)[number]) =>
+    licenseGap({
+      state: t.state,
+      requiredStates: requiredStateSet,
+      assigneeLicenses: t.assignees.flatMap((a) => licensesByUser.get(a.userId) ?? []),
+    });
 
   return (
     <div className="flex flex-col gap-6">
@@ -70,11 +98,27 @@ export default async function TransactionsPage({
               </option>
             ))}
           </select>
+          <label className="flex items-center gap-1.5 text-sm text-stone-600">
+            <input
+              type="checkbox"
+              name="mine"
+              value="1"
+              defaultChecked={mineFilter}
+              className="accent-brand-600"
+            />
+            Assigned to me
+          </label>
           <button type="submit" className={btnGhost}>
             Filter
           </button>
         </form>
       </div>
+
+      {licenseError && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+          Not created — {licenseError}
+        </p>
+      )}
 
       {limit.limit != null && (
         <p
@@ -235,19 +279,8 @@ export default async function TransactionsPage({
             </select>
           </label>
           <label className={label}>
-            TC / assistant 1
-            <select name="tc1UserId" className={input} defaultValue="">
-              <option value="">—</option>
-              {members.map((m) => (
-                <option key={m.user.id} value={m.user.id}>
-                  {m.user.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={label}>
-            TC / assistant 2
-            <select name="tc2UserId" className={input} defaultValue="">
+            Assign to
+            <select name="assigneeId" className={input} defaultValue="">
               <option value="">—</option>
               {members.map((m) => (
                 <option key={m.user.id} value={m.user.id}>
@@ -312,6 +345,15 @@ export default async function TransactionsPage({
                     >
                       {t.propertyAddress}
                     </Link>
+                    {gapFor(t) && (
+                      <span
+                        title={`${t.state} requires a licensed coordinator on this file`}
+                        className="ml-2 inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-900"
+                      >
+                        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                        unlicensed
+                      </span>
+                    )}
                   </td>
                   <td className={td}>{sideLabel(t.side, labels)}</td>
                   <td className={td}>{t.parties.map((p) => p.contact.name).join(", ") || "—"}</td>

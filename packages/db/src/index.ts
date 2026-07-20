@@ -15,13 +15,18 @@ export type {
   Member,
   Organization,
   Organization as Tenant,
+  PaymentRequest,
+  PaymentRequestItem,
   PortalLink,
   Session,
   SignatureEnvelope,
   Task,
+  TenantState,
   Transaction,
+  TransactionAssignee,
   TransactionParty,
   User,
+  UserLicense,
   VaultAccessLog,
   VaultCredential,
 } from "@prisma/client";
@@ -72,3 +77,5 @@ export const ComplianceStatus = PrismaPkg.ComplianceStatus;
 export type ComplianceStatus = PrismaPkg.ComplianceStatus;
 export const ComplianceSlotStatus = PrismaPkg.ComplianceSlotStatus;
 export type ComplianceSlotStatus = PrismaPkg.ComplianceSlotStatus;
+export const PaymentRequestStatus = PrismaPkg.PaymentRequestStatus;
+export type PaymentRequestStatus = PrismaPkg.PaymentRequestStatus;

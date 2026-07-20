@@ -11,9 +11,18 @@ import {
   revokeApiKey,
 } from "@/lib/actions/api-keys";
 import { setContactVisibilityRestriction } from "@/lib/actions/contacts";
+import { saveDirectoryListing } from "@/lib/actions/directory";
 import { removeSampleData } from "@/lib/actions/sample-data";
+import { addState, removeState, setLicenseEnforcement } from "@/lib/actions/states";
 import { setDailyBriefing } from "@/lib/actions/templates";
 import { saveSideLabels } from "@/lib/actions/website";
+import {
+  AVAILABILITY,
+  PRICING_MODELS,
+  readDirectoryConfig,
+  SOFTWARE,
+  SPECIALIZATIONS,
+} from "@/lib/directory";
 import { emailEnabled } from "@/lib/email";
 import { fmtDate } from "@/lib/format";
 import { listTenants } from "@/lib/session";
@@ -195,6 +204,265 @@ async function ContactVisibilitySection({
   );
 }
 
+async function OperatingStatesSection({ tenantId, userId }: { tenantId: string; userId: string }) {
+  const role = await getMemberRole(tenantId, userId);
+  if (role !== "owner" && role !== "admin") return null;
+  const { prisma } = await import("@freehold/db");
+  const [states, org] = await Promise.all([
+    withTenant(tenantId, (tx) => tx.tenantState.findMany({ orderBy: { state: "asc" } })),
+    prisma.organization.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { licenseEnforcement: true },
+    }),
+  ]);
+  const blocking = org.licenseEnforcement === "block";
+
+  return (
+    <section className={card}>
+      <h2 className="mb-1 font-medium">Operating states</h2>
+      <p className="mb-3 text-sm text-stone-500">
+        The states you work in, and which of them require a licensed coordinator on every file.
+        Freehold doesn't decide this for you — mark the ones your business has determined require a
+        license. Licences themselves live on each person's{" "}
+        <Link href="/dashboard/team" className="text-brand-700 hover:underline">
+          team record
+        </Link>
+        .
+      </p>
+
+      {states.length > 0 && (
+        <ul className="mb-4 flex flex-col">
+          {states.map((s) => (
+            <li
+              key={s.id}
+              className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
+            >
+              <span className="w-10 font-medium">{s.state}</span>
+              <span className={s.licenseRequired ? "text-stone-700" : "text-stone-400"}>
+                {s.licenseRequired ? "License required" : "No license requirement"}
+              </span>
+              <form action={addState} className="ml-auto">
+                <input type="hidden" name="state" value={s.state} />
+                {!s.licenseRequired && <input type="hidden" name="licenseRequired" value="on" />}
+                <button type="submit" className="text-xs text-brand-600 hover:underline">
+                  {s.licenseRequired ? "drop requirement" : "require a license"}
+                </button>
+              </form>
+              <form action={removeState}>
+                <input type="hidden" name="id" value={s.id} />
+                <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
+                  remove
+                </button>
+              </form>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form action={addState} className="mb-4 flex flex-wrap items-end gap-3">
+        <label className={label}>
+          State
+          <input name="state" required maxLength={2} className={`${input} w-20`} placeholder="TX" />
+        </label>
+        <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
+          <input type="checkbox" name="licenseRequired" className="accent-brand-600" />
+          Requires a licensed coordinator
+        </label>
+        <button type="submit" className={btnGhost}>
+          Add state
+        </button>
+      </form>
+
+      <form action={setLicenseEnforcement} className="border-t border-stone-100 pt-3">
+        <p className="mb-2 text-sm font-medium text-stone-700">
+          When a file has nobody licensed for its state
+        </p>
+        <label className="mb-1 flex items-start gap-2 text-sm text-stone-600">
+          <input
+            type="radio"
+            name="licenseEnforcement"
+            value="warn"
+            defaultChecked={!blocking}
+            className="mt-1 accent-brand-600"
+          />
+          <span>
+            <strong className="font-medium text-stone-800">Warn</strong> — the file saves and
+            carries a flag until someone licensed is assigned.
+          </span>
+        </label>
+        <label className="mb-3 flex items-start gap-2 text-sm text-stone-600">
+          <input
+            type="radio"
+            name="licenseEnforcement"
+            value="block"
+            defaultChecked={blocking}
+            className="mt-1 accent-brand-600"
+          />
+          <span>
+            <strong className="font-medium text-stone-800">Block</strong> — refuse to save the file
+            until someone licensed is assigned.
+          </span>
+        </label>
+        <button type="submit" className={btnGhost}>
+          Save enforcement
+        </button>
+      </form>
+    </section>
+  );
+}
+
+async function DirectorySection({ tenantId, userId }: { tenantId: string; userId: string }) {
+  const role = await getMemberRole(tenantId, userId);
+  if (role !== "owner" && role !== "admin") return null;
+  const [org, states] = await Promise.all([
+    prisma.organization.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { directoryConfig: true },
+    }),
+    withTenant(tenantId, (tx) => tx.tenantState.findMany({ orderBy: { state: "asc" } })),
+  ]);
+  const cfg = readDirectoryConfig(org.directoryConfig);
+
+  return (
+    <section className={card}>
+      <h2 className="mb-1 font-medium">Coordinator directory</h2>
+      <p className="mb-3 text-sm text-stone-500">
+        List this workspace so other coordinators can find you for overflow and vacation coverage.
+        Listing publishes your workspace name, the states you cover, and whatever you enter below —
+        to other workspaces and to the public directory feed. Nothing about your transactions,
+        clients, or people is ever published. Switch it off any time.
+      </p>
+      {states.length === 0 && (
+        <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Add the states you work in under <strong>Operating states</strong> above — a listing with
+          no coverage won't be found by anyone searching.
+        </p>
+      )}
+
+      <form action={saveDirectoryListing} className="flex flex-col gap-3">
+        <label className="flex items-center gap-2 text-sm font-medium text-stone-800">
+          <input
+            type="checkbox"
+            name="listed"
+            defaultChecked={cfg.listed === true}
+            className="accent-brand-600"
+          />
+          List this workspace in the directory
+        </label>
+
+        <div className="flex flex-wrap items-end gap-3">
+          <label className={`${label} min-w-72 flex-1`}>
+            What you want other coordinators to know
+            <input
+              name="blurb"
+              defaultValue={cfg.blurb ?? ""}
+              className={input}
+              placeholder="Buy-side residential, 48-hour turnaround, Texas and Florida"
+            />
+          </label>
+          <label className={label}>
+            Contact email
+            <input
+              name="contactEmail"
+              type="email"
+              defaultValue={cfg.contactEmail ?? ""}
+              className={input}
+            />
+          </label>
+          <label className={label}>
+            Years in business
+            <input
+              name="yearsExperience"
+              inputMode="numeric"
+              defaultValue={cfg.yearsExperience ?? ""}
+              className={`${input} w-24`}
+            />
+          </label>
+        </div>
+
+        <div className="flex flex-wrap gap-6">
+          <fieldset>
+            <legend className="mb-1 text-sm font-medium text-stone-700">Specializations</legend>
+            <div className="flex flex-wrap gap-3">
+              {SPECIALIZATIONS.map((s) => (
+                <label key={s} className="flex items-center gap-1.5 text-sm text-stone-600">
+                  <input
+                    type="checkbox"
+                    name="specializations"
+                    value={s}
+                    defaultChecked={cfg.specializations?.includes(s)}
+                    className="accent-brand-600"
+                  />
+                  {s}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <label className={label}>
+            Availability
+            <select name="availability" defaultValue={cfg.availability ?? ""} className={input}>
+              <option value="">—</option>
+              {AVAILABILITY.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={label}>
+            Pricing
+            <select name="pricingModel" defaultValue={cfg.pricingModel ?? ""} className={input}>
+              <option value="">—</option>
+              {PRICING_MODELS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <fieldset>
+          <legend className="mb-1 text-sm font-medium text-stone-700">Software you work in</legend>
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+            {SOFTWARE.map((s) => (
+              <label key={s} className="flex items-center gap-1.5 text-sm text-stone-600">
+                <input
+                  type="checkbox"
+                  name="software"
+                  value={s}
+                  defaultChecked={cfg.software?.includes(s)}
+                  className="accent-brand-600"
+                />
+                {s}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <label className="flex items-center gap-2 text-sm text-stone-600">
+          <input
+            type="checkbox"
+            name="remote"
+            defaultChecked={cfg.remote !== false}
+            className="accent-brand-600"
+          />
+          Works remotely
+        </label>
+
+        <div className="flex items-center gap-3">
+          <button type="submit" className={btnGhost}>
+            Save listing
+          </button>
+          <Link href="/dashboard/directory" className="text-sm text-brand-700 hover:underline">
+            Browse the directory →
+          </Link>
+        </div>
+      </form>
+    </section>
+  );
+}
+
 async function AuditSection({ tenantId, userId }: { tenantId: string; userId: string }) {
   const role = await getMemberRole(tenantId, userId);
   if (role !== "owner" && role !== "admin") return null;
@@ -322,6 +590,10 @@ export default async function SettingsPage() {
         <h2 className="mb-1 font-medium">Two-factor authentication</h2>
         <TwoFactorSettings enabled={Boolean(session.user.twoFactorEnabled)} />
       </section>
+
+      <OperatingStatesSection tenantId={tenantId} userId={session.user.id} />
+
+      <DirectorySection tenantId={tenantId} userId={session.user.id} />
 
       <section className={card}>
         <h2 className="mb-1 font-medium">Side wording</h2>

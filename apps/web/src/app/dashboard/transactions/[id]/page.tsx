@@ -1,10 +1,13 @@
 import { PartyRole, prisma, TransactionSide, TransactionStatus, withTenant } from "@freehold/db";
+import { Warning } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Avatar } from "@/components/avatar";
 import { Badge, EnvelopeBadge, ExtractionBadge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
 import { DictateButton } from "@/components/dictate-button";
 import { VisibilityToggles } from "@/components/visibility-toggles";
+import { assignUser, unassignUser } from "@/lib/actions/assignees";
 import {
   attachSlotDocument,
   reviewSlot,
@@ -21,6 +24,7 @@ import {
 } from "@/lib/actions/esign";
 import { runExtraction } from "@/lib/actions/extractions";
 import { addParty, removeParty } from "@/lib/actions/parties";
+import { setAssigneeFee } from "@/lib/actions/pay";
 import { createPortalLink, deletePortalLink, setPortalLinkActive } from "@/lib/actions/portal";
 import {
   applyActionPlan,
@@ -51,6 +55,8 @@ import { emailEnabled } from "@/lib/email";
 import { EMAIL_MERGE_CODES, renderMerge } from "@/lib/email-template";
 import { suggestForTask } from "@/lib/email-template-library";
 import { fmtDate, fmtMoney, ROLE_LABEL, STATUS_LABEL } from "@/lib/format";
+import { gapForTransaction, gapMessage } from "@/lib/licensing";
+import { fmtCents } from "@/lib/pay";
 import { extractionCreditState } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
 import { PRIORITY_BADGE, PRIORITY_LABEL } from "@/lib/priority";
@@ -82,12 +88,17 @@ export default async function TransactionDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string; emailTemplate?: string; emailTask?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    emailTemplate?: string;
+    emailTask?: string;
+    licenseError?: string;
+  }>;
 }) {
   const { tenantId, session } = await requireTenant();
   const labels = await tenantSideLabels(tenantId);
   const { id } = await params;
-  const { tab: tabRaw, emailTemplate, emailTask } = await searchParams;
+  const { tab: tabRaw, emailTemplate, emailTask, licenseError } = await searchParams;
   const tab: TxnTab = (TXN_TABS.some(([t]) => t === tabRaw) ? tabRaw : "tasks") as TxnTab;
 
   const data = await withTenant(tenantId, async (tx) => {
@@ -129,6 +140,14 @@ export default async function TransactionDetailPage({
         envelopes: {
           orderBy: { createdAt: "desc" },
           include: { document: { select: { filename: true } } },
+        },
+        assignees: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            user: { select: { id: true, name: true, image: true } },
+            // Present once billed — the fee then locks, since it's on a statement.
+            paymentItem: { select: { feeCents: true, request: { select: { status: true } } } },
+          },
         },
         portalLinks: { orderBy: { createdAt: "desc" } },
         emails: { orderBy: { createdAt: "desc" }, take: 50 },
@@ -172,6 +191,18 @@ export default async function TransactionDetailPage({
     ? effectiveTier(member.role, member.complianceTier, currentRound.approvalLevels)
     : 0;
   const canReview = reviewerTier >= 1;
+  const canSetFees = member.role === "owner" || member.role === "admin";
+
+  // Workspace members for the assignment picker (auth table, not tenant-RLS).
+  const workspaceMembers = await prisma.member.findMany({
+    where: { organizationId: tenantId },
+    include: { user: { select: { id: true, name: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+
+  // Licensed-state check: shown as a banner under "warn", and the reason a
+  // blocked write bounced back here.
+  const gap = await withTenant(tenantId, (tx) => gapForTransaction(tx, txn.id));
 
   const portalBase = await portalOrigin(tenantId);
   const aiCredits = await extractionCreditState(tenantId);
@@ -235,6 +266,24 @@ export default async function TransactionDetailPage({
           </p>
         </div>
       </div>
+
+      {licenseError && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+          Not saved — {licenseError}
+        </p>
+      )}
+      {!licenseError && gap && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <Warning size={14} weight="fill" className="mr-1 inline text-amber-600" aria-hidden />
+          {gapMessage(gap)}{" "}
+          <Link
+            href={`/dashboard/transactions/${txn.id}?tab=participants`}
+            className="font-medium text-brand-700 underline"
+          >
+            Assign someone
+          </Link>
+        </p>
+      )}
 
       <div className="grid gap-5 xl:grid-cols-[280px_minmax(0,1fr)_280px]">
         <aside className="flex flex-col gap-4 xl:order-1">
@@ -1122,6 +1171,86 @@ export default async function TransactionDetailPage({
           )}
           {tab === "participants" && (
             <>
+              <section className={card}>
+                <h2 className="mb-1 font-medium">Assigned</h2>
+                <p className="mb-3 text-sm text-stone-500">
+                  Who in the workspace works this file. Filter the transactions list to "Assigned to
+                  me" to see your own.
+                  {canSetFees && " Set what each person is paid; they request it when it's due."}
+                </p>
+                {txn.assignees.length === 0 ? (
+                  <p className="mb-3 text-sm text-stone-400">Nobody assigned yet.</p>
+                ) : (
+                  <ul className="mb-4 flex flex-col gap-1">
+                    {txn.assignees.map((a) => (
+                      <li key={a.id} className="flex items-center gap-3 text-sm">
+                        <Avatar user={a.user} size={28} />
+                        <span className="font-medium">{a.user.name}</span>
+                        {a.roleLabel && <span className="text-stone-500">{a.roleLabel}</span>}
+                        {canSetFees && !a.paymentItem && (
+                          <form action={setAssigneeFee} className="flex items-center gap-1">
+                            <input type="hidden" name="id" value={a.id} />
+                            <input type="hidden" name="transactionId" value={txn.id} />
+                            <span className="text-xs text-stone-400">fee $</span>
+                            <input
+                              name="feeCents"
+                              defaultValue={a.feeCents == null ? "" : (a.feeCents / 100).toFixed(2)}
+                              placeholder="350.00"
+                              className={`${input} w-24 px-2 py-1 text-xs`}
+                            />
+                            <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                              Save
+                            </button>
+                          </form>
+                        )}
+                        {a.paymentItem && (
+                          <span className="text-xs text-stone-500">
+                            {fmtCents(a.paymentItem.feeCents)} ·{" "}
+                            {a.paymentItem.request.status === "PAID" ? "paid" : "payment requested"}
+                          </span>
+                        )}
+                        {!canSetFees && !a.paymentItem && a.feeCents != null && (
+                          <span className="text-xs text-stone-500">{fmtCents(a.feeCents)}</span>
+                        )}
+                        <form action={unassignUser} className="ml-auto">
+                          <input type="hidden" name="id" value={a.id} />
+                          <input type="hidden" name="transactionId" value={txn.id} />
+                          <button
+                            type="submit"
+                            className="text-xs text-stone-400 hover:text-red-600"
+                          >
+                            remove
+                          </button>
+                        </form>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <form action={assignUser} className="flex flex-wrap items-end gap-2">
+                  <input type="hidden" name="transactionId" value={txn.id} />
+                  <label className={label}>
+                    Member
+                    <select name="userId" className={input} defaultValue="" required>
+                      <option value="" disabled>
+                        Choose…
+                      </option>
+                      {workspaceMembers.map((m) => (
+                        <option key={m.user.id} value={m.user.id}>
+                          {m.user.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className={label}>
+                    Role on this file
+                    <input name="roleLabel" className={input} placeholder="Lead TC" />
+                  </label>
+                  <button type="submit" className={btnGhost}>
+                    Assign
+                  </button>
+                </form>
+              </section>
+
               <section className={card}>
                 <h2 className="mb-3 font-medium">Parties</h2>
                 {txn.parties.length === 0 ? (

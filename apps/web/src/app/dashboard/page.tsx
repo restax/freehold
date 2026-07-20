@@ -38,16 +38,15 @@ function dayLabel(d: Date, todayKey: string): string {
 }
 
 export default async function DashboardPage() {
-  const { tenantId } = await requireTenant();
+  const { tenantId, userId } = await requireTenant();
   const now = new Date();
   const todayKey = dayKey(now);
   const soon = new Date(now);
   soon.setUTCDate(soon.getUTCDate() + 7);
   const weekAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000);
 
-  const { counts, openTasks, closings, doneThisWeek, prospecting, recent } = await withTenant(
-    tenantId,
-    async (tx) => ({
+  const { counts, openTasks, closings, doneThisWeek, prospecting, recent, licenseAlerts, myFiles } =
+    await withTenant(tenantId, async (tx) => ({
       counts: await tx.transaction.groupBy({ by: ["status"], _count: { _all: true } }),
       openTasks: await tx.task.findMany({
         // Undated tasks are included so a reopened task always lands
@@ -86,8 +85,29 @@ export default async function DashboardPage() {
         take: 5,
         include: { client: { select: { name: true } } },
       }),
-    }),
-  );
+      // Licenses running out (or already out) — surfaced until renewed.
+      licenseAlerts: await tx.userLicense.findMany({
+        where: { expiresAt: { lte: new Date(Date.now() + 60 * 24 * 3600 * 1000) } },
+        orderBy: { expiresAt: "asc" },
+        select: { id: true, state: true, expiresAt: true, user: { select: { name: true } } },
+      }),
+      // Files assigned to the signed-in user, active first.
+      myFiles: await tx.transaction.findMany({
+        where: {
+          assignees: { some: { userId } },
+          status: { notIn: ["CLOSED", "CANCELLED"] },
+        },
+        orderBy: [{ closeDate: { sort: "asc", nulls: "last" } }, { updatedAt: "desc" }],
+        take: 8,
+        select: {
+          id: true,
+          propertyAddress: true,
+          status: true,
+          closeDate: true,
+          client: { select: { name: true } },
+        },
+      }),
+    }));
 
   const countFor = (s: TransactionStatus) => counts.find((c) => c.status === s)?._count._all ?? 0;
 
@@ -178,6 +198,22 @@ export default async function DashboardPage() {
         <p className="text-sm text-stone-500">{heading}</p>
         <h1 className="font-display text-2xl font-bold tracking-tight">Your day</h1>
       </div>
+
+      {licenseAlerts.length > 0 && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <Warning size={14} weight="fill" className="mr-1 inline text-amber-600" aria-hidden />
+          {licenseAlerts.length === 1
+            ? `${licenseAlerts[0].user.name}'s ${licenseAlerts[0].state} license ${
+                licenseAlerts[0].expiresAt && licenseAlerts[0].expiresAt < now
+                  ? "has expired"
+                  : `expires ${fmtDate(licenseAlerts[0].expiresAt)}`
+              }.`
+            : `${licenseAlerts.length} team licenses are expired or expiring soon.`}{" "}
+          <Link href="/dashboard/team" className="font-medium text-brand-700 underline">
+            Review on Team
+          </Link>
+        </p>
+      )}
 
       {/* Today */}
       <section className={card}>
@@ -308,6 +344,44 @@ export default async function DashboardPage() {
           </div>
         )}
       </section>
+
+      {/* Your assigned files */}
+      {myFiles.length > 0 && (
+        <section className={card}>
+          <h2 className="mb-1 font-medium">Your files</h2>
+          <p className="mb-2 text-xs text-stone-400">
+            Active transactions assigned to you, soonest closing first.
+          </p>
+          <ul className="flex flex-col">
+            {myFiles.map((t) => (
+              <li
+                key={t.id}
+                className="flex items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
+              >
+                <Link
+                  href={`/dashboard/transactions/${t.id}`}
+                  className="font-medium text-brand-700 hover:underline"
+                >
+                  {t.propertyAddress}
+                </Link>
+                <StatusBadge status={t.status} />
+                {t.client && <span className="text-stone-400">{t.client.name}</span>}
+                {t.closeDate && (
+                  <span className="ml-auto tabular-nums text-stone-400">
+                    closes {fmtDate(t.closeDate)}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+          <Link
+            href="/dashboard/transactions?mine=1"
+            className="mt-2 inline-block text-sm text-brand-700 hover:underline"
+          >
+            All your files →
+          </Link>
+        </section>
+      )}
 
       {/* Prospecting queue */}
       {prospecting.length > 0 && (

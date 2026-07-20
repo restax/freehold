@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { logAudit } from "@/lib/audit";
 import { fireIntroEmail, firePostCloseEmail } from "@/lib/auto-emails";
 import { confirmed, dateOnly, intOr, oneOf, optStr, str } from "@/lib/forms";
+import { gapForPending, gapMessage, licenseEnforcement } from "@/lib/licensing";
 import { transactionLimit } from "@/lib/plans";
 import { requireAdminTenant, requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
@@ -30,8 +31,6 @@ function commonFields(formData: FormData) {
     expireDate: dateOnly(formData, "expireDate"),
     mlsId: optStr(formData, "mlsId"),
     coAgentClientId: optStr(formData, "coAgentClientId"),
-    tc1UserId: optStr(formData, "tc1UserId"),
-    tc2UserId: optStr(formData, "tc2UserId"),
     notes: optStr(formData, "notes"),
   };
 }
@@ -66,11 +65,34 @@ export async function createTransaction(formData: FormData) {
   if (!propertyAddress) return;
   const limit = await transactionLimit(tenantId);
   if (limit.limited) return; // cloud free-tier cap; the page shows the upgrade banner
-  const created = await withTenant(tenantId, (tx) =>
-    tx.transaction.create({
-      data: { tenantId, propertyAddress, ...commonFields(formData) },
-    }),
-  );
+  const assigneeId = optStr(formData, "assigneeId");
+  const fields = commonFields(formData);
+
+  // Under "block" enforcement a file in a license-required state can't be
+  // created without a licensed coordinator on it. Under "warn" it saves and
+  // the file carries a flag instead.
+  const enforcement = await licenseEnforcement(tenantId);
+  if (enforcement === "block") {
+    const gap = await withTenant(tenantId, (tx) =>
+      gapForPending(tx, fields.state, assigneeId ? [assigneeId] : []),
+    );
+    if (gap) {
+      redirect(`/dashboard/transactions?licenseError=${encodeURIComponent(gapMessage(gap))}`);
+    }
+  }
+
+  const created = await withTenant(tenantId, async (tx) => {
+    const txn = await tx.transaction.create({
+      data: { tenantId, propertyAddress, ...fields },
+    });
+    // Optional create-time assignment; more people can be added on the file.
+    if (assigneeId) {
+      await tx.transactionAssignee.create({
+        data: { tenantId, transactionId: txn.id, userId: assigneeId },
+      });
+    }
+    return txn;
+  });
   await emitWebhook(tenantId, "transaction.created", {
     id: created.id,
     propertyAddress: created.propertyAddress,
@@ -89,6 +111,26 @@ export async function updateTransaction(formData: FormData) {
   if (!id) return;
   const propertyAddress = str(formData, "propertyAddress");
   const fields = commonFields(formData);
+
+  // Moving a file into a license-required state is the same decision as
+  // creating one there, so it goes through the same gate.
+  const enforcement = await licenseEnforcement(tenantId);
+  if (enforcement === "block") {
+    const gap = await withTenant(tenantId, async (tx) => {
+      const assignees = await tx.transactionAssignee.findMany({
+        where: { transactionId: id },
+        select: { userId: true },
+      });
+      return gapForPending(
+        tx,
+        fields.state,
+        assignees.map((a) => a.userId),
+      );
+    });
+    if (gap) {
+      redirect(`/dashboard/transactions/${id}?licenseError=${encodeURIComponent(gapMessage(gap))}`);
+    }
+  }
 
   const redirected: string[] = [];
   let closedNow = false;

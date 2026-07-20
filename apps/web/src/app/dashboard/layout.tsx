@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { DashboardNav, SettingsNavLink } from "@/components/dashboard-nav";
+import { DashboardNav, ProfileNavLink, SettingsNavLink } from "@/components/dashboard-nav";
 import { Wordmark } from "@/components/marketing";
 import { SignOutButton } from "@/components/sign-out-button";
 import { openBillingPortal } from "@/lib/actions/billing";
@@ -105,6 +105,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </details>
         <DashboardNav />
         <div className="mt-auto flex flex-col gap-1 border-t border-stone-200 pt-3">
+          <ProfileNavLink />
           <SettingsNavLink />
           <div className="flex items-center justify-between gap-2 px-2.5 pt-1">
             <span className="truncate text-xs text-stone-400">{session.user.email}</span>
