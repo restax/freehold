@@ -3,15 +3,17 @@ import { runDailyBriefings } from "@/lib/daily-briefing";
 import { runOwnerExports } from "@/lib/export-run";
 import { runInvoiceReports } from "@/lib/invoice-report";
 import { flushOutbox } from "@/lib/outbox";
+import { sweepExpiredExports } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 /**
  * The single nightly cron (one slot on Vercel Hobby): flush the email outbox,
- * push client-owned exports to each opted-in workspace's own storage, and email
- * the daily briefing. The standalone /api/outbox/run and /api/exports/run
- * routes stay for manual or self-hosted triggering.
+ * push client-owned exports to each opted-in workspace's own storage, sweep
+ * yesterday's on-demand "Download everything" artifacts out of the platform
+ * bucket, and email the daily briefing. The standalone /api/outbox/run and
+ * /api/exports/run routes stay for manual or self-hosted triggering.
  */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
@@ -23,5 +25,6 @@ export async function GET(req: Request) {
   const exports = await runOwnerExports();
   const briefings = await runDailyBriefings();
   const invoiceReports = await runInvoiceReports();
-  return NextResponse.json({ outbox, exports, briefings, invoiceReports });
+  const exportSweep = await sweepExpiredExports();
+  return NextResponse.json({ outbox, exports, briefings, invoiceReports, exportSweep });
 }

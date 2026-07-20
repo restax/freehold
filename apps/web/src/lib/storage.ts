@@ -2,10 +2,13 @@ import { randomUUID } from "node:crypto";
 import {
   CreateBucketCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { decryptBytes, encryptBytes, isEncryptedBytes, loadMasterKey } from "@freehold/vault";
 import { loadTenantStorage, type TenantS3Config } from "@/lib/storage-config";
 
@@ -42,7 +45,7 @@ export interface PutResult {
   storageProvider: StorageProvider;
 }
 
-function s3Config() {
+export function s3Config() {
   const endpoint = process.env.STORAGE_ENDPOINT;
   const bucket = process.env.STORAGE_BUCKET;
   if (!endpoint || !bucket) return null;
@@ -249,4 +252,88 @@ export async function deleteObject(doc: StoredBytes): Promise<void> {
   } catch {
     // Orphaned objects are preferable to failed deletes; a cleanup job can sweep later.
   }
+}
+
+/**
+ * On-demand generated artifacts (currently: full workspace export ZIPs) that
+ * are too large to return directly from a Vercel Function — its response
+ * body is hard-capped at 4.5 MB, well below one real tenant's documents.
+ * These land in the platform bucket under exports/, never encrypted (same
+ * call as putTenantExport: the point is a plain file the requester can open),
+ * and the caller hands the browser a short-lived presigned URL instead of
+ * streaming bytes through the function. A nightly sweep deletes anything
+ * left over a day later — these are one-time downloads, not storage.
+ */
+const EXPORT_PREFIX = "exports/";
+const EXPORT_URL_TTL_SECONDS = 15 * 60;
+const EXPORT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** Whether the platform has its own S3-compatible bucket configured at all. */
+export function platformStorageConfigured(): boolean {
+  return s3Config() !== null;
+}
+
+/**
+ * Upload a generated artifact to the platform bucket and return a presigned
+ * GET URL that forces the given filename on download. Returns null when no
+ * platform bucket is configured — callers fall back to a direct response in
+ * that case (fine off Vercel, where the 4.5 MB cap doesn't exist).
+ */
+export async function presignPlatformExport(
+  tenantId: string,
+  bytes: Uint8Array,
+  filename: string,
+  contentType: string,
+): Promise<string | null> {
+  const cfg = s3Config();
+  if (!cfg) return null;
+
+  const key = `${EXPORT_PREFIX}${tenantId}/${Date.now()}-${randomUUID()}.zip`;
+  await putWithBucketCreate(s3(), cfg.bucket, key, Buffer.from(bytes), contentType);
+
+  const command = new GetObjectCommand({
+    Bucket: cfg.bucket,
+    Key: key,
+    ResponseContentDisposition: `attachment; filename="${filename}"`,
+    ResponseContentType: contentType,
+  });
+  return getSignedUrl(s3(), command, { expiresIn: EXPORT_URL_TTL_SECONDS });
+}
+
+/** Delete platform-bucket export artifacts older than a day. Nightly-cron only. */
+export async function sweepExpiredExports(): Promise<{ checked: number; deleted: number }> {
+  const cfg = s3Config();
+  if (!cfg) return { checked: 0, deleted: 0 };
+
+  const client = s3();
+  let checked = 0;
+  let deleted = 0;
+  let continuationToken: string | undefined;
+
+  do {
+    const page = await client.send(
+      new ListObjectsV2Command({
+        Bucket: cfg.bucket,
+        Prefix: EXPORT_PREFIX,
+        ContinuationToken: continuationToken,
+      }),
+    );
+    const stale = (page.Contents ?? []).filter(
+      (obj) =>
+        obj.Key && obj.LastModified && Date.now() - obj.LastModified.getTime() > EXPORT_MAX_AGE_MS,
+    );
+    checked += page.Contents?.length ?? 0;
+    if (stale.length > 0) {
+      await client.send(
+        new DeleteObjectsCommand({
+          Bucket: cfg.bucket,
+          Delete: { Objects: stale.map((obj) => ({ Key: obj.Key as string })) },
+        }),
+      );
+      deleted += stale.length;
+    }
+    continuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return { checked, deleted };
 }
