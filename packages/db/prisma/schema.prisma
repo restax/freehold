@@ -112,51 +112,51 @@ enum PlanTier {
 }
 
 model Organization {
-  id                      String               @id
+  id                      String                @id
   name                    String
-  slug                    String               @unique
+  slug                    String                @unique
   logo                    String?
   metadata                String?
-  planTier                PlanTier             @default(FREE) @map("plan_tier")
-  seatLimit               Int                  @default(2) @map("seat_limit")
-  aiExtractionsUsed       Int                  @default(0) @map("ai_extractions_used")
+  planTier                PlanTier              @default(FREE) @map("plan_tier")
+  seatLimit               Int                   @default(2) @map("seat_limit")
+  aiExtractionsUsed       Int                   @default(0) @map("ai_extractions_used")
   /// Admin setting: when true, members only see contacts they own.
-  restrictContactsToOwner Boolean              @default(false) @map("restrict_contacts_to_owner")
+  restrictContactsToOwner Boolean               @default(false) @map("restrict_contacts_to_owner")
   /// Per-tenant Follow Up Boss connection: {enc:{...}, importedAt?, importedCount?}.
   /// API key encrypted with VAULT_MASTER_KEY.
-  fubConfig               Json?                @map("fub_config")
+  fubConfig               Json?                 @map("fub_config")
   /// Per-tenant Twenty CRM connection: {url, enc:{...}, importedAt?, importedCount?}.
-  twentyConfig            Json?                @map("twenty_config")
+  twentyConfig            Json?                 @map("twenty_config")
   /// Tenant wording for transaction sides: {buy, sell} — e.g. sell side vs list side.
-  sideLabels              Json?                @map("side_labels")
+  sideLabels              Json?                 @map("side_labels")
   /// Tenant overrides for automated email templates: {intro:{subject,body}, postClose:{subject,body}}.
-  emailTemplates          Json?                @map("email_templates")
+  emailTemplates          Json?                 @map("email_templates")
   /// Workspace email signature + global footer: {signature, footer} —
   /// appended to every outgoing branded email.
-  emailSettings           Json?                @map("email_settings")
+  emailSettings           Json?                 @map("email_settings")
   /// Tenant mini-site at <slug>.<root>: {published, tagline, about, phone, email, services, showRegistration}.
-  siteConfig              Json?                @map("site_config")
+  siteConfig              Json?                 @map("site_config")
   /// Per-tenant Documenso connection: {url, enc:{ciphertext,iv,tag,wrappedKey,wrapIv,wrapTag,keyVersion}}.
   /// Token encrypted with VAULT_MASTER_KEY; null = use server-wide env default.
-  documensoConfig         Json?                @map("documenso_config")
+  documensoConfig         Json?                 @map("documenso_config")
   /// Per-tenant document storage: {provider:"S3", endpoint, region, bucket,
   /// accessKeyEnc:{...}, secretKeyEnc:{...}}. Keys encrypted with VAULT_MASTER_KEY.
   /// New documents route here; null = platform default (env S3) or Postgres bytes.
-  storageConfig           Json?                @map("storage_config")
-  stripeCustomerId        String?              @map("stripe_customer_id")
-  stripeSubscriptionId    String?              @map("stripe_subscription_id")
+  storageConfig           Json?                 @map("storage_config")
+  stripeCustomerId        String?               @map("stripe_customer_id")
+  stripeSubscriptionId    String?               @map("stripe_subscription_id")
   /// Last-known Stripe subscription status (active, trialing, past_due, unpaid, canceled).
   /// Mirrored from webhooks for operator visibility; null = never had a paid sub.
-  subscriptionStatus      String?              @map("subscription_status")
+  subscriptionStatus      String?               @map("subscription_status")
   /// Set when the workspace is locked for a failed renewal. Data is preserved;
   /// the dashboard is gated until payment is updated. Cleared when Stripe reports paid again.
-  billingSuspendedAt      DateTime?            @map("billing_suspended_at")
+  billingSuspendedAt      DateTime?             @map("billing_suspended_at")
   /// Complimentary (comped) plan grant, independent of Stripe. When set (and not
   /// past compExpiresAt), it overrides planTier — a full plan with no checkout/charge.
-  compTier                PlanTier?            @map("comp_tier")
+  compTier                PlanTier?             @map("comp_tier")
   /// When the comp ends; null = no expiry (until an operator revokes it).
-  compExpiresAt           DateTime?            @map("comp_expires_at")
-  createdAt               DateTime             @default(now())
+  compExpiresAt           DateTime?             @map("comp_expires_at")
+  createdAt               DateTime              @default(now())
   members                 Member[]
   invitations             Invitation[]
   clients                 Client[]
@@ -166,6 +166,8 @@ model Organization {
   tasks                   Task[]
   actionPlans             ActionPlan[]
   actionPlanTasks         ActionPlanTask[]
+  complianceChecklists    ComplianceChecklist[]
+  complianceItems         ComplianceItem[]
   documents               Document[]
   extractions             ContractExtraction[]
   extractionFields        ExtractionField[]
@@ -231,27 +233,33 @@ enum ClientType {
 /// serve. Transactions, vault credentials, portal branding, and invoicing all
 /// attach here in later stages.
 model Client {
-  id            String            @id @default(uuid())
-  tenantId      String            @map("tenant_id")
-  tenant        Organization      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  type          ClientType        @default(AGENT)
-  name          String
-  email         String?
-  phone         String?
-  notes         String?
+  id                    String               @id @default(uuid())
+  tenantId              String               @map("tenant_id")
+  tenant                Organization         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type                  ClientType           @default(AGENT)
+  name                  String
+  email                 String?
+  phone                 String?
+  notes                 String?
   /// Per-client e-signature provider; null = tenant default (FREEHOLD_ESIGN_DEFAULT env, else MANUAL).
-  esignProvider EsignProvider?    @map("esign_provider")
+  esignProvider         EsignProvider?       @map("esign_provider")
   /// Per-client automated-email switches: {intro?: boolean, postClose?: boolean}; missing = on.
-  emailPrefs    Json?             @map("email_prefs")
-  isSample      Boolean           @default(false)
-  transactions  Transaction[]
-  credentials   VaultCredential[]
-  portalLinks   PortalLink[]
-  clientNotes   ClientNote[]
-  agents        ClientAgent[]
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  invoices      Invoice[]
+  emailPrefs            Json?                @map("email_prefs")
+  /// Compliance: every transaction for this client follows the assigned
+  /// checklist. Switch complianceEnabled off to exempt the client entirely
+  /// (leaving no checklist assigned is also inert).
+  complianceEnabled     Boolean              @default(true) @map("compliance_enabled")
+  complianceChecklistId String?              @map("compliance_checklist_id")
+  complianceChecklist   ComplianceChecklist? @relation(fields: [complianceChecklistId], references: [id], onDelete: SetNull)
+  isSample              Boolean              @default(false)
+  transactions          Transaction[]
+  credentials           VaultCredential[]
+  portalLinks           PortalLink[]
+  clientNotes           ClientNote[]
+  agents                ClientAgent[]
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  invoices              Invoice[]
 
   @@index([tenantId])
   @@map("client")
@@ -807,6 +815,45 @@ model ActionPlanTask {
   @@map("action_plan_task")
 }
 
+/// A named set of documents a transaction must carry to pass compliance
+/// (KW-style compliance checklist). Distinct from ActionPlan, which produces
+/// dated *tasks*; this defines required *documents*. Assigned per Client, so
+/// every file for that client inherits the same rules.
+model ComplianceChecklist {
+  id          String           @id @default(uuid())
+  tenantId    String           @map("tenant_id")
+  tenant      Organization     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  isSample    Boolean          @default(false)
+  items       ComplianceItem[]
+  clients     Client[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([tenantId])
+  @@map("compliance_checklist")
+}
+
+/// One required document on a compliance checklist.
+model ComplianceItem {
+  id          String              @id @default(uuid())
+  tenantId    String              @map("tenant_id")
+  tenant      Organization        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  checklistId String              @map("checklist_id")
+  checklist   ComplianceChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  /// Optional items are tracked but never block a file from passing.
+  required    Boolean             @default(true)
+  sortOrder   Int                 @default(0) @map("sort_order")
+  createdAt   DateTime            @default(now())
+
+  @@index([tenantId])
+  @@index([checklistId])
+  @@map("compliance_item")
+}
+
 // --- Stage 02: documents + AI contract extraction ---
 
 enum ExtractionStatus {
@@ -854,12 +901,19 @@ model Document {
   storageProvider String?              @map("storage_provider")
   visibleToAgent  Boolean              @default(true) @map("visible_to_agent")
   visibleToClient Boolean              @default(true) @map("visible_to_client")
+  /// Versioning: replacing a file keeps the old one as a prior version. The new
+  /// row is current (isCurrent), version+1, and replacesId points at the file it
+  /// superseded. Lists show only current rows; the chain is the version history.
+  version         Int                  @default(1)
+  isCurrent       Boolean              @default(true) @map("is_current")
+  replacesId      String?              @map("replaces_id")
   extractions     ContractExtraction[]
   envelopes       SignatureEnvelope[]
   createdAt       DateTime             @default(now())
 
   @@index([tenantId])
   @@index([transactionId])
+  @@index([replacesId])
   @@map("document")
 }
 

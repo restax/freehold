@@ -16,6 +16,7 @@ import {
   LockKey,
   PlugsConnected,
   Receipt,
+  ShieldCheck,
   Sun,
   UsersThree,
 } from "@phosphor-icons/react";
@@ -51,6 +52,7 @@ const GROUPS: NavGroup[] = [
     label: "Library",
     items: [
       { href: "/dashboard/action-plans", label: "Action plans", icon: ListChecks },
+      { href: "/dashboard/compliance", label: "Compliance", icon: ShieldCheck },
       { href: "/dashboard/templates", label: "Doc templates", icon: FileText },
       { href: "/dashboard/emails", label: "Email templates", icon: EnvelopeSimple },
       { href: "/dashboard/vault", label: "Vault", icon: LockKey },

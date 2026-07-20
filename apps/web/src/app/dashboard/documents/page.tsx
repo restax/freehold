@@ -49,6 +49,7 @@ export default async function DocumentsPage({
   const { documents, transactions } = await withTenant(tenantId, async (t) => ({
     documents: await t.document.findMany({
       where: {
+        isCurrent: true,
         ...(txFilter ? { transactionId: txFilter } : {}),
         ...(query ? { filename: { contains: query, mode: "insensitive" } } : {}),
       },

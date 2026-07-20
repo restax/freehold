@@ -12,6 +12,7 @@ import {
   removeClientAgent,
   saveClientEmailPrefs,
 } from "@/lib/actions/clients";
+import { setClientCompliance } from "@/lib/actions/compliance";
 import { createAgentPortalLink, setPortalLinkActive } from "@/lib/actions/portal";
 import { parseEmailPrefs } from "@/lib/auto-emails";
 import { fmtDate, fmtMoney } from "@/lib/format";
@@ -60,6 +61,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             orderBy: { system: "asc" },
             select: { id: true, system: true, username: true, url: true },
           },
+          complianceChecklist: { select: { id: true, name: true } },
           transactions: {
             orderBy: { updatedAt: "desc" },
             include: { portalLinks: { orderBy: { createdAt: "desc" } } },
@@ -68,6 +70,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
       }),
       tx.contact.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     ]),
+  );
+  const checklists = await withTenant(tenantId, (tx) =>
+    tx.complianceChecklist.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
   );
   if (!client) notFound();
   const portalBase = await portalOrigin(tenantId);
@@ -469,6 +474,70 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             })}
           </ul>
         )}
+      </section>
+
+      <section className={card}>
+        <h2 className="mb-1 font-medium">Compliance</h2>
+        <p className="mb-3 text-sm text-stone-500">
+          {client.complianceEnabled && client.complianceChecklist ? (
+            <>
+              Every file for {client.name} must carry the documents on{" "}
+              <Link
+                href={`/dashboard/compliance/${client.complianceChecklist.id}`}
+                className="text-brand-700 hover:underline"
+              >
+                {client.complianceChecklist.name}
+              </Link>
+              .
+            </>
+          ) : client.complianceEnabled ? (
+            <>
+              Compliance is on for {client.name}, but no checklist is assigned yet — nothing is
+              required until you pick one.
+            </>
+          ) : (
+            <>Compliance is switched off for {client.name}. Their files have no requirements.</>
+          )}
+        </p>
+        <form action={setClientCompliance} className="flex flex-wrap items-end gap-3">
+          <input type="hidden" name="clientId" value={client.id} />
+          <label className={labelCls}>
+            Checklist
+            <select
+              name="checklistId"
+              defaultValue={client.complianceChecklistId ?? ""}
+              className={input}
+            >
+              <option value="">— none —</option>
+              {checklists.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 pb-2 text-sm font-medium text-stone-700">
+            <input
+              type="checkbox"
+              name="enabled"
+              defaultChecked={client.complianceEnabled}
+              className="accent-brand-600"
+            />
+            Compliance required
+          </label>
+          <button type="submit" className={btnGhost}>
+            Save compliance rules
+          </button>
+          {checklists.length === 0 && (
+            <span className="pb-2 text-xs text-stone-400">
+              No checklists yet —{" "}
+              <Link href="/dashboard/compliance" className="text-brand-700 hover:underline">
+                create one
+              </Link>
+              .
+            </span>
+          )}
+        </form>
       </section>
 
       <section className={card}>

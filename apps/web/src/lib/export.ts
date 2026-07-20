@@ -46,6 +46,8 @@ export async function buildWorkspaceExport(tenantId: string): Promise<ExportResu
               storageProvider: true,
               tenantId: true,
               createdAt: true,
+              version: true,
+              isCurrent: true,
             },
           },
         },
@@ -93,7 +95,13 @@ export async function buildWorkspaceExport(tenantId: string): Promise<ExportResu
       }
       try {
         const bytes = await getObjectBytes(d);
-        zip.file(`documents/${safe(t.propertyAddress)}/${safe(d.filename)}`, bytes);
+        // Current files land at the top; superseded versions go in a
+        // prior-versions/ subfolder so identically named files never collide.
+        const dir = `documents/${safe(t.propertyAddress)}`;
+        const path = d.isCurrent
+          ? `${dir}/${safe(d.filename)}`
+          : `${dir}/prior-versions/v${d.version}-${safe(d.filename)}`;
+        zip.file(path, bytes);
         documentCount += 1;
         totalBytes += bytes.length;
       } catch {

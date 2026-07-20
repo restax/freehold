@@ -22,7 +22,7 @@ export async function GET(
       select: {
         propertyAddress: true,
         documents: {
-          where: { visibleToAgent: true },
+          where: { visibleToAgent: true, isCurrent: true },
           select: {
             filename: true,
             data: true,

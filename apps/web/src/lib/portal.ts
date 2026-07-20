@@ -64,7 +64,7 @@ export async function resolvePortal(token: string) {
           select: { id: true, title: true, dueDate: true, status: true },
         },
         documents: {
-          where: { visibleToClient: true },
+          where: { visibleToClient: true, isCurrent: true },
           orderBy: { createdAt: "desc" },
           select: { id: true, filename: true, sizeBytes: true, createdAt: true },
         },
@@ -142,7 +142,12 @@ export async function resolveAgentPortal(token: string) {
       },
     });
     const recentDocs = await tx.document.findMany({
-      where: { transactionId: { in: txnIds }, visibleToAgent: true, createdAt: { gte: weekAgo } },
+      where: {
+        transactionId: { in: txnIds },
+        visibleToAgent: true,
+        isCurrent: true,
+        createdAt: { gte: weekAgo },
+      },
       orderBy: { createdAt: "desc" },
       take: 15,
       select: {
@@ -176,7 +181,7 @@ export async function resolveAgentPortalTxn(token: string, txnId: string) {
           select: { id: true, title: true, dueDate: true, status: true },
         },
         documents: {
-          where: { visibleToAgent: true },
+          where: { visibleToAgent: true, isCurrent: true },
           orderBy: { createdAt: "desc" },
           select: { id: true, filename: true, sizeBytes: true, createdAt: true },
         },

@@ -5,7 +5,7 @@ import { Badge, EnvelopeBadge, ExtractionBadge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
 import { DictateButton } from "@/components/dictate-button";
 import { VisibilityToggles } from "@/components/visibility-toggles";
-import { deleteDocument, uploadDocument } from "@/lib/actions/documents";
+import { deleteDocument, replaceDocument, uploadDocument } from "@/lib/actions/documents";
 import { cancelScheduledEmail, sendTransactionEmail } from "@/lib/actions/emails";
 import {
   deleteEnvelope,
@@ -44,7 +44,7 @@ import { portalOrigin } from "@/lib/portal";
 import { PRIORITY_BADGE, PRIORITY_LABEL } from "@/lib/priority";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
 import { requireTenant } from "@/lib/tenant";
-import { btn, btnDanger, btnGhost, card, input, label } from "@/lib/ui";
+import { btn, btnGhost, card, input, label } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -95,6 +95,9 @@ export default async function TransactionDetailPage({
             createdAt: true,
             visibleToAgent: true,
             visibleToClient: true,
+            version: true,
+            isCurrent: true,
+            replacesId: true,
           },
         },
         extractions: {
@@ -124,6 +127,21 @@ export default async function TransactionDetailPage({
   });
   if (!data) notFound();
   const { txn, contacts, clients, plans, templates, emailTemplates } = data;
+
+  // Versioning: lists show current files only; each keeps a chain of the prior
+  // versions it superseded (newest prior first), reached via replacesId.
+  const docById = new Map(txn.documents.map((d) => [d.id, d]));
+  const currentDocs = txn.documents.filter((d) => d.isCurrent);
+  const priorVersions = (doc: (typeof txn.documents)[number]) => {
+    const out: typeof txn.documents = [];
+    let cur = doc.replacesId ? docById.get(doc.replacesId) : undefined;
+    while (cur) {
+      out.push(cur);
+      cur = cur.replacesId ? docById.get(cur.replacesId) : undefined;
+    }
+    return out;
+  };
+
   const portalBase = await portalOrigin(tenantId);
   const aiCredits = await extractionCreditState(tenantId);
 
@@ -154,7 +172,7 @@ export default async function TransactionDetailPage({
           task_due: task?.dueDate ? fmtDate(task.dueDate) : "",
         }
       : {};
-    for (const d of txn.documents) {
+    for (const d of currentDocs) {
       const keywords = (selectedEmailTemplate.attachMatch ?? "")
         .split(",")
         .map((k) => k.trim().toLowerCase())
@@ -418,9 +436,9 @@ export default async function TransactionDetailPage({
                     until one is added to <code>.env</code>.
                   </p>
                 )}
-                {txn.documents.length > 0 && (
+                {currentDocs.length > 0 && (
                   <ul className="mb-4 flex flex-col">
-                    {txn.documents.map((doc) => (
+                    {currentDocs.map((doc) => (
                       <li
                         key={doc.id}
                         className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 last:border-0"
@@ -433,6 +451,11 @@ export default async function TransactionDetailPage({
                         >
                           {doc.filename}
                         </a>
+                        {doc.version > 1 && (
+                          <span className="rounded bg-stone-100 px-1.5 py-0.5 text-xs font-medium text-stone-500">
+                            v{doc.version}
+                          </span>
+                        )}
                         <span className="text-xs text-stone-400">
                           {(doc.sizeBytes / 1024).toFixed(0)} KB · {fmtDate(doc.createdAt)}
                         </span>
@@ -510,6 +533,65 @@ export default async function TransactionDetailPage({
                             </button>
                           </form>
                         </details>
+                        <details className="w-full">
+                          <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
+                            Replace with a new version
+                          </summary>
+                          <form
+                            action={replaceDocument}
+                            className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
+                          >
+                            <input type="hidden" name="id" value={doc.id} />
+                            <label className={label}>
+                              New file (PDF, max 10 MB)
+                              <input
+                                name="file"
+                                type="file"
+                                accept="application/pdf,.pdf"
+                                required
+                                className={input}
+                              />
+                            </label>
+                            <button type="submit" className={btnGhost}>
+                              Replace
+                            </button>
+                            <span className="pb-2 text-xs text-stone-400">
+                              The current file becomes a prior version — nothing is lost.
+                            </span>
+                          </form>
+                        </details>
+                        {priorVersions(doc).length > 0 && (
+                          <details className="w-full">
+                            <summary className="cursor-pointer select-none text-xs text-stone-500 transition-colors hover:text-stone-700">
+                              {priorVersions(doc).length} prior version
+                              {priorVersions(doc).length === 1 ? "" : "s"}
+                            </summary>
+                            <ul className="mt-1.5 flex flex-col gap-1 border-l-2 border-stone-200 pl-3">
+                              {priorVersions(doc).map((p) => (
+                                <li
+                                  key={p.id}
+                                  className="flex flex-wrap items-center gap-2 text-xs"
+                                >
+                                  <span className="rounded bg-stone-100 px-1.5 py-0.5 font-medium text-stone-500">
+                                    v{p.version}
+                                  </span>
+                                  <a
+                                    href={`/api/documents/${p.id}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-stone-500 hover:text-brand-600 hover:underline"
+                                  >
+                                    {p.filename}
+                                  </a>
+                                  <span className="text-stone-400">
+                                    {(p.sizeBytes / 1024).toFixed(0)} KB · replaced{" "}
+                                    {fmtDate(p.createdAt)}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -987,13 +1069,13 @@ export default async function TransactionDetailPage({
                           className={input}
                         />
                       </label>
-                      {txn.documents.length > 0 && (
+                      {currentDocs.length > 0 && (
                         <div className="flex flex-col gap-1">
                           <span className="text-sm font-medium text-stone-700">
                             Attach documents
                           </span>
                           <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-                            {txn.documents.map((d) => (
+                            {currentDocs.map((d) => (
                               <label
                                 key={d.id}
                                 className="flex items-center gap-1.5 text-sm text-stone-600"
