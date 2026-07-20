@@ -316,6 +316,46 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
     ],
   ],
   [
+    "Licensing, assignment & coordinator network",
+    [
+      [
+        "Per-state license tracking",
+        "Every user's profile holds their TC licenses by state — number, expiration, the document itself — with amber and red alerts as expiry approaches.",
+        "today",
+      ],
+      [
+        "Unlimited file assignment",
+        "Assign any number of teammates to a transaction, each with their own role label, editable any time. No fixed two-person cap.",
+        "today",
+      ],
+      [
+        "License enforcement by operating state",
+        "Mark which of your states require a TC license, then choose warn or block: Freehold flags — or refuses — a file with nobody licensed assigned.",
+        "today",
+      ],
+      [
+        "Coordinator directory",
+        "Search Freehold-enabled workspaces and the public FindTCPros directory in one list, filtered by state, specialty, and software — know who to call before you need them.",
+        "today",
+      ],
+      [
+        "Cross-tenant engagements",
+        "Hire another Freehold workspace to cover a file: their coordinator gets scoped guest access to exactly that transaction, nothing else in your workspace.",
+        "today",
+      ],
+      [
+        "Per-transaction pay requests",
+        "Set a fee when you assign a file. The assignee requests payment on completed work; an admin marks it paid against an itemized statement.",
+        "today",
+      ],
+      [
+        "Client invoicing without a payment processor",
+        "Bill a client for TC services as a document, not a charge — email it, track it as an open follow-up, mark it paid however they actually paid. Route it through your own ERPNext instead and status mirrors back automatically.",
+        "today",
+      ],
+    ],
+  ],
+  [
     "Client portal",
     [
       [
@@ -395,9 +435,9 @@ export default function FeaturesPage() {
             Real screenshots, not mockups
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-stone-600">
-            Straight from the live demo workspace \u2014 what you see is what ships.{" "}
+            Straight from the live demo workspace — what you see is what ships.{" "}
             <a href="/demo" className="font-medium text-brand-700 hover:text-brand-600">
-              Click around it yourself \u2192
+              Click around it yourself →
             </a>
           </p>
           <div className="mt-6 grid gap-5 md:grid-cols-2">

@@ -18,7 +18,8 @@ What's in today:
 - **Portals, team & vault** — shareable client/buyer/seller portals on revocable per-link tokens, team management with roles and link-based invitations, and a credential vault (MLS/lender logins envelope-encrypted at rest, revealed only on click, every reveal audited — Freehold never logs into anything automatically).
 - **Cloud & billing** — Stripe subscriptions with a free tier and graceful limits that never lock data (existing work stays readable and exportable). Limits apply **only** when `FREEHOLD_CLOUD=1` — self-hosted Freehold is unlimited, always.
 - **Email & comms** — transactional email via Resend (branded HTML from the workspace's own address, replies threading back onto the transaction) plus a full email template studio: a starter library with merge fields, per-task suggestions with one-click compose and attachments, Deepgram voice dictation, a workspace signature/footer, automated intro/post-close emails, optional auto-send on task completion, quiet hours, and scheduled sends.
-- **Security & platform** — TOTP two-factor auth with backup codes, at-rest document encryption (envelope AES-256-GCM), six-digit email verification on Cloud signups, per-workspace marketing sites on subdomains with logo upload and buy-/sell-side intake forms, CSV import, a REST API with signed webhooks, client invoicing, and integrations: Zapier, Follow Up Boss, Twenty CRM, per-tenant Documenso, and a Claude Skill.
+- **Security & platform** — TOTP two-factor auth with backup codes, at-rest document encryption (envelope AES-256-GCM), six-digit email verification on Cloud signups, per-workspace marketing sites on subdomains with logo upload and buy-/sell-side intake forms, CSV import, a REST API with signed webhooks, client invoicing (payment-agnostic — a tracked document and follow-up task, with an optional per-tenant ERPNext connection that creates the Sales Invoice there and mirrors its status back), and integrations: Zapier, Follow Up Boss, Twenty CRM, ERPNext, per-tenant Documenso, and a Claude Skill.
+- **Licensing, assignment & coordinator network** — per-user, per-state license tracking with expiry alerts; unlimited transaction assignment with per-assignee role labels (no fixed two-person cap); per-tenant operating states with a warn-or-block license-enforcement switch; a coordinator directory merging Freehold-enabled workspaces with the public FindTCPros feed, filterable by state, specialty, and software; cross-tenant engagements that grant another workspace's coordinator scoped guest access to exactly one file; and per-transaction pay requests, so an assignee can request payment on completed work and an admin marks it paid against an itemized statement.
 
 On the roadmap: saved views, role-based task auto-assignment, background jobs, a Dotloop adapter, Bitwarden import/export, a template marketplace, BYO-Twilio SMS, and a RESO MLS adapter.
 
@@ -35,7 +36,7 @@ On the roadmap: saved views, role-based task auto-assignment, background jobs, a
 | Email | Resend (free tier works for self-hosting; replies thread back onto transactions) |
 | SMS | Bring your own Twilio or Vonage account |
 | E-signature | Adapter interface: Documenso (bundled, arm's-length) · DocuSign · Dotloop |
-| Payments | Stripe + Stripe Connect (tenants invoice their own clients) |
+| Billing | Stripe (Cloud subscriptions only) — client invoicing is payment-agnostic, with an optional per-tenant ERPNext connection for accounting |
 
 ## Repo layout
 

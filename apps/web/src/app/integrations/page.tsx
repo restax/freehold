@@ -58,7 +58,17 @@ const LIVE: Integration[] = [
   [
     "Stripe",
     "St",
-    "Powers Freehold Cloud subscriptions, and client invoicing through your own Stripe account with hosted payment pages and automatic paid-status sync.",
+    "Powers Freehold Cloud subscriptions — that's the whole job. Client invoicing never touches a payment processor: it's a document and a follow-up task, not a charge.",
+  ],
+  [
+    "ERPNext",
+    "Er",
+    "Working today: connect your own ERPNext (Frappe) instance and Freehold creates the Sales Invoice there instead of just in Freehold — your ERP stays the ledger, and paid status mirrors back automatically.",
+  ],
+  [
+    "FindTCPros directory",
+    "Fp",
+    "Working today: the coordinator directory pulls in FindTCPros's public listings alongside Freehold-enabled workspaces, so one search covers both — filtered by state, specialty, and software.",
   ],
 ];
 

@@ -52,9 +52,17 @@ around before importing your own.
 | E-signatures via Documenso | `DOCUMENSO_URL`, `DOCUMENSO_API_TOKEN` | `docker-compose.documenso.yml` runs a local Documenso; see its header comments |
 | E-signatures via DocuSign | `DOCUSIGN_*` | Config-gated; appears once set |
 | External S3 storage | `STORAGE_S3_*` | Any S3-compatible service; bundled MinIO is the default |
-| Client invoicing | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Your own Stripe account; invoices go out under your name |
 | Email + reply capture | `RESEND_API_KEY`, `EMAIL_FROM_DOMAIN`, `EMAIL_REPLY_DOMAIN`, `RESEND_WEBHOOK_SECRET` | A free Resend account and one verified domain; replies thread back onto transactions |
 | Scheduled email delivery | `CRON_SECRET` | Required for "Send later" and quiet-hours deferrals — see below |
+| SkySlope credential custody | `SKYSLOPE_CLIENT_ID`, `SKYSLOPE_CLIENT_SECRET` | Lets admins store a client's SkySlope API key per client, encrypted at rest. No live SkySlope calls yet — custody only, pending SkySlope's partner agreement |
+
+Client invoicing needs nothing from this table — it works out of the box, no
+payment processor involved. Freehold generates the invoice, emails it, and
+tracks it as an open follow-up task until you mark it paid however the client
+actually paid (check, Zelle, wire, out of closing proceeds). If you already
+run ERPNext, connect it per-tenant under **Settings → Integrations**: no env
+var needed, and Freehold creates the Sales Invoice there instead, mirroring
+its paid status back automatically.
 
 ## Reaching it from the internet (optional)
 
