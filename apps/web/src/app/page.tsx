@@ -463,35 +463,67 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* Aged: cheese yes, software no */}
-      <section className="relative min-h-[420px] overflow-hidden lg:min-h-[520px]">
-        <Image
-          src="/marketing/parmesan.jpg"
-          alt="Rows of Parmesan wheels aging on wooden shelves in a maturing room"
-          fill
-          sizes="100vw"
-          className="object-cover"
-        />
-        <div
-          aria-hidden
-          className="absolute inset-0 bg-gradient-to-t from-stone-950/85 via-stone-950/30 to-transparent"
-        />
-        <div className="relative mx-auto flex min-h-[420px] max-w-6xl flex-col justify-end px-4 pb-14 pt-24 sm:px-6 lg:min-h-[520px] lg:pb-16">
-          <h2 className="max-w-xl text-4xl font-semibold tracking-tight text-white md:text-5xl">
-            Age cheese, <em className="italic">not</em> your software.
-          </h2>
-          <p className="mt-4 max-w-md text-sm leading-relaxed text-stone-200">
-            Most TC platforms were built a generation ago. Freehold ships every week — and you can
-            read the code.
-          </p>
-          <p className="mt-5">
-            <Link
-              href="/features"
-              className="text-sm font-medium text-white underline underline-offset-4 hover:text-brand-200"
-            >
-              See what's already shipped →
-            </Link>
-          </p>
+      {/* Rotating hero: cheese (built to last) crossfades with then-vs-now (honest pricing) */}
+      <section className="hero-crossfade relative min-h-[420px] overflow-hidden lg:min-h-[520px]">
+        <div className="hero-slide absolute inset-0">
+          <Image
+            src="/marketing/parmesan.jpg"
+            alt="Rows of Parmesan wheels aging on wooden shelves in a maturing room"
+            fill
+            sizes="100vw"
+            className="object-cover"
+          />
+          <div
+            aria-hidden
+            className="absolute inset-0 bg-gradient-to-t from-stone-950/85 via-stone-950/30 to-transparent"
+          />
+          <div className="relative mx-auto flex min-h-[420px] max-w-6xl flex-col justify-end px-4 pb-14 pt-24 sm:px-6 lg:min-h-[520px] lg:pb-16">
+            <h2 className="max-w-xl text-4xl font-semibold tracking-tight text-white md:text-5xl">
+              Age cheese, <em className="italic">not</em> your software.
+            </h2>
+            <p className="mt-4 max-w-md text-sm leading-relaxed text-stone-200">
+              Most TC platforms were built a generation ago. Freehold ships every week — and you can
+              read the code.
+            </p>
+            <p className="mt-5">
+              <Link
+                href="/features"
+                className="text-sm font-medium text-white underline underline-offset-4 hover:text-brand-200"
+              >
+                See what's already shipped →
+              </Link>
+            </p>
+          </div>
+        </div>
+        <div className="hero-slide absolute inset-0">
+          <Image
+            src="/marketing/then-vs-now.jpg"
+            alt="Split image: a sprawling, empty tech office at dusk beside rows of glowing server racks on the left, one person working alone at a small desk in an apartment on the right"
+            fill
+            sizes="100vw"
+            className="object-cover"
+          />
+          <div
+            aria-hidden
+            className="absolute inset-0 bg-gradient-to-t from-stone-950/85 via-stone-950/30 to-transparent"
+          />
+          <div className="relative mx-auto flex min-h-[420px] max-w-6xl flex-col justify-end px-4 pb-14 pt-24 sm:px-6 lg:min-h-[520px] lg:pb-16">
+            <h2 className="max-w-xl text-4xl font-semibold tracking-tight text-white md:text-5xl">
+              2006: a floor of engineers. <em className="italic">2026:</em> one guy and an API key.
+            </h2>
+            <p className="mt-4 max-w-md text-sm leading-relaxed text-stone-200">
+              Software got cheaper to build. Most subscriptions never got cheaper to buy — ours
+              does.
+            </p>
+            <p className="mt-5">
+              <Link
+                href="/pricing"
+                className="text-sm font-medium text-white underline underline-offset-4 hover:text-brand-200"
+              >
+                See pricing →
+              </Link>
+            </p>
+          </div>
         </div>
       </section>
 

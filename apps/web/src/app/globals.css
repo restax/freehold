@@ -43,3 +43,45 @@ body {
   outline: 2px solid var(--color-brand-600);
   outline-offset: 2px;
 }
+
+/* Pure-CSS crossfade for the homepage hero banner — no JS, no hydration.
+   Each .hero-slide runs the same keyframes; the second is phase-shifted by
+   a negative delay of half the cycle, so as one fades out the other fades
+   in. pointer-events is listed alongside opacity so only the visible slide
+   is clickable (CSS applies non-interpolable properties as a discrete jump
+   at the keyframe, not a tween). */
+.hero-crossfade .hero-slide {
+  animation: hero-fade 16s infinite;
+}
+.hero-crossfade .hero-slide:nth-child(2) {
+  animation-delay: -8s;
+}
+.hero-crossfade:hover .hero-slide,
+.hero-crossfade:focus-within .hero-slide {
+  animation-play-state: paused;
+}
+@keyframes hero-fade {
+  0%,
+  42% {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  50%,
+  92% {
+    opacity: 0;
+    pointer-events: none;
+  }
+  100% {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-crossfade .hero-slide {
+    animation: none;
+    opacity: 0;
+  }
+  .hero-crossfade .hero-slide:first-child {
+    opacity: 1;
+  }
+}
