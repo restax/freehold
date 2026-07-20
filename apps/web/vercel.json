@@ -5,7 +5,7 @@
       "schedule": "0 9 * * *"
     },
     {
-      "path": "/api/outbox/run",
+      "path": "/api/cron/nightly",
       "schedule": "0 13 * * *"
     }
   ]

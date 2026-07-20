@@ -163,22 +163,40 @@ export async function deleteEmailTemplateLib(formData: FormData) {
   revalidatePath("/dashboard/emails");
 }
 
+type EmailSettingsValue = string | number | boolean;
+
+/** Merge a patch into organization.emailSettings without clobbering other keys. */
+async function mergeEmailSettings(tenantId: string, patch: Record<string, EmailSettingsValue>) {
+  const { prisma } = await import("@freehold/db");
+  const org = await prisma.organization.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: { emailSettings: true },
+  });
+  const current = (org.emailSettings as Record<string, EmailSettingsValue> | null) ?? {};
+  await prisma.organization.update({
+    where: { id: tenantId },
+    data: { emailSettings: { ...current, ...patch } },
+  });
+}
+
 /** Workspace signature + global footer, applied to every outgoing email. */
 export async function saveEmailSettings(formData: FormData) {
   const { tenantId, isAdmin } = await requireAdminTenant();
   if (!isAdmin) return;
-  const { prisma } = await import("@freehold/db");
-  await prisma.organization.update({
-    where: { id: tenantId },
-    data: {
-      emailSettings: {
-        signature: String(formData.get("signature") ?? "").trim(),
-        footer: String(formData.get("footer") ?? "").trim(),
-        quietStart: Number(formData.get("quietStart") ?? 20),
-        quietEnd: Number(formData.get("quietEnd") ?? 8),
-        timeZone: String(formData.get("timeZone") ?? "America/Chicago").trim(),
-      },
-    },
+  await mergeEmailSettings(tenantId, {
+    signature: String(formData.get("signature") ?? "").trim(),
+    footer: String(formData.get("footer") ?? "").trim(),
+    quietStart: Number(formData.get("quietStart") ?? 20),
+    quietEnd: Number(formData.get("quietEnd") ?? 8),
+    timeZone: String(formData.get("timeZone") ?? "America/Chicago").trim(),
   });
   revalidatePath("/dashboard/emails");
+}
+
+/** Toggle the daily briefing email (owner + admins get a morning summary + PDF). */
+export async function setDailyBriefing(formData: FormData) {
+  const { tenantId, isAdmin } = await requireAdminTenant();
+  if (!isAdmin) return;
+  await mergeEmailSettings(tenantId, { dailyBriefing: str(formData, "enabled") === "1" });
+  revalidatePath("/dashboard/settings");
 }

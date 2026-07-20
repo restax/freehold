@@ -31,6 +31,25 @@ export default function TermsPage() {
           Don't use the service to break the law, and don't attempt to access other customers' data.
           We may suspend accounts that do either.
         </p>
+        <h2 className="mt-2 font-semibold text-stone-900">If Freehold Cloud ever goes away</h2>
+        <p>
+          Your business should never be trapped inside ours. Freehold is source-available software:
+          the full application is already public on{" "}
+          <a
+            href="https://github.com/restax/freehold"
+            className="text-brand-700 hover:text-brand-600"
+          >
+            GitHub
+          </a>
+          , and the Elastic License 2.0 lets you run it for your own organization — free, forever,
+          on your own server. That's the real guarantee: it doesn't depend on us staying in business
+          or behaving well, because the code you'd need is already in your hands.
+        </p>
+        <p>
+          Your data stays exportable at any time, including after you cancel. If we ever wound down
+          Freehold Cloud, we intend to give reasonable advance notice and a final export so you can
+          move to your own instance without losing a day of work.
+        </p>
         <h2 className="mt-2 font-semibold text-stone-900">Security disclaimer</h2>
         <p>
           Real estate transactions involve sensitive information, and we treat that seriously: we

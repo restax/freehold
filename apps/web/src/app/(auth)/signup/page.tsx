@@ -86,6 +86,19 @@ export default function SignupPage() {
         </Link>
         , including the security disclaimer.
       </p>
+      <p className="text-center text-xs text-stone-400">
+        Freehold is source-available. If Freehold Cloud ever shuts down, you can self-host the same
+        app from{" "}
+        <a
+          href="https://github.com/restax/freehold"
+          className="underline hover:text-stone-600"
+          target="_blank"
+          rel="noreferrer"
+        >
+          GitHub
+        </a>{" "}
+        and keep your data — your business is never locked in.
+      </p>
       <p className="text-center text-sm text-stone-500">
         Already have an account?{" "}
         <Link href="/login" className="text-brand-600 hover:underline">

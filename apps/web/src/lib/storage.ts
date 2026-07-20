@@ -150,6 +150,23 @@ async function putWithBucketCreate(
   }
 }
 
+/**
+ * Write a raw object to a tenant's connected bucket at a chosen key — no
+ * envelope encryption, so client-owned exports are directly openable in the
+ * storage they control. Returns false when the workspace has no bucket.
+ */
+export async function putTenantExport(
+  tenantId: string,
+  key: string,
+  bytes: Uint8Array,
+  contentType: string,
+): Promise<{ ok: boolean; bucket?: string }> {
+  const tenant = await loadTenantStorage(tenantId);
+  if (!tenant) return { ok: false };
+  await putWithBucketCreate(tenantS3Client(tenant), tenant.bucket, key, bytes, contentType);
+  return { ok: true, bucket: tenant.bucket };
+}
+
 function maybeDecrypt(buf: Buffer): Buffer {
   if (!isEncryptedBytes(buf)) return buf;
   const key = documentKey();

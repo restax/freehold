@@ -1,4 +1,5 @@
 import { prisma, withTenant } from "@freehold/db";
+import Link from "next/link";
 import { Badge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
 import { TwoFactorSettings } from "@/components/two-factor-settings";
@@ -11,10 +12,13 @@ import {
 } from "@/lib/actions/api-keys";
 import { setContactVisibilityRestriction } from "@/lib/actions/contacts";
 import { removeSampleData } from "@/lib/actions/sample-data";
+import { setDailyBriefing } from "@/lib/actions/templates";
 import { saveSideLabels } from "@/lib/actions/website";
+import { emailEnabled } from "@/lib/email";
 import { fmtDate } from "@/lib/format";
 import { listTenants } from "@/lib/session";
 import { tenantSideLabels } from "@/lib/side-labels";
+import { storageStatus } from "@/lib/storage-config";
 import { getMemberRole, requireTenant } from "@/lib/tenant";
 import { btn, btnGhost, card, input, label, td, th, trHover } from "@/lib/ui";
 import { WEBHOOK_EVENTS } from "@/lib/webhook-emit";
@@ -239,6 +243,15 @@ export default async function SettingsPage() {
   });
 
   const sideLabels = await tenantSideLabels(tenantId);
+  const storage = await storageStatus(tenantId);
+  const role = await getMemberRole(tenantId, session.user.id);
+  const isAdmin = role === "owner" || role === "admin";
+  const org = await prisma.organization.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: { emailSettings: true },
+  });
+  const briefingOn =
+    (org.emailSettings as { dailyBriefing?: boolean } | null)?.dailyBriefing === true;
 
   return (
     <div className="flex flex-col gap-6">
@@ -253,6 +266,57 @@ export default async function SettingsPage() {
           <span className="text-stone-500">Signed in as:</span> {session.user.email}
         </p>
       </section>
+
+      <section className={card}>
+        <h2 className="mb-1 font-medium">Your data</h2>
+        <p className="mb-3 text-sm text-stone-500">
+          Everything in this workspace — transactions, contacts, clients, tasks, and every document
+          — as one ZIP you can take anywhere. Freehold is source-available, so this export plus the{" "}
+          <a
+            href="https://github.com/restax/freehold"
+            className="text-brand-700 hover:text-brand-600"
+          >
+            public repo
+          </a>{" "}
+          is a working copy of your business that never depends on us.
+        </p>
+        <a href="/api/exports/latest" className={btn} download>
+          Download everything
+        </a>
+        {storage.source === "tenant" ? (
+          <p className="mt-3 text-xs text-stone-500">
+            Nightly export is <strong>on</strong> — a fresh copy is pushed to your own storage (
+            {storage.bucket}) every morning, and the owner gets an email with a link. A backup in
+            infrastructure you control.
+          </p>
+        ) : (
+          <p className="mt-3 text-xs text-stone-400">
+            Want it automatic?{" "}
+            <Link href="/dashboard/integrations" className="text-brand-700 hover:underline">
+              Connect your own storage bucket
+            </Link>{" "}
+            and we'll deliver a nightly export there — a backup in infrastructure you control.
+          </p>
+        )}
+      </section>
+
+      {emailEnabled() && isAdmin && (
+        <section className={card}>
+          <h2 className="mb-1 font-medium">Daily briefing</h2>
+          <p className="mb-3 text-sm text-stone-500">
+            Every morning, owners and admins get an emailed summary of every active transaction —
+            status, key dates, and the contact details for every party — with a PDF attached. Once
+            it's in your inbox it's yours: readable offline, whatever happens to your connection,
+            your storage, or us. {briefingOn ? "It's on." : "It's off."}
+          </p>
+          <form action={setDailyBriefing}>
+            <input type="hidden" name="enabled" value={briefingOn ? "0" : "1"} />
+            <button type="submit" className={btnGhost}>
+              {briefingOn ? "Turn off daily briefing" : "Turn on daily briefing"}
+            </button>
+          </form>
+        </section>
+      )}
 
       <section className={card}>
         <h2 className="mb-1 font-medium">Two-factor authentication</h2>
