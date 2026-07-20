@@ -45,6 +45,7 @@ import {
   SLOT_LABEL as COMPLIANCE_SLOT_LABEL,
   STATUS_LABEL as COMPLIANCE_STATUS_LABEL,
   STATUS_TONE as COMPLIANCE_STATUS_TONE,
+  effectiveTier,
 } from "@/lib/compliance";
 import { emailEnabled } from "@/lib/email";
 import { EMAIL_MERGE_CODES, renderMerge } from "@/lib/email-template";
@@ -54,7 +55,7 @@ import { extractionCreditState } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
 import { PRIORITY_BADGE, PRIORITY_LABEL } from "@/lib/priority";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
-import { getMemberRole, requireTenant } from "@/lib/tenant";
+import { getMemberCompliance, requireTenant } from "@/lib/tenant";
 import { btn, btnGhost, card, input, label } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -166,8 +167,11 @@ export default async function TransactionDetailPage({
   // Compliance: the current round drives the tab; older rounds stay as history.
   const currentRound = txn.compliance.find((c) => c.isCurrent) ?? null;
   const priorRounds = txn.compliance.filter((c) => !c.isCurrent);
-  const reviewerRole = await getMemberRole(tenantId, session.user.id);
-  const canReview = reviewerRole === "owner" || reviewerRole === "admin";
+  const member = await getMemberCompliance(tenantId, session.user.id);
+  const reviewerTier = currentRound
+    ? effectiveTier(member.role, member.complianceTier, currentRound.approvalLevels)
+    : 0;
+  const canReview = reviewerTier >= 1;
 
   const portalBase = await portalOrigin(tenantId);
   const aiCredits = await extractionCreditState(tenantId);
@@ -744,6 +748,8 @@ export default async function TransactionDetailPage({
                     </Badge>
                     <span className="text-xs text-stone-400">
                       {currentRound.checklistName} · v{currentRound.version}
+                      {currentRound.approvalLevels > 1 &&
+                        ` · ${currentRound.approvalLevels}-level approval`}
                     </span>
                   </>
                 )}
@@ -796,6 +802,12 @@ export default async function TransactionDetailPage({
                           >
                             {COMPLIANCE_SLOT_LABEL[slot.status]}
                           </Badge>
+                          {slot.status === "SUBMITTED" && slot.approvedTier > 0 && (
+                            <span className="text-xs font-medium text-emerald-700">
+                              level {slot.approvedTier}/{currentRound.approvalLevels} signed off —
+                              awaiting level {slot.approvedTier + 1}
+                            </span>
+                          )}
                           {slot.description && (
                             <span className="text-xs text-stone-400">{slot.description}</span>
                           )}
@@ -842,39 +854,48 @@ export default async function TransactionDetailPage({
                           )}
                         </div>
 
-                        {canReview && slot.status === "SUBMITTED" && (
-                          <form
-                            action={reviewSlot}
-                            className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
-                          >
-                            <input type="hidden" name="slotId" value={slot.id} />
-                            <input type="hidden" name="transactionId" value={txn.id} />
-                            <label className={`${label} min-w-56 flex-1`}>
-                              Note (required when sending back)
-                              <input
-                                name="reviewNote"
-                                className={input}
-                                placeholder="Page 4 is missing an initial"
-                              />
-                            </label>
-                            <button
-                              type="submit"
-                              name="decision"
-                              value="approve"
-                              className={btnGhost}
+                        {canReview &&
+                          slot.status === "SUBMITTED" &&
+                          reviewerTier > slot.approvedTier && (
+                            <form
+                              action={reviewSlot}
+                              className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
                             >
-                              Approve
-                            </button>
-                            <button
-                              type="submit"
-                              name="decision"
-                              value="return"
-                              className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50"
-                            >
-                              Return
-                            </button>
-                          </form>
-                        )}
+                              <input type="hidden" name="slotId" value={slot.id} />
+                              <input type="hidden" name="transactionId" value={txn.id} />
+                              {currentRound.approvalLevels > 1 && (
+                                <span className="w-full text-xs text-stone-500">
+                                  Reviewing at level{" "}
+                                  {Math.min(reviewerTier, currentRound.approvalLevels)} of{" "}
+                                  {currentRound.approvalLevels}
+                                </span>
+                              )}
+                              <label className={`${label} min-w-56 flex-1`}>
+                                Note (required when sending back)
+                                <input
+                                  name="reviewNote"
+                                  className={input}
+                                  placeholder="Page 4 is missing an initial"
+                                />
+                              </label>
+                              <button
+                                type="submit"
+                                name="decision"
+                                value="approve"
+                                className={btnGhost}
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="submit"
+                                name="decision"
+                                value="return"
+                                className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50"
+                              >
+                                Return
+                              </button>
+                            </form>
+                          )}
                       </li>
                     ))}
                   </ul>

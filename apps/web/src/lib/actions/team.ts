@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "@freehold/db";
 import { revalidatePath } from "next/cache";
+import { logAudit } from "@/lib/audit";
 import { oneOf, str } from "@/lib/forms";
 import { seatState } from "@/lib/plans";
 import { requireAdminTenant } from "@/lib/tenant";
@@ -58,6 +59,46 @@ export async function updateMemberRole(formData: FormData) {
   });
   if (!target || target.role === "owner") return; // never demote the owner here
   await prisma.member.update({ where: { id: memberId }, data: { role } });
+  revalidatePath("/dashboard/team");
+}
+
+/**
+ * Assign a member's compliance review authority: "default" follows their role
+ * (owner/admin review, member submits), "0" is submitter-only even for an
+ * admin, "1".."3" reviews at that level. The owner always holds top authority
+ * and can't be reassigned here. Audited — this decides who can pass a file.
+ */
+export async function updateMemberComplianceTier(formData: FormData) {
+  const { tenantId, isAdmin, session } = await requireAdminTenant();
+  if (!isAdmin) return;
+  const memberId = str(formData, "memberId");
+  const raw = str(formData, "complianceTier");
+  if (!memberId) return;
+  const complianceTier = raw === "default" ? null : Number.parseInt(raw, 10);
+  if (
+    complianceTier !== null &&
+    (Number.isNaN(complianceTier) || complianceTier < 0 || complianceTier > 3)
+  ) {
+    return;
+  }
+  const target = await prisma.member.findFirst({
+    where: { id: memberId, organizationId: tenantId },
+    include: { user: { select: { email: true } } },
+  });
+  if (!target || target.role === "owner") return;
+  await prisma.member.update({ where: { id: memberId }, data: { complianceTier } });
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "compliance.reviewer_changed",
+    summary:
+      complianceTier === null
+        ? `${target.user.email} follows their role for compliance review`
+        : complianceTier === 0
+          ? `${target.user.email} set to submitter-only for compliance`
+          : `${target.user.email} set to level-${complianceTier} compliance reviewer`,
+  });
   revalidatePath("/dashboard/team");
 }
 

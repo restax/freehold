@@ -1,6 +1,12 @@
 import { prisma } from "@freehold/db";
 import Link from "next/link";
-import { cancelInvitation, inviteMember, removeMember, updateMemberRole } from "@/lib/actions/team";
+import {
+  cancelInvitation,
+  inviteMember,
+  removeMember,
+  updateMemberComplianceTier,
+  updateMemberRole,
+} from "@/lib/actions/team";
 import { fmtDate } from "@/lib/format";
 import { seatState } from "@/lib/plans";
 import { requireAdminTenant } from "@/lib/tenant";
@@ -9,6 +15,23 @@ import { btn, btnGhost, card, input, label, td, th, trHover } from "@/lib/ui";
 export const dynamic = "force-dynamic";
 
 const ROLES = ["admin", "member"] as const;
+
+const TIER_OPTIONS = [
+  ["default", "Default (by role)"],
+  ["0", "Submitter only"],
+  ["1", "Level 1 reviewer"],
+  ["2", "Level 2 reviewer"],
+  ["3", "Level 3 reviewer"],
+] as const;
+
+const tierLabel = (t: number | null, role: string) =>
+  t === null
+    ? role === "member"
+      ? "Submits (default)"
+      : "Reviews (default)"
+    : t === 0
+      ? "Submitter only"
+      : `Level ${t} reviewer`;
 
 export default async function TeamPage() {
   const { tenantId, userId, isAdmin } = await requireAdminTenant();
@@ -32,7 +55,8 @@ export default async function TeamPage() {
         <h1 className="text-xl font-semibold">Team</h1>
         <p className="text-sm text-stone-500">
           Owners and admins manage the workspace; members handle day-to-day coordination but can't
-          delete transactions, clients, templates, or plans.
+          delete transactions, clients, templates, or plans. Compliance review sets who can approve
+          submitted documents, and at which level when a checklist needs more than one sign-off.
         </p>
       </div>
 
@@ -54,6 +78,7 @@ export default async function TeamPage() {
               <th className={th}>Name</th>
               <th className={th}>Email</th>
               <th className={th}>Role</th>
+              <th className={th}>Compliance review</th>
               <th className={th} />
             </tr>
           </thead>
@@ -81,6 +106,33 @@ export default async function TeamPage() {
                         {ROLES.map((r) => (
                           <option key={r} value={r}>
                             {r}
+                          </option>
+                        ))}
+                      </select>
+                      <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                        Save
+                      </button>
+                    </form>
+                  )}
+                </td>
+                <td className={td}>
+                  {m.role === "owner" ? (
+                    <span className="text-stone-500">Full authority</span>
+                  ) : !isAdmin ? (
+                    <span className="text-stone-500">{tierLabel(m.complianceTier, m.role)}</span>
+                  ) : (
+                    <form action={updateMemberComplianceTier} className="flex items-center gap-1">
+                      <input type="hidden" name="memberId" value={m.id} />
+                      <select
+                        name="complianceTier"
+                        defaultValue={
+                          m.complianceTier === null ? "default" : String(m.complianceTier)
+                        }
+                        className={`${input} px-2 py-1 text-xs`}
+                      >
+                        {TIER_OPTIONS.map(([value, text]) => (
+                          <option key={value} value={value}>
+                            {text}
                           </option>
                         ))}
                       </select>

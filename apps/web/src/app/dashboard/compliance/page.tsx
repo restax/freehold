@@ -40,6 +40,7 @@ export default async function CompliancePage() {
         status: true,
         version: true,
         checklistName: true,
+        approvalLevels: true,
         submittedAt: true,
         transaction: {
           select: { id: true, propertyAddress: true, client: { select: { name: true } } },
@@ -99,6 +100,7 @@ export default async function CompliancePage() {
                       </Link>
                       <span className="ml-2 text-xs text-stone-400">
                         {r.checklistName} · v{r.version}
+                        {r.approvalLevels > 1 && ` · ${r.approvalLevels}-level`}
                       </span>
                     </td>
                     <td className={td}>

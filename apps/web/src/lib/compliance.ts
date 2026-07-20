@@ -14,6 +14,22 @@ export interface RollupSlot {
 }
 
 /**
+ * A member's review authority for a round. An explicitly assigned tier wins —
+ * including 0, which strips review rights from an admin. Without one,
+ * owners/admins hold top authority (whatever the round requires) and members
+ * submit only. This is why single-level workspaces that never touch tiers see
+ * exactly the old owner-or-admin behavior.
+ */
+export function effectiveTier(
+  role: string,
+  assigned: number | null,
+  approvalLevels: number,
+): number {
+  if (assigned !== null) return assigned;
+  return role === "owner" || role === "admin" ? approvalLevels : 0;
+}
+
+/**
  * Overall status from the slots. Anything sent back outranks everything else —
  * a file with a returned document needs work regardless of what else passed.
  * Only the required slots gate approval; optional ones are tracked, never
@@ -66,7 +82,7 @@ export interface StartRoundResult {
 /**
  * Snapshot the client's checklist onto a transaction as a new round. Any
  * existing round is superseded (kept for history), and the new one starts at
- * version+1 — the "new checklist version for an opportunity" flow.
+ * version+1 — how a file picks up a fresh checklist version part-way through.
  */
 export async function startComplianceRound(
   tx: TenantTx,
@@ -83,6 +99,7 @@ export async function startComplianceRound(
             select: {
               id: true,
               name: true,
+              approvalLevels: true,
               items: { orderBy: { sortOrder: "asc" } },
             },
           },
@@ -113,6 +130,7 @@ export async function startComplianceRound(
       transactionId,
       checklistId: checklist.id,
       checklistName: checklist.name,
+      approvalLevels: checklist.approvalLevels,
       version: (prior?.version ?? 0) + 1,
       slots: {
         create: checklist.items.map((i) => ({

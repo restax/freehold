@@ -4,9 +4,9 @@ import { ComplianceSlotStatus, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logAudit } from "@/lib/audit";
-import { refreshComplianceStatus, startComplianceRound } from "@/lib/compliance";
-import { confirmed, optStr, str } from "@/lib/forms";
-import { requireAdminTenant, requireTenant } from "@/lib/tenant";
+import { effectiveTier, refreshComplianceStatus, startComplianceRound } from "@/lib/compliance";
+import { confirmed, intOr, optStr, str } from "@/lib/forms";
+import { getMemberCompliance, requireAdminTenant, requireTenant } from "@/lib/tenant";
 
 /**
  * Compliance checklists: the set of documents a file must carry to pass
@@ -109,6 +109,35 @@ export async function setClientCompliance(formData: FormData) {
   revalidatePath("/dashboard/compliance");
 }
 
+/**
+ * How many levels of reviewer sign-off this checklist's documents need.
+ * Admin-only and audited like the client rules — it changes who can pass a
+ * file. Applies to rounds started after the change; running rounds keep the
+ * levels they were snapshotted with.
+ */
+export async function setChecklistApprovalLevels(formData: FormData) {
+  const { tenantId, isAdmin, session } = await requireAdminTenant();
+  if (!isAdmin) return;
+  const checklistId = str(formData, "checklistId");
+  const levels = intOr(formData, "approvalLevels", 1) ?? 1;
+  if (!checklistId || levels < 1 || levels > 3) return;
+  const checklist = await withTenant(tenantId, (tx) =>
+    tx.complianceChecklist.update({
+      where: { id: checklistId },
+      data: { approvalLevels: levels },
+      select: { name: true },
+    }),
+  );
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "compliance.approval_levels_changed",
+    summary: `"${checklist.name}" now needs ${levels} level${levels === 1 ? "" : "s"} of sign-off`,
+  });
+  revalidatePath(`/dashboard/compliance/${checklistId}`);
+}
+
 // --- Per-transaction compliance rounds (submit → review → approve/return) ---
 
 /**
@@ -148,13 +177,15 @@ export async function attachSlotDocument(formData: FormData) {
       select: { complianceId: true, status: true },
     });
     // Attaching (or swapping) a file puts the slot back in the submitter's
-    // court; a previously returned slot becomes ready to send up again.
+    // court; a previously returned slot becomes ready to send up again. New
+    // bytes mean review starts over, so any partial sign-off is wiped.
     await tx.complianceSlot.update({
       where: { id: slotId },
       data: {
         documentId,
         status: documentId ? ComplianceSlotStatus.ATTACHED : ComplianceSlotStatus.MISSING,
         reviewNote: null,
+        approvedTier: 0,
       },
     });
     await refreshComplianceStatus(tx, slot.complianceId);
@@ -194,28 +225,56 @@ export async function submitForReview(formData: FormData) {
 
 /**
  * Reviewer decision on one document: approve it, or return it with a note
- * saying what's wrong. Admin/owner only — this is the approval authority.
+ * saying what's wrong. Authority comes from the member's effective compliance
+ * tier: an approval stamps the reviewer's level, and the slot only turns
+ * APPROVED once the round's required levels are all covered — a higher tier's
+ * sign-off subsumes the levels below it, so the ladder can't deadlock. Anyone
+ * with review authority can return, wiping partial sign-offs.
  */
 export async function reviewSlot(formData: FormData) {
-  const { tenantId, isAdmin, session } = await requireAdminTenant();
-  if (!isAdmin) return;
+  const { tenantId, userId, session } = await requireTenant();
   const slotId = str(formData, "slotId");
   const transactionId = str(formData, "transactionId");
   const decision = str(formData, "decision"); // "approve" | "return"
   const note = optStr(formData, "reviewNote");
   if (!slotId || (decision !== "approve" && decision !== "return")) return;
+  const member = await getMemberCompliance(tenantId, userId);
 
-  const { slotName, status } = await withTenant(tenantId, async (tx) => {
-    const slot = await tx.complianceSlot.update({
+  const outcome = await withTenant(tenantId, async (tx) => {
+    const slot = await tx.complianceSlot.findUniqueOrThrow({
+      where: { id: slotId },
+      select: {
+        name: true,
+        status: true,
+        approvedTier: true,
+        complianceId: true,
+        compliance: { select: { approvalLevels: true } },
+      },
+    });
+    // Only submitted documents are up for a ruling.
+    if (slot.status !== ComplianceSlotStatus.SUBMITTED) return null;
+    const levels = slot.compliance.approvalLevels;
+    const tier = effectiveTier(member.role, member.complianceTier, levels);
+    if (tier < 1) return null; // no review authority
+    // Approving below or at an already-covered level changes nothing.
+    if (decision === "approve" && tier <= slot.approvedTier) return null;
+
+    const approvedTier = decision === "approve" ? Math.max(slot.approvedTier, tier) : 0;
+    const fullyApproved = decision === "approve" && approvedTier >= levels;
+    await tx.complianceSlot.update({
       where: { id: slotId },
       data: {
         status:
-          decision === "approve" ? ComplianceSlotStatus.APPROVED : ComplianceSlotStatus.RETURNED,
+          decision === "return"
+            ? ComplianceSlotStatus.RETURNED
+            : fullyApproved
+              ? ComplianceSlotStatus.APPROVED
+              : ComplianceSlotStatus.SUBMITTED,
+        approvedTier,
         reviewNote: decision === "return" ? note : null,
         reviewedAt: new Date(),
         reviewedById: session.user.id,
       },
-      select: { name: true, complianceId: true },
     });
     const status = await refreshComplianceStatus(tx, slot.complianceId);
     // Record who last ruled on this round, whichever way it went.
@@ -223,8 +282,9 @@ export async function reviewSlot(formData: FormData) {
       where: { id: slot.complianceId },
       data: { reviewedById: session.user.id },
     });
-    return { slotName: slot.name, status };
+    return { slotName: slot.name, status, tier, levels, fullyApproved };
   });
+  if (!outcome) return;
 
   logAudit({
     tenantId,
@@ -233,8 +293,10 @@ export async function reviewSlot(formData: FormData) {
     action: decision === "approve" ? "compliance.approved" : "compliance.returned",
     summary:
       decision === "approve"
-        ? `Approved "${slotName}" — file is now ${status}`
-        : `Returned "${slotName}"${note ? `: ${note}` : ""}`,
+        ? outcome.fullyApproved
+          ? `Approved "${outcome.slotName}" — document cleared; file is now ${outcome.status}`
+          : `Approved "${outcome.slotName}" at level ${outcome.tier} of ${outcome.levels} — awaiting level ${outcome.tier + 1}`
+        : `Returned "${outcome.slotName}"${note ? `: ${note}` : ""}`,
   });
   revalidatePath(`/dashboard/transactions/${transactionId}`);
   revalidatePath("/dashboard/compliance");

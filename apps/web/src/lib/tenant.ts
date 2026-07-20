@@ -27,6 +27,18 @@ export async function getMemberRole(tenantId: string, userId: string): Promise<s
   return member?.role ?? "member";
 }
 
+/** Role plus assigned compliance tier, for review-authority checks. */
+export async function getMemberCompliance(
+  tenantId: string,
+  userId: string,
+): Promise<{ role: string; complianceTier: number | null }> {
+  const member = await prisma.member.findFirst({
+    where: { organizationId: tenantId, userId },
+    select: { role: true, complianceTier: true },
+  });
+  return { role: member?.role ?? "member", complianceTier: member?.complianceTier ?? null };
+}
+
 /**
  * requireTenant plus an admin check. Destructive actions call this and no-op
  * for plain members (owner/admin pass). Button-hiding for members is a UI

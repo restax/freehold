@@ -199,6 +199,10 @@ model Member {
   userId         String
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   role           String       @default("member")
+  /// Compliance review authority, assigned from the Team page. null = default
+  /// by role (owner/admin hold top authority, member submits only); 0 =
+  /// submitter only even for an admin; 1..N = approves at levels up to N.
+  complianceTier Int?         @map("compliance_tier")
   createdAt      DateTime     @default(now())
 
   @@index([organizationId])
@@ -819,7 +823,7 @@ model ActionPlanTask {
 }
 
 /// A named set of documents a transaction must carry to pass compliance
-/// (KW-style compliance checklist). Distinct from ActionPlan, which produces
+/// (standard compliance checklist). Distinct from ActionPlan, which produces
 /// dated *tasks*; this defines required *documents*. Assigned per Client, so
 /// every file for that client inherits the same rules.
 model ComplianceChecklist {
@@ -828,6 +832,9 @@ model ComplianceChecklist {
   tenant      Organization            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name        String
   description String?
+  /// How many levels of reviewer sign-off each document needs (1 = a single
+  /// reviewer approves; 2+ = it climbs the ladder).
+  approvalLevels Int                  @default(1) @map("approval_levels")
   isSample    Boolean                 @default(false)
   items       ComplianceItem[]
   clients     Client[]
@@ -858,8 +865,8 @@ enum ComplianceSlotStatus {
 
 /// A checklist instantiated onto one transaction — a snapshot taken when it was
 /// applied, so later edits to the template never rewrite a file already under
-/// review. A transaction can carry several rounds; the newest is current (KW:
-/// "create a new compliance checklist version for an opportunity").
+/// review. A transaction can carry several rounds; the newest is current, which
+/// is how a file gets a fresh checklist version part-way through.
 model TransactionCompliance {
   id            String               @id @default(uuid())
   tenantId      String               @map("tenant_id")
@@ -871,6 +878,8 @@ model TransactionCompliance {
   checklist     ComplianceChecklist? @relation(fields: [checklistId], references: [id], onDelete: SetNull)
   /// Snapshot of the checklist name at instantiation.
   checklistName String               @map("checklist_name")
+  /// Snapshot of the checklist's approval-levels setting at instantiation.
+  approvalLevels Int                 @default(1) @map("approval_levels")
   version       Int                  @default(1)
   isCurrent     Boolean              @default(true) @map("is_current")
   status        ComplianceStatus     @default(DRAFT)
@@ -903,6 +912,9 @@ model ComplianceSlot {
   documentId   String?               @map("document_id")
   document     Document?             @relation(fields: [documentId], references: [id], onDelete: SetNull)
   status       ComplianceSlotStatus  @default(MISSING)
+  /// Highest review level that has signed off so far. APPROVED only once it
+  /// reaches the round's approvalLevels; reset by a return or a file swap.
+  approvedTier Int                   @default(0) @map("approved_tier")
   /// Why a reviewer sent it back.
   reviewNote   String?               @map("review_note")
   reviewedAt   DateTime?             @map("reviewed_at")
