@@ -281,6 +281,12 @@ model Client {
   esignProvider         EsignProvider?       @map("esign_provider")
   /// Per-client automated-email switches: {intro?: boolean, postClose?: boolean}; missing = on.
   emailPrefs            Json?                @map("email_prefs")
+  /// This agent's own SkySlope API credentials, so their transactions can be
+  /// read on their behalf: {accessKeyEnc:{...}, secretEnc:{...}, label?,
+  /// connectedAt, verifiedAt?}. Envelope-encrypted with VAULT_MASTER_KEY.
+  /// One per client because SkySlope issues AccessKey/Secret per user, not
+  /// per brokerage. Null = not connected.
+  skyslopeConfig        Json?                @map("skyslope_config")
   /// Compliance: every transaction for this client follows the assigned
   /// checklist. Switch complianceEnabled off to exempt the client entirely
   /// (leaving no checklist assigned is also inert).

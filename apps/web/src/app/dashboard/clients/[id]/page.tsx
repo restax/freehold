@@ -2,9 +2,10 @@ import { withTenant } from "@freehold/db";
 import { Buildings, LinkSimple } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { StatusBadge } from "@/components/badges";
+import { Badge, StatusBadge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
 import { RevealCredential } from "@/components/reveal-credential";
+import { RevealSkyslope } from "@/components/reveal-skyslope";
 import {
   addClientAgent,
   addClientNote,
@@ -14,9 +15,11 @@ import {
 } from "@/lib/actions/clients";
 import { setClientCompliance } from "@/lib/actions/compliance";
 import { createAgentPortalLink, setPortalLinkActive } from "@/lib/actions/portal";
+import { connectSkyslope, disconnectSkyslope } from "@/lib/actions/skyslope";
 import { parseEmailPrefs } from "@/lib/auto-emails";
 import { fmtDate, fmtMoney } from "@/lib/format";
 import { portalOrigin } from "@/lib/portal";
+import { decodeSkyslopeConfig, maskKey, parseSkyslopeConfig, skyslopeState } from "@/lib/skyslope";
 import { requireAdminTenant } from "@/lib/tenant";
 import { btn, btnGhost, card, input, label as labelCls, td, th, trHover } from "@/lib/ui";
 
@@ -80,6 +83,15 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const addableContacts = contacts.filter((c) => !agentIds.has(c.id));
   const legacyAgentLinks = client.portalLinks.filter((pl) => !pl.contactId);
   const emailPrefs = parseEmailPrefs(client.emailPrefs);
+
+  // SkySlope: the stored key is only ever shown masked, so decrypt just enough
+  // to render its last four. The full value needs the audited reveal.
+  const skyslopeCfg = parseSkyslopeConfig(client.skyslopeConfig);
+  const skyslope = {
+    config: skyslopeCfg,
+    state: skyslopeState(skyslopeCfg),
+    maskedKey: skyslopeCfg ? decodeSkyslopeConfig(skyslopeCfg).accessKey : "",
+  };
 
   const portalLinks = client.transactions.flatMap((t) =>
     t.portalLinks.filter((pl) => pl.audience === "CLIENT").map((pl) => ({ ...pl, transaction: t })),
@@ -409,6 +421,78 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           .
         </p>
       </section>
+
+      {isAdmin && (
+        <section className={card}>
+          <h2 className="mb-1 font-medium">SkySlope API access</h2>
+          <p className="mb-3 text-sm text-stone-500">
+            {client.name} generates an Access Key and Secret in SkySlope under{" "}
+            <strong>My Account → Integrations → Generate New Key</strong> and gives them to you.
+            Stored encrypted, shown only masked, and every reveal is written to the vault's audit
+            log — these are their credentials, not yours.
+          </p>
+
+          {skyslope.state === "partner-missing" && (
+            <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              This install has no SkySlope partner credentials, so stored keys can't be used yet.
+              SkySlope issues a ClientID and Secret per licensee once an agreement is signed; set
+              them as <code>SKYSLOPE_CLIENT_ID</code> and <code>SKYSLOPE_CLIENT_SECRET</code>. You
+              can still store an agent's key here in the meantime.
+            </p>
+          )}
+
+          {skyslope.config ? (
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                <Badge tone={skyslope.state === "verified" ? "success" : "progress"}>
+                  {skyslope.state === "verified" ? "Verified" : "Stored, not yet verified"}
+                </Badge>
+                <span className="font-mono text-xs text-stone-600">
+                  {maskKey(skyslope.maskedKey)}
+                </span>
+                {skyslope.config.label && (
+                  <span className="text-xs text-stone-400">{skyslope.config.label}</span>
+                )}
+                <span className="text-xs text-stone-400">
+                  added {fmtDate(new Date(skyslope.config.connectedAt))}
+                </span>
+                <RevealSkyslope clientId={client.id} />
+                <form action={disconnectSkyslope} className="ml-auto">
+                  <input type="hidden" name="clientId" value={client.id} />
+                  <button type="submit" className="text-xs text-stone-400 hover:text-red-600">
+                    remove
+                  </button>
+                </form>
+              </div>
+              {skyslope.state === "stored" && (
+                <p className="text-xs text-stone-400">
+                  Freehold hasn't called SkySlope with this key yet, so it hasn't been proven to
+                  work. Reading their transactions arrives with the sync stage.
+                </p>
+              )}
+            </div>
+          ) : (
+            <form action={connectSkyslope} className="flex flex-wrap items-end gap-3">
+              <input type="hidden" name="clientId" value={client.id} />
+              <label className={labelCls}>
+                Access Key *
+                <input name="accessKey" required className={input} />
+              </label>
+              <label className={labelCls}>
+                Secret *
+                <input name="secret" type="password" required className={input} />
+              </label>
+              <label className={labelCls}>
+                Label
+                <input name="label" placeholder="casey@sunriserealty" className={input} />
+              </label>
+              <button type="submit" className={btnGhost}>
+                Store credentials
+              </button>
+            </form>
+          )}
+        </section>
+      )}
 
       <section className={card}>
         <h2 className="mb-1 flex items-center gap-2 font-medium">
