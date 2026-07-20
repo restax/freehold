@@ -1,41 +1,7 @@
 import { prisma, withTenant } from "@freehold/db";
+import { buildIcs, type IcsEvent } from "@/lib/ics";
 
 export const dynamic = "force-dynamic";
-
-interface IcsEvent {
-  uid: string;
-  date: Date;
-  summary: string;
-}
-
-function escapeIcs(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
-}
-
-function toIcs(events: IcsEvent[], calendarName: string): string {
-  const day = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, "");
-  const stamp = `${new Date().toISOString().replace(/[-:]/g, "").slice(0, 15)}Z`;
-  const lines = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//Freehold//portal//EN",
-    "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH",
-    `X-WR-CALNAME:${escapeIcs(calendarName)}`,
-  ];
-  for (const e of events) {
-    lines.push(
-      "BEGIN:VEVENT",
-      `UID:${e.uid}@freeholdtc.dev`,
-      `DTSTAMP:${stamp}`,
-      `DTSTART;VALUE=DATE:${day(e.date)}`,
-      `SUMMARY:${escapeIcs(e.summary)}`,
-      "END:VEVENT",
-    );
-  }
-  lines.push("END:VCALENDAR");
-  return `${lines.join("\r\n")}\r\n`;
-}
 
 /**
  * Subscribe-able calendar feed per portal link: every visible dated item.
@@ -131,7 +97,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
     return new Response("Not found", { status: 404 });
   }
 
-  return new Response(toIcs(events, name), {
+  return new Response(buildIcs(events, name), {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
       "Content-Disposition": 'inline; filename="freehold.ics"',

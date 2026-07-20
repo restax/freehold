@@ -233,6 +233,11 @@ model Member {
   /// by role (owner/admin hold top authority, member submits only); 0 =
   /// submitter only even for an admin; 1..N = approves at levels up to N.
   complianceTier Int?         @map("compliance_tier")
+  /// Capability token for this person's subscribe-once personal calendar feed
+  /// in this workspace (a user in two tenants gets a separate feed per one,
+  /// same as everything else here — roles and assignments don't cross tenants).
+  /// Generated lazily on first request for the link; null until then.
+  calendarToken  String?      @unique @map("calendar_token")
   createdAt      DateTime     @default(now())
 
   @@index([organizationId])

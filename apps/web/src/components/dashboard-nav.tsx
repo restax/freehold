@@ -3,6 +3,7 @@
 import {
   AddressBook,
   Buildings,
+  CalendarBlank,
   Compass,
   CreditCard,
   DownloadSimple,
@@ -46,6 +47,7 @@ const GROUPS: NavGroup[] = [
     label: "Work",
     items: [
       { href: "/dashboard/transactions", label: "Transactions", icon: House },
+      { href: "/dashboard/calendar", label: "Calendar", icon: CalendarBlank },
       { href: "/dashboard/contacts", label: "Contacts", icon: AddressBook },
       { href: "/dashboard/clients", label: "Clients", icon: Buildings },
       { href: "/dashboard/documents", label: "Documents", icon: Files },
@@ -100,7 +102,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 }
 
 /** The only destinations outside coverage staff can reach. */
-const GUEST_HREFS = new Set(["/dashboard", "/dashboard/transactions"]);
+const GUEST_HREFS = new Set(["/dashboard", "/dashboard/transactions", "/dashboard/calendar"]);
 
 export function DashboardNav({ isGuest = false }: { isGuest?: boolean }) {
   const pathname = usePathname();

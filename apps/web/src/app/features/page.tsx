@@ -135,6 +135,11 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
     "Dashboards",
     [
       ["Pipeline at a glance", "Every open file, its stage, and what's due next.", "today"],
+      [
+        "Calendar view",
+        "A real month grid of every dated task and closing, high-priority items marked, switchable between your own and the whole team's.",
+        "today",
+      ],
       ["Status filters", "See exactly the slice of your pipeline you need.", "today"],
       ["Saved views", "Switch between custom-filtered perspectives instantly.", "request"],
       ["Column customization", "Choose the fields your dashboard shows.", "request"],
@@ -222,7 +227,7 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ],
       [
         "Calendar feeds",
-        "Every portal has a subscribe-once calendar feed \u2014 dates sync to Google, Outlook, or Apple Calendar and stay current.",
+        "Every portal, and every person on your team, has a subscribe-once calendar feed \u2014 dates sync to Google, Outlook, or Apple Calendar and stay current.",
         "today",
       ],
       [

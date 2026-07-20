@@ -33,7 +33,7 @@ const LIVE: Integration[] = [
   [
     "Calendar feeds (ICS)",
     "Ca",
-    "Every client and agent portal has a subscribe-once calendar feed — deadlines land in Google, Outlook, or Apple Calendar and stay current.",
+    "Every client and agent portal, and every person on your team, has a subscribe-once calendar feed — deadlines land in Google, Outlook, or Apple Calendar and stay current.",
   ],
   [
     "Freehold API",
