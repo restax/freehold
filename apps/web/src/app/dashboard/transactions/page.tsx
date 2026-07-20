@@ -2,9 +2,10 @@ import { TransactionSide, TransactionStatus, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { StatusBadge } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
+import { createFromContract } from "@/lib/actions/extractions";
 import { createTransaction } from "@/lib/actions/transactions";
 import { fmtDate, fmtMoney, STATUS_LABEL } from "@/lib/format";
-import { transactionLimit } from "@/lib/plans";
+import { extractionCreditState, transactionLimit } from "@/lib/plans";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
 import { requireTenant } from "@/lib/tenant";
 import { btn, btnGhost, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
@@ -21,7 +22,14 @@ export default async function TransactionsPage({
 }) {
   const { tenantId } = await requireTenant();
   const labels = await tenantSideLabels(tenantId);
-  const limit = await transactionLimit(tenantId);
+  const [limit, credits] = await Promise.all([
+    transactionLimit(tenantId),
+    extractionCreditState(tenantId),
+  ]);
+  // Upload-first needs the AI: always on Cloud (platform key), opt-in on
+  // self-host. Without a key, extraction can't run, so we hide the card
+  // rather than leave a stranded provisional transaction behind a failure.
+  const aiAvailable = Boolean(process.env.ANTHROPIC_API_KEY);
   const { status } = await searchParams;
   const statusFilter = STATUSES.includes(status as TransactionStatus)
     ? (status as TransactionStatus)
@@ -91,8 +99,45 @@ export default async function TransactionsPage({
         </p>
       )}
 
+      {aiAvailable &&
+        !limit.limited &&
+        (credits.limited ? (
+          <p className="rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-600">
+            You've used your trial contract extractions.{" "}
+            <Link href="/dashboard/billing" className="font-medium text-brand-700 underline">
+              Upgrade
+            </Link>{" "}
+            for unlimited, or enter a transaction manually below.
+          </p>
+        ) : (
+          <section className={`${card} border-brand-600/25 bg-brand-50/40`}>
+            <h2 className="font-medium text-stone-900">Start from a contract</h2>
+            <p className="mt-1 text-sm text-stone-600">
+              Drop in the signed PDF — the AI reads the parties, price, and every deadline, each one
+              page-cited and confidence-scored. You confirm before anything is saved. No typing.
+            </p>
+            <form action={createFromContract} className="mt-3 flex flex-wrap items-center gap-2">
+              <input
+                name="file"
+                type="file"
+                accept="application/pdf,.pdf"
+                required
+                className="text-sm file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-brand-700"
+              />
+              <button type="submit" className={btn}>
+                Upload &amp; extract
+              </button>
+            </form>
+            <p className="mt-2 text-xs text-stone-400">
+              PDF, up to 10&nbsp;MB. Extraction takes ~30–90 seconds.
+            </p>
+          </section>
+        ))}
+
       <details className={card}>
-        <summary className={summaryLink}>New transaction</summary>
+        <summary className={summaryLink}>
+          {aiAvailable ? "Or enter details manually" : "New transaction"}
+        </summary>
         <form action={createTransaction} className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <label className={`${label} sm:col-span-2`}>
             Property address *
@@ -236,7 +281,11 @@ export default async function TransactionsPage({
           ) : (
             <EmptyState
               title="Your pipeline is empty"
-              hint='Open "New transaction" above to add your first deal — attach the people, apply an action plan, and every deadline computes itself.'
+              hint={
+                aiAvailable
+                  ? "Drop a signed contract above and the AI builds the file for you — parties, price, and every deadline, page-cited for you to confirm. Or enter one manually."
+                  : 'Open "New transaction" above to add your first deal — attach the people, apply an action plan, and every deadline computes itself.'
+              }
             />
           )
         ) : (
