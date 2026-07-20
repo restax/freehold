@@ -25,11 +25,15 @@ export async function adminCreateCoupon(formData: FormData) {
   const expiresAt = expires
     ? Math.floor((expires.getTime() + 24 * 3600 * 1000 - 1000) / 1000)
     : undefined;
+  // "single" = one redemption total across all customers; "multi" = unlimited.
+  const usage = str(formData, "usage");
+  const maxRedemptions = usage === "single" ? 1 : null;
   if (!code) return;
   if (kind === "amount" && (!amount || amount <= 0)) return;
   await createDiscountCoupon({
     code,
     months,
+    maxRedemptions,
     ...(expiresAt ? { expiresAt } : {}),
     ...(kind === "free" ? { freeMonths: true } : { amountOffUsd: amount }),
   });

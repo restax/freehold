@@ -312,6 +312,13 @@ export default async function AdminPage() {
             />
           </label>
           <label className={labelCls}>
+            Uses
+            <select name="usage" className={input} defaultValue="multi">
+              <option value="multi">Multi-use (unlimited)</option>
+              <option value="single">Single-use (one redemption total)</option>
+            </select>
+          </label>
+          <label className={labelCls}>
             Expires (optional)
             <input name="expiresAt" type="date" className={`${input} w-40`} />
           </label>
@@ -326,7 +333,9 @@ export default async function AdminPage() {
                 <code className="font-mono font-semibold">{c.code}</code>
                 <span className="text-stone-500">{c.name}</span>
                 <span className="text-xs text-stone-400">
-                  {c.redemptions} redemption{c.redemptions === 1 ? "" : "s"}
+                  {c.redemptions}
+                  {c.maxRedemptions ? ` / ${c.maxRedemptions}` : ""} redemptions
+                  {c.maxRedemptions === 1 ? " · single-use" : ""}
                   {c.active ? "" : " · inactive"}
                   {c.expiresAt ? ` · expires ${fmtDate(new Date(c.expiresAt * 1000))}` : ""}
                 </span>
