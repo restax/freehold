@@ -6,6 +6,7 @@ import {
   CreditCard,
   DownloadSimple,
   EnvelopeSimple,
+  Files,
   FileText,
   GearSix,
   Globe,
@@ -43,6 +44,7 @@ const GROUPS: NavGroup[] = [
       { href: "/dashboard/transactions", label: "Transactions", icon: House },
       { href: "/dashboard/contacts", label: "Contacts", icon: AddressBook },
       { href: "/dashboard/clients", label: "Clients", icon: Buildings },
+      { href: "/dashboard/documents", label: "Documents", icon: Files },
     ],
   },
   {
