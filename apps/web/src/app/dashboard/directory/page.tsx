@@ -1,6 +1,8 @@
+import { withTenant } from "@freehold/db";
 import Link from "next/link";
 import { Badge } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
+import { requestEngagement } from "@/lib/actions/engagements";
 import {
   type DirectorySort,
   filterListings,
@@ -11,7 +13,7 @@ import {
   sortListings,
 } from "@/lib/directory";
 import { fetchPublicListings, loadFreeholdListings } from "@/lib/directory-feed";
-import { requireTenant } from "@/lib/tenant";
+import { getMemberRole, requireTenant } from "@/lib/tenant";
 import { btnGhost, card, input, label } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +36,8 @@ export default async function DirectoryPage({
     sort?: string;
   }>;
 }) {
-  const { tenantId } = await requireTenant();
+  const { tenantId, userId } = await requireTenant();
+  const isAdmin = ["owner", "admin"].includes(await getMemberRole(tenantId, userId));
   const params = await searchParams;
   const source: ListingSource | undefined =
     params.source === "freehold" || params.source === "public" ? params.source : undefined;
@@ -44,7 +47,19 @@ export default async function DirectoryPage({
   // Freehold-enabled workspaces on this instance, plus whatever the public
   // directory syndicates. The public side is a third party: if it's slow or
   // down, the page still renders with the workspaces we do have.
-  const [listed, feed] = await Promise.all([loadFreeholdListings(), fetchPublicListings()]);
+  const [listed, feed, engagements] = await Promise.all([
+    loadFreeholdListings(),
+    fetchPublicListings(),
+    // Vendors we've already asked or are already working with, so the card
+    // offers a link instead of a duplicate request.
+    withTenant(tenantId, (tx) =>
+      tx.engagement.findMany({
+        where: { tenantId, status: { in: ["REQUESTED", "ACTIVE"] } },
+        select: { vendorTenantId: true },
+      }),
+    ),
+  ]);
+  const engagedWith = new Set(engagements.map((e) => e.vendorTenantId));
   // Your own workspace isn't a vendor to you.
   const freeholdRows = listed.filter((l) => l.id !== tenantId);
 
@@ -208,11 +223,33 @@ export default async function DirectoryPage({
                 {l.contactEmail && (
                   <a
                     href={`mailto:${l.contactEmail}`}
-                    className="ml-auto font-medium text-brand-700 hover:underline"
+                    className="font-medium text-brand-700 hover:underline"
                   >
                     Contact
                   </a>
                 )}
+                {l.engageable &&
+                  isAdmin &&
+                  (engagedWith.has(l.id) ? (
+                    <Link
+                      href="/dashboard/engagements"
+                      className="ml-auto text-xs text-stone-500 hover:underline"
+                    >
+                      already engaged →
+                    </Link>
+                  ) : (
+                    <form action={requestEngagement} className="ml-auto flex items-center gap-1">
+                      <input type="hidden" name="vendorTenantId" value={l.id} />
+                      <input
+                        name="note"
+                        placeholder="What you need covered"
+                        className={`${input} w-44 px-2 py-1 text-xs`}
+                      />
+                      <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                        Request coverage
+                      </button>
+                    </form>
+                  ))}
                 {l.profileUrl && (
                   <a
                     href={l.profileUrl}

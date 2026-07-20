@@ -5,6 +5,7 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { openBillingPortal } from "@/lib/actions/billing";
 import { getTenantPlan } from "@/lib/plans";
 import { getSession, listTenants } from "@/lib/session";
+import { GUEST_ROLE, getMemberRole } from "@/lib/tenant";
 import { btn } from "@/lib/ui";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -13,6 +14,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const tenants = await listTenants();
   if (tenants.length === 0) redirect("/onboarding");
   const active = tenants.find((t) => t.id === session.session.activeOrganizationId) ?? tenants[0];
+
+  // Outside coverage staff get a stripped sidebar: no create menu, no
+  // settings, only the files they were handed. Pages enforce this themselves —
+  // the sidebar just stops offering doors that won't open.
+  const isGuest = (await getMemberRole(active.id, session.user.id)) === GUEST_ROLE;
 
   // Failed-renewal lock: access is paused until payment is fixed, but nothing
   // is deleted and the recovery path (Stripe portal, sign-out) stays open.
@@ -72,41 +78,48 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <div className="mb-4 mt-1 truncate rounded-lg bg-stone-100/80 px-2.5 py-1.5 text-xs font-medium text-stone-500">
           {active?.name}
         </div>
-        <details className="group relative mb-3">
-          <summary className="flex cursor-pointer select-none items-center justify-center gap-1 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700">
-            + Create
-          </summary>
-          <div className="absolute left-0 right-0 z-10 mt-1 flex flex-col rounded-lg border border-stone-200 bg-white py-1 shadow-lg">
-            <a
-              href="/dashboard/transactions"
-              className="px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
-            >
-              Transaction
-            </a>
-            <a
-              href="/dashboard/contacts/new"
-              className="px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
-            >
-              Contact
-            </a>
-            <a
-              href="/dashboard/contacts?due=1"
-              className="px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
-            >
-              Contact note
-            </a>
-            <a
-              href="/dashboard/transactions"
-              className="px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
-            >
-              Task
-            </a>
-          </div>
-        </details>
-        <DashboardNav />
+        {isGuest && (
+          <p className="mb-3 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
+            You're covering files for this workspace as a guest.
+          </p>
+        )}
+        {!isGuest && (
+          <details className="group relative mb-3">
+            <summary className="flex cursor-pointer select-none items-center justify-center gap-1 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700">
+              + Create
+            </summary>
+            <div className="absolute left-0 right-0 z-10 mt-1 flex flex-col rounded-lg border border-stone-200 bg-white py-1 shadow-lg">
+              <a
+                href="/dashboard/transactions"
+                className="px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
+              >
+                Transaction
+              </a>
+              <a
+                href="/dashboard/contacts/new"
+                className="px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
+              >
+                Contact
+              </a>
+              <a
+                href="/dashboard/contacts?due=1"
+                className="px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
+              >
+                Contact note
+              </a>
+              <a
+                href="/dashboard/transactions"
+                className="px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
+              >
+                Task
+              </a>
+            </div>
+          </details>
+        )}
+        <DashboardNav isGuest={isGuest} />
         <div className="mt-auto flex flex-col gap-1 border-t border-stone-200 pt-3">
           <ProfileNavLink />
-          <SettingsNavLink />
+          {!isGuest && <SettingsNavLink />}
           <div className="flex items-center justify-between gap-2 px-2.5 pt-1">
             <span className="truncate text-xs text-stone-400">{session.user.email}</span>
             <SignOutButton />

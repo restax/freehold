@@ -5,17 +5,19 @@ import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
 import { confirmed, str } from "@/lib/forms";
 import { deleteObject, putObject } from "@/lib/storage";
-import { requireTenant } from "@/lib/tenant";
+import { guestMaySeeTransaction, requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
 export async function uploadDocument(formData: FormData) {
-  const { tenantId } = await requireTenant();
+  // Guests upload to the files they cover — that's the work — but nowhere else.
+  const { tenantId, session } = await requireTenant({ allowGuest: true });
   const transactionId = str(formData, "transactionId");
   const file = formData.get("file");
   if (!transactionId || !(file instanceof File) || file.size === 0) return;
   if (file.size > MAX_BYTES) return;
+  if (!(await guestMaySeeTransaction(tenantId, session.user.id, transactionId))) return;
 
   const bytes = Buffer.from(await file.arrayBuffer());
   const filename = file.name || "document.pdf";

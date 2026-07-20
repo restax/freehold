@@ -43,6 +43,7 @@ model User {
   licenses         UserLicense[]
   transactionAssignments TransactionAssignee[]
   paymentRequests  PaymentRequest[]
+  guestEngagements Engagement[]
 
   @@map("user")
 }
@@ -183,6 +184,8 @@ model Organization {
   states                  TenantState[]
   paymentRequests         PaymentRequest[]
   paymentRequestItems     PaymentRequestItem[]
+  engagementsHired        Engagement[]            @relation("EngagementHirer")
+  engagementsProvided     Engagement[]            @relation("EngagementVendor")
   /// What happens when a file sits in a license-required state with nobody
   /// licensed assigned: "warn" (save it, flag it everywhere) or "block"
   /// (refuse the write). Deliberately a tenant choice — TCs routinely open a
@@ -948,6 +951,46 @@ model ComplianceSlot {
   @@index([tenantId])
   @@index([complianceId])
   @@map("compliance_slot")
+}
+
+/// Lifecycle of one workspace covering files for another.
+enum EngagementStatus {
+  REQUESTED
+  ACTIVE
+  DECLINED
+  ENDED
+}
+
+/// One workspace contracting another to cover files — vacation, overflow, a
+/// specialty they don't handle. Found through the directory.
+///
+/// The vendor's chosen person joins the hiring workspace as a `guest` Member:
+/// a real, revocable membership that sees only the transactions they are
+/// assigned to. Nothing is copied between workspaces and no data is synced —
+/// the file never leaves the workspace that owns it.
+model Engagement {
+  id             String           @id @default(uuid())
+  /// The workspace that needs the coverage and owns the files.
+  tenantId       String           @map("tenant_id")
+  tenant         Organization     @relation("EngagementHirer", fields: [tenantId], references: [id], onDelete: Cascade)
+  /// The workspace providing it.
+  vendorTenantId String           @map("vendor_tenant_id")
+  vendorTenant   Organization     @relation("EngagementVendor", fields: [vendorTenantId], references: [id], onDelete: Cascade)
+  status         EngagementStatus @default(REQUESTED)
+  /// What the hiring workspace is asking for.
+  note           String?
+  /// The vendor user given guest access, chosen when they accept.
+  guestUserId    String?          @map("guest_user_id")
+  guestUser      User?            @relation(fields: [guestUserId], references: [id], onDelete: SetNull)
+  requestedById  String?          @map("requested_by_id")
+  respondedAt    DateTime?        @map("responded_at")
+  endedAt        DateTime?        @map("ended_at")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([tenantId])
+  @@index([vendorTenantId])
+  @@map("engagement")
 }
 
 /// Where a user's pay request stands. Freehold tracks what is owed and

@@ -14,7 +14,8 @@ import { btn, btnGhost, card, input, label, td, th, trHover } from "@/lib/ui";
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage() {
-  const { tenantId, userId } = await requireTenant();
+  // Guests keep their own profile, licenses, and pay — all of it their data.
+  const { tenantId, userId } = await requireTenant({ allowGuest: true });
   const [user, licenses, unbilled, payRequests] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { id: userId },

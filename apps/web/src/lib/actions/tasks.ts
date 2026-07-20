@@ -5,7 +5,7 @@ import { instantiatePlan, type PlanTaskTemplate } from "@freehold/workflows";
 import { revalidatePath } from "next/cache";
 import { fireTaskTemplateEmail } from "@/lib/auto-emails";
 import { confirmed, dateOnly, str } from "@/lib/forms";
-import { requireTenant } from "@/lib/tenant";
+import { guestMaySeeTransaction, requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
 
 function revalidateTaskViews(transactionId: string | null) {
@@ -33,10 +33,15 @@ export async function createTask(formData: FormData) {
 }
 
 export async function toggleTask(formData: FormData) {
-  const { tenantId, session } = await requireTenant();
+  // Working tasks is the point of covering a file, so guests may — but only
+  // on the files they were actually assigned.
+  const { tenantId, session } = await requireTenant({ allowGuest: true });
   const id = str(formData, "id");
   if (!id) return;
   const transactionId = str(formData, "transactionId") || null;
+  if (transactionId && !(await guestMaySeeTransaction(tenantId, session.user.id, transactionId))) {
+    return;
+  }
   const completed = await withTenant(tenantId, async (tx) => {
     const task = await tx.task.findUniqueOrThrow({
       where: { id },

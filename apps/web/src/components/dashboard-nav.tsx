@@ -11,6 +11,7 @@ import {
   FileText,
   GearSix,
   Globe,
+  Handshake,
   House,
   type Icon,
   ListChecks,
@@ -66,6 +67,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { href: "/dashboard/invoices", label: "Invoices", icon: Receipt },
       { href: "/dashboard/directory", label: "Directory", icon: Compass },
+      { href: "/dashboard/engagements", label: "Engagements", icon: Handshake },
       { href: "/dashboard/website", label: "Website", icon: Globe },
       { href: "/dashboard/integrations", label: "Integrations", icon: PlugsConnected },
       { href: "/dashboard/team", label: "Team", icon: UsersThree },
@@ -97,14 +99,25 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   );
 }
 
-export function DashboardNav() {
+/** The only destinations outside coverage staff can reach. */
+const GUEST_HREFS = new Set(["/dashboard", "/dashboard/transactions"]);
+
+export function DashboardNav({ isGuest = false }: { isGuest?: boolean }) {
   const pathname = usePathname();
   const isActive = (href: string) =>
     href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
 
+  // Hiding these is courtesy, not security — every page refuses guests
+  // server-side regardless of what the sidebar shows.
+  const groups = isGuest
+    ? GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => GUEST_HREFS.has(i.href)) })).filter(
+        (g) => g.items.length > 0,
+      )
+    : GROUPS;
+
   return (
     <nav className="flex flex-col">
-      {GROUPS.map((group) => (
+      {groups.map((group) => (
         <div key={group.label ?? "top"} className="flex flex-col gap-0.5">
           {group.label && (
             <p className="mb-1 mt-5 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-400">

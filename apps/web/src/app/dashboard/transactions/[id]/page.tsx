@@ -61,7 +61,7 @@ import { extractionCreditState } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
 import { PRIORITY_BADGE, PRIORITY_LABEL } from "@/lib/priority";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
-import { getMemberCompliance, requireTenant } from "@/lib/tenant";
+import { getMemberCompliance, guestMaySeeTransaction, requireTenant } from "@/lib/tenant";
 import { btn, btnGhost, card, input, label } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -95,9 +95,12 @@ export default async function TransactionDetailPage({
     licenseError?: string;
   }>;
 }) {
-  const { tenantId, session } = await requireTenant();
+  const { tenantId, session } = await requireTenant({ allowGuest: true });
   const labels = await tenantSideLabels(tenantId);
   const { id } = await params;
+  // A guest reaches only the files they were handed; anything else doesn't
+  // exist as far as they're concerned.
+  if (!(await guestMaySeeTransaction(tenantId, session.user.id, id))) notFound();
   const { tab: tabRaw, emailTemplate, emailTask, licenseError } = await searchParams;
   const tab: TxnTab = (TXN_TABS.some(([t]) => t === tabRaw) ? tabRaw : "tasks") as TxnTab;
 

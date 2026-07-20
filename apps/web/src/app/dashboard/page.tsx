@@ -37,8 +37,114 @@ function dayLabel(d: Date, todayKey: string): string {
   return d.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
 }
 
+/**
+ * What outside coverage staff see instead of the workspace dashboard: the
+ * files they were handed and their open tasks on those files. No pipeline
+ * counts, no prospecting, nothing about the rest of the workspace.
+ */
+async function GuestDashboard({ tenantId, userId }: { tenantId: string; userId: string }) {
+  const { files, tasks } = await withTenant(tenantId, async (tx) => {
+    const files = await tx.transaction.findMany({
+      where: { assignees: { some: { userId } } },
+      orderBy: [{ closeDate: { sort: "asc", nulls: "last" } }, { updatedAt: "desc" }],
+      select: {
+        id: true,
+        propertyAddress: true,
+        status: true,
+        closeDate: true,
+        client: { select: { name: true } },
+      },
+    });
+    return {
+      files,
+      tasks: await tx.task.findMany({
+        where: {
+          status: TaskStatus.OPEN,
+          transaction: { assignees: { some: { userId } } },
+        },
+        orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }],
+        take: 25,
+        include: { transaction: { select: { id: true, propertyAddress: true } } },
+      }),
+    };
+  });
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <p className="text-sm text-stone-500">Covering files</p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Your files</h1>
+      </div>
+      <section className={card}>
+        <h2 className="mb-1 font-medium">Assigned to you</h2>
+        <p className="mb-3 text-xs text-stone-400">
+          You're working these files as outside coverage. You see only what you've been assigned.
+        </p>
+        {files.length === 0 ? (
+          <EmptyState
+            title="Nothing assigned yet"
+            hint="The workspace that engaged you will assign the files they want covered."
+          />
+        ) : (
+          <ul className="flex flex-col">
+            {files.map((t) => (
+              <li
+                key={t.id}
+                className="flex items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
+              >
+                <Link
+                  href={`/dashboard/transactions/${t.id}`}
+                  className="font-medium text-brand-700 hover:underline"
+                >
+                  {t.propertyAddress}
+                </Link>
+                <StatusBadge status={t.status} />
+                {t.client && <span className="text-stone-400">{t.client.name}</span>}
+                {t.closeDate && (
+                  <span className="ml-auto tabular-nums text-stone-400">
+                    closes {fmtDate(t.closeDate)}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      {tasks.length > 0 && (
+        <section className={card}>
+          <h2 className="mb-3 font-medium">Open tasks on your files</h2>
+          <ul className="flex flex-col">
+            {tasks.map((t) => (
+              <li
+                key={t.id}
+                className="flex items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
+              >
+                <span className="whitespace-nowrap tabular-nums text-stone-500">
+                  {fmtDate(t.dueDate)}
+                </span>
+                <span>{t.title}</span>
+                {t.transaction && (
+                  <Link
+                    href={`/dashboard/transactions/${t.transaction.id}`}
+                    className="ml-auto truncate text-brand-600 hover:underline"
+                  >
+                    {t.transaction.propertyAddress}
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
+}
+
 export default async function DashboardPage() {
-  const { tenantId, userId } = await requireTenant();
+  const { tenantId, userId, isGuest } = await requireTenant({ allowGuest: true });
+  // Everything on this page is workspace-wide. A guest gets only their own
+  // assigned files instead — see GuestDashboard below.
+  if (isGuest) return <GuestDashboard tenantId={tenantId} userId={userId} />;
   const now = new Date();
   const todayKey = dayKey(now);
   const soon = new Date(now);

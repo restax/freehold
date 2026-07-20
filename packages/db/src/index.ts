@@ -79,3 +79,5 @@ export const ComplianceSlotStatus = PrismaPkg.ComplianceSlotStatus;
 export type ComplianceSlotStatus = PrismaPkg.ComplianceSlotStatus;
 export const PaymentRequestStatus = PrismaPkg.PaymentRequestStatus;
 export type PaymentRequestStatus = PrismaPkg.PaymentRequestStatus;
+export const EngagementStatus = PrismaPkg.EngagementStatus;
+export type EngagementStatus = PrismaPkg.EngagementStatus;

@@ -171,7 +171,9 @@ export interface SeatState {
 export async function seatState(tenantId: string): Promise<SeatState> {
   const plan = await getTenantPlan(tenantId);
   const [members, pending] = await Promise.all([
-    prisma.member.count({ where: { organizationId: tenantId } }),
+    // Guests are outside coverage staff on an engagement, not staff you're
+    // adding to the workspace — they never consume one of your seats.
+    prisma.member.count({ where: { organizationId: tenantId, role: { not: "guest" } } }),
     prisma.invitation.count({ where: { organizationId: tenantId, status: "pending" } }),
   ]);
   const used = members + pending;

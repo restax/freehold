@@ -21,7 +21,7 @@ export default async function TransactionsPage({
 }: {
   searchParams: Promise<{ status?: string; mine?: string; licenseError?: string }>;
 }) {
-  const { tenantId, userId } = await requireTenant();
+  const { tenantId, userId, isGuest } = await requireTenant({ allowGuest: true });
   const labels = await tenantSideLabels(tenantId);
   const [limit, credits] = await Promise.all([
     transactionLimit(tenantId),
@@ -43,7 +43,9 @@ export default async function TransactionsPage({
       transactions: await tx.transaction.findMany({
         where: {
           ...(statusFilter ? { status: statusFilter } : {}),
-          ...(mineFilter ? { assignees: { some: { userId } } } : {}),
+          // A guest is outside coverage staff: they see only what they were
+          // handed, whatever the filters say.
+          ...(mineFilter || isGuest ? { assignees: { some: { userId } } } : {}),
         },
         orderBy: { updatedAt: "desc" },
         include: {
