@@ -57,12 +57,18 @@ export function buildMergeContext(
   for (const [k, v] of Object.entries((txn.customFields as Record<string, string> | null) ?? {})) {
     ctx[`custom.${k}`] = String(v);
   }
+  // Two parties can share a role (co-sellers, co-buyers): the first keeps the
+  // plain {{party.SELLER.name}} key so existing templates never break, and
+  // each one after that gets a numbered key ({{party.SELLER_2.name}}, _3, ...)
+  // instead of silently overwriting the first and vanishing from the letter.
+  const roleCounts: Record<string, number> = {};
   for (const p of txn.parties ?? []) {
-    if (!(`party.${p.role}.name` in ctx)) {
-      ctx[`party.${p.role}.name`] = p.contact.name;
-      ctx[`party.${p.role}.email`] = p.contact.email ?? "";
-      ctx[`party.${p.role}.phone`] = p.contact.phone ?? "";
-    }
+    const count = (roleCounts[p.role] ?? 0) + 1;
+    roleCounts[p.role] = count;
+    const key = count === 1 ? p.role : `${p.role}_${count}`;
+    ctx[`party.${key}.name`] = p.contact.name;
+    ctx[`party.${key}.email`] = p.contact.email ?? "";
+    ctx[`party.${key}.phone`] = p.contact.phone ?? "";
   }
   return ctx;
 }

@@ -10,7 +10,7 @@ import {
   deleteChecklistItem,
   setChecklistApprovalLevels,
 } from "@/lib/actions/compliance";
-import { requireTenant } from "@/lib/tenant";
+import { requireAdminTenant } from "@/lib/tenant";
 import { btn, card, input, label, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export default async function ComplianceChecklistPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { tenantId } = await requireTenant();
+  const { tenantId, isAdmin } = await requireAdminTenant();
   const { id } = await params;
 
   const checklist = await withTenant(tenantId, (tx) =>
@@ -123,36 +123,38 @@ export default async function ComplianceChecklistPage({
         </form>
       </section>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Review policy</h2>
-        <p className="mb-3 text-sm text-stone-500">
-          How many levels of reviewer sign-off each document needs. One level means any reviewer's
-          approval passes it; more levels make it climb the ladder — set who reviews at which level
-          on the{" "}
-          <Link href="/dashboard/team" className="text-brand-700 hover:underline">
-            Team
-          </Link>{" "}
-          page. Rounds already in flight keep the policy they started with.
-        </p>
-        <form action={setChecklistApprovalLevels} className="flex flex-wrap items-end gap-3">
-          <input type="hidden" name="checklistId" value={checklist.id} />
-          <label className={label}>
-            Approval levels
-            <select
-              name="approvalLevels"
-              defaultValue={String(checklist.approvalLevels)}
-              className={input}
-            >
-              <option value="1">1 — single sign-off</option>
-              <option value="2">2 — two levels</option>
-              <option value="3">3 — three levels</option>
-            </select>
-          </label>
-          <button type="submit" className={btn}>
-            Save
-          </button>
-        </form>
-      </section>
+      {isAdmin && (
+        <section className={card}>
+          <h2 className="mb-1 font-medium">Review policy</h2>
+          <p className="mb-3 text-sm text-stone-500">
+            How many levels of reviewer sign-off each document needs. One level means any reviewer's
+            approval passes it; more levels make it climb the ladder — set who reviews at which
+            level on the{" "}
+            <Link href="/dashboard/team" className="text-brand-700 hover:underline">
+              Team
+            </Link>{" "}
+            page. Rounds already in flight keep the policy they started with.
+          </p>
+          <form action={setChecklistApprovalLevels} className="flex flex-wrap items-end gap-3">
+            <input type="hidden" name="checklistId" value={checklist.id} />
+            <label className={label}>
+              Approval levels
+              <select
+                name="approvalLevels"
+                defaultValue={String(checklist.approvalLevels)}
+                className={input}
+              >
+                <option value="1">1 — single sign-off</option>
+                <option value="2">2 — two levels</option>
+                <option value="3">3 — three levels</option>
+              </select>
+            </label>
+            <button type="submit" className={btn}>
+              Save
+            </button>
+          </form>
+        </section>
+      )}
 
       <section className={card}>
         <h2 className="mb-1 font-medium">Clients using this checklist</h2>
@@ -177,18 +179,20 @@ export default async function ComplianceChecklistPage({
         )}
       </section>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Danger zone</h2>
-        <p className="mb-3 text-sm text-stone-500">
-          Deleting a checklist leaves the clients using it with no document requirements.
-        </p>
-        <DangerDelete
-          action={deleteChecklist}
-          label="Delete checklist"
-          description="Removes this checklist and its documents."
-          hidden={{ id: checklist.id }}
-        />
-      </section>
+      {isAdmin && (
+        <section className={card}>
+          <h2 className="mb-1 font-medium">Danger zone</h2>
+          <p className="mb-3 text-sm text-stone-500">
+            Deleting a checklist leaves the clients using it with no document requirements.
+          </p>
+          <DangerDelete
+            action={deleteChecklist}
+            label="Delete checklist"
+            description="Removes this checklist and its documents."
+            hidden={{ id: checklist.id }}
+          />
+        </section>
+      )}
     </div>
   );
 }

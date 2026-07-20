@@ -29,6 +29,33 @@ describe("buildMergeContext", () => {
     expect(ctx["tenant.name"]).toBe("Acme Realty Group");
     expect(ctx.today).toBe("2026-07-18");
   });
+
+  it("suffixes a second party in the same role instead of overwriting the first", () => {
+    const ctx = buildMergeContext(
+      {
+        ...TXN,
+        parties: [
+          {
+            role: "SELLER",
+            contact: { name: "Alex Rivera", email: "alex@example.com", phone: null },
+          },
+          {
+            role: "SELLER",
+            contact: { name: "Sam Rivera", email: "sam@example.com", phone: null },
+          },
+          {
+            role: "SELLER",
+            contact: { name: "Jamie Rivera", email: "jamie@example.com", phone: null },
+          },
+        ],
+      },
+      "Acme Realty Group",
+    );
+    expect(ctx["party.SELLER.name"]).toBe("Alex Rivera");
+    expect(ctx["party.SELLER_2.name"]).toBe("Sam Rivera");
+    expect(ctx["party.SELLER_2.email"]).toBe("sam@example.com");
+    expect(ctx["party.SELLER_3.name"]).toBe("Jamie Rivera");
+  });
 });
 
 describe("resolveTemplate", () => {

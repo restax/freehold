@@ -4,13 +4,13 @@ import { notFound } from "next/navigation";
 import { DangerDelete } from "@/components/danger-delete";
 import { deleteTemplate, updateTemplate } from "@/lib/actions/templates";
 import { MERGE_FIELD_REFERENCE } from "@/lib/templates";
-import { requireTenant } from "@/lib/tenant";
+import { requireAdminTenant } from "@/lib/tenant";
 import { btn, btnDanger, card, input, label } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function TemplateEditPage({ params }: { params: Promise<{ id: string }> }) {
-  const { tenantId } = await requireTenant();
+  const { tenantId, isAdmin } = await requireAdminTenant();
   const { id } = await params;
   const template = await withTenant(tenantId, (tx) => tx.docTemplate.findUnique({ where: { id } }));
   if (!template) notFound();
@@ -24,13 +24,15 @@ export default async function TemplateEditPage({ params }: { params: Promise<{ i
           </Link>
           <h1 className="text-xl font-semibold">{template.name}</h1>
         </div>
-        <DangerDelete
-          compact
-          action={deleteTemplate}
-          label="Delete template"
-          description="Removes this document template."
-          hidden={{ id: template.id }}
-        />
+        {isAdmin && (
+          <DangerDelete
+            compact
+            action={deleteTemplate}
+            label="Delete template"
+            description="Removes this document template."
+            hidden={{ id: template.id }}
+          />
+        )}
       </div>
 
       <section className={card}>
@@ -71,7 +73,10 @@ export default async function TemplateEditPage({ params }: { params: Promise<{ i
         <h2 className="mb-2 font-medium">Merge fields</h2>
         <p className="mb-2 text-sm text-stone-500">
           Unknown fields render as blanks. Party roles: BUYER, SELLER, BUYER_AGENT, LISTING_AGENT,
-          LENDER, TITLE_COMPANY, INSPECTOR, APPRAISER, ATTORNEY.
+          LENDER, TITLE_COMPANY, INSPECTOR, APPRAISER, ATTORNEY. A second party in the same role
+          (co-sellers, co-buyers) gets a numbered field instead of replacing the first —{" "}
+          <code className="rounded bg-stone-100 px-1 py-0.5">{"{{party.SELLER_2.name}}"}</code> for
+          the second seller, and so on.
         </p>
         <div className="flex flex-wrap gap-2">
           {MERGE_FIELD_REFERENCE.map((fieldRef) => (
