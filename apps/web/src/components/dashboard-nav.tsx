@@ -18,6 +18,7 @@ import {
   Lifebuoy,
   ListChecks,
   LockKey,
+  Microphone,
   PlugsConnected,
   Receipt,
   ShieldCheck,
@@ -27,6 +28,7 @@ import {
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { VOICE_OPEN_EVENT } from "@/components/voice-widget";
 
 interface NavItem {
   href: string;
@@ -136,6 +138,18 @@ export function DashboardNav({ isGuest = false }: { isGuest?: boolean }) {
           {group.items.map((item) => (
             <NavLink key={item.href} item={item} active={isActive(item.href)} />
           ))}
+          {/* Voice search isn't a page — it's the panel that lives on every
+              screen — so the menu entry opens it where you already are. */}
+          {group.label === "Work" && (
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent(VOICE_OPEN_EVENT))}
+              className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900"
+            >
+              <Microphone size={16} className="text-stone-400" aria-hidden />
+              Voice search
+            </button>
+          )}
         </div>
       ))}
     </nav>

@@ -130,6 +130,11 @@ model Organization {
   planTier                PlanTier                @default(FREE) @map("plan_tier")
   seatLimit               Int                     @default(2) @map("seat_limit")
   aiExtractionsUsed       Int                     @default(0) @map("ai_extractions_used")
+  /// Voice-search sessions started this billing month. Unlike the lifetime
+  /// extraction credits, voice recurs, so the window rolls: once
+  /// voiceQuotaResetAt is in the past the counter starts over.
+  voiceSessionsUsed       Int                     @default(0) @map("voice_sessions_used")
+  voiceQuotaResetAt       DateTime?               @map("voice_quota_reset_at")
   /// Admin setting: when true, members only see contacts they own.
   restrictContactsToOwner Boolean                 @default(false) @map("restrict_contacts_to_owner")
   /// Per-tenant Follow Up Boss connection: {enc:{...}, importedAt?, importedCount?}.

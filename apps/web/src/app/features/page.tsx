@@ -140,6 +140,11 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
         "A real month grid of every dated task and closing, high-priority items marked, switchable between your own and the whole team's.",
         "today",
       ],
+      [
+        "Voice search",
+        "Ask out loud — “what's closing this week”, “who's the lender on Maple” — and hear the answer, from your own live data. On every page, and on client portals so buyers and agents can ask about their own file instead of calling you.",
+        "today",
+      ],
       ["Status filters", "See exactly the slice of your pipeline you need.", "today"],
       ["Saved views", "Switch between custom-filtered perspectives instantly.", "request"],
       ["Column customization", "Choose the fields your dashboard shows.", "request"],
@@ -318,6 +323,11 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ["Fair seat pricing", "Add seats as you grow, change any time, no surprise jumps.", "today"],
       ["Per-task delegation", "Assign individual tasks to teammates.", "request"],
       ["Record ownership tracking", "See who created and owns every record.", "request"],
+      [
+        "Support tickets, right where you're working",
+        "Report an issue from any page — one box in the sidebar, tagged automatically with what you were looking at. Track replies on your own tickets page; no separate portal, no email back-and-forth.",
+        "today",
+      ],
     ],
   ],
   [

@@ -23,7 +23,7 @@ export async function portalOrigin(tenantId: string): Promise<string> {
   return `${url.protocol}//${org.slug}.${url.host}`;
 }
 
-async function liveLink(token: string) {
+export async function liveLink(token: string) {
   const link = await prisma.portalLink.findUnique({ where: { token } });
   if (!link || link.revokedAt) return null;
   // Fire-and-forget access timestamp; portal rendering never blocks on it.

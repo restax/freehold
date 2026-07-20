@@ -7,6 +7,8 @@
       "!**/.next",
       "!**/dist",
       "!**/.turbo",
+      "!**/.venv",
+      "!**/__pycache__",
       "!docs/plan.html",
       "!pnpm-lock.yaml"
     ]

@@ -20,6 +20,8 @@ export const PLAN_INFO: Record<
     portalClientLimit: number | null;
     /** Lifetime AI extraction trial credits; null = fair-use, not metered. */
     aiExtractionCredits: number | null;
+    /** Voice-search sessions per month; 0 = not included, null = uncapped. */
+    voiceSessionsPerMonth: number | null;
   }
 > = {
   FREE: {
@@ -29,6 +31,7 @@ export const PLAN_INFO: Record<
     activeTransactionLimit: 5,
     portalClientLimit: 5,
     aiExtractionCredits: 10,
+    voiceSessionsPerMonth: 0,
   },
   PRO: {
     label: "Pro",
@@ -37,6 +40,7 @@ export const PLAN_INFO: Record<
     activeTransactionLimit: 50,
     portalClientLimit: 50,
     aiExtractionCredits: null,
+    voiceSessionsPerMonth: 100,
   },
   BUSINESS: {
     label: "Business",
@@ -45,6 +49,7 @@ export const PLAN_INFO: Record<
     activeTransactionLimit: 100,
     portalClientLimit: 100,
     aiExtractionCredits: null,
+    voiceSessionsPerMonth: 300,
   },
 };
 
@@ -158,6 +163,61 @@ export async function recordExtractionUse(tenantId: string): Promise<void> {
   await prisma.organization.update({
     where: { id: tenantId },
     data: { aiExtractionsUsed: { increment: 1 } },
+  });
+}
+
+export interface VoiceQuotaState {
+  limited: boolean;
+  used: number;
+  limit: number | null;
+}
+
+/** One month from now, used to open a fresh voice-quota window. */
+function nextMonth(): Date {
+  const d = new Date();
+  d.setMonth(d.getMonth() + 1);
+  return d;
+}
+
+/**
+ * Voice search burns three metered APIs per session (speech-to-text, Claude,
+ * text-to-speech), so unlike dictation's flat tier gate this is counted — a
+ * single enthusiastic workspace shouldn't be able to drain the shared
+ * text-to-speech budget in an afternoon. The window rolls monthly because the
+ * upstream budget does. Self-host is never metered: they bring their own keys.
+ */
+export async function voiceQuotaState(tenantId: string): Promise<VoiceQuotaState> {
+  if (!isCloud()) return { limited: false, used: 0, limit: null };
+  const org = await prisma.organization.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: {
+      planTier: true,
+      compTier: true,
+      compExpiresAt: true,
+      voiceSessionsUsed: true,
+      voiceQuotaResetAt: true,
+    },
+  });
+  const limit = PLAN_INFO[effectiveTier(org)].voiceSessionsPerMonth;
+  if (limit == null) return { limited: false, used: org.voiceSessionsUsed, limit: null };
+  // An elapsed window means this month's count is zero, whatever the column says.
+  const expired = org.voiceQuotaResetAt != null && org.voiceQuotaResetAt.getTime() <= Date.now();
+  const used = expired ? 0 : org.voiceSessionsUsed;
+  return { limited: used >= limit, used, limit };
+}
+
+/** Count one voice session, rolling the monthly window when it has elapsed. */
+export async function recordVoiceSession(tenantId: string): Promise<void> {
+  const org = await prisma.organization.findUnique({
+    where: { id: tenantId },
+    select: { voiceQuotaResetAt: true },
+  });
+  const rollover = org?.voiceQuotaResetAt == null || org.voiceQuotaResetAt.getTime() <= Date.now();
+  await prisma.organization.update({
+    where: { id: tenantId },
+    data: rollover
+      ? { voiceSessionsUsed: 1, voiceQuotaResetAt: nextMonth() }
+      : { voiceSessionsUsed: { increment: 1 } },
   });
 }
 

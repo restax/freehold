@@ -52,3 +52,9 @@ docs/launch/
 docs/PLAN.md
 docs/plan.html
 docs/TODO.md
+
+# Python (voice agent)
+.venv/
+__pycache__/
+*.pyc
+services/voice-agent/secrets.env

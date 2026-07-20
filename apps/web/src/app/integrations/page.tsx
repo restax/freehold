@@ -23,7 +23,17 @@ const LIVE: Integration[] = [
   [
     "Claude AI",
     "AI",
-    "Reads contracts with page-cited extraction, powers the site assistant, and ships as a Claude skill so you can ask about your own deals from Claude.",
+    "Reads contracts with page-cited extraction, powers the site assistant, answers your spoken questions in voice search, and ships as a Claude skill so you can ask about your own deals from Claude.",
+  ],
+  [
+    "ElevenLabs & LiveKit",
+    "Vo",
+    "Voice search speaks its answers with ElevenLabs over a LiveKit realtime session — natural back-and-forth, interruptible, on every dashboard page and every client portal.",
+  ],
+  [
+    "Deepgram",
+    "Dg",
+    "Speech recognition behind both voice search and the Dictate button — streaming transcription with punctuation, so talking is as precise as typing.",
   ],
   [
     "S3-compatible storage",

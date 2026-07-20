@@ -21,6 +21,7 @@ import {
   MarketingFooter,
   MarketingNav,
 } from "@/components/marketing";
+import { VoiceDemo } from "@/components/voice-demo";
 import { getSession } from "@/lib/session";
 import brokerageDusk from "../../public/marketing/brokerage-dusk.jpg";
 import closingKeys from "../../public/marketing/closing-keys.jpg";
@@ -196,6 +197,24 @@ export default async function LandingPage() {
           </p>
         </div>
       </div>
+
+      {/* Voice demo — hear the product rather than read about it */}
+      <section className="border-b border-stone-200/70 bg-stone-50">
+        <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:gap-16">
+          <div>
+            <p className="text-sm font-medium text-brand-600">Try it right now</p>
+            <h2 className="font-display mt-2 text-4xl font-extrabold tracking-tight md:text-5xl">
+              Don't read the pitch. Ask it.
+            </h2>
+            <p className="mt-4 max-w-md leading-relaxed text-stone-600">
+              Freehold has voice search built in — coordinators ask &ldquo;what's closing this
+              week&rdquo; and hear the answer from their own files. This is that same voice, pointed
+              at Freehold itself. Ask it anything, including what it can't do.
+            </p>
+          </div>
+          <VoiceDemo />
+        </div>
+      </section>
 
       {/* AI contract extraction */}
       <section id="extraction" className="border-b border-stone-200/70 bg-white">

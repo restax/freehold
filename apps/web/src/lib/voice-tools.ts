@@ -1,0 +1,381 @@
+import { withTenant } from "@freehold/db";
+import { fmtDate } from "./format";
+import { FREEHOLD_FACTS, FREEHOLD_RULES } from "./freehold-facts";
+import { resolveAgentPortal, resolvePortal } from "./portal";
+import type { VoiceScope } from "./voice-grant";
+
+/**
+ * The read surface the voice agent is allowed to reach, and nothing wider.
+ *
+ * Deliberately NOT a refactor of the public REST API (`/api/v1`): that returns
+ * 200–500-row dumps shaped for programmatic consumers, which is the wrong
+ * shape to read aloud and a lot of tokens to spend. These return small,
+ * already-summarised answers.
+ *
+ * The scope always comes from a verified grant (see voice-grant.ts). No tool
+ * takes a tenant id, portal token, or transaction id from the model — the
+ * model can only ask questions, never widen its own reach. Portal tools defer
+ * to the same resolvers the portal pages themselves use, so a spoken answer
+ * can never exceed what that link's own page already renders.
+ */
+
+export interface VoiceTool {
+  name: string;
+  description: string;
+  input_schema: {
+    type: "object";
+    properties: Record<string, { type: string; description: string }>;
+    required?: string[];
+  };
+}
+
+const TENANT_TOOLS: VoiceTool[] = [
+  {
+    name: "workspace_summary",
+    description:
+      "Counts across the whole workspace: active and closed transactions, clients, contacts, open tasks. Use for 'how many' or 'how's business' questions.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "search_transactions",
+    description:
+      "Find transactions by property address or client name. Omit the query to list the most recent. Optionally filter by status.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Address or client name, partial match" },
+        status: {
+          type: "string",
+          description: "LISTING, UNDER_CONTRACT, PENDING, CLOSED, or CANCELLED",
+        },
+      },
+    },
+  },
+  {
+    name: "upcoming_deadlines",
+    description:
+      "Open tasks and closings due in the next N days (default 7). Use for 'what's due', 'what's closing', 'what's coming up'.",
+    input_schema: {
+      type: "object",
+      properties: { days: { type: "number", description: "How many days ahead, default 7" } },
+    },
+  },
+  {
+    name: "find_people",
+    description:
+      "Search contacts and clients by name, email, or phone. Use for 'what's so-and-so's number' or 'who is the lender on'.",
+    input_schema: {
+      type: "object",
+      properties: { query: { type: "string", description: "Name, email, or phone fragment" } },
+      required: ["query"],
+    },
+  },
+];
+
+const PORTAL_TOOLS: VoiceTool[] = [
+  {
+    name: "my_files",
+    description:
+      "The transaction(s) this person can see: address, status, and key dates. Use for 'where are we', 'what's the status', 'when do we close'.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "my_dates",
+    description: "Upcoming milestones and deadlines visible to this person.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "my_documents",
+    description: "Names of documents shared with this person. Never returns file contents.",
+    input_schema: { type: "object", properties: {} },
+  },
+];
+
+export function toolsForScope(scope: VoiceScope): VoiceTool[] {
+  if (scope.kind === "marketing") return [];
+  return scope.kind === "portal" ? PORTAL_TOOLS : TENANT_TOOLS;
+}
+
+/** Spoken-answer rules every scope shares. */
+const SPEAKING_STYLE = `You are being LISTENED TO, not read. So:
+- Answer in one or two short sentences. Never read out a list of more than
+  three items — summarise instead.
+- Say dates like a person does: "Friday the 24th", not "2026-07-24".
+- Never say IDs, URLs, or raw field names.
+- Money: "three eighty-five" or "three hundred eighty-five thousand".`;
+
+const WORKSPACE_INSTRUCTIONS = `You are Freehold's voice assistant, helping a real
+estate transaction coordinator find information by voice.
+
+${SPEAKING_STYLE}
+
+Always call a tool before answering a question about their data — never guess or
+rely on memory of earlier answers. If a lookup comes back empty, say so plainly.
+If asked something you have no tool for, say you can't help with that yet and
+suggest the dashboard. Keep it warm and quick.`;
+
+const PORTAL_INSTRUCTIONS = `You are Freehold's voice assistant, speaking with a
+buyer, seller, or agent about their own transaction.
+
+${SPEAKING_STYLE}
+
+Always call a tool before answering — never guess. You can only see this one
+person's file; if they ask about anything else, say you can only help with their
+transaction and suggest they contact their coordinator. Be reassuring and brief:
+these are people mid-move, and this is often the most stressful purchase of
+their life.`;
+
+const MARKETING_INSTRUCTIONS = `You are the voice of Freehold, greeting a visitor
+on the homepage who has never used it. You have no access to any customer data
+and no tools — you are here to explain Freehold and answer questions about it.
+
+${SPEAKING_STYLE}
+
+${FREEHOLD_FACTS}
+
+${FREEHOLD_RULES}
+
+Be genuinely useful, not salesy. If Freehold isn't a fit for what they describe,
+say so — that honesty is the product's whole personality. Point people to the
+live demo or hello@freeholdtc.dev when it's the better answer.`;
+
+/** The opening line, spoken before the visitor says anything. */
+const MARKETING_GREETING = `Give a warm ten-second pitch, in your own words, no
+more than three sentences: Freehold is transaction management and CRM built for
+real estate transaction coordinators — the AI reads a purchase contract and
+page-cites every date and dollar for you to confirm, clients get their own
+portal, and the whole thing is source-available so you can self-host it free
+forever. Then invite them to ask you anything about it.`;
+
+const WORKSPACE_GREETING = "Greet them in one short sentence and ask what they'd like to know.";
+
+const PORTAL_GREETING = `Greet them warmly in one short sentence, mention you can
+answer questions about their transaction, and invite them to ask.`;
+
+/** Persona + opening line for a scope. Kept server-side so the agent stays generic. */
+export function briefForScope(scope: VoiceScope): { instructions: string; greeting: string } {
+  if (scope.kind === "marketing") {
+    return { instructions: MARKETING_INSTRUCTIONS, greeting: MARKETING_GREETING };
+  }
+  if (scope.kind === "portal") {
+    return { instructions: PORTAL_INSTRUCTIONS, greeting: PORTAL_GREETING };
+  }
+  return { instructions: WORKSPACE_INSTRUCTIONS, greeting: WORKSPACE_GREETING };
+}
+
+const NOT_FOUND = { result: "Nothing matched." };
+
+/** Transactions a guest may see: only the ones they're assigned to. */
+function guestFilter(scope: VoiceScope) {
+  return scope.kind === "guest" ? { assignees: { some: { userId: scope.userId } } } : {};
+}
+
+async function runTenantTool(
+  scope: Extract<VoiceScope, { kind: "tenant" | "guest" }>,
+  name: string,
+  input: Record<string, unknown>,
+): Promise<unknown> {
+  const { tenantId } = scope;
+  const scoped = guestFilter(scope);
+
+  if (name === "workspace_summary") {
+    return withTenant(tenantId, async (tx) => ({
+      activeTransactions: await tx.transaction.count({
+        where: { ...scoped, status: { notIn: ["CLOSED", "CANCELLED"] } },
+      }),
+      closedTransactions: await tx.transaction.count({ where: { ...scoped, status: "CLOSED" } }),
+      openTasks: await tx.task.count({ where: { status: "OPEN" } }),
+      ...(scope.kind === "tenant"
+        ? { clients: await tx.client.count(), contacts: await tx.contact.count() }
+        : {}),
+    }));
+  }
+
+  if (name === "search_transactions") {
+    const query = typeof input.query === "string" ? input.query.trim() : "";
+    const status = typeof input.status === "string" ? input.status : null;
+    const rows = await withTenant(tenantId, (tx) =>
+      tx.transaction.findMany({
+        where: {
+          ...scoped,
+          ...(status ? { status: status as never } : {}),
+          ...(query
+            ? {
+                OR: [
+                  { propertyAddress: { contains: query, mode: "insensitive" as const } },
+                  { client: { name: { contains: query, mode: "insensitive" as const } } },
+                ],
+              }
+            : {}),
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 15,
+        select: {
+          propertyAddress: true,
+          status: true,
+          closeDate: true,
+          contractDate: true,
+          purchasePrice: true,
+          client: { select: { name: true } },
+        },
+      }),
+    );
+    if (rows.length === 0) return NOT_FOUND;
+    return rows.map((t) => ({
+      address: t.propertyAddress,
+      status: t.status,
+      client: t.client?.name ?? null,
+      closeDate: fmtDate(t.closeDate),
+      contractDate: fmtDate(t.contractDate),
+      price: t.purchasePrice,
+    }));
+  }
+
+  if (name === "upcoming_deadlines") {
+    const days = typeof input.days === "number" && input.days > 0 ? Math.min(input.days, 90) : 7;
+    const until = new Date(Date.now() + days * 24 * 3600 * 1000);
+    return withTenant(tenantId, async (tx) => {
+      const tasks = await tx.task.findMany({
+        where: {
+          status: "OPEN",
+          dueDate: { lte: until },
+          ...(scope.kind === "guest" ? { transaction: scoped } : {}),
+        },
+        orderBy: { dueDate: "asc" },
+        take: 25,
+        select: {
+          title: true,
+          dueDate: true,
+          priority: true,
+          transaction: { select: { propertyAddress: true } },
+        },
+      });
+      const closings = await tx.transaction.findMany({
+        where: {
+          ...scoped,
+          closeDate: { lte: until, gte: new Date(Date.now() - 24 * 3600 * 1000) },
+          status: { notIn: ["CLOSED", "CANCELLED"] },
+        },
+        orderBy: { closeDate: "asc" },
+        select: { propertyAddress: true, closeDate: true },
+      });
+      if (tasks.length === 0 && closings.length === 0) {
+        return { result: `Nothing due in the next ${days} days.` };
+      }
+      return {
+        tasks: tasks.map((t) => ({
+          title: t.title,
+          due: fmtDate(t.dueDate),
+          priority: t.priority,
+          address: t.transaction?.propertyAddress ?? null,
+        })),
+        closings: closings.map((c) => ({
+          address: c.propertyAddress,
+          closeDate: fmtDate(c.closeDate),
+        })),
+      };
+    });
+  }
+
+  if (name === "find_people") {
+    // Guests coordinate files, not the CRM — they get no directory access.
+    if (scope.kind === "guest") return { result: "Not available." };
+    const query = typeof input.query === "string" ? input.query.trim() : "";
+    if (!query) return NOT_FOUND;
+    const like = { contains: query, mode: "insensitive" as const };
+    const [contacts, clients] = await withTenant(tenantId, async (tx) => [
+      await tx.contact.findMany({
+        where: { OR: [{ name: like }, { email: like }, { phone: like }] },
+        take: 10,
+        select: { name: true, email: true, phone: true, category: true },
+      }),
+      await tx.client.findMany({
+        where: { OR: [{ name: like }, { email: like }] },
+        take: 10,
+        select: { name: true, email: true, phone: true, type: true },
+      }),
+    ]);
+    if (contacts.length === 0 && clients.length === 0) return NOT_FOUND;
+    return { contacts, clients };
+  }
+
+  return { error: "unknown_tool" };
+}
+
+/**
+ * Portal tools. Every one re-derives its data from the capability token via
+ * the same resolvers the portal pages use — which already apply
+ * visibleToClient / visibleToAgent and the per-link show* toggles. Nothing
+ * here accepts an id, so there is no parameter a model could bend toward
+ * another file.
+ */
+async function runPortalTool(token: string, name: string): Promise<unknown> {
+  const client = await resolvePortal(token);
+  const agent = client ? null : await resolveAgentPortal(token);
+  if (!client && !agent) return { error: "link_not_found" };
+
+  if (client) {
+    const { txn } = client;
+    if (name === "my_files") {
+      return {
+        address: txn.propertyAddress,
+        status: txn.status,
+        closeDate: fmtDate(txn.closeDate),
+        contractDate: fmtDate(txn.contractDate),
+      };
+    }
+    if (name === "my_dates") {
+      const open = txn.tasks.filter((t) => t.dueDate);
+      if (open.length === 0) return { result: "No dates are shared on this file yet." };
+      return open.map((t) => ({ milestone: t.title, date: fmtDate(t.dueDate), status: t.status }));
+    }
+    if (name === "my_documents") {
+      if (txn.documents.length === 0) return { result: "No documents shared yet." };
+      return txn.documents.map((d) => ({ name: d.filename, added: fmtDate(d.createdAt) }));
+    }
+  }
+
+  if (agent) {
+    if (name === "my_files") {
+      return agent.transactions.map((t) => ({
+        address: t.propertyAddress,
+        status: t.status,
+        closeDate: fmtDate(t.closeDate),
+      }));
+    }
+    if (name === "my_dates") {
+      if (agent.upcoming.length === 0) return { result: "Nothing coming up in the next 30 days." };
+      return agent.upcoming.map((t) => ({
+        milestone: t.title,
+        date: fmtDate(t.dueDate),
+        address: t.transaction?.propertyAddress ?? null,
+      }));
+    }
+    if (name === "my_documents") {
+      if (agent.recentDocs.length === 0) return { result: "No recent documents." };
+      return agent.recentDocs.map((d) => ({
+        name: d.filename,
+        address: d.transaction?.propertyAddress ?? null,
+      }));
+    }
+  }
+
+  return { error: "unknown_tool" };
+}
+
+/** Dispatch a tool call under a verified scope. Never throws to the caller. */
+export async function runVoiceTool(
+  scope: VoiceScope,
+  name: string,
+  input: Record<string, unknown>,
+): Promise<unknown> {
+  try {
+    // Marketing has no tools at all; if one is somehow named, refuse rather
+    // than fall through to a scope that can read data.
+    if (scope.kind === "marketing") return { error: "no_tools_in_this_scope" };
+    if (scope.kind === "portal") return await runPortalTool(scope.portalToken, name);
+    return await runTenantTool(scope, name, input);
+  } catch {
+    return { error: "lookup_failed" };
+  }
+}

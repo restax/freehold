@@ -54,6 +54,9 @@ around before importing your own.
 | External S3 storage | `STORAGE_S3_*` | Any S3-compatible service; bundled MinIO is the default |
 | Email + reply capture | `RESEND_API_KEY`, `EMAIL_FROM_DOMAIN`, `EMAIL_REPLY_DOMAIN`, `RESEND_WEBHOOK_SECRET` | A free Resend account and one verified domain; replies thread back onto transactions |
 | Scheduled email delivery | `CRON_SECRET` | Required for "Send later" and quiet-hours deferrals — see below |
+| Operator panel (`/admin`) | `PLATFORM_ADMIN_EMAILS` | Comma-separated emails allowed into `/admin` — read-only workspace overview plus the support-ticket queue at `/admin/tickets`. Unset (the default) means `/admin` 404s for everyone |
+| Support-ticket Slack alerts | `SLACK_ADMIN_WEBHOOK_URL` (or `SLACK_BOT_TOKEN` + `SLACK_ADMIN_CHANNEL`) | Optional — pings you when a tenant files a ticket from their sidebar. Tickets still land in `/admin/tickets` without it |
+| Voice search | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `ELEVENLABS_API_KEY`, `DEEPGRAM_API_KEY` | Ask questions out loud and hear the answer. Also needs the agent worker running — see below. Unset, the mic button reports itself unavailable and nothing else changes |
 | SkySlope credential custody | `SKYSLOPE_CLIENT_ID`, `SKYSLOPE_CLIENT_SECRET` | Lets admins store a client's SkySlope API key per client, encrypted at rest. No live SkySlope calls yet — custody only, pending SkySlope's partner agreement |
 
 Client invoicing needs nothing from this table — it works out of the box, no
@@ -136,6 +139,32 @@ from Freehold entirely.
 ## Two-factor authentication
 
 TOTP two-factor auth is built in (better-auth `twoFactor` plugin) — no extra configuration. Each user enables it under **Settings → Two-factor authentication**: scan the QR code with any authenticator app, store the one-time backup codes offline. Sign-ins then require a 6-digit code; a device can be trusted for 30 days.
+
+## Voice search (optional)
+
+Voice search lets someone ask a question out loud — "what's closing this
+week" — and hear the answer from their own data. It works on every dashboard
+page and on client portals.
+
+Unlike everything else here, it needs **a second process**: a LiveKit agent
+that holds the realtime audio session. That can't run inside the web
+container, so it lives in `services/voice-agent/` and is started separately:
+
+```bash
+cd services/voice-agent
+python3.12 -m venv .venv          # Python 3.10+ required
+./.venv/bin/pip install -r requirements.txt
+./.venv/bin/python agent.py start
+```
+
+Set `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` (a free
+[LiveKit Cloud](https://cloud.livekit.io) project is plenty), plus
+`ELEVENLABS_API_KEY` and `DEEPGRAM_API_KEY`. The worker reads the same `.env`
+as the app. Full detail — including how the agent is prevented from reading
+anything beyond the person it's serving — is in that folder's README.
+
+Skip all of this and Freehold works exactly as before; the mic button just
+says voice search isn't configured.
 
 ## Voice dictation (optional)
 
