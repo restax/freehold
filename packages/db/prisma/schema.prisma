@@ -44,6 +44,7 @@ model User {
   transactionAssignments TransactionAssignee[]
   paymentRequests  PaymentRequest[]
   guestEngagements Engagement[]
+  supportTickets   SupportTicket[]
 
   @@map("user")
 }
@@ -186,6 +187,8 @@ model Organization {
   paymentRequestItems     PaymentRequestItem[]
   engagementsHired        Engagement[]            @relation("EngagementHirer")
   engagementsProvided     Engagement[]            @relation("EngagementVendor")
+  supportTickets          SupportTicket[]
+  supportTicketReplies    SupportTicketReply[]
   /// What happens when a file sits in a license-required state with nobody
   /// licensed assigned: "warn" (save it, flag it everywhere) or "block"
   /// (refuse the write). Deliberately a tenant choice — TCs routinely open a
@@ -1086,6 +1089,55 @@ model PaymentRequestItem {
   @@index([tenantId])
   @@index([requestId])
   @@map("payment_request_item")
+}
+
+enum TicketStatus {
+  OPEN
+  ANSWERED
+  CLOSED
+}
+
+/// A trouble ticket filed from inside the dashboard — the sidebar widget on
+/// every tenant page (not the portal sites) captures the page it was opened
+/// from, so an operator knows what the person was looking at without asking.
+model SupportTicket {
+  id        String               @id @default(uuid())
+  tenantId  String               @map("tenant_id")
+  tenant    Organization         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String               @map("user_id")
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Auto-derived from the body (first ~60 chars) — the form is one textarea,
+  /// on purpose, so filing a ticket is never more than "type and send".
+  subject   String
+  body      String
+  /// Raw pathname the widget was opened from, e.g. /dashboard/transactions/abc123.
+  pagePath  String?              @map("page_path")
+  status    TicketStatus         @default(OPEN)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  replies   SupportTicketReply[]
+
+  @@index([tenantId, status])
+  @@map("support_ticket")
+}
+
+/// One message in a ticket's thread — from the tenant who filed it, another
+/// member of their workspace, or the operator. Operator replies aren't tied to
+/// a User row in the tenant (an operator isn't necessarily a Member of every
+/// workspace they support), so the author is recorded as plain text.
+model SupportTicketReply {
+  id           String        @id @default(uuid())
+  tenantId     String        @map("tenant_id")
+  tenant       Organization  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticketId     String        @map("ticket_id")
+  ticket       SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  body         String
+  fromOperator Boolean       @default(false) @map("from_operator")
+  authorEmail  String        @map("author_email")
+  createdAt    DateTime      @default(now())
+
+  @@index([tenantId, ticketId])
+  @@map("support_ticket_reply")
 }
 
 /// A state the workspace operates in, and whether it requires a licensed

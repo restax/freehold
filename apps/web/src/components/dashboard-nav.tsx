@@ -15,6 +15,7 @@ import {
   Handshake,
   House,
   type Icon,
+  Lifebuoy,
   ListChecks,
   LockKey,
   PlugsConnected,
@@ -74,6 +75,7 @@ const GROUPS: NavGroup[] = [
       { href: "/dashboard/integrations", label: "Integrations", icon: PlugsConnected },
       { href: "/dashboard/team", label: "Team", icon: UsersThree },
       { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
+      { href: "/dashboard/support", label: "Support", icon: Lifebuoy },
     ],
   },
 ];
@@ -102,7 +104,12 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 }
 
 /** The only destinations outside coverage staff can reach. */
-const GUEST_HREFS = new Set(["/dashboard", "/dashboard/transactions", "/dashboard/calendar"]);
+const GUEST_HREFS = new Set([
+  "/dashboard",
+  "/dashboard/transactions",
+  "/dashboard/calendar",
+  "/dashboard/support",
+]);
 
 export function DashboardNav({ isGuest = false }: { isGuest?: boolean }) {
   const pathname = usePathname();

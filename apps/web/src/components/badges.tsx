@@ -65,3 +65,19 @@ export function ExtractionBadge({ status }: { status: string }) {
     </Badge>
   );
 }
+
+const TICKET_TONE: Record<string, BadgeTone> = {
+  OPEN: "attention",
+  ANSWERED: "progress",
+  CLOSED: "neutral",
+};
+
+const TICKET_LABEL: Record<string, string> = {
+  OPEN: "Open",
+  ANSWERED: "Answered",
+  CLOSED: "Closed",
+};
+
+export function TicketBadge({ status }: { status: string }) {
+  return <Badge tone={TICKET_TONE[status] ?? "neutral"}>{TICKET_LABEL[status] ?? status}</Badge>;
+}

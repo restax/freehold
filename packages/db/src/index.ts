@@ -81,3 +81,5 @@ export const PaymentRequestStatus = PrismaPkg.PaymentRequestStatus;
 export type PaymentRequestStatus = PrismaPkg.PaymentRequestStatus;
 export const EngagementStatus = PrismaPkg.EngagementStatus;
 export type EngagementStatus = PrismaPkg.EngagementStatus;
+export const TicketStatus = PrismaPkg.TicketStatus;
+export type TicketStatus = PrismaPkg.TicketStatus;

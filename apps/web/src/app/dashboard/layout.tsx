@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { DashboardNav, ProfileNavLink, SettingsNavLink } from "@/components/dashboard-nav";
 import { Wordmark } from "@/components/marketing";
 import { SignOutButton } from "@/components/sign-out-button";
+import { SupportTicketWidget } from "@/components/support-ticket-widget";
 import { openBillingPortal } from "@/lib/actions/billing";
 import { getTenantPlan } from "@/lib/plans";
 import { getSession, listTenants } from "@/lib/session";
@@ -118,6 +119,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         )}
         <DashboardNav isGuest={isGuest} />
         <div className="mt-auto flex flex-col gap-1 border-t border-stone-200 pt-3">
+          <SupportTicketWidget />
           <ProfileNavLink />
           {!isGuest && <SettingsNavLink />}
           <div className="flex items-center justify-between gap-2 px-2.5 pt-1">
