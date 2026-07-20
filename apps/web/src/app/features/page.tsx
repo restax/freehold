@@ -284,6 +284,21 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
         "TOTP codes from any authenticator app, with one-time backup codes — enable it in Settings in under a minute.",
         "today",
       ],
+      [
+        "Bring your own storage",
+        "Keep every document in an S3-compatible bucket you own — AWS S3, Cloudflare R2, Backblaze B2, Wasabi, or MinIO. Freehold reads and writes it, but the files live in infrastructure you control, not ours.",
+        "today",
+      ],
+      [
+        "Your data is never locked in",
+        "Download your entire workspace — records and every document — as one archive any time. Connect your own storage and a full copy is delivered there automatically every night.",
+        "today",
+      ],
+      [
+        "Daily briefing in your inbox",
+        "Opt in and every morning owners and admins get an emailed summary of every active transaction — status, key dates, and contact details for every party — with a PDF attached. Readable offline, so you're covered even without a connection.",
+        "today",
+      ],
     ],
   ],
   [

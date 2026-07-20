@@ -412,6 +412,57 @@ export default async function LandingPage() {
         </div>
       </section>
 
+      {/* Your data stays yours */}
+      <section className="border-y border-stone-200/70 bg-stone-50/70">
+        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
+          <h2 className="max-w-xl font-display text-3xl font-bold tracking-tight md:text-4xl">
+            Your data stays yours
+          </h2>
+          <p className="mt-3 max-w-2xl text-lg leading-relaxed text-stone-600">
+            Real business data deserves real guardrails — and a way out that never depends on us.
+          </p>
+          <div className="mt-10 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <h3 className="font-medium">Tied to your login</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
+                Your workspace is reachable only through your authenticated account, with optional
+                two-factor. One workspace can never see another's data — Postgres row-level security
+                enforces it in the database itself.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium">Encrypted, and never sold</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
+                Documents and credentials are envelope-encrypted at rest. We use your data to run
+                the service and nothing else — it's never sold or shared, and your documents are
+                never used to train AI models.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium">Your storage, your control</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
+                Keep every document in a cloud bucket you own — S3, R2, Backblaze, Wasabi, or MinIO.
+                Freehold reads and writes it, but the files live in your infrastructure, not ours.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium">Yours to take, any time</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
+                Download everything — records and documents — in one archive whenever you want, or
+                get an automatic nightly copy delivered to your own storage. Every morning, a
+                briefing of your active deals lands in your inbox — readable offline.
+              </p>
+            </div>
+          </div>
+          <p className="mt-10 max-w-3xl text-base leading-relaxed text-stone-500">
+            Think of it as insurance you hope never to need. We plan for the worst case the way
+            anyone sensible does — the open code, your own exports, and a briefing in your inbox
+            each morning mean your business keeps running even if your connection drops, your
+            storage fails, or Freehold itself goes away.
+          </p>
+        </div>
+      </section>
+
       {/* Aged: cheese yes, software no */}
       <section className="relative min-h-[420px] overflow-hidden lg:min-h-[520px]">
         <Image

@@ -37,6 +37,12 @@ export default function PrivacyPage() {
           .
         </p>
         <p>
+          You stay in control of where your data lives. Connect your own S3-compatible storage
+          bucket and new documents are written there, in infrastructure you own. You can download
+          your entire workspace — records and documents — as one archive at any time, and with your
+          own storage connected we deliver a full copy there automatically every night.
+        </p>
+        <p>
           You can export your data or delete your workspace at any time, and deletion is permanent.
           If you self-host Freehold, none of this applies: your data lives on your own server and
           never reaches us.
