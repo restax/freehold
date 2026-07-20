@@ -6,7 +6,7 @@ An AI-enabled real estate transaction management and CRM platform for brokerages
 
 The flagship AI feature: upload a purchase contract and Freehold extracts every key date and figure — page-cited, confidence-scored, human-confirmed before anything enters the record. No guessing.
 
-See [`docs/PLAN.md`](docs/PLAN.md) for the full architecture and roadmap (or [`docs/plan.html`](docs/plan.html) — same content, styled; open it in a browser).
+The full architecture and roadmap live in `docs/PLAN.md` (kept local-only, not part of this repo).
 
 **Status:** live in beta — Freehold Cloud runs at [freeholdtc.dev](https://freeholdtc.dev), and the full stack self-hosts from one Docker Compose file.
 
@@ -55,8 +55,9 @@ services/
   esign-bridge/       Documenso API wrapper
   comms-bridge/       webhook surface for SMS/voice add-ons
 docs/
-  PLAN.md             full architecture + roadmap
-  plan.html           styled version of the same plan
+  SELF-HOSTING.md     self-hosting walkthrough
+  CLA.md              contributor license agreement
+  BACKUP.md           client-owned backup setup
 ```
 
 Everything a working TC needs day-to-day lives in the source-available (Elastic License 2.0) core. The small [`ee/`](ee/) folder (commercial license, Cal.com-style) contains only Cloud billing and plan gating. One private companion repo (`freehold-infra`) holds cloud operations and the Hub (news feed, marketplace index, telemetry) — nothing in it is needed to self-host.

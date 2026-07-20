@@ -1,6 +1,6 @@
 # Contributing
 
-Freehold's core is source-available (Elastic License 2.0 — free to use, modify, and self-host for your own organization; never resellable or hostable for others) and open to contributions once Stage 00 lands (see [`docs/PLAN.md`](docs/PLAN.md) for the build sequence — early stages are foundational and best coordinated before large PRs).
+Freehold's core is source-available (Elastic License 2.0 — free to use, modify, and self-host for your own organization; never resellable or hostable for others) and open to contributions. For larger changes, open an issue first to coordinate before investing in a big PR.
 
 ## Contributor License Agreement (required)
 

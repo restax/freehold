@@ -4,7 +4,7 @@ import { type PlanTier, prisma, withTenant } from "@freehold/db";
  * Cloud plan definitions and limit checks.
  *
  * Limits apply ONLY when FREEHOLD_CLOUD=1 — self-hosted Freehold is
- * unlimited forever, by policy (see docs/PLAN.md, "no caps anywhere on
+ * unlimited forever, by policy ("no caps anywhere on
  * self-host"). At a limit nothing is ever locked away: existing data stays
  * readable and exportable; only creating more is gated.
  */

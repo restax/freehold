@@ -44,3 +44,11 @@ docusign_private.key
 # personal credential stashes never belong in the repo
 .site2FA
 *.backup-codes*
+
+# launch post drafts — local-only, not for the public repo
+docs/launch/
+
+# internal build plan + to-do list — local-only, not for the public repo
+docs/PLAN.md
+docs/plan.html
+docs/TODO.md
