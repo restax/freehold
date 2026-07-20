@@ -1,4 +1,4 @@
-import { prisma, withTenant } from "@freehold/db";
+import { prisma } from "@freehold/db";
 import { billingEnabled, planUpdateFromEvent, verifyWebhook } from "@freehold/ee-billing";
 import { adminAlert } from "@/lib/notify";
 
@@ -39,28 +39,8 @@ export async function POST(req: Request) {
     return new Response("ok", { status: 200 });
   }
 
-  // Client invoicing: mark tenant invoices paid/void as Stripe reports them.
-  // The invoice table is RLS-protected, so the update must run inside the
-  // tenant scope; we stamped the tenant id into the Stripe invoice metadata.
-  if (event.type === "invoice.paid" || event.type === "invoice.voided") {
-    const invoice = event.data.object as {
-      id?: string;
-      metadata?: { freeholdTenantId?: string };
-    };
-    const tenantId = invoice.metadata?.freeholdTenantId;
-    if (invoice.id && tenantId) {
-      await withTenant(tenantId, (tx) =>
-        tx.invoice.updateMany({
-          where: { stripeInvoiceId: invoice.id },
-          data:
-            event.type === "invoice.paid"
-              ? { status: "PAID", paidAt: new Date() }
-              : { status: "VOID" },
-        }),
-      ).catch(() => {});
-    }
-    return new Response("ok", { status: 200 });
-  }
+  // Client invoicing is payment-agnostic and never touches Stripe: tenants
+  // mark their own invoices paid. This webhook is subscriptions only.
 
   const update = planUpdateFromEvent(event);
   if (update) {

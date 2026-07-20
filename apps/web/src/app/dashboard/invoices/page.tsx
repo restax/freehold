@@ -4,12 +4,18 @@ import { Badge, type BadgeTone } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
 import {
   createInvoice,
+  erpnextBaseUrl,
+  erpnextConnected,
   invoicingAllowed,
-  invoicingEnabled,
+  markInvoicePaid,
+  sendInvoice,
   voidInvoice,
 } from "@/lib/actions/invoices";
 import { markPaymentRequestPaid } from "@/lib/actions/pay";
+import { emailEnabled } from "@/lib/email";
+import { erpnextInvoiceUrl } from "@/lib/erpnext";
 import { fmtDate } from "@/lib/format";
+import { agingBucket, daysOverdue, invoiceLabel, TERM_PRESETS } from "@/lib/invoicing";
 import { fmtCents } from "@/lib/pay";
 import { getMemberRole, requireTenant } from "@/lib/tenant";
 import { btn, btnGhost, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
@@ -22,14 +28,28 @@ const STATUS_TONE: Record<string, BadgeTone> = {
   VOID: "neutral",
 };
 
-export default async function InvoicesPage() {
+const STATUS_TEXT: Record<string, string> = {
+  SENT: "Outstanding",
+  PAID: "Paid",
+  VOID: "Void",
+};
+
+export default async function InvoicesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ invoiceError?: string }>;
+}) {
   const { tenantId, userId } = await requireTenant();
-  const [enabled, allowed, role] = await Promise.all([
-    invoicingEnabled(),
+  const { invoiceError } = await searchParams;
+  const [allowed, role, canEmail, hasErpnext] = await Promise.all([
     invoicingAllowed(tenantId),
     getMemberRole(tenantId, userId),
+    Promise.resolve(emailEnabled()),
+    erpnextConnected(tenantId),
   ]);
   const isAdmin = role === "owner" || role === "admin";
+  // Only needed to deep-link rows back into their instance.
+  const erpnextUrl = hasErpnext ? await erpnextBaseUrl(tenantId) : null;
   // Pay requests from workspace users — the other side of the money page.
   const payRequests = isAdmin
     ? await withTenant(tenantId, (tx) =>
@@ -44,8 +64,11 @@ export default async function InvoicesPage() {
     : [];
   const { invoices, clients, transactions } = await withTenant(tenantId, async (tx) => ({
     invoices: await tx.invoice.findMany({
-      orderBy: { createdAt: "desc" },
-      include: { client: { select: { name: true } } },
+      orderBy: { number: "desc" },
+      include: {
+        client: { select: { name: true, email: true } },
+        transaction: { select: { id: true, propertyAddress: true } },
+      },
     }),
     clients: await tx.client.findMany({ orderBy: { name: "asc" } }),
     transactions: await tx.transaction.findMany({
@@ -55,24 +78,28 @@ export default async function InvoicesPage() {
       take: 100,
     }),
   }));
-  const billableClients = clients.filter((c) => c.email);
+
+  const outstanding = invoices.filter((i) => i.status === "SENT");
+  const overdue = outstanding.filter((i) => agingBucket(i.dueDate) === "overdue");
+  const outstandingTotal = outstanding.reduce((s, i) => s + i.amountCents, 0);
+  const overdueTotal = overdue.reduce((s, i) => s + i.amountCents, 0);
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-xl font-semibold">Invoices</h1>
         <p className="text-sm text-stone-500">
-          Bill your clients for coordination work. Each invoice gets a hosted payment page you can
-          text or email; status updates automatically when it's paid.
+          Bill your clients for coordination work — however they actually pay: check, Zelle, wire,
+          or out of closing proceeds. Freehold generates the invoice, emails it, and keeps a
+          follow-up task open until you mark it paid.
         </p>
       </div>
 
-      {!enabled && (
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Invoicing needs a Stripe account: set <code>STRIPE_SECRET_KEY</code> in <code>.env</code>.
-        </p>
+      {invoiceError && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{invoiceError}</p>
       )}
-      {enabled && !allowed && (
+
+      {!allowed && (
         <p className="rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-600">
           Client invoicing is available on paid plans.{" "}
           <Link href="/dashboard/billing" className="font-medium text-brand-700 underline">
@@ -80,6 +107,29 @@ export default async function InvoicesPage() {
           </Link>
           .
         </p>
+      )}
+
+      {allowed && outstanding.length > 0 && (
+        <section className={card}>
+          <h2 className="mb-1 font-medium">Outstanding</h2>
+          <p className="text-sm text-stone-600">
+            <strong className="tabular-nums">{fmtCents(outstandingTotal)}</strong> across{" "}
+            {outstanding.length} invoice{outstanding.length === 1 ? "" : "s"}
+            {overdue.length > 0 && (
+              <>
+                {" — "}
+                <strong className="tabular-nums text-red-700">{fmtCents(overdueTotal)}</strong>{" "}
+                <span className="text-red-700">
+                  overdue ({overdue.length} invoice{overdue.length === 1 ? "" : "s"})
+                </span>
+              </>
+            )}
+            .
+          </p>
+          <p className="mt-1 text-xs text-stone-400">
+            Get this as an email every morning — switch it on under Settings → Invoice report.
+          </p>
+        </section>
       )}
 
       {isAdmin && payRequests.length > 0 && (
@@ -167,7 +217,7 @@ export default async function InvoicesPage() {
         </section>
       )}
 
-      {allowed && (
+      {allowed && isAdmin && (
         <details className={card} open={invoices.length === 0}>
           <summary className={summaryLink}>New invoice</summary>
           <form action={createInvoice} className="mt-4 flex flex-wrap items-end gap-3">
@@ -177,7 +227,7 @@ export default async function InvoicesPage() {
                 <option value="" disabled>
                   Choose…
                 </option>
-                {billableClients.map((c) => (
+                {clients.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                   </option>
@@ -203,6 +253,24 @@ export default async function InvoicesPage() {
               />
             </label>
             <label className={label}>
+              Payment terms
+              <input
+                name="paymentTerms"
+                list="term-presets"
+                placeholder="Due at closing"
+                className={input}
+              />
+              <datalist id="term-presets">
+                {TERM_PRESETS.map((t) => (
+                  <option key={t} value={t} />
+                ))}
+              </datalist>
+            </label>
+            <label className={label}>
+              Due
+              <input name="dueDate" type="date" className={input} />
+            </label>
+            <label className={label}>
               Transaction
               <select name="transactionId" className={input} defaultValue="">
                 <option value="">—</option>
@@ -213,15 +281,23 @@ export default async function InvoicesPage() {
                 ))}
               </select>
             </label>
+            {hasErpnext && (
+              <label className={label}>
+                Create in
+                <select name="provider" className={input} defaultValue="freehold">
+                  <option value="freehold">Freehold</option>
+                  <option value="erpnext">ERPNext</option>
+                </select>
+              </label>
+            )}
             <button type="submit" className={btn}>
-              Create &amp; get payment link
+              Issue invoice
             </button>
           </form>
-          {billableClients.length < clients.length && (
-            <p className="mt-2 text-xs text-stone-400">
-              Clients without an email address can't be invoiced; add one on the Clients page.
-            </p>
-          )}
+          <p className="mt-2 text-xs text-stone-400">
+            Issuing opens a follow-up task that closes itself when the invoice is marked paid.
+            Clients need an email address on file to be sent the invoice.
+          </p>
         </details>
       )}
 
@@ -229,61 +305,127 @@ export default async function InvoicesPage() {
         {invoices.length === 0 ? (
           <EmptyState
             title="No invoices yet"
-            hint="Create one above and Freehold gives you a hosted Stripe payment page for your client, then tracks when it's paid."
+            hint="Issue one above — Freehold generates the PDF, emails it to your client, and keeps a follow-up open until it's paid."
           />
         ) : (
           <table className="w-full">
             <thead>
               <tr>
+                <th className={th}>#</th>
                 <th className={th}>Client</th>
-                <th className={th}>Description</th>
                 <th className={th}>Amount</th>
+                <th className={th}>Terms</th>
+                <th className={th}>Due</th>
                 <th className={th}>Status</th>
-                <th className={th}>Created</th>
-                <th className={th}>Paid</th>
                 <th className={th} />
               </tr>
             </thead>
             <tbody>
-              {invoices.map((inv) => (
-                <tr key={inv.id} className={trHover}>
-                  <td className={`${td} font-medium`}>{inv.client?.name ?? "—"}</td>
-                  <td className={td}>{inv.description}</td>
-                  <td className={td}>${(inv.amountCents / 100).toLocaleString("en-US")}</td>
-                  <td className={td}>
-                    <Badge tone={STATUS_TONE[inv.status] ?? "neutral"}>
-                      {inv.status.toLowerCase()}
-                    </Badge>
-                  </td>
-                  <td className={td}>{fmtDate(inv.createdAt)}</td>
-                  <td className={td}>{inv.paidAt ? fmtDate(inv.paidAt) : "—"}</td>
-                  <td className={td}>
-                    <span className="flex items-center gap-3">
-                      {inv.hostedUrl && inv.status === "SENT" && (
-                        <a
-                          href={inv.hostedUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs font-medium text-brand-700 hover:text-brand-600"
+              {invoices.map((inv) => {
+                const isOverdue = inv.status === "SENT" && agingBucket(inv.dueDate) === "overdue";
+                return (
+                  <tr key={inv.id} className={trHover}>
+                    <td className={`${td} font-medium`}>
+                      {invoiceLabel(inv.number)}
+                      {inv.transaction && (
+                        <Link
+                          href={`/dashboard/transactions/${inv.transaction.id}`}
+                          className="ml-2 text-xs text-brand-700 hover:underline"
                         >
-                          payment page
-                        </a>
+                          {inv.transaction.propertyAddress}
+                        </Link>
                       )}
-                      {inv.status === "SENT" && (
-                        <form action={voidInvoice}>
-                          <input type="hidden" name="id" value={inv.id} />
-                          <button
-                            type="submit"
-                            className="text-xs text-stone-400 hover:text-red-600"
+                    </td>
+                    <td className={td}>{inv.client?.name ?? "—"}</td>
+                    <td className={`${td} tabular-nums`}>{fmtCents(inv.amountCents)}</td>
+                    <td className={td}>{inv.paymentTerms ?? "—"}</td>
+                    <td className={td}>
+                      {inv.dueDate ? (
+                        <span className={isOverdue ? "font-medium text-red-700" : undefined}>
+                          {fmtDate(inv.dueDate)}
+                          {isOverdue && ` (${daysOverdue(inv.dueDate)}d)`}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className={td}>
+                      <span className="flex items-center gap-1.5">
+                        <Badge tone={STATUS_TONE[inv.status] ?? "neutral"}>
+                          {STATUS_TEXT[inv.status] ?? inv.status}
+                        </Badge>
+                        {inv.status === "SENT" && inv.sentAt && (
+                          <span className="text-xs text-stone-400">
+                            emailed {fmtDate(inv.sentAt)}
+                          </span>
+                        )}
+                        {inv.status === "PAID" && inv.paidNote && (
+                          <span className="text-xs text-stone-400">({inv.paidNote})</span>
+                        )}
+                      </span>
+                    </td>
+                    <td className={td}>
+                      <span className="flex flex-wrap items-center gap-3">
+                        {inv.provider === "erpnext" && inv.externalId && erpnextUrl ? (
+                          <a
+                            href={erpnextInvoiceUrl(erpnextUrl, inv.externalId)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs font-medium text-brand-700 hover:text-brand-600"
+                            title={inv.externalId}
                           >
-                            void
-                          </button>
-                        </form>
-                      )}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+                            open in ERPNext →
+                          </a>
+                        ) : (
+                          <a
+                            href={`/api/invoices/${inv.id}/pdf`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs font-medium text-brand-700 hover:text-brand-600"
+                          >
+                            PDF
+                          </a>
+                        )}
+                        {isAdmin && inv.status === "SENT" && canEmail && inv.client?.email && (
+                          <form action={sendInvoice}>
+                            <input type="hidden" name="id" value={inv.id} />
+                            <button
+                              type="submit"
+                              className="text-xs font-medium text-brand-700 hover:text-brand-600"
+                            >
+                              {inv.sentAt ? "re-send" : "send"}
+                            </button>
+                          </form>
+                        )}
+                        {isAdmin && inv.status === "SENT" && (
+                          <form action={markInvoicePaid} className="flex items-center gap-1">
+                            <input type="hidden" name="id" value={inv.id} />
+                            <input
+                              name="paidNote"
+                              placeholder="check #1042"
+                              className={`${input} w-28 px-2 py-1 text-xs`}
+                            />
+                            <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                              Mark paid
+                            </button>
+                          </form>
+                        )}
+                        {isAdmin && inv.status === "SENT" && (
+                          <form action={voidInvoice}>
+                            <input type="hidden" name="id" value={inv.id} />
+                            <button
+                              type="submit"
+                              className="text-xs text-stone-400 hover:text-red-600"
+                            >
+                              void
+                            </button>
+                          </form>
+                        )}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runDailyBriefings } from "@/lib/daily-briefing";
 import { runOwnerExports } from "@/lib/export-run";
+import { runInvoiceReports } from "@/lib/invoice-report";
 import { flushOutbox } from "@/lib/outbox";
 
 export const dynamic = "force-dynamic";
@@ -21,5 +22,6 @@ export async function GET(req: Request) {
   const outbox = await flushOutbox();
   const exports = await runOwnerExports();
   const briefings = await runDailyBriefings();
-  return NextResponse.json({ outbox, exports, briefings });
+  const invoiceReports = await runInvoiceReports();
+  return NextResponse.json({ outbox, exports, briefings, invoiceReports });
 }

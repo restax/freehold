@@ -5,11 +5,14 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { CopyButton } from "@/components/copy-button";
 import { createSkillKey, readNewSkillKey } from "@/lib/actions/api-keys";
+import { connectErpnext, disconnectErpnext } from "@/lib/actions/erpnext";
 import { connectDocumenso, disconnectDocumenso } from "@/lib/actions/esign-config";
 import { connectFub, disconnectFub, importFubContacts } from "@/lib/actions/fub";
+import { refreshErpnextInvoices } from "@/lib/actions/invoices";
 import { connectStorage, disconnectStorage } from "@/lib/actions/storage-config";
 import { connectTwenty, disconnectTwenty, importTwentyContacts } from "@/lib/actions/twenty";
 import { emailEnabled } from "@/lib/email";
+import { parseErpnextConfig } from "@/lib/erpnext";
 import { documensoStatus } from "@/lib/esign-config";
 import { fubStatus } from "@/lib/fub";
 import { storageStatus } from "@/lib/storage-config";
@@ -51,10 +54,10 @@ When I ask what's closing, what's due, or how a client is doing, fetch the data 
 export default async function IntegrationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ storageOk?: string; storageError?: string }>;
+  searchParams: Promise<{ storageOk?: string; storageError?: string; erpnextError?: string }>;
 }) {
   const { tenantId, isAdmin } = await requireAdminTenant();
-  const { storageOk, storageError } = await searchParams;
+  const { storageOk, storageError, erpnextError } = await searchParams;
   const newSkillKey = await readNewSkillKey();
 
   const [apiKeys, webhooks] = await Promise.all([
@@ -69,6 +72,14 @@ export default async function IntegrationsPage({
   const fub = await fubStatus(tenantId);
   const twenty = await twentyStatus(tenantId);
   const storage = await storageStatus(tenantId);
+  const erpnext = parseErpnextConfig(
+    (
+      await prisma.organization.findUniqueOrThrow({
+        where: { id: tenantId },
+        select: { erpnextConfig: true },
+      })
+    ).erpnextConfig,
+  );
 
   const cards: Array<{
     name: string;
@@ -282,6 +293,56 @@ export default async function IntegrationsPage({
           <label className={labelCls}>
             API key
             <input name="apiKey" type="password" required className={input} />
+          </label>
+          <button type="submit" className={`${btn} self-start`}>
+            Verify &amp; connect
+          </button>
+        </form>
+      ),
+    },
+    {
+      name: "ERPNext",
+      mono: "ER",
+      tone: (erpnext ? "active" : "setup") as Tone,
+      status: erpnext ? "Connected" : "Optional",
+      body: erpnext
+        ? `Connected to ${erpnext.url}, billing item "${erpnext.itemCode}". Client invoices can be created as Sales Invoices in your ERPNext, and their paid status mirrors back here.`
+        : "Already run ERPNext for your books? Connect it and you can issue client invoices as Sales Invoices there instead of keeping them in Freehold — your ERP stays the accounting record. Needs an API key/secret from your ERPNext user, and a service Item to bill against. Verified before saving.",
+      extra: erpnext ? (
+        <div className="mt-2 flex items-center gap-4">
+          <form action={refreshErpnextInvoices}>
+            <button type="submit" className={`${btnGhost} px-2.5 py-1 text-xs`}>
+              Sync invoice statuses
+            </button>
+          </form>
+          <form action={disconnectErpnext}>
+            <button type="submit" className="text-xs text-stone-400 hover:text-red-600">
+              Disconnect
+            </button>
+          </form>
+        </div>
+      ) : (
+        <form action={connectErpnext} className="mt-3 flex flex-col gap-2">
+          {erpnextError && (
+            <p className="rounded-lg bg-red-50 px-2.5 py-1.5 text-xs text-red-800">
+              {erpnextError}
+            </p>
+          )}
+          <label className={labelCls}>
+            ERPNext URL
+            <input name="url" required placeholder="https://erp.example.com" className={input} />
+          </label>
+          <label className={labelCls}>
+            API key
+            <input name="apiKey" required className={input} />
+          </label>
+          <label className={labelCls}>
+            API secret
+            <input name="apiSecret" type="password" required className={input} />
+          </label>
+          <label className={labelCls}>
+            Item to bill
+            <input name="itemCode" placeholder="TC Services" className={input} />
           </label>
           <button type="submit" className={`${btn} self-start`}>
             Verify &amp; connect

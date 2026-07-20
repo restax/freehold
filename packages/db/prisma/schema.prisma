@@ -196,6 +196,10 @@ model Organization {
   /// software[], availability, pricingModel, yearsExperience, remote}. States
   /// covered come from TenantState. Null or listed:false = not listed anywhere.
   directoryConfig         Json?                   @map("directory_config")
+  /// Per-tenant ERPNext connection: {url, itemCode, keyEnc:{...},
+  /// secretEnc:{...}}. API key + secret encrypted with VAULT_MASTER_KEY.
+  /// Null = client invoices are kept in Freehold only.
+  erpnextConfig           Json?                   @map("erpnext_config")
   documents               Document[]
   extractions             ContractExtraction[]
   extractionFields        ExtractionField[]
@@ -667,22 +671,43 @@ enum InvoiceStatus {
 /**
  * Client invoicing: the tenant bills their client through Stripe.
  */
+/// A tenant billing their client. Payment-method-agnostic by design: clients
+/// pay by check, Zelle, wire, or out of closing proceeds, so Freehold's job is
+/// the document, the record, and the follow-up — never the payment rail. No
+/// processor is involved; "paid" is whatever the tenant says it is.
 model Invoice {
-  id              String        @id @default(uuid())
-  tenantId        String        @map("tenant_id")
-  tenant          Organization  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  clientId        String?
-  client          Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  transactionId   String?
-  transaction     Transaction?  @relation(fields: [transactionId], references: [id], onDelete: SetNull)
-  description     String
-  amountCents     Int           @map("amount_cents")
-  status          InvoiceStatus @default(SENT)
-  stripeInvoiceId String?       @unique @map("stripe_invoice_id")
-  hostedUrl       String?       @map("hosted_url")
-  createdAt       DateTime      @default(now())
-  paidAt          DateTime?     @map("paid_at")
+  id            String        @id @default(uuid())
+  tenantId      String        @map("tenant_id")
+  tenant        Organization  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId      String?
+  client        Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  transactionId String?
+  transaction   Transaction?  @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  /// Per-tenant sequence, rendered as INV-0001.
+  number        Int
+  /// Where this invoice actually lives: "freehold" (we are the record) or
+  /// "erpnext" (created in the tenant's ERP; status mirrored from there).
+  provider      String        @default("freehold")
+  /// The Sales Invoice name in their ERPNext, e.g. ACC-SINV-2026-00007.
+  externalId    String?       @map("external_id")
+  description   String
+  amountCents   Int           @map("amount_cents")
+  /// How it's to be paid — "Due at closing", "Net 30", or free text.
+  paymentTerms  String?       @map("payment_terms")
+  dueDate       DateTime?     @map("due_date") @db.Date
+  /// SENT means outstanding; issuing and emailing are separate facts.
+  status        InvoiceStatus @default(SENT)
+  /// When the invoice email actually went out.
+  sentAt        DateTime?     @map("sent_at")
+  /// How it was settled — "check #1042 at closing".
+  paidNote      String?       @map("paid_note")
+  /// The nag: an open task that closes only when the invoice is resolved.
+  followUpTaskId String?      @map("follow_up_task_id")
+  followUpTask   Task?        @relation(fields: [followUpTaskId], references: [id], onDelete: SetNull)
+  createdAt     DateTime      @default(now())
+  paidAt        DateTime?     @map("paid_at")
 
+  @@unique([tenantId, number])
   @@index([tenantId])
   @@map("invoice")
 }
@@ -807,6 +832,7 @@ model Task {
   isSample        Boolean      @default(false)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+  invoiceFollowUps Invoice[]
 
   @@index([tenantId, status, dueDate])
   @@map("task")

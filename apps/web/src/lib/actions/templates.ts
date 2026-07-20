@@ -200,3 +200,15 @@ export async function setDailyBriefing(formData: FormData) {
   await mergeEmailSettings(tenantId, { dailyBriefing: str(formData, "enabled") === "1" });
   revalidatePath("/dashboard/settings");
 }
+
+/**
+ * Who gets the outstanding-invoices report each morning; empty switches it
+ * off. One chosen user, not a broadcast — it's a working list for whoever
+ * chases the money.
+ */
+export async function setInvoiceReport(formData: FormData) {
+  const { tenantId, isAdmin } = await requireAdminTenant();
+  if (!isAdmin) return;
+  await mergeEmailSettings(tenantId, { invoiceReportUserId: str(formData, "userId") });
+  revalidatePath("/dashboard/settings");
+}

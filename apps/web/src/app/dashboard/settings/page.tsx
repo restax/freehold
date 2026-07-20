@@ -14,7 +14,7 @@ import { setContactVisibilityRestriction } from "@/lib/actions/contacts";
 import { saveDirectoryListing } from "@/lib/actions/directory";
 import { removeSampleData } from "@/lib/actions/sample-data";
 import { addState, removeState, setLicenseEnforcement } from "@/lib/actions/states";
-import { setDailyBriefing } from "@/lib/actions/templates";
+import { setDailyBriefing, setInvoiceReport } from "@/lib/actions/templates";
 import { saveSideLabels } from "@/lib/actions/website";
 import {
   AVAILABILITY,
@@ -520,6 +520,15 @@ export default async function SettingsPage() {
   });
   const briefingOn =
     (org.emailSettings as { dailyBriefing?: boolean } | null)?.dailyBriefing === true;
+  const invoiceReportUserId =
+    (org.emailSettings as { invoiceReportUserId?: string } | null)?.invoiceReportUserId ?? "";
+  const reportMembers = isAdmin
+    ? await prisma.member.findMany({
+        where: { organizationId: tenantId, role: { not: "guest" } },
+        include: { user: { select: { id: true, name: true } } },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -581,6 +590,33 @@ export default async function SettingsPage() {
             <input type="hidden" name="enabled" value={briefingOn ? "0" : "1"} />
             <button type="submit" className={btnGhost}>
               {briefingOn ? "Turn off daily briefing" : "Turn on daily briefing"}
+            </button>
+          </form>
+        </section>
+      )}
+
+      {emailEnabled() && isAdmin && (
+        <section className={card}>
+          <h2 className="mb-1 font-medium">Invoice report</h2>
+          <p className="mb-3 text-sm text-stone-500">
+            Each morning, one chosen person gets the outstanding-invoices list — what's unpaid,
+            what's overdue, who to chase. Mornings with nothing outstanding send nothing.{" "}
+            {invoiceReportUserId ? "It's on." : "It's off."}
+          </p>
+          <form action={setInvoiceReport} className="flex flex-wrap items-end gap-3">
+            <label className={label}>
+              Send to
+              <select name="userId" defaultValue={invoiceReportUserId} className={input}>
+                <option value="">— off —</option>
+                {reportMembers.map((m) => (
+                  <option key={m.user.id} value={m.user.id}>
+                    {m.user.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="submit" className={btnGhost}>
+              Save
             </button>
           </form>
         </section>

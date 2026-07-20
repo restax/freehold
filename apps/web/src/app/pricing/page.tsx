@@ -50,7 +50,7 @@ const TIERS: Array<{
       "Merge-field document templates",
       "Credential vault with reveal audit",
       "Branded client portals, per-client e-sign",
-      "Client invoicing via Stripe",
+      "Client invoicing with follow-up tracking",
     ],
     cta: "Start with Pro",
     note: "7-day free trial · cancel in two clicks",

@@ -23,6 +23,7 @@ import {
   sendForSignature,
 } from "@/lib/actions/esign";
 import { runExtraction } from "@/lib/actions/extractions";
+import { createInvoice } from "@/lib/actions/invoices";
 import { addParty, removeParty } from "@/lib/actions/parties";
 import { setAssigneeFee } from "@/lib/actions/pay";
 import { createPortalLink, deletePortalLink, setPortalLinkActive } from "@/lib/actions/portal";
@@ -55,6 +56,7 @@ import { emailEnabled } from "@/lib/email";
 import { EMAIL_MERGE_CODES, renderMerge } from "@/lib/email-template";
 import { suggestForTask } from "@/lib/email-template-library";
 import { fmtDate, fmtMoney, ROLE_LABEL, STATUS_LABEL } from "@/lib/format";
+import { invoiceLabel, TERM_PRESETS } from "@/lib/invoicing";
 import { gapForTransaction, gapMessage } from "@/lib/licensing";
 import { fmtCents } from "@/lib/pay";
 import { extractionCreditState } from "@/lib/plans";
@@ -109,6 +111,7 @@ export default async function TransactionDetailPage({
       where: { id },
       include: {
         client: true,
+        invoices: { orderBy: { number: "desc" } },
         intakeSubmissions: { orderBy: { createdAt: "desc" } },
         parties: { include: { contact: true }, orderBy: { createdAt: "asc" } },
         tasks: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
@@ -1583,6 +1586,109 @@ export default async function TransactionDetailPage({
                 </Link>{" "}
                 tab.
               </p>
+            </section>
+          )}
+          {tab === "payout" && canSetFees && (
+            <section className={card}>
+              <h2 className="mb-1 font-medium">Invoices</h2>
+              <p className="mb-3 text-sm text-stone-500">
+                Bill the client for this file — they pay however they pay (check, Zelle, wire,
+                closing proceeds). A follow-up task stays open until you mark it paid.
+              </p>
+              {txn.invoices.length > 0 && (
+                <ul className="mb-4 flex flex-col">
+                  {txn.invoices.map((inv) => (
+                    <li
+                      key={inv.id}
+                      className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
+                    >
+                      <span className="font-medium">{invoiceLabel(inv.number)}</span>
+                      <span className="tabular-nums">{fmtCents(inv.amountCents)}</span>
+                      {inv.paymentTerms && (
+                        <span className="text-xs text-stone-400">{inv.paymentTerms}</span>
+                      )}
+                      <Badge
+                        tone={
+                          inv.status === "PAID"
+                            ? "success"
+                            : inv.status === "VOID"
+                              ? "neutral"
+                              : "progress"
+                        }
+                      >
+                        {inv.status === "SENT"
+                          ? "Outstanding"
+                          : inv.status === "PAID"
+                            ? "Paid"
+                            : "Void"}
+                      </Badge>
+                      <a
+                        href={`/api/invoices/${inv.id}/pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-brand-600 hover:underline"
+                      >
+                        PDF
+                      </a>
+                      <Link
+                        href="/dashboard/invoices"
+                        className="ml-auto text-xs text-stone-400 hover:underline"
+                      >
+                        manage →
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {txn.client ? (
+                <form action={createInvoice} className="flex flex-wrap items-end gap-3">
+                  <input type="hidden" name="clientId" value={txn.client.id} />
+                  <input type="hidden" name="transactionId" value={txn.id} />
+                  <label className={label}>
+                    Amount (USD) *
+                    <input
+                      name="amount"
+                      inputMode="decimal"
+                      required
+                      placeholder="350.00"
+                      className={`${input} w-28`}
+                    />
+                  </label>
+                  <label className={`${label} min-w-56 flex-1`}>
+                    Description
+                    <input
+                      name="description"
+                      defaultValue={`Transaction coordination: ${txn.propertyAddress}`}
+                      className={input}
+                    />
+                  </label>
+                  <label className={label}>
+                    Payment terms
+                    <input
+                      name="paymentTerms"
+                      list="txn-term-presets"
+                      placeholder="Due at closing"
+                      className={input}
+                    />
+                    <datalist id="txn-term-presets">
+                      {TERM_PRESETS.map((t) => (
+                        <option key={t} value={t} />
+                      ))}
+                    </datalist>
+                  </label>
+                  <label className={label}>
+                    Due
+                    <input name="dueDate" type="date" className={input} />
+                  </label>
+                  <button type="submit" className={btnGhost}>
+                    Issue invoice to {txn.client.name}
+                  </button>
+                </form>
+              ) : (
+                <p className="text-sm text-stone-400">
+                  Attach a client to this transaction to invoice them.
+                </p>
+              )}
             </section>
           )}
           {tab === "payout" && (
