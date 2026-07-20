@@ -112,51 +112,51 @@ enum PlanTier {
 }
 
 model Organization {
-  id                      String                @id
+  id                      String                  @id
   name                    String
-  slug                    String                @unique
+  slug                    String                  @unique
   logo                    String?
   metadata                String?
-  planTier                PlanTier              @default(FREE) @map("plan_tier")
-  seatLimit               Int                   @default(2) @map("seat_limit")
-  aiExtractionsUsed       Int                   @default(0) @map("ai_extractions_used")
+  planTier                PlanTier                @default(FREE) @map("plan_tier")
+  seatLimit               Int                     @default(2) @map("seat_limit")
+  aiExtractionsUsed       Int                     @default(0) @map("ai_extractions_used")
   /// Admin setting: when true, members only see contacts they own.
-  restrictContactsToOwner Boolean               @default(false) @map("restrict_contacts_to_owner")
+  restrictContactsToOwner Boolean                 @default(false) @map("restrict_contacts_to_owner")
   /// Per-tenant Follow Up Boss connection: {enc:{...}, importedAt?, importedCount?}.
   /// API key encrypted with VAULT_MASTER_KEY.
-  fubConfig               Json?                 @map("fub_config")
+  fubConfig               Json?                   @map("fub_config")
   /// Per-tenant Twenty CRM connection: {url, enc:{...}, importedAt?, importedCount?}.
-  twentyConfig            Json?                 @map("twenty_config")
+  twentyConfig            Json?                   @map("twenty_config")
   /// Tenant wording for transaction sides: {buy, sell} — e.g. sell side vs list side.
-  sideLabels              Json?                 @map("side_labels")
+  sideLabels              Json?                   @map("side_labels")
   /// Tenant overrides for automated email templates: {intro:{subject,body}, postClose:{subject,body}}.
-  emailTemplates          Json?                 @map("email_templates")
+  emailTemplates          Json?                   @map("email_templates")
   /// Workspace email signature + global footer: {signature, footer} —
   /// appended to every outgoing branded email.
-  emailSettings           Json?                 @map("email_settings")
+  emailSettings           Json?                   @map("email_settings")
   /// Tenant mini-site at <slug>.<root>: {published, tagline, about, phone, email, services, showRegistration}.
-  siteConfig              Json?                 @map("site_config")
+  siteConfig              Json?                   @map("site_config")
   /// Per-tenant Documenso connection: {url, enc:{ciphertext,iv,tag,wrappedKey,wrapIv,wrapTag,keyVersion}}.
   /// Token encrypted with VAULT_MASTER_KEY; null = use server-wide env default.
-  documensoConfig         Json?                 @map("documenso_config")
+  documensoConfig         Json?                   @map("documenso_config")
   /// Per-tenant document storage: {provider:"S3", endpoint, region, bucket,
   /// accessKeyEnc:{...}, secretKeyEnc:{...}}. Keys encrypted with VAULT_MASTER_KEY.
   /// New documents route here; null = platform default (env S3) or Postgres bytes.
-  storageConfig           Json?                 @map("storage_config")
-  stripeCustomerId        String?               @map("stripe_customer_id")
-  stripeSubscriptionId    String?               @map("stripe_subscription_id")
+  storageConfig           Json?                   @map("storage_config")
+  stripeCustomerId        String?                 @map("stripe_customer_id")
+  stripeSubscriptionId    String?                 @map("stripe_subscription_id")
   /// Last-known Stripe subscription status (active, trialing, past_due, unpaid, canceled).
   /// Mirrored from webhooks for operator visibility; null = never had a paid sub.
-  subscriptionStatus      String?               @map("subscription_status")
+  subscriptionStatus      String?                 @map("subscription_status")
   /// Set when the workspace is locked for a failed renewal. Data is preserved;
   /// the dashboard is gated until payment is updated. Cleared when Stripe reports paid again.
-  billingSuspendedAt      DateTime?             @map("billing_suspended_at")
+  billingSuspendedAt      DateTime?               @map("billing_suspended_at")
   /// Complimentary (comped) plan grant, independent of Stripe. When set (and not
   /// past compExpiresAt), it overrides planTier — a full plan with no checkout/charge.
-  compTier                PlanTier?             @map("comp_tier")
+  compTier                PlanTier?               @map("comp_tier")
   /// When the comp ends; null = no expiry (until an operator revokes it).
-  compExpiresAt           DateTime?             @map("comp_expires_at")
-  createdAt               DateTime              @default(now())
+  compExpiresAt           DateTime?               @map("comp_expires_at")
+  createdAt               DateTime                @default(now())
   members                 Member[]
   invitations             Invitation[]
   clients                 Client[]
@@ -168,6 +168,8 @@ model Organization {
   actionPlanTasks         ActionPlanTask[]
   complianceChecklists    ComplianceChecklist[]
   complianceItems         ComplianceItem[]
+  transactionCompliances  TransactionCompliance[]
+  complianceSlots         ComplianceSlot[]
   documents               Document[]
   extractions             ContractExtraction[]
   extractionFields        ExtractionField[]
@@ -500,48 +502,49 @@ model ContactNote {
 /// The central object: one closing. Belongs to a tenant, optionally to the
 /// client (agent/brokerage) the tenant serves it for.
 model Transaction {
-  id                String               @id @default(uuid())
-  tenantId          String               @map("tenant_id")
-  tenant            Organization         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id                String                  @id @default(uuid())
+  tenantId          String                  @map("tenant_id")
+  tenant            Organization            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   clientId          String?
-  client            Client?              @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  status            TransactionStatus    @default(UNDER_CONTRACT)
-  side              TransactionSide      @default(BUY_SIDE)
-  propertyAddress   String               @map("property_address")
+  client            Client?                 @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  status            TransactionStatus       @default(UNDER_CONTRACT)
+  side              TransactionSide         @default(BUY_SIDE)
+  propertyAddress   String                  @map("property_address")
   city              String?
   state             String?
   zip               String?
-  purchasePrice     Int?                 @map("purchase_price")
-  listPrice         Int?                 @map("list_price")
-  listDate          DateTime?            @map("list_date") @db.Date
-  onMarketDate      DateTime?            @map("on_market_date") @db.Date
-  expireDate        DateTime?            @map("expire_date") @db.Date
-  mlsId             String?              @map("mls_id")
+  purchasePrice     Int?                    @map("purchase_price")
+  listPrice         Int?                    @map("list_price")
+  listDate          DateTime?               @map("list_date") @db.Date
+  onMarketDate      DateTime?               @map("on_market_date") @db.Date
+  expireDate        DateTime?               @map("expire_date") @db.Date
+  mlsId             String?                 @map("mls_id")
   /// Assignment roles: co-agent is a Client (managed agent); TCs are workspace users.
-  coAgentClientId   String?              @map("co_agent_client_id")
-  tc1UserId         String?              @map("tc1_user_id")
-  tc2UserId         String?              @map("tc2_user_id")
+  coAgentClientId   String?                 @map("co_agent_client_id")
+  tc1UserId         String?                 @map("tc1_user_id")
+  tc2UserId         String?                 @map("tc2_user_id")
   /// Commission breakdown: {listPct, buyPct, note} — gross computes from price.
   payout            Json?
   emails            Email[]
   /// Contract-governed date changes awaiting an executed amendment:
   /// {closeDate?: "YYYY-MM-DD", contractDate?: "YYYY-MM-DD"}
-  proposedDates     Json?                @map("proposed_dates")
-  contractDate      DateTime?            @map("contract_date") @db.Date
-  closeDate         DateTime?            @map("close_date") @db.Date
+  proposedDates     Json?                   @map("proposed_dates")
+  contractDate      DateTime?               @map("contract_date") @db.Date
+  closeDate         DateTime?               @map("close_date") @db.Date
   notes             String?
-  customFields      Json?                @map("custom_fields")
-  isSample          Boolean              @default(false)
+  customFields      Json?                   @map("custom_fields")
+  isSample          Boolean                 @default(false)
   parties           TransactionParty[]
   tasks             Task[]
   documents         Document[]
   extractions       ContractExtraction[]
   envelopes         SignatureEnvelope[]
   portalLinks       PortalLink[]
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
   invoices          Invoice[]
   intakeSubmissions IntakeSubmission[]
+  compliance        TransactionCompliance[]
 
   @@index([tenantId, status])
   @@map("transaction")
@@ -820,19 +823,96 @@ model ActionPlanTask {
 /// dated *tasks*; this defines required *documents*. Assigned per Client, so
 /// every file for that client inherits the same rules.
 model ComplianceChecklist {
-  id          String           @id @default(uuid())
-  tenantId    String           @map("tenant_id")
-  tenant      Organization     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id          String                  @id @default(uuid())
+  tenantId    String                  @map("tenant_id")
+  tenant      Organization            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name        String
   description String?
-  isSample    Boolean          @default(false)
+  isSample    Boolean                 @default(false)
   items       ComplianceItem[]
   clients     Client[]
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  instances   TransactionCompliance[]
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
 
   @@index([tenantId])
   @@map("compliance_checklist")
+}
+
+/// Overall state of one compliance round on a transaction.
+enum ComplianceStatus {
+  DRAFT
+  SUBMITTED
+  CHANGES_REQUESTED
+  APPROVED
+}
+
+/// State of a single required document within a compliance round.
+enum ComplianceSlotStatus {
+  MISSING
+  ATTACHED
+  SUBMITTED
+  APPROVED
+  RETURNED
+}
+
+/// A checklist instantiated onto one transaction — a snapshot taken when it was
+/// applied, so later edits to the template never rewrite a file already under
+/// review. A transaction can carry several rounds; the newest is current (KW:
+/// "create a new compliance checklist version for an opportunity").
+model TransactionCompliance {
+  id            String               @id @default(uuid())
+  tenantId      String               @map("tenant_id")
+  tenant        Organization         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactionId String               @map("transaction_id")
+  transaction   Transaction          @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  /// Source template; null if the checklist was later deleted.
+  checklistId   String?              @map("checklist_id")
+  checklist     ComplianceChecklist? @relation(fields: [checklistId], references: [id], onDelete: SetNull)
+  /// Snapshot of the checklist name at instantiation.
+  checklistName String               @map("checklist_name")
+  version       Int                  @default(1)
+  isCurrent     Boolean              @default(true) @map("is_current")
+  status        ComplianceStatus     @default(DRAFT)
+  submittedAt   DateTime?            @map("submitted_at")
+  submittedById String?              @map("submitted_by_id")
+  reviewedAt    DateTime?            @map("reviewed_at")
+  reviewedById  String?              @map("reviewed_by_id")
+  slots         ComplianceSlot[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([tenantId])
+  @@index([transactionId])
+  @@map("transaction_compliance")
+}
+
+/// One required document within a compliance round: which file satisfies it and
+/// where it stands in review.
+model ComplianceSlot {
+  id           String                @id @default(uuid())
+  tenantId     String                @map("tenant_id")
+  tenant       Organization          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  complianceId String                @map("compliance_id")
+  compliance   TransactionCompliance @relation(fields: [complianceId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  required     Boolean               @default(true)
+  sortOrder    Int                   @default(0) @map("sort_order")
+  /// The document satisfying this slot; cleared if that document is deleted.
+  documentId   String?               @map("document_id")
+  document     Document?             @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  status       ComplianceSlotStatus  @default(MISSING)
+  /// Why a reviewer sent it back.
+  reviewNote   String?               @map("review_note")
+  reviewedAt   DateTime?             @map("reviewed_at")
+  reviewedById String?               @map("reviewed_by_id")
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  @@index([tenantId])
+  @@index([complianceId])
+  @@map("compliance_slot")
 }
 
 /// One required document on a compliance checklist.
@@ -909,6 +989,7 @@ model Document {
   replacesId      String?              @map("replaces_id")
   extractions     ContractExtraction[]
   envelopes       SignatureEnvelope[]
+  complianceSlots ComplianceSlot[]
   createdAt       DateTime             @default(now())
 
   @@index([tenantId])

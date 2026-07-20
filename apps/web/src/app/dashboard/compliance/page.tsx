@@ -1,7 +1,10 @@
-import { withTenant } from "@freehold/db";
+import { ComplianceSlotStatus, ComplianceStatus, withTenant } from "@freehold/db";
 import Link from "next/link";
+import { Badge } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
 import { createChecklist } from "@/lib/actions/compliance";
+import { STATUS_LABEL, STATUS_TONE } from "@/lib/compliance";
+import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
 import { btn, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
 
@@ -9,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CompliancePage() {
   const { tenantId } = await requireTenant();
-  const { checklists, clients } = await withTenant(tenantId, async (tx) => ({
+  const { checklists, clients, queue } = await withTenant(tenantId, async (tx) => ({
     checklists: await tx.complianceChecklist.findMany({
       orderBy: { name: "asc" },
       include: { _count: { select: { items: true, clients: true } } },
@@ -23,6 +26,27 @@ export default async function CompliancePage() {
         complianceChecklist: { select: { name: true } },
       },
     }),
+    // Everything a reviewer still owes an answer on: sent up for review, or
+    // sent back and waiting on the submitter. Oldest submission first — the
+    // file that has been waiting longest is the one to work next.
+    queue: await tx.transactionCompliance.findMany({
+      where: {
+        isCurrent: true,
+        status: { in: [ComplianceStatus.SUBMITTED, ComplianceStatus.CHANGES_REQUESTED] },
+      },
+      orderBy: [{ submittedAt: "asc" }],
+      select: {
+        id: true,
+        status: true,
+        version: true,
+        checklistName: true,
+        submittedAt: true,
+        transaction: {
+          select: { id: true, propertyAddress: true, client: { select: { name: true } } },
+        },
+        slots: { select: { required: true, status: true } },
+      },
+    }),
   }));
 
   return (
@@ -34,6 +58,75 @@ export default async function CompliancePage() {
           transaction for them inherits the same rules — or switch compliance off for that client.
         </p>
       </div>
+
+      <section className={card}>
+        <h2 className="mb-1 font-medium">Review queue</h2>
+        <p className="mb-3 text-sm text-stone-500">
+          Files sent up for compliance review, longest-waiting first. Open one to approve each
+          document or send it back with a note.
+        </p>
+        {queue.length === 0 ? (
+          <p className="text-sm text-stone-400">Nothing waiting on review.</p>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr>
+                <th className={th}>File</th>
+                <th className={th}>Client</th>
+                <th className={th}>Status</th>
+                <th className={th}>Awaiting you</th>
+                <th className={th}>Required approved</th>
+                <th className={th}>Submitted</th>
+              </tr>
+            </thead>
+            <tbody>
+              {queue.map((r) => {
+                const awaiting = r.slots.filter(
+                  (s) => s.status === ComplianceSlotStatus.SUBMITTED,
+                ).length;
+                const required = r.slots.filter((s) => s.required);
+                const approved = required.filter(
+                  (s) => s.status === ComplianceSlotStatus.APPROVED,
+                ).length;
+                return (
+                  <tr key={r.id} className={trHover}>
+                    <td className={td}>
+                      <Link
+                        href={`/dashboard/transactions/${r.transaction.id}?tab=compliance`}
+                        className="font-medium text-brand-700 hover:text-brand-600"
+                      >
+                        {r.transaction.propertyAddress}
+                      </Link>
+                      <span className="ml-2 text-xs text-stone-400">
+                        {r.checklistName} · v{r.version}
+                      </span>
+                    </td>
+                    <td className={td}>
+                      {r.transaction.client?.name ?? <span className="text-stone-300">—</span>}
+                    </td>
+                    <td className={td}>
+                      <Badge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</Badge>
+                    </td>
+                    <td className={td}>
+                      {awaiting > 0 ? awaiting : <span className="text-stone-300">—</span>}
+                    </td>
+                    <td className={td}>
+                      {approved} / {required.length}
+                    </td>
+                    <td className={td}>
+                      {r.submittedAt ? (
+                        fmtDate(r.submittedAt)
+                      ) : (
+                        <span className="text-stone-300">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </section>
 
       <details className={card}>
         <summary className={summaryLink}>New checklist</summary>

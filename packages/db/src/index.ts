@@ -68,3 +68,7 @@ export const FieldValueType = PrismaPkg.FieldValueType;
 export type FieldValueType = PrismaPkg.FieldValueType;
 export const InvoiceStatus = PrismaPkg.InvoiceStatus;
 export type InvoiceStatus = PrismaPkg.InvoiceStatus;
+export const ComplianceStatus = PrismaPkg.ComplianceStatus;
+export type ComplianceStatus = PrismaPkg.ComplianceStatus;
+export const ComplianceSlotStatus = PrismaPkg.ComplianceSlotStatus;
+export type ComplianceSlotStatus = PrismaPkg.ComplianceSlotStatus;

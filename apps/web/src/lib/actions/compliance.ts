@@ -1,9 +1,10 @@
 "use server";
 
-import { withTenant } from "@freehold/db";
+import { ComplianceSlotStatus, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logAudit } from "@/lib/audit";
+import { refreshComplianceStatus, startComplianceRound } from "@/lib/compliance";
 import { confirmed, optStr, str } from "@/lib/forms";
 import { requireAdminTenant, requireTenant } from "@/lib/tenant";
 
@@ -105,5 +106,136 @@ export async function setClientCompliance(formData: FormData) {
       : `Compliance switched OFF for ${client.name}`,
   });
   revalidatePath(`/dashboard/clients/${clientId}`);
+  revalidatePath("/dashboard/compliance");
+}
+
+// --- Per-transaction compliance rounds (submit → review → approve/return) ---
+
+/**
+ * Start a compliance round on a transaction from its client's checklist, or
+ * open a fresh version when one already exists. Snapshotting the checklist
+ * means later template edits never rewrite a file already under review.
+ */
+export async function startRound(formData: FormData) {
+  const { tenantId, session } = await requireTenant();
+  const transactionId = str(formData, "transactionId");
+  if (!transactionId) return;
+  const result = await withTenant(tenantId, (tx) =>
+    startComplianceRound(tx, tenantId, transactionId),
+  );
+  if (result.ok) {
+    logAudit({
+      tenantId,
+      actorId: session.user.id,
+      actorEmail: session.user.email,
+      action: "compliance.round_started",
+      summary: "Started a compliance round on a transaction",
+    });
+  }
+  revalidatePath(`/dashboard/transactions/${transactionId}`);
+}
+
+/** Point a checklist slot at one of the transaction's documents (or clear it). */
+export async function attachSlotDocument(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const slotId = str(formData, "slotId");
+  const transactionId = str(formData, "transactionId");
+  const documentId = optStr(formData, "documentId");
+  if (!slotId) return;
+  await withTenant(tenantId, async (tx) => {
+    const slot = await tx.complianceSlot.findUniqueOrThrow({
+      where: { id: slotId },
+      select: { complianceId: true, status: true },
+    });
+    // Attaching (or swapping) a file puts the slot back in the submitter's
+    // court; a previously returned slot becomes ready to send up again.
+    await tx.complianceSlot.update({
+      where: { id: slotId },
+      data: {
+        documentId,
+        status: documentId ? ComplianceSlotStatus.ATTACHED : ComplianceSlotStatus.MISSING,
+        reviewNote: null,
+      },
+    });
+    await refreshComplianceStatus(tx, slot.complianceId);
+  });
+  revalidatePath(`/dashboard/transactions/${transactionId}`);
+}
+
+/** Send the assembled file up for compliance review. */
+export async function submitForReview(formData: FormData) {
+  const { tenantId, session } = await requireTenant();
+  const complianceId = str(formData, "complianceId");
+  const transactionId = str(formData, "transactionId");
+  if (!complianceId) return;
+  await withTenant(tenantId, async (tx) => {
+    // Only attached (or previously returned-then-refilled) slots move up;
+    // already-approved ones stay approved.
+    await tx.complianceSlot.updateMany({
+      where: { complianceId, status: ComplianceSlotStatus.ATTACHED },
+      data: { status: ComplianceSlotStatus.SUBMITTED },
+    });
+    await tx.transactionCompliance.update({
+      where: { id: complianceId },
+      data: { submittedAt: new Date(), submittedById: session.user.id },
+    });
+    await refreshComplianceStatus(tx, complianceId);
+  });
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "compliance.submitted",
+    summary: "Submitted a file for compliance review",
+  });
+  revalidatePath(`/dashboard/transactions/${transactionId}`);
+  revalidatePath("/dashboard/compliance");
+}
+
+/**
+ * Reviewer decision on one document: approve it, or return it with a note
+ * saying what's wrong. Admin/owner only — this is the approval authority.
+ */
+export async function reviewSlot(formData: FormData) {
+  const { tenantId, isAdmin, session } = await requireAdminTenant();
+  if (!isAdmin) return;
+  const slotId = str(formData, "slotId");
+  const transactionId = str(formData, "transactionId");
+  const decision = str(formData, "decision"); // "approve" | "return"
+  const note = optStr(formData, "reviewNote");
+  if (!slotId || (decision !== "approve" && decision !== "return")) return;
+
+  const { slotName, status } = await withTenant(tenantId, async (tx) => {
+    const slot = await tx.complianceSlot.update({
+      where: { id: slotId },
+      data: {
+        status:
+          decision === "approve" ? ComplianceSlotStatus.APPROVED : ComplianceSlotStatus.RETURNED,
+        reviewNote: decision === "return" ? note : null,
+        reviewedAt: new Date(),
+        reviewedById: session.user.id,
+      },
+      select: { name: true, complianceId: true },
+    });
+    const status = await refreshComplianceStatus(tx, slot.complianceId);
+    // Record who last ruled on this round, whichever way it went.
+    await tx.transactionCompliance.update({
+      where: { id: slot.complianceId },
+      data: { reviewedById: session.user.id },
+    });
+    return { slotName: slot.name, status };
+  });
+
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: decision === "approve" ? "compliance.approved" : "compliance.returned",
+    summary:
+      decision === "approve"
+        ? `Approved "${slotName}" — file is now ${status}`
+        : `Returned "${slotName}"${note ? `: ${note}` : ""}`,
+  });
+  revalidatePath(`/dashboard/transactions/${transactionId}`);
   revalidatePath("/dashboard/compliance");
 }

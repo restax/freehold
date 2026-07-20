@@ -5,6 +5,12 @@ import { Badge, EnvelopeBadge, ExtractionBadge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
 import { DictateButton } from "@/components/dictate-button";
 import { VisibilityToggles } from "@/components/visibility-toggles";
+import {
+  attachSlotDocument,
+  reviewSlot,
+  startRound,
+  submitForReview,
+} from "@/lib/actions/compliance";
 import { deleteDocument, replaceDocument, uploadDocument } from "@/lib/actions/documents";
 import { cancelScheduledEmail, sendTransactionEmail } from "@/lib/actions/emails";
 import {
@@ -35,6 +41,11 @@ import {
   withdrawDateChange,
 } from "@/lib/actions/transactions";
 import { emailContextForTransaction, transactionMergeContext } from "@/lib/auto-emails";
+import {
+  SLOT_LABEL as COMPLIANCE_SLOT_LABEL,
+  STATUS_LABEL as COMPLIANCE_STATUS_LABEL,
+  STATUS_TONE as COMPLIANCE_STATUS_TONE,
+} from "@/lib/compliance";
 import { emailEnabled } from "@/lib/email";
 import { EMAIL_MERGE_CODES, renderMerge } from "@/lib/email-template";
 import { suggestForTask } from "@/lib/email-template-library";
@@ -43,7 +54,7 @@ import { extractionCreditState } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
 import { PRIORITY_BADGE, PRIORITY_LABEL } from "@/lib/priority";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
-import { requireTenant } from "@/lib/tenant";
+import { getMemberRole, requireTenant } from "@/lib/tenant";
 import { btn, btnGhost, card, input, label } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -55,6 +66,7 @@ const ROLES = Object.values(PartyRole);
 const TXN_TABS = [
   ["tasks", "Tasks"],
   ["attachments", "Attachments"],
+  ["compliance", "Compliance"],
   ["dates", "Dates & details"],
   ["participants", "Participants"],
   ["emails", "Emails"],
@@ -100,6 +112,15 @@ export default async function TransactionDetailPage({
             replacesId: true,
           },
         },
+        compliance: {
+          orderBy: { version: "desc" },
+          include: {
+            slots: {
+              orderBy: { sortOrder: "asc" },
+              include: { document: { select: { id: true, filename: true } } },
+            },
+          },
+        },
         extractions: {
           orderBy: { createdAt: "desc" },
           include: { _count: { select: { fields: true } } },
@@ -141,6 +162,12 @@ export default async function TransactionDetailPage({
     }
     return out;
   };
+
+  // Compliance: the current round drives the tab; older rounds stay as history.
+  const currentRound = txn.compliance.find((c) => c.isCurrent) ?? null;
+  const priorRounds = txn.compliance.filter((c) => !c.isCurrent);
+  const reviewerRole = await getMemberRole(tenantId, session.user.id);
+  const canReview = reviewerRole === "owner" || reviewerRole === "admin";
 
   const portalBase = await portalOrigin(tenantId);
   const aiCredits = await extractionCreditState(tenantId);
@@ -705,6 +732,195 @@ export default async function TransactionDetailPage({
                 )}
               </section>
             </>
+          )}
+          {tab === "compliance" && (
+            <section className={card}>
+              <div className="mb-3 flex flex-wrap items-center gap-3">
+                <h2 className="font-medium">Compliance</h2>
+                {currentRound && (
+                  <>
+                    <Badge tone={COMPLIANCE_STATUS_TONE[currentRound.status]}>
+                      {COMPLIANCE_STATUS_LABEL[currentRound.status]}
+                    </Badge>
+                    <span className="text-xs text-stone-400">
+                      {currentRound.checklistName} · v{currentRound.version}
+                    </span>
+                  </>
+                )}
+              </div>
+
+              {!currentRound ? (
+                <>
+                  <p className="mb-3 text-sm text-stone-500">
+                    {txn.client
+                      ? txn.client.complianceEnabled
+                        ? "Start a compliance round to pull in this client's required documents and send the file up for review."
+                        : `Compliance is switched off for ${txn.client.name}. Turn it on from their profile to require documents on their files.`
+                      : "Attach a client to this transaction to use their compliance checklist."}
+                  </p>
+                  {txn.client?.complianceEnabled && (
+                    <form action={startRound}>
+                      <input type="hidden" name="transactionId" value={txn.id} />
+                      <button type="submit" className={btn}>
+                        Start compliance round
+                      </button>
+                    </form>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="mb-4 text-sm text-stone-500">
+                    Attach a file to each required document, then submit the whole file for review.
+                    A reviewer approves each one or sends it back with a note.
+                  </p>
+                  <ul className="mb-4 flex flex-col">
+                    {currentRound.slots.map((slot) => (
+                      <li key={slot.id} className="border-b border-stone-100 py-3 last:border-0">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="font-medium">{slot.name}</span>
+                          {slot.required ? (
+                            <Badge tone="danger">required</Badge>
+                          ) : (
+                            <Badge tone="neutral">optional</Badge>
+                          )}
+                          <Badge
+                            tone={
+                              slot.status === "APPROVED"
+                                ? "success"
+                                : slot.status === "RETURNED"
+                                  ? "danger"
+                                  : slot.status === "SUBMITTED"
+                                    ? "progress"
+                                    : "neutral"
+                            }
+                          >
+                            {COMPLIANCE_SLOT_LABEL[slot.status]}
+                          </Badge>
+                          {slot.description && (
+                            <span className="text-xs text-stone-400">{slot.description}</span>
+                          )}
+                        </div>
+
+                        {slot.reviewNote && (
+                          <p className="mt-1.5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+                            Returned: {slot.reviewNote}
+                          </p>
+                        )}
+
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <form
+                            action={attachSlotDocument}
+                            className="flex flex-wrap items-center gap-2"
+                          >
+                            <input type="hidden" name="slotId" value={slot.id} />
+                            <input type="hidden" name="transactionId" value={txn.id} />
+                            <select
+                              name="documentId"
+                              defaultValue={slot.documentId ?? ""}
+                              className={input}
+                            >
+                              <option value="">— no file attached —</option>
+                              {currentDocs.map((d) => (
+                                <option key={d.id} value={d.id}>
+                                  {d.filename}
+                                </option>
+                              ))}
+                            </select>
+                            <button type="submit" className={btnGhost}>
+                              Save
+                            </button>
+                          </form>
+                          {slot.document && (
+                            <a
+                              href={`/api/documents/${slot.document.id}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs text-brand-600 hover:underline"
+                            >
+                              open {slot.document.filename}
+                            </a>
+                          )}
+                        </div>
+
+                        {canReview && slot.status === "SUBMITTED" && (
+                          <form
+                            action={reviewSlot}
+                            className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
+                          >
+                            <input type="hidden" name="slotId" value={slot.id} />
+                            <input type="hidden" name="transactionId" value={txn.id} />
+                            <label className={`${label} min-w-56 flex-1`}>
+                              Note (required when sending back)
+                              <input
+                                name="reviewNote"
+                                className={input}
+                                placeholder="Page 4 is missing an initial"
+                              />
+                            </label>
+                            <button
+                              type="submit"
+                              name="decision"
+                              value="approve"
+                              className={btnGhost}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="submit"
+                              name="decision"
+                              value="return"
+                              className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50"
+                            >
+                              Return
+                            </button>
+                          </form>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    {currentRound.status !== "APPROVED" && (
+                      <form action={submitForReview}>
+                        <input type="hidden" name="complianceId" value={currentRound.id} />
+                        <input type="hidden" name="transactionId" value={txn.id} />
+                        <button type="submit" className={btn}>
+                          Submit for review
+                        </button>
+                      </form>
+                    )}
+                    <form action={startRound}>
+                      <input type="hidden" name="transactionId" value={txn.id} />
+                      <button type="submit" className={btnGhost}>
+                        Start a new version
+                      </button>
+                    </form>
+                    {currentRound.submittedAt && (
+                      <span className="text-xs text-stone-400">
+                        Submitted {fmtDate(currentRound.submittedAt)}
+                      </span>
+                    )}
+                  </div>
+
+                  {priorRounds.length > 0 && (
+                    <details className="mt-4">
+                      <summary className="cursor-pointer select-none text-xs text-stone-500 hover:text-stone-700">
+                        {priorRounds.length} earlier version{priorRounds.length === 1 ? "" : "s"}
+                      </summary>
+                      <ul className="mt-1.5 flex flex-col gap-1 border-l-2 border-stone-200 pl-3">
+                        {priorRounds.map((r) => (
+                          <li key={r.id} className="text-xs text-stone-500">
+                            v{r.version} · {r.checklistName} · {COMPLIANCE_STATUS_LABEL[r.status]} ·{" "}
+                            {r.slots.filter((s) => s.status === "APPROVED").length}/{r.slots.length}{" "}
+                            approved
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </>
+              )}
+            </section>
           )}
           {tab === "dates" && (
             <>
