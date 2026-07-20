@@ -477,6 +477,13 @@ export default async function LandingPage() {
             aria-hidden
             className="absolute inset-0 bg-gradient-to-t from-stone-950/85 via-stone-950/30 to-transparent"
           />
+          {/* Second scrim from the left: the headline sits over the busy half
+              of these photos, and the vertical gradient alone isn't enough to
+              keep white text legible against neon and clutter. */}
+          <div
+            aria-hidden
+            className="absolute inset-0 bg-gradient-to-r from-stone-950/70 via-stone-950/20 to-transparent"
+          />
           <div className="relative mx-auto flex min-h-[420px] max-w-6xl flex-col justify-end px-4 pb-14 pt-24 sm:px-6 lg:min-h-[520px] lg:pb-16">
             <h2 className="max-w-xl text-4xl font-semibold tracking-tight text-white md:text-5xl">
               Age cheese, <em className="italic">not</em> your software.
@@ -507,9 +514,16 @@ export default async function LandingPage() {
             aria-hidden
             className="absolute inset-0 bg-gradient-to-t from-stone-950/85 via-stone-950/30 to-transparent"
           />
+          {/* Second scrim from the left: the headline sits over the busy half
+              of these photos, and the vertical gradient alone isn't enough to
+              keep white text legible against neon and clutter. */}
+          <div
+            aria-hidden
+            className="absolute inset-0 bg-gradient-to-r from-stone-950/70 via-stone-950/20 to-transparent"
+          />
           <div className="relative mx-auto flex min-h-[420px] max-w-6xl flex-col justify-end px-4 pb-14 pt-24 sm:px-6 lg:min-h-[520px] lg:pb-16">
             <h2 className="max-w-xl text-4xl font-semibold tracking-tight text-white md:text-5xl">
-              2006: a floor of engineers. <em className="italic">2026:</em> one guy and an API key.
+              2006: a floor of engineers. <em className="italic">2026:</em> one guy and an API.
             </h2>
             <p className="mt-4 max-w-md text-sm leading-relaxed text-stone-200">
               Software got cheaper to build. Most subscriptions never got cheaper to buy — ours
