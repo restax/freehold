@@ -11,7 +11,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const doc = await withTenant(tenantId, (tx) =>
     tx.document.findUnique({
       where: { id },
-      select: { filename: true, contentType: true, data: true, storageKey: true },
+      select: {
+        filename: true,
+        contentType: true,
+        data: true,
+        storageKey: true,
+        storageProvider: true,
+        tenantId: true,
+      },
     }),
   );
   if (!doc) return new Response("Not found", { status: 404 });

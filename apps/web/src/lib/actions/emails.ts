@@ -29,7 +29,13 @@ export async function sendTransactionEmail(formData: FormData) {
     const docs = await withTenant(tenantId, (tx) =>
       tx.document.findMany({
         where: { id: { in: attachDocIds }, transactionId },
-        select: { filename: true, data: true, storageKey: true },
+        select: {
+          filename: true,
+          data: true,
+          storageKey: true,
+          storageProvider: true,
+          tenantId: true,
+        },
       }),
     );
     let total = 0;

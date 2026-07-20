@@ -40,6 +40,8 @@ export async function sendForSignature(formData: FormData) {
         filename: true,
         data: true,
         storageKey: true,
+        storageProvider: true,
+        tenantId: true,
         transactionId: true,
         transaction: { select: { client: { select: { esignProvider: true } } } },
       },

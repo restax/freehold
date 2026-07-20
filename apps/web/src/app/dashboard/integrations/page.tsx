@@ -7,10 +7,12 @@ import { CopyButton } from "@/components/copy-button";
 import { createSkillKey, readNewSkillKey } from "@/lib/actions/api-keys";
 import { connectDocumenso, disconnectDocumenso } from "@/lib/actions/esign-config";
 import { connectFub, disconnectFub, importFubContacts } from "@/lib/actions/fub";
+import { connectStorage, disconnectStorage } from "@/lib/actions/storage-config";
 import { connectTwenty, disconnectTwenty, importTwentyContacts } from "@/lib/actions/twenty";
 import { emailEnabled } from "@/lib/email";
 import { documensoStatus } from "@/lib/esign-config";
 import { fubStatus } from "@/lib/fub";
+import { storageStatus } from "@/lib/storage-config";
 import { requireAdminTenant } from "@/lib/tenant";
 import { twentyStatus } from "@/lib/twenty";
 import { btn, btnGhost, card, input, label as labelCls } from "@/lib/ui";
@@ -46,8 +48,13 @@ Endpoints:
 When I ask what's closing, what's due, or how a client is doing, fetch the data and answer concisely. Never repeat the API key back to me.`;
 }
 
-export default async function IntegrationsPage() {
+export default async function IntegrationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ storageOk?: string; storageError?: string }>;
+}) {
   const { tenantId, isAdmin } = await requireAdminTenant();
+  const { storageOk, storageError } = await searchParams;
   const newSkillKey = await readNewSkillKey();
 
   const [apiKeys, webhooks] = await Promise.all([
@@ -61,6 +68,7 @@ export default async function IntegrationsPage() {
   const documenso = await documensoStatus(tenantId);
   const fub = await fubStatus(tenantId);
   const twenty = await twentyStatus(tenantId);
+  const storage = await storageStatus(tenantId);
 
   const cards: Array<{
     name: string;
@@ -120,6 +128,66 @@ export default async function IntegrationsPage() {
             <label className={labelCls}>
               API token
               <input name="token" type="password" required placeholder="api_…" className={input} />
+            </label>
+            <button type="submit" className={`${btn} self-start`}>
+              Verify &amp; connect
+            </button>
+          </form>
+        ),
+    },
+    {
+      name: "Document storage",
+      mono: "St",
+      tone: (storage.source === "tenant" ? "active" : "included") as Tone,
+      status:
+        storage.source === "tenant"
+          ? "Your bucket"
+          : storage.source === "platform"
+            ? "Platform storage"
+            : "Built-in",
+      body:
+        storage.source === "tenant"
+          ? `New documents are written to your own bucket "${storage.bucket}". Files stored before you connected stay where they were. Everything is encrypted at rest.`
+          : "By default Freehold stores your documents, encrypted at rest. Connect your own S3-compatible bucket — AWS S3, Cloudflare R2, Backblaze B2, Wasabi, or MinIO — to keep every new file in storage you control.",
+      extra:
+        storage.source === "tenant" ? (
+          <form action={disconnectStorage} className="mt-2">
+            <p className="mb-1.5 text-xs text-stone-400">
+              Disconnecting leaves files already in this bucket readable only while it's connected —
+              Freehold keeps no second copy.
+            </p>
+            <button type="submit" className="text-xs text-stone-400 hover:text-red-600">
+              Disconnect
+            </button>
+          </form>
+        ) : (
+          <form action={connectStorage} className="mt-3 flex flex-col gap-2">
+            <label className={labelCls}>
+              Endpoint
+              <input
+                name="endpoint"
+                required
+                placeholder="https://s3.us-east-1.amazonaws.com"
+                className={input}
+              />
+            </label>
+            <div className="flex gap-2">
+              <label className={`${labelCls} flex-1`}>
+                Bucket
+                <input name="bucket" required placeholder="my-firm-docs" className={input} />
+              </label>
+              <label className={`${labelCls} w-28`}>
+                Region
+                <input name="region" placeholder="us-east-1" className={input} />
+              </label>
+            </div>
+            <label className={labelCls}>
+              Access key ID
+              <input name="accessKey" required className={input} />
+            </label>
+            <label className={labelCls}>
+              Secret access key
+              <input name="secretKey" type="password" required className={input} />
             </label>
             <button type="submit" className={`${btn} self-start`}>
               Verify &amp; connect
@@ -346,6 +414,15 @@ export default async function IntegrationsPage() {
           — requests usually ship in days.
         </p>
       </div>
+
+      {storageOk && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          Storage connected — new documents will be written to your bucket.
+        </p>
+      )}
+      {storageError && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{storageError}</p>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         {cards.map((c) => (

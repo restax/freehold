@@ -88,6 +88,7 @@ export async function generateDocument(formData: FormData) {
         sizeBytes: pdf.length,
         data: stored.data,
         storageKey: stored.storageKey,
+        storageProvider: stored.storageProvider,
       },
     }),
   );

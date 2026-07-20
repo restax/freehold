@@ -23,7 +23,13 @@ export async function GET(
         propertyAddress: true,
         documents: {
           where: { visibleToAgent: true },
-          select: { filename: true, data: true, storageKey: true },
+          select: {
+            filename: true,
+            data: true,
+            storageKey: true,
+            storageProvider: true,
+            tenantId: true,
+          },
         },
       },
     }),

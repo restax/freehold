@@ -31,6 +31,7 @@ export async function uploadDocument(formData: FormData) {
         sizeBytes: file.size,
         data: stored.data,
         storageKey: stored.storageKey,
+        storageProvider: stored.storageProvider,
       },
     }),
   );
@@ -50,8 +51,16 @@ export async function deleteDocument(formData: FormData) {
   const transactionId = str(formData, "transactionId");
   if (!id || !confirmed(formData)) return;
   const doc = await withTenant(tenantId, (tx) =>
-    tx.document.delete({ where: { id }, select: { storageKey: true, data: true } }),
+    tx.document.delete({
+      where: { id },
+      select: { storageKey: true, data: true, storageProvider: true, tenantId: true },
+    }),
   );
-  await deleteObject({ storageKey: doc.storageKey, data: null });
+  await deleteObject({
+    storageKey: doc.storageKey,
+    data: null,
+    storageProvider: doc.storageProvider,
+    tenantId: doc.tenantId,
+  });
   revalidatePath(`/dashboard/transactions/${transactionId}`);
 }

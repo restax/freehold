@@ -86,7 +86,15 @@ export async function runExtraction(formData: FormData) {
   const { extraction, doc } = await withTenant(tenantId, async (tx) => {
     const doc = await tx.document.findUniqueOrThrow({
       where: { id: documentId },
-      select: { id: true, transactionId: true, data: true, storageKey: true, contentType: true },
+      select: {
+        id: true,
+        transactionId: true,
+        data: true,
+        storageKey: true,
+        contentType: true,
+        storageProvider: true,
+        tenantId: true,
+      },
     });
     const extraction = await tx.contractExtraction.create({
       data: {
@@ -149,8 +157,9 @@ export async function createFromContract(formData: FormData) {
         sizeBytes: file.size,
         data: stored.data,
         storageKey: stored.storageKey,
+        storageProvider: stored.storageProvider,
       },
-      select: { id: true, data: true, storageKey: true },
+      select: { id: true, data: true, storageKey: true, storageProvider: true, tenantId: true },
     });
     const extraction = await tx.contractExtraction.create({
       data: {

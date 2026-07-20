@@ -71,6 +71,7 @@ export async function submitIntake(formData: FormData) {
           sizeBytes: u.sizeBytes,
           data: u.stored.data,
           storageKey: u.stored.storageKey,
+          storageProvider: u.stored.storageProvider,
           visibleToClient: true,
           visibleToAgent: true,
         },

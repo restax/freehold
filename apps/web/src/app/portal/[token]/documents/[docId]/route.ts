@@ -25,6 +25,8 @@ export async function GET(
         contentType: true,
         data: true,
         storageKey: true,
+        storageProvider: true,
+        tenantId: true,
         transactionId: true,
         visibleToAgent: true,
         visibleToClient: true,

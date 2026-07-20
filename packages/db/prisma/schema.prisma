@@ -139,6 +139,10 @@ model Organization {
   /// Per-tenant Documenso connection: {url, enc:{ciphertext,iv,tag,wrappedKey,wrapIv,wrapTag,keyVersion}}.
   /// Token encrypted with VAULT_MASTER_KEY; null = use server-wide env default.
   documensoConfig         Json?                @map("documenso_config")
+  /// Per-tenant document storage: {provider:"S3", endpoint, region, bucket,
+  /// accessKeyEnc:{...}, secretKeyEnc:{...}}. Keys encrypted with VAULT_MASTER_KEY.
+  /// New documents route here; null = platform default (env S3) or Postgres bytes.
+  storageConfig           Json?                @map("storage_config")
   stripeCustomerId        String?              @map("stripe_customer_id")
   stripeSubscriptionId    String?              @map("stripe_subscription_id")
   /// Last-known Stripe subscription status (active, trialing, past_due, unpaid, canceled).
@@ -845,6 +849,9 @@ model Document {
   sizeBytes       Int                  @map("size_bytes")
   data            Bytes?
   storageKey      String?              @map("storage_key")
+  /// Which driver holds the bytes: DB | S3 (platform) | TENANT_S3. Null on rows
+  /// predating per-tenant storage — reads infer from data/storageKey then.
+  storageProvider String?              @map("storage_provider")
   visibleToAgent  Boolean              @default(true) @map("visible_to_agent")
   visibleToClient Boolean              @default(true) @map("visible_to_client")
   extractions     ContractExtraction[]
