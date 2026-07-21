@@ -2,14 +2,17 @@ import {
   AddressBook,
   BuildingOffice,
   ChartLineUp,
+  CheckCircle,
   EnvelopeSimple,
   FileText,
   GitBranch,
   ListChecks,
   LockKey,
+  MagnifyingGlass,
   ShieldCheck,
   Signature,
   Sparkle,
+  UploadSimple,
   UsersThree,
 } from "@phosphor-icons/react/dist/ssr";
 import Image from "next/image";
@@ -41,6 +44,42 @@ const CTA_PRIMARY = "Start free";
  * review screen with illustrative sample values; it is a styled mock of
  * our own UI, not a screenshot of anyone else's.
  */
+
+const VALUE_STRIP = [
+  {
+    icon: Sparkle,
+    text: "No data entry. AI reads the contract and builds the file, every field page-cited.",
+    cls: "border-stone-200/70 bg-white",
+  },
+  {
+    icon: GitBranch,
+    text: "The whole product's code is public, not a crippled core.",
+    cls: "border-brand-600/20 bg-brand-50/70",
+  },
+  {
+    icon: ShieldCheck,
+    text: "Every date, document, and credential reveal lands in the audit log.",
+    cls: "border-stone-200/70 bg-white",
+  },
+];
+
+const EXTRACTION_STEPS = [
+  {
+    icon: UploadSimple,
+    title: "Upload",
+    body: "Drop in the signed PDF. That's the last time you type anything the contract already says.",
+  },
+  {
+    icon: MagnifyingGlass,
+    title: "Review with citations",
+    body: "Each extracted field shows the exact page and clause it came from. Low-confidence fields are flagged, never silently filled.",
+  },
+  {
+    icon: CheckCircle,
+    title: "Apply to the file",
+    body: "Confirmed dates populate the transaction and create every dated deadline task in your action plan. The system does the chasing from there.",
+  },
+];
 
 const BENTO = [
   {
@@ -180,21 +219,18 @@ export default async function LandingPage() {
 
       {/* Value strip */}
       <div className="border-y border-stone-200/70 bg-white">
-        <div className="mx-auto grid max-w-6xl gap-5 px-4 py-6 text-sm text-stone-600 sm:grid-cols-3 sm:px-6">
-          <p className="flex gap-3">
-            <Sparkle size={20} aria-hidden className="mt-0.5 shrink-0 text-brand-600" />
-            <span>
-              No data entry. AI reads the contract and builds the file, every field page-cited.
-            </span>
-          </p>
-          <p className="flex gap-3">
-            <GitBranch size={20} aria-hidden className="mt-0.5 shrink-0 text-brand-600" />
-            <span>The whole product's code is public, not a crippled core.</span>
-          </p>
-          <p className="flex gap-3">
-            <ShieldCheck size={20} aria-hidden className="mt-0.5 shrink-0 text-brand-600" />
-            <span>Every date, document, and credential reveal lands in the audit log.</span>
-          </p>
+        <div className="mx-auto grid max-w-6xl gap-4 px-4 py-8 sm:grid-cols-3 sm:px-6">
+          {VALUE_STRIP.map(({ icon: Icon, text, cls }) => (
+            <div
+              key={text}
+              className={`flex items-start gap-3 rounded-xl border p-4 shadow-xs ${cls}`}
+            >
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-600/10 text-brand-700">
+                <Icon size={18} weight="regular" aria-hidden />
+              </span>
+              <p className="pt-1 text-sm leading-relaxed text-stone-600">{text}</p>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -231,28 +267,24 @@ export default async function LandingPage() {
               confidence level. Nothing enters the record until a human confirms it.
             </p>
           </div>
-          <div className="flex flex-col gap-8">
-            <div className="border-l-[3px] border-brand-600 pl-5">
-              <h3 className="font-display text-lg font-bold">Upload</h3>
-              <p className="mt-1.5 leading-relaxed text-stone-600">
-                Drop in the signed PDF. That's the last time you type anything the contract already
-                says.
-              </p>
-            </div>
-            <div className="border-l-[3px] border-brand-600 pl-5">
-              <h3 className="font-display text-lg font-bold">Review with citations</h3>
-              <p className="mt-1.5 leading-relaxed text-stone-600">
-                Each extracted field shows the exact page and clause it came from. Low-confidence
-                fields are flagged, never silently filled.
-              </p>
-            </div>
-            <div className="border-l-[3px] border-brand-600 pl-5">
-              <h3 className="font-display text-lg font-bold">Apply to the file</h3>
-              <p className="mt-1.5 leading-relaxed text-stone-600">
-                Confirmed dates populate the transaction and create every dated deadline task in
-                your action plan. The system does the chasing from there.
-              </p>
-            </div>
+          <div className="flex flex-col">
+            {EXTRACTION_STEPS.map(({ icon: Icon, title, body }, i) => (
+              <div key={title} className="relative flex gap-5 pb-8 last:pb-0">
+                {i < EXTRACTION_STEPS.length - 1 && (
+                  <span
+                    aria-hidden
+                    className="absolute left-[19px] top-10 h-[calc(100%-1.5rem)] w-px bg-stone-200"
+                  />
+                )}
+                <span className="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-600 text-white">
+                  <Icon size={18} weight="bold" aria-hidden />
+                </span>
+                <div className="pt-1.5">
+                  <h3 className="font-display text-lg font-bold">{title}</h3>
+                  <p className="mt-1.5 leading-relaxed text-stone-600">{body}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
