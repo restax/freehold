@@ -240,10 +240,20 @@ async def entrypoint(ctx: JobContext) -> None:
         llm=anthropic.LLM(model=LLM_MODEL),
         # Passed explicitly: the plugin looks for ELEVEN_API_KEY, but the repo
         # names it ELEVENLABS_API_KEY like every other vendor key.
+        #
+        # chunk_length_schedule disables the plugin's default auto_mode, which
+        # flushes to ElevenLabs once per sentence — each flush starts a new
+        # streaming "generation," and the seam between generations is audible
+        # as a small stutter on any reply longer than one sentence. Buffering
+        # by character count instead (ElevenLabs' own recommended schedule)
+        # sends one continuous stream for a short reply and only a couple of
+        # smooth flushes for a longer one — first-word latency is essentially
+        # unchanged since the first chunk is still just ~120 characters.
         tts=elevenlabs.TTS(
             voice_id=VOICE_ID,
             model="eleven_turbo_v2_5",
             api_key=os.environ["ELEVENLABS_API_KEY"],
+            chunk_length_schedule=[120, 160, 250, 290],
         ),
         # Voice answers should resolve fast; a long tool chain means a long
         # silence, and every step costs money.
