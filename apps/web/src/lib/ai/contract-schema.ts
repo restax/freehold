@@ -134,7 +134,7 @@ export interface FlatField {
   page: number | null;
   quote: string | null;
   confidence: "HIGH" | "MEDIUM" | "LOW";
-  target: "TRANSACTION_FIELD" | "TASK" | "CUSTOM_FIELD";
+  target: "TRANSACTION_FIELD" | "TASK" | "CUSTOM_FIELD" | "PARTY";
   sortOrder: number;
 }
 
@@ -152,7 +152,9 @@ const SCALAR_DEFS: Array<{
   { key: "close_date", label: "Closing date", valueType: "DATE" },
 ];
 
-const PARTY_LABEL: Record<string, string> = {
+/** Friendly labels for the contract-party roles the model returns. Shared by
+ *  the extractor and the transaction's locked Parties panel. */
+export const PARTY_LABEL: Record<string, string> = {
   buyer: "Buyer",
   seller: "Seller",
   buyer_agent: "Buyer's agent",
@@ -162,6 +164,16 @@ const PARTY_LABEL: Record<string, string> = {
   attorney: "Attorney",
   other: "Other party",
 };
+
+export function partyLabel(role: string): string {
+  return PARTY_LABEL[role] ?? "Other party";
+}
+
+/** One entry in a transaction's locked contract-parties panel. */
+export interface ContractParty {
+  role: string;
+  value: string;
+}
 
 const CONF: Record<Confidence, FlatField["confidence"]> = {
   high: "HIGH",
@@ -215,7 +227,7 @@ export function flattenExtraction(result: ContractExtractionResult): FlatField[]
       page: p.page,
       quote: p.quote,
       confidence: CONF[p.confidence] ?? "LOW",
-      target: "CUSTOM_FIELD",
+      target: "PARTY",
       sortOrder: order++,
     });
   }

@@ -24,6 +24,7 @@ const TARGET_LABEL: Record<string, string> = {
   TRANSACTION_FIELD: "Updates transaction",
   TASK: "Creates dated task",
   CUSTOM_FIELD: "Saved as custom field",
+  PARTY: "Saved as party",
 };
 
 const PDF_WIDTH = 540;

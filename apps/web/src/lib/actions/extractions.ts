@@ -3,7 +3,11 @@
 import { ExtractionStatus, FieldTarget, TransactionStatus, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { flattenExtraction, transactionUpdateFor } from "@/lib/ai/contract-schema";
+import {
+  type ContractParty,
+  flattenExtraction,
+  transactionUpdateFor,
+} from "@/lib/ai/contract-schema";
 import { EXTRACTION_MODEL, extractContract } from "@/lib/ai/extract";
 import { str } from "@/lib/forms";
 import { extractionCreditState, recordExtractionUse, transactionLimit } from "@/lib/plans";
@@ -201,7 +205,10 @@ export async function applyExtraction(formData: FormData) {
   const transactionId = await withTenant(tenantId, async (tx) => {
     const extraction = await tx.contractExtraction.findUniqueOrThrow({
       where: { id: extractionId },
-      include: { fields: true, transaction: { select: { id: true, customFields: true } } },
+      include: {
+        fields: true,
+        transaction: { select: { id: true, customFields: true, contractParties: true } },
+      },
     });
     const chosen = extraction.fields.filter((f) => selectedIds.includes(f.id));
 
@@ -209,6 +216,12 @@ export async function applyExtraction(formData: FormData) {
     const customFields = {
       ...((extraction.transaction.customFields as Record<string, string> | null) ?? {}),
     };
+    // Parties land in their own locked panel (an ordered role/value list), not
+    // in customFields — so two same-role parties (buyer + seller attorney)
+    // both survive instead of one clobbering the other.
+    const parties: ContractParty[] = [
+      ...((extraction.transaction.contractParties as ContractParty[] | null) ?? []),
+    ];
     let maxSort = 0;
 
     for (const field of chosen) {
@@ -218,6 +231,13 @@ export async function applyExtraction(formData: FormData) {
         else customFields[field.label] = field.value; // unparseable → still captured
       } else if (field.target === FieldTarget.CUSTOM_FIELD) {
         customFields[field.label] = field.value;
+      } else if (field.target === FieldTarget.PARTY) {
+        const role = field.key.startsWith("party:") ? field.key.slice("party:".length) : "other";
+        const value = field.value.trim();
+        // Dedupe on re-apply, but keep distinct people who share a role.
+        if (value && !parties.some((p) => p.role === role && p.value === value)) {
+          parties.push({ role, value });
+        }
       }
     }
 
@@ -247,7 +267,11 @@ export async function applyExtraction(formData: FormData) {
 
     await tx.transaction.update({
       where: { id: extraction.transactionId },
-      data: { ...columnUpdates, customFields },
+      data: {
+        ...columnUpdates,
+        customFields,
+        contractParties: parties as unknown as Record<string, string>[],
+      },
     });
     await tx.extractionField.updateMany({
       where: { id: { in: chosen.map((f) => f.id) } },

@@ -37,15 +37,18 @@ import {
 } from "@/lib/actions/tasks";
 import { generateDocument } from "@/lib/actions/templates";
 import {
+  addTransactionParty,
   confirmDateChange,
   deleteTransaction,
   proposeDateChange,
   removeCustomField,
+  removeTransactionParty,
   setCustomField,
   updatePayout,
   updateTransaction,
   withdrawDateChange,
 } from "@/lib/actions/transactions";
+import { type ContractParty, PARTY_LABEL, partyLabel } from "@/lib/ai/contract-schema";
 import { emailContextForTransaction, transactionMergeContext } from "@/lib/auto-emails";
 import {
   SLOT_LABEL as COMPLIANCE_SLOT_LABEL,
@@ -263,6 +266,7 @@ export default async function TransactionDetailPage({
   }
 
   const customFields = (txn.customFields as Record<string, string> | null) ?? {};
+  const contractParties = (txn.contractParties as ContractParty[] | null) ?? [];
   const today = fmtDate(new Date());
   const openCount = txn.tasks.filter((t) => t.status === "OPEN").length;
 
@@ -322,6 +326,64 @@ export default async function TransactionDetailPage({
                 </div>
               </dl>
             </details>
+          </section>
+          <section className={card}>
+            <h2 className="mb-1 font-medium">Parties</h2>
+            <p className="mb-3 text-xs text-stone-400">
+              Pulled from the contract, or add your own. Permanent — these won't be dropped like a
+              custom field.
+            </p>
+            {contractParties.length > 0 ? (
+              <ul className="mb-3 flex flex-col divide-y divide-stone-100">
+                {contractParties.map((p) => (
+                  <li
+                    key={`${p.role}:${p.value}`}
+                    className="group flex items-start gap-2 py-1.5 text-sm"
+                  >
+                    <span className="w-24 shrink-0 text-xs font-medium uppercase tracking-wide text-stone-400">
+                      {partyLabel(p.role)}
+                    </span>
+                    <span className="min-w-0 flex-1 text-stone-800">{p.value}</span>
+                    <form action={removeTransactionParty}>
+                      <input type="hidden" name="id" value={txn.id} />
+                      <input type="hidden" name="role" value={p.role} />
+                      <input type="hidden" name="value" value={p.value} />
+                      <button
+                        type="submit"
+                        aria-label={`Remove ${partyLabel(p.role)}`}
+                        className="text-xs text-stone-300 opacity-0 transition hover:text-red-600 group-hover:opacity-100"
+                      >
+                        ✕
+                      </button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mb-3 text-sm text-stone-400">
+                No parties yet — they fill in when you apply a contract extraction.
+              </p>
+            )}
+            <form action={addTransactionParty} className="flex flex-wrap items-end gap-2">
+              <input type="hidden" name="id" value={txn.id} />
+              <label className={label}>
+                Role
+                <select name="role" defaultValue="buyer" className={input}>
+                  {Object.entries(PARTY_LABEL).map(([role, lbl]) => (
+                    <option key={role} value={role}>
+                      {lbl}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={label}>
+                Name
+                <input name="value" placeholder="Jane Buyer" className={input} />
+              </label>
+              <button type="submit" className={btnGhost}>
+                Add party
+              </button>
+            </form>
           </section>
           <section className={card}>
             <h2 className="mb-1 font-medium">Custom fields</h2>

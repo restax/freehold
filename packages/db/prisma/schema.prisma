@@ -1029,6 +1029,11 @@ model Transaction {
   closeDate         DateTime?               @map("close_date") @db.Date
   notes             String?
   customFields      Json?                   @map("custom_fields")
+  /// Parties pulled from the contract (buyer, seller, attorneys, title, agents)
+  /// as a permanent, locked panel — an ordered array of { role, value }. Kept
+  /// out of customFields so they can't be casually deleted, and distinct from
+  /// the CRM-linked `parties` relation (this is text, no Contact rows).
+  contractParties   Json?                   @map("contract_parties")
   isSample          Boolean                 @default(false)
   parties           TransactionParty[]
   tasks             Task[]
@@ -1759,6 +1764,7 @@ enum FieldTarget {
   TRANSACTION_FIELD
   TASK
   CUSTOM_FIELD
+  PARTY
 }
 
 enum FieldValueType {

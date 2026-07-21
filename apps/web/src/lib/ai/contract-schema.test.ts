@@ -57,7 +57,7 @@ describe("flattenExtraction", () => {
     ]);
     expect(rows.find((r) => r.key === "zip")).toBeUndefined();
     expect(rows.find((r) => r.key === "deadline:Inspection deadline")?.target).toBe("TASK");
-    expect(rows.find((r) => r.key === "party:buyer")?.target).toBe("CUSTOM_FIELD");
+    expect(rows.find((r) => r.key === "party:buyer")?.target).toBe("PARTY");
     expect(rows.find((r) => r.key === "purchase_price")?.confidence).toBe("HIGH");
   });
 });

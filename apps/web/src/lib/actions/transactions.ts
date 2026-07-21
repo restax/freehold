@@ -3,6 +3,7 @@
 import { type TenantTx, TransactionSide, TransactionStatus, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { ContractParty } from "@/lib/ai/contract-schema";
 import { logAudit } from "@/lib/audit";
 import { fireIntroEmail, firePostCloseEmail } from "@/lib/auto-emails";
 import { confirmed, dateOnly, intOr, oneOf, optStr, str } from "@/lib/forms";
@@ -242,6 +243,56 @@ export async function removeCustomField(formData: FormData) {
     const fields = { ...((txn.customFields as Record<string, string> | null) ?? {}) };
     delete fields[key];
     await tx.transaction.update({ where: { id }, data: { customFields: fields } });
+  });
+  revalidatePath(`/dashboard/transactions/${id}`);
+}
+
+/**
+ * The locked contract-parties panel: an ordered role/value list, separate from
+ * customFields so a party can't be casually deleted. Populated by extraction
+ * and hand-editable here.
+ */
+export async function addTransactionParty(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  const role = str(formData, "role") || "other";
+  const value = str(formData, "value");
+  if (!id || !value) return;
+  await withTenant(tenantId, async (tx) => {
+    const txn = await tx.transaction.findUniqueOrThrow({
+      where: { id },
+      select: { contractParties: true },
+    });
+    const parties = [...((txn.contractParties as ContractParty[] | null) ?? [])];
+    if (!parties.some((p) => p.role === role && p.value === value)) {
+      parties.push({ role, value });
+    }
+    await tx.transaction.update({
+      where: { id },
+      data: { contractParties: parties as unknown as Record<string, string>[] },
+    });
+  });
+  revalidatePath(`/dashboard/transactions/${id}`);
+}
+
+export async function removeTransactionParty(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  const role = str(formData, "role");
+  const value = str(formData, "value");
+  if (!id) return;
+  await withTenant(tenantId, async (tx) => {
+    const txn = await tx.transaction.findUniqueOrThrow({
+      where: { id },
+      select: { contractParties: true },
+    });
+    const parties = ((txn.contractParties as ContractParty[] | null) ?? []).filter(
+      (p) => !(p.role === role && p.value === value),
+    );
+    await tx.transaction.update({
+      where: { id },
+      data: { contractParties: parties as unknown as Record<string, string>[] },
+    });
   });
   revalidatePath(`/dashboard/transactions/${id}`);
 }
