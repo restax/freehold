@@ -47,7 +47,16 @@ export async function ensureDemo() {
         name: "Maplewood Transactions (Demo)",
         slug: DEMO_SLUG,
         createdAt: new Date(),
+        // Comped Business tier, no expiry: the demo should show the whole
+        // product, not trip the FREE plan's real limits (voice search is 0
+        // sessions on FREE — a visitor would never hear it work otherwise).
+        compTier: "BUSINESS",
       },
+    });
+  } else if (org.compTier !== "BUSINESS" || org.compExpiresAt != null) {
+    org = await prisma.organization.update({
+      where: { id: org.id },
+      data: { compTier: "BUSINESS", compExpiresAt: null },
     });
   }
 

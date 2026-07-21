@@ -80,7 +80,7 @@ function fmtNewsDate(iso: string): string {
 export async function HubNews() {
   const items = (await fetchHubFeed()) ?? FALLBACK;
   return (
-    <div>
+    <div className="max-w-2xl">
       <section className="rounded-xl border border-stone-200/70 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_8px_rgb(41_37_36/0.04)]">
         <div className="flex items-center justify-between border-b border-stone-100 px-5 py-3.5">
           <h2 className="font-medium">What's new</h2>
@@ -113,7 +113,7 @@ export async function HubNews() {
             </li>
           ))}
         </ul>
-        <div className="flex items-center justify-between border-t border-stone-100 px-5 py-3">
+        <div className="flex items-center justify-center gap-1.5 border-t border-stone-100 px-5 py-3">
           <span className="text-xs text-stone-400">Powered by</span>
           <CloudWordmark size="sm" />
         </div>

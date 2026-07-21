@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
 import { DashboardNav, ProfileNavLink, SettingsNavLink } from "@/components/dashboard-nav";
+import { DemoWatermark } from "@/components/demo-watermark";
 import { Wordmark } from "@/components/marketing";
 import { SignOutButton } from "@/components/sign-out-button";
 import { SupportTicketWidget } from "@/components/support-ticket-widget";
 import { VoiceWidget } from "@/components/voice-widget";
 import { openBillingPortal } from "@/lib/actions/billing";
+import { DEMO_SLUG } from "@/lib/demo";
 import { getTenantPlan } from "@/lib/plans";
 import { getSession, listTenants } from "@/lib/session";
 import { GUEST_ROLE, getMemberRole } from "@/lib/tenant";
@@ -65,8 +67,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
     );
   }
 
+  const isDemoTenant = active?.slug === DEMO_SLUG;
+
   return (
     <div className="flex min-h-screen">
+      {isDemoTenant && <DemoWatermark />}
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:shadow-md"
