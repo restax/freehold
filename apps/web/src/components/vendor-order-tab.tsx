@@ -74,6 +74,21 @@ export async function VendorOrderTab({
   const vendorName = new Map(vendors.map((v) => [v.id, v.name]));
   const connectable = vendors.filter((v) => activeConnections.some((c) => c.vendorId === v.id));
 
+  // Documents the vendor chose to share on any order they take (insurance,
+  // W-9, E&O…). Vendor-owned root table, no RLS; grouped by vendor so each
+  // order can show its vendor's paperwork without a per-row query.
+  const sharedDocs = await prisma.vendorDocument.findMany({
+    where: { vendorId: { in: vendorIds.length > 0 ? vendorIds : [""] }, shareOnOrder: true },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, vendorId: true, label: true },
+  });
+  const sharedByVendor = new Map<string, Array<{ id: string; label: string }>>();
+  for (const d of sharedDocs) {
+    const list = sharedByVendor.get(d.vendorId) ?? [];
+    list.push({ id: d.id, label: d.label });
+    sharedByVendor.set(d.vendorId, list);
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {connectable.length > 0 && (
@@ -257,6 +272,24 @@ export async function VendorOrderTab({
                   📎 {o.documents.length} file{o.documents.length > 1 ? "s" : ""} from the vendor —
                   see the Attachments tab (internal until you share).
                 </p>
+              )}
+
+              {/* Paperwork the vendor keeps on file and shares on every order. */}
+              {o.vendorId && (sharedByVendor.get(o.vendorId)?.length ?? 0) > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                  <span>On file from this vendor:</span>
+                  {sharedByVendor.get(o.vendorId)?.map((d) => (
+                    <a
+                      key={d.id}
+                      href={`/api/vendor-documents/${d.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-full border border-stone-200 bg-stone-50 px-2.5 py-0.5 font-medium text-stone-700 hover:border-brand-300 hover:text-brand-700"
+                    >
+                      {d.label}
+                    </a>
+                  ))}
+                </div>
               )}
 
               {/* The order conversation, both sides. */}

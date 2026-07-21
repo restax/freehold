@@ -39,6 +39,12 @@ export function middleware(req: NextRequest) {
   // A bare visit lands on the vendor dashboard (which itself gates to login).
   if (slug === "vendor") {
     if (pathname.startsWith("/vendor/")) return NextResponse.next();
+    // Public vendor pages are canonical on the apex (freeholdtc.dev/v/<slug>),
+    // so a /v/ link from the vendor site bounces there rather than 404ing
+    // under the /vendor/* rewrite.
+    if (pathname.startsWith("/v/")) {
+      return NextResponse.redirect(`${protocol}//${root}${pathname}${search}`, 308);
+    }
     const url = req.nextUrl.clone();
     url.pathname = pathname === "/" ? "/vendor/dashboard" : `/vendor${pathname}`;
     return NextResponse.rewrite(url);

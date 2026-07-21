@@ -81,15 +81,75 @@ model Vendor {
   logo        String?
   /// Opt-in to the TC-side vendor directory. Off by default.
   listed      Boolean        @default(false)
+  /// URL handle for the public vendor page (/v/<slug>). Null on rows created
+  /// before public pages existed; backfilled on the next profile save.
+  slug        String?        @unique
+  /// Tiered contact/bio fields. Visibility is enforced where each is rendered:
+  /// public.* shows on the public vendor page, ads, and directory; client.*
+  /// shows to a coordinator's client on an order with this vendor; private.*
+  /// is the vendor's own, never displayed. `blurb`/`phone`/`email` above stay
+  /// as the pre-tier fields (account email, directory blurb).
+  publicBio          String? @map("public_bio")
+  publicPhone        String? @map("public_phone")
+  publicEmail        String? @map("public_email")
+  clientBio          String? @map("client_bio")
+  clientPhone        String? @map("client_phone")
+  clientServiceNotes String? @map("client_service_notes")
+  privateEmail       String? @map("private_email")
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   users       VendorUser[]
   connections VendorConnection[]
   orders      VendorOrder[]
   ads         VendorAd[]
+  coverage    VendorCoverage[]
+  documents   VendorDocument[]
 
   @@index([category])
   @@map("vendor")
+}
+
+/// Where a vendor works, one row per area. Kept as rows (not a text field) so
+/// "who covers Illinois / Cook County / 60601" is a real query — needed for the
+/// coordinator directory filter and the regional ad targeting. No RLS: a
+/// vendor-owned root table like vendor itself.
+model VendorCoverage {
+  id        String   @id @default(uuid())
+  vendorId  String   @map("vendor_id")
+  vendor    Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  /// "STATE" | "COUNTY" | "ZIP".
+  kind      String
+  /// The area: a USPS state code ("IL"), a "County, ST" string, or a ZIP.
+  value     String
+  createdAt DateTime @default(now())
+
+  @@index([vendorId])
+  @@index([kind, value])
+  @@map("vendor_coverage")
+}
+
+/// A document a vendor keeps on their profile (insurance, E&O, W9, resume) to
+/// share when an order is placed. Envelope-encrypted through the same putObject
+/// path as transaction documents. No RLS — vendor-owned root table.
+model VendorDocument {
+  id              String   @id @default(uuid())
+  vendorId        String   @map("vendor_id")
+  vendor          Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  /// What it is: "Insurance", "E&O", "W9", "Resume", or a custom label.
+  label           String
+  filename        String
+  contentType     String   @map("content_type")
+  sizeBytes       Int      @map("size_bytes")
+  data            Bytes?
+  storageKey      String?  @map("storage_key")
+  storageProvider String?  @map("storage_provider")
+  /// Attach automatically to the transaction when an order is placed. On by
+  /// default — that's the whole point of keeping it here.
+  shareOnOrder    Boolean  @default(true) @map("share_on_order")
+  createdAt       DateTime @default(now())
+
+  @@index([vendorId])
+  @@map("vendor_document")
 }
 
 /// A paid ad placement a vendor buys — a deliberate revenue line. Shown only
@@ -121,13 +181,40 @@ model VendorAd {
   stripeSubscriptionId String?   @map("stripe_subscription_id")
   /// Current paid-through date from Stripe; the ad is dark past it.
   periodEnd            DateTime? @map("period_end")
+  /// End of a no-card free trial (set once when the vendor claims it). While in
+  /// the future the ad runs without payment; past it, the nightly cron pauses it
+  /// and starts the renewal drip. Null = never took a trial.
+  trialEndsAt          DateTime? @map("trial_ends_at")
+  /// Renewal-drip state (only meaningful for a trial that never converted).
+  renewalToken          String?   @unique @map("renewal_token")
+  renewalUnsubscribedAt DateTime? @map("renewal_unsubscribed_at")
+  lastRenewalEmailAt    DateTime? @map("last_renewal_email_at")
+  renewalEmailsSent     Int       @default(0) @map("renewal_emails_sent")
   createdAt            DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+
+  states VendorAdState[]
 
   @@index([status])
   @@index([vendorId])
   @@index([stripeSubscriptionId])
   @@map("vendor_ad")
+}
+
+/// A state an ad is targeted to. Up to 4 per ad (enforced in the action); the
+/// placement row for a viewer is served by matching their state to these. Root
+/// table, no RLS — app-scoped like vendor_ad itself.
+model VendorAdState {
+  id      String   @id @default(uuid())
+  adId    String   @map("ad_id")
+  ad      VendorAd @relation(fields: [adId], references: [id], onDelete: Cascade)
+  /// Two-letter US state code (see lib/vendor-profile US_STATES).
+  state   String
+  createdAt DateTime @default(now())
+
+  @@unique([adId, state])
+  @@index([state])
+  @@map("vendor_ad_state")
 }
 
 enum VendorConnectionStatus {

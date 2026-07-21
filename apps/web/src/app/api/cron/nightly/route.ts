@@ -4,6 +4,7 @@ import { runOwnerExports } from "@/lib/export-run";
 import { runInvoiceReports } from "@/lib/invoice-report";
 import { flushOutbox } from "@/lib/outbox";
 import { sweepExpiredExports } from "@/lib/storage";
+import { runVendorAdRenewals } from "@/lib/vendor-ad-renewals";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -26,5 +27,13 @@ export async function GET(req: Request) {
   const briefings = await runDailyBriefings();
   const invoiceReports = await runInvoiceReports();
   const exportSweep = await sweepExpiredExports();
-  return NextResponse.json({ outbox, exports, briefings, invoiceReports, exportSweep });
+  const adRenewals = await runVendorAdRenewals();
+  return NextResponse.json({
+    outbox,
+    exports,
+    briefings,
+    invoiceReports,
+    exportSweep,
+    adRenewals,
+  });
 }

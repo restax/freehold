@@ -5,6 +5,27 @@ import { auth } from "@/lib/auth";
 import { oneOf, optStr, str } from "@/lib/forms";
 import { adminAlert } from "@/lib/notify";
 import { requireVendor } from "@/lib/vendor-auth";
+import { vendorSlugify } from "@/lib/vendor-profile";
+
+/**
+ * Resolve a base slug to one no other vendor holds, appending -2, -3, … on
+ * collision. `exclude` keeps a vendor's own current slug from counting as a
+ * clash when they re-save. The slug names the public page (/v/<slug>); it is
+ * cosmetic, never an authorization token.
+ */
+async function uniqueVendorSlug(base: string, exclude?: string): Promise<string> {
+  let candidate = base;
+  for (let n = 2; n < 1000; n++) {
+    const clash = await prisma.vendor.findFirst({
+      where: { slug: candidate, ...(exclude ? { id: { not: exclude } } : {}) },
+      select: { id: true },
+    });
+    if (!clash) return candidate;
+    candidate = `${base}-${n}`;
+  }
+  // Astronomically unlikely; fall back to a value that cannot collide.
+  return `${base}-${Date.now()}`;
+}
 
 /**
  * Vendor account lifecycle. A vendor is a User with a VendorUser link and no
@@ -59,6 +80,7 @@ export async function registerVendor(formData: FormData): Promise<VendorRegister
       category: category as VendorCategory,
       phone: optStr(formData, "phone"),
       serviceArea: optStr(formData, "serviceArea"),
+      slug: await uniqueVendorSlug(vendorSlugify(businessName)),
     },
   });
   await prisma.vendorUser.create({ data: { vendorId: vendor.id, userId: user.id, role: "owner" } });
@@ -119,20 +141,53 @@ async function claimEmailedOrders(email: string, vendorId: string): Promise<numb
   return claimed;
 }
 
-/** Update the signed-in vendor's public profile. */
+/**
+ * Update the signed-in vendor's profile. The fields fall into three visibility
+ * tiers, and the form groups them the same way so a vendor always knows who
+ * sees what:
+ *   - Public — shown on the public page, directory listing, and ads:
+ *     publicBio, publicPhone, publicEmail (falls back to the legacy blurb/phone).
+ *   - Client-facing — shown to a coordinator's client on an order they place:
+ *     clientBio, clientPhone, clientServiceNotes.
+ *   - Private — never displayed anywhere: privateEmail (an internal contact).
+ * A slug is backfilled the first time an older vendor saves.
+ */
 export async function updateVendorProfile(formData: FormData) {
   const { vendorId } = await requireVendor();
   const name = str(formData, "name");
   if (!name) return;
+
+  const existing = await prisma.vendor.findUnique({
+    where: { id: vendorId },
+    select: { slug: true },
+  });
+
+  // The public tier is canonical; the legacy phone/blurb columns mirror it so
+  // older surfaces (directory, ad renderer) keep working without a data migration.
+  const publicPhone = optStr(formData, "publicPhone");
+  const publicBio = optStr(formData, "publicBio");
+
   await prisma.vendor.update({
     where: { id: vendorId },
     data: {
       name,
       category: oneOf(formData, "category", CATEGORIES, "OTHER") as VendorCategory,
-      phone: optStr(formData, "phone"),
+      phone: publicPhone,
       serviceArea: optStr(formData, "serviceArea"),
-      blurb: optStr(formData, "blurb"),
+      blurb: publicBio,
       listed: str(formData, "listed") === "1",
+      // Public tier
+      publicBio,
+      publicPhone,
+      publicEmail: optStr(formData, "publicEmail"),
+      // Client-facing tier
+      clientBio: optStr(formData, "clientBio"),
+      clientPhone: optStr(formData, "clientPhone"),
+      clientServiceNotes: optStr(formData, "clientServiceNotes"),
+      // Private tier
+      privateEmail: optStr(formData, "privateEmail"),
+      // Backfill a public-page slug for vendors created before slugs existed.
+      ...(existing?.slug ? {} : { slug: await uniqueVendorSlug(vendorSlugify(name)) }),
     },
   });
 }

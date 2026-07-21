@@ -26,7 +26,10 @@ export default async function AdminAdsPage() {
   const ads = await prisma.vendorAd.findMany({
     orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
     take: 200,
-    include: { vendor: { select: { name: true, email: true, category: true } } },
+    include: {
+      vendor: { select: { name: true, email: true, category: true } },
+      states: { select: { state: true }, orderBy: { state: "asc" } },
+    },
   });
   const pending = ads.filter((a) => a.status === "PENDING");
 
@@ -81,6 +84,11 @@ export default async function AdminAdsPage() {
                 >
                   {a.linkUrl}
                 </a>
+                <p className="mt-1 text-xs text-stone-500">
+                  {a.states.length > 0
+                    ? `Targets: ${a.states.map((s) => s.state).join(", ")}`
+                    : "No states targeted — won't show anywhere."}
+                </p>
 
                 {(a.status === "PENDING" || a.status === "PAUSED") && (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
