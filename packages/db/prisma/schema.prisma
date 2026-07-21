@@ -952,6 +952,9 @@ model PortalLink {
   showDocuments  Boolean        @default(false) @map("show_documents")
   showParties    Boolean        @default(true) @map("show_parties")
   showIntake     Boolean        @default(true) @map("show_intake")
+  /// Opt-in: let this client order the workspace's connected vendors from the
+  /// portal, and see those orders' status and appointments. Off by default.
+  showVendorOrders Boolean      @default(false) @map("show_vendor_orders")
   revokedAt      DateTime?      @map("revoked_at")
   lastAccessedAt DateTime?      @map("last_accessed_at")
   createdAt      DateTime       @default(now())

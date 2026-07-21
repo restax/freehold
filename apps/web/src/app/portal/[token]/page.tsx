@@ -13,9 +13,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/badges";
 import { submitIntake } from "@/lib/actions/intake";
+import { placeClientOrder } from "@/lib/actions/portal-orders";
 import { fmtDate, fmtMoney, ROLE_LABEL, STATUS_LABEL } from "@/lib/format";
 import { INTAKE_UPLOAD_HINT, intakeFields } from "@/lib/intake";
 import { resolveAgentPortal, resolvePortal } from "@/lib/portal";
+import { type PortalVendorData, portalVendorData } from "@/lib/portal-vendors";
 import { type SideLabels, sideLabel, tenantSideLabels } from "@/lib/side-labels";
 
 export const dynamic = "force-dynamic";
@@ -131,10 +133,31 @@ function IntakeForm({
 
 /* ---------------- Buyer & Seller portal ---------------- */
 
+const ORDER_STATUS_TONE: Record<string, string> = {
+  SENT: "bg-stone-100 text-stone-600",
+  ACCEPTED: "bg-amber-100 text-amber-800",
+  SCHEDULED: "bg-brand-100 text-brand-800",
+  COMPLETED: "bg-brand-600 text-white",
+  DECLINED: "bg-red-100 text-red-700",
+  CANCELLED: "bg-stone-100 text-stone-400",
+};
+
+function fmtApptDate(d: Date): string {
+  return d.toLocaleString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "UTC",
+  });
+}
+
 function ClientPortal(
   portal: NonNullable<Awaited<ReturnType<typeof resolvePortal>>>,
   labels: SideLabels,
   intakeDone: boolean,
+  vendorData: PortalVendorData | null,
 ) {
   const { link, txn, tenantName } = portal;
   const today = fmtDate(new Date());
@@ -318,6 +341,95 @@ function ClientPortal(
                 </li>
               ))}
             </ul>
+          </section>
+        )}
+
+        {link.showVendorOrders && vendorData && (
+          <section className={cardCls}>
+            <h2 className="mb-1 flex items-center gap-2 font-medium">
+              <CalendarCheck size={17} weight="bold" className="text-brand-600" aria-hidden />
+              Services
+            </h2>
+            <p className="mb-3 text-sm text-stone-500">
+              Order a service for your transaction. {tenantName} sees it right away, and any
+              appointment shows up here.
+            </p>
+
+            {vendorData.orders.length > 0 && (
+              <ul className="mb-4 flex flex-col gap-2">
+                {vendorData.orders.map((o) => (
+                  <li
+                    key={o.id}
+                    className="flex flex-wrap items-center gap-2 rounded-lg border border-stone-100 px-3 py-2 text-sm"
+                  >
+                    <span className="font-medium">{o.type}</span>
+                    {o.vendorName && <span className="text-stone-500">· {o.vendorName}</span>}
+                    <span
+                      className={`rounded-md px-2 py-0.5 text-xs font-medium ${ORDER_STATUS_TONE[o.status] ?? ""}`}
+                    >
+                      {o.status.toLowerCase()}
+                    </span>
+                    {o.status === "SCHEDULED" && o.scheduledAt && (
+                      <span className="text-brand-700">
+                        appointment {fmtApptDate(o.scheduledAt)}
+                      </span>
+                    )}
+                    {o.status === "ACCEPTED" && o.missedAt && (
+                      <span className="text-red-600">appointment missed — being rescheduled</span>
+                    )}
+                    {o.placedByClient && (
+                      <span className="text-xs text-stone-400">ordered by you</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {vendorData.connectedVendors.length > 0 ? (
+              <form
+                action={placeClientOrder}
+                className="flex flex-wrap items-end gap-3 border-t border-stone-100 pt-3"
+              >
+                <input type="hidden" name="token" value={link.token} />
+                <label className="flex flex-col gap-1 text-sm">
+                  Vendor
+                  <select name="vendorId" required className={intakeInputCls}>
+                    {vendorData.connectedVendors.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  What you need
+                  <input
+                    name="type"
+                    required
+                    placeholder="Home inspection"
+                    className={intakeInputCls}
+                  />
+                </label>
+                <label className="flex min-w-48 flex-1 flex-col gap-1 text-sm">
+                  Details
+                  <input
+                    name="details"
+                    placeholder="Anything they should know"
+                    className={intakeInputCls}
+                  />
+                </label>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-brand-700 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+                >
+                  Place order
+                </button>
+              </form>
+            ) : (
+              <p className="border-t border-stone-100 pt-3 text-sm text-stone-400">
+                {tenantName} hasn't connected any vendors yet — check back soon.
+              </p>
+            )}
           </section>
         )}
 
@@ -613,7 +725,10 @@ export default async function PortalPage({
   const clientPortal = await resolvePortal(token);
   if (clientPortal) {
     const labels = await tenantSideLabels(clientPortal.link.tenantId);
-    return ClientPortal(clientPortal, labels, intake === "done");
+    const vendorData = clientPortal.link.showVendorOrders
+      ? await portalVendorData(clientPortal.link.tenantId, clientPortal.txn.id)
+      : null;
+    return ClientPortal(clientPortal, labels, intake === "done", vendorData);
   }
 
   const agentPortal = await resolveAgentPortal(token);
