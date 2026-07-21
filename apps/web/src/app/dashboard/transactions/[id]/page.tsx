@@ -6,6 +6,7 @@ import { Avatar } from "@/components/avatar";
 import { Badge, EnvelopeBadge, ExtractionBadge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
 import { DictateButton } from "@/components/dictate-button";
+import { DocumentDropZone } from "@/components/document-drop-zone";
 import { VendorOrderTab } from "@/components/vendor-order-tab";
 import { VisibilityToggles } from "@/components/visibility-toggles";
 import { assignUser, unassignUser } from "@/lib/actions/assignees";
@@ -628,6 +629,7 @@ export default async function TransactionDetailPage({
           )}
           {tab === "documents" && (
             <div className="flex flex-col gap-6">
+              <DocumentDropZone transactionId={txn.id} linkAction={setRequiredDocument} />
               <section className={card}>
                 <div className="mb-1 flex items-center gap-2">
                   <h2 className="font-medium">Required documents</h2>
