@@ -85,6 +85,7 @@ model Vendor {
   updatedAt   DateTime       @updatedAt
   users       VendorUser[]
   connections VendorConnection[]
+  orders      VendorOrder[]
 
   @@index([category])
   @@map("vendor")
@@ -130,6 +131,89 @@ model VendorConnection {
   @@index([tenantId])
   @@index([vendorId])
   @@map("vendor_connection")
+}
+
+enum VendorOrderStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  SCHEDULED
+  COMPLETED
+  DECLINED
+  CANCELLED
+}
+
+enum OrderPlacedBy {
+  TC
+  CLIENT
+}
+
+enum OrderActor {
+  TC
+  VENDOR
+  CLIENT
+  SYSTEM
+}
+
+/// An order a coordinator (or, later, a client) places with a vendor on a
+/// transaction — a title commitment, a home inspection, listing photos. It
+/// lives on the file, not in an email thread. `vendorId` is null when the
+/// order went out to an as-yet-unregistered vendor by email (Stage 4); once
+/// they register it links up.
+///
+/// Same two-sided RLS as vendor_connection: the coordinator side keys off
+/// app.tenant_id, the vendor side off app.vendor_id.
+model VendorOrder {
+  id            String            @id @default(uuid())
+  tenantId      String            @map("tenant_id")
+  tenant        Organization      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vendorId      String?           @map("vendor_id")
+  vendor        Vendor?           @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  transactionId String            @map("transaction_id")
+  transaction   Transaction       @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  connectionId  String?           @map("connection_id")
+  /// Free-text order type ("Title commitment", "Home inspection", "Listing photos").
+  type          String
+  status        VendorOrderStatus @default(SENT)
+  details       String?
+  dueDate       DateTime?         @map("due_date") @db.Date
+  /// The appointment, once set — the thing TCs re-type today.
+  scheduledAt   DateTime?         @map("scheduled_at")
+  completedAt   DateTime?         @map("completed_at")
+  /// Recorded, never overwritten, when an appointment is missed.
+  missedAt      DateTime?         @map("missed_at")
+  placedBy      OrderPlacedBy     @default(TC) @map("placed_by")
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  events        VendorOrderEvent[]
+
+  @@index([tenantId, transactionId])
+  @@index([vendorId])
+  @@map("vendor_order")
+}
+
+/// The audit history of one order. Appended to, never mutated — because the
+/// evidence a coordinator most needs is that an appointment was set for
+/// Tuesday and missed, which a status column that just flips to COMPLETED
+/// would erase. tenant_id + vendor_id are copied from the parent order so the
+/// same two-sided RLS lets both sides read the trail.
+model VendorOrderEvent {
+  id        String      @id @default(uuid())
+  tenantId  String      @map("tenant_id")
+  vendorId  String?     @map("vendor_id")
+  orderId   String      @map("order_id")
+  order     VendorOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// "created", "accepted", "declined", "scheduled", "rescheduled", "missed",
+  /// "completed", "cancelled", "note".
+  kind      String
+  detail    String?
+  /// The appointment time, for scheduled/rescheduled events.
+  at        DateTime?
+  actor     OrderActor  @default(TC)
+  createdAt DateTime    @default(now())
+
+  @@index([tenantId, orderId])
+  @@map("vendor_order_event")
 }
 
 /// A person who can act for a vendor. Many per vendor (a title company has
@@ -296,6 +380,7 @@ model Organization {
   supportTickets          SupportTicket[]
   supportTicketReplies    SupportTicketReply[]
   vendorConnections       VendorConnection[]
+  vendorOrders            VendorOrder[]
   /// What happens when a file sits in a license-required state with nobody
   /// licensed assigned: "warn" (save it, flag it everywhere) or "block"
   /// (refuse the write). Deliberately a tenant choice — TCs routinely open a
@@ -700,6 +785,7 @@ model Transaction {
   invoices          Invoice[]
   intakeSubmissions IntakeSubmission[]
   compliance        TransactionCompliance[]
+  vendorOrders      VendorOrder[]
 
   @@index([tenantId, status])
   @@map("transaction")

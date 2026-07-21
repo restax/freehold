@@ -1,5 +1,6 @@
 import { prisma, withVendor } from "@freehold/db";
 import { Badge } from "@/components/badges";
+import { VendorOrderInbox } from "@/components/vendor-order-inbox";
 import { vendorAcceptConnection, vendorEndConnection } from "@/lib/actions/vendor-connections";
 import { fmtDate } from "@/lib/format";
 import { requireVendor } from "@/lib/vendor-auth";
@@ -69,6 +70,8 @@ export default async function VendorDashboardPage() {
         </section>
       )}
 
+      <VendorOrderInbox vendorId={vendorId} />
+
       {active.length > 0 ? (
         <section className="rounded-2xl border border-stone-200 bg-white p-5">
           <h2 className="mb-3 font-medium">Connected coordinators</h2>
@@ -87,9 +90,6 @@ export default async function VendorDashboardPage() {
               </li>
             ))}
           </ul>
-          <p className="mt-4 text-sm text-stone-400">
-            No orders yet — they'll appear here the moment a connected coordinator places one.
-          </p>
         </section>
       ) : (
         incoming.length === 0 && (

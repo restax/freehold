@@ -8,6 +8,9 @@ export const WEBHOOK_EVENTS = [
   "document.uploaded",
   "envelope.sent",
   "envelope.completed",
+  "vendor.order.placed",
+  "vendor.order.updated",
+  "vendor.order.completed",
 ] as const;
 
 /**

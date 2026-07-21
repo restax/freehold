@@ -6,6 +6,7 @@ import { Avatar } from "@/components/avatar";
 import { Badge, EnvelopeBadge, ExtractionBadge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
 import { DictateButton } from "@/components/dictate-button";
+import { VendorOrderTab } from "@/components/vendor-order-tab";
 import { VisibilityToggles } from "@/components/visibility-toggles";
 import { assignUser, unassignUser } from "@/lib/actions/assignees";
 import {
@@ -80,6 +81,7 @@ const ROLES = Object.values(PartyRole);
 const TXN_TABS = [
   ["tasks", "Tasks"],
   ["attachments", "Attachments"],
+  ["vendors", "Vendors"],
   ["compliance", "Compliance"],
   ["dates", "Dates & details"],
   ["participants", "Participants"],
@@ -791,6 +793,7 @@ export default async function TransactionDetailPage({
               )}
             </section>
           )}
+          {tab === "vendors" && <VendorOrderTab tenantId={tenantId} transactionId={id} />}
           {tab === "compliance" && (
             <section className={card}>
               <div className="mb-3 flex flex-wrap items-center gap-3">
