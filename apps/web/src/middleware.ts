@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { RESERVED_SLUGS } from "@/lib/reserved-slugs";
 
 /**
  * Tenant subdomains: acme.freeholdtc.dev is the client-facing face of the
@@ -9,9 +10,12 @@ import { type NextRequest, NextResponse } from "next/server";
  * The root host comes from BETTER_AUTH_URL, so this works identically for a
  * self-hosted install that points wildcard DNS at itself, and does nothing
  * when requests arrive on the root host.
+ *
+ * `vendor.<root>` is special: it is the FreeholdVendors site, so it rewrites
+ * to /vendor/* rather than to a tenant portal. It is a reserved subdomain here
+ * AND a reserved workspace slug (see tenantSlugAvailable) so no workspace can
+ * ever claim it.
  */
-const RESERVED_SUBDOMAINS = new Set(["www", "app", "api", "mail", "demo", "status"]);
-
 function rootHost(): string | null {
   const url = process.env.BETTER_AUTH_URL;
   if (!url) return null;
@@ -29,11 +33,21 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
   const slug = host.slice(0, -(root.length + 1));
-  if (!slug || slug.includes(".") || RESERVED_SUBDOMAINS.has(slug)) {
+  const { pathname, search, protocol } = req.nextUrl;
+
+  // The vendor site: everything on vendor.<root> is served from /vendor/*.
+  // A bare visit lands on the vendor dashboard (which itself gates to login).
+  if (slug === "vendor") {
+    if (pathname.startsWith("/vendor/")) return NextResponse.next();
+    const url = req.nextUrl.clone();
+    url.pathname = pathname === "/" ? "/vendor/dashboard" : `/vendor${pathname}`;
+    return NextResponse.rewrite(url);
+  }
+
+  if (!slug || slug.includes(".") || RESERVED_SLUGS.has(slug)) {
     return NextResponse.next();
   }
 
-  const { pathname, search, protocol } = req.nextUrl;
   if (pathname === "/") {
     const url = req.nextUrl.clone();
     url.pathname = `/t/${slug}`;

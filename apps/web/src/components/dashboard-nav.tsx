@@ -23,6 +23,7 @@ import {
   Receipt,
   ShieldCheck,
   Sun,
+  Toolbox,
   UserCircle,
   UsersThree,
 } from "@phosphor-icons/react";
@@ -72,6 +73,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { href: "/dashboard/invoices", label: "Invoices", icon: Receipt },
       { href: "/dashboard/directory", label: "Directory", icon: Compass },
+      { href: "/dashboard/vendors", label: "Vendors", icon: Toolbox },
       { href: "/dashboard/engagements", label: "Engagements", icon: Handshake },
       { href: "/dashboard/website", label: "Website", icon: Globe },
       { href: "/dashboard/integrations", label: "Integrations", icon: PlugsConnected },

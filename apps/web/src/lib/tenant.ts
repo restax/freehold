@@ -1,6 +1,7 @@
 import { prisma, withTenant } from "@freehold/db";
 import { redirect } from "next/navigation";
 import { getSession, listTenants } from "./session";
+import { vendorIdForUser } from "./vendor-auth";
 
 /** Outside coverage staff: see only the files they're assigned, nothing else. */
 export const GUEST_ROLE = "guest";
@@ -21,7 +22,12 @@ export async function requireTenant(opts: { allowGuest?: boolean } = {}) {
   if (!session) redirect("/login");
   const tenants = await listTenants();
   const first = tenants[0];
-  if (!first) redirect("/onboarding");
+  if (!first) {
+    // A vendor with no workspace belongs on the vendor site, not in TC
+    // onboarding — keep the two worlds from bleeding into each other.
+    if (await vendorIdForUser(session.user.id)) redirect("/vendor/dashboard");
+    redirect("/onboarding");
+  }
   const tenantId =
     tenants.find((t) => t.id === session.session.activeOrganizationId)?.id ?? first.id;
 

@@ -45,8 +45,109 @@ model User {
   paymentRequests  PaymentRequest[]
   guestEngagements Engagement[]
   supportTickets   SupportTicket[]
+  vendorUsers      VendorUser[]
 
   @@map("user")
+}
+
+enum VendorCategory {
+  TITLE
+  INSPECTION
+  PHOTOGRAPHY
+  SIGNAGE
+  LEGAL
+  OTHER
+}
+
+/// A service business on FreeholdVendors — a title company, inspector,
+/// photographer, sign installer, or law office. A vendor is its own root
+/// entity, NOT a tenant: it has no Organization, no Member rows, and never
+/// touches a workspace's seat or plan limits. It connects to many TC
+/// workspaces (see VendorConnection) and receives orders from all of them.
+///
+/// Deliberately no row-level security: like Organization, a vendor is a top
+/// of the ownership tree, scoped by the app through VendorUser membership, not
+/// by app.tenant_id (a vendor has no tenant).
+model Vendor {
+  id          String         @id @default(uuid())
+  name        String
+  category    VendorCategory @default(OTHER)
+  email       String         @unique
+  phone       String?
+  /// Free-text service area ("Chicago metro", "Cook & DuPage counties").
+  serviceArea String?        @map("service_area")
+  blurb       String?
+  /// Logo as a data URL, same convention as Organization.logo.
+  logo        String?
+  /// Opt-in to the TC-side vendor directory. Off by default.
+  listed      Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  users       VendorUser[]
+  connections VendorConnection[]
+
+  @@index([category])
+  @@map("vendor")
+}
+
+enum VendorConnectionStatus {
+  REQUESTED
+  ACTIVE
+  DECLINED
+  REVOKED
+}
+
+enum ConnectionInitiator {
+  TENANT
+  VENDOR
+}
+
+/// The standing relationship between a coordinator's workspace and a vendor —
+/// the "accept a friend request" handshake. Either side can start it; the
+/// other accepts. Once ACTIVE, orders can flow. Revoking stops new orders but
+/// never deletes the history.
+///
+/// Unlike engagement (both sides are tenants), the vendor side has no tenant,
+/// so the two-sided RLS keys off app.tenant_id for the coordinator and
+/// app.vendor_id for the vendor. Because only one is ever set in a given
+/// transaction, the WITH CHECK also pins each side's inserts to itself.
+model VendorConnection {
+  id          String                 @id @default(uuid())
+  tenantId    String                 @map("tenant_id")
+  tenant      Organization           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vendorId    String                 @map("vendor_id")
+  vendor      Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  status      VendorConnectionStatus @default(REQUESTED)
+  requestedBy ConnectionInitiator    @map("requested_by")
+  note        String?
+  requestedById String?              @map("requested_by_id")
+  respondedAt DateTime?              @map("responded_at")
+  revokedAt   DateTime?              @map("revoked_at")
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  @@unique([tenantId, vendorId])
+  @@index([tenantId])
+  @@index([vendorId])
+  @@map("vendor_connection")
+}
+
+/// A person who can act for a vendor. Many per vendor (a title company has
+/// several escrow officers), which is why this is a join and not a scalar on
+/// Vendor — the mistake Engagement.guestUserId would have forced.
+model VendorUser {
+  id        String   @id @default(uuid())
+  vendorId  String   @map("vendor_id")
+  vendor    Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "owner" (created it) or "member". Vendor-internal, unrelated to tenant roles.
+  role      String   @default("owner")
+  createdAt DateTime @default(now())
+
+  @@unique([vendorId, userId])
+  @@index([userId])
+  @@map("vendor_user")
 }
 
 model Session {
@@ -194,6 +295,7 @@ model Organization {
   engagementsProvided     Engagement[]            @relation("EngagementVendor")
   supportTickets          SupportTicket[]
   supportTicketReplies    SupportTicketReply[]
+  vendorConnections       VendorConnection[]
   /// What happens when a file sits in a license-required state with nobody
   /// licensed assigned: "warn" (save it, flag it everywhere) or "block"
   /// (refuse the write). Deliberately a tenant choice — TCs routinely open a

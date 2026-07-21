@@ -1,12 +1,15 @@
 import { redirect } from "next/navigation";
 import { OnboardingForm } from "@/components/onboarding-form";
 import { getSession, listTenants } from "@/lib/session";
+import { vendorIdForUser } from "@/lib/vendor-auth";
 
 export default async function OnboardingPage() {
   const session = await getSession();
   if (!session) redirect("/login");
   const tenants = await listTenants();
   if (tenants.length > 0) redirect("/dashboard");
+  // A vendor who lands here (e.g. by typing the URL) goes to the vendor site.
+  if (await vendorIdForUser(session.user.id)) redirect("/vendor/dashboard");
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-6">

@@ -28,3 +28,28 @@ export async function withTenant<T>(
     { maxWait: 5_000, timeout: 15_000 },
   );
 }
+
+/**
+ * The vendor-side mirror of `withTenant`, for FreeholdVendors cross-boundary
+ * tables (vendor_connection, vendor_order, …). Sets `app.vendor_id` so those
+ * tables' RLS policies — `tenant_id = app.tenant_id OR vendor_id = app.vendor_id`
+ * — let a vendor read exactly its own rows and nothing else.
+ *
+ * A vendor has no tenant, so it can never use `withTenant`; a coordinator has
+ * no vendor, so it never uses this. Only one of the two session variables is
+ * ever set in a given transaction, which is also what makes each side's
+ * `WITH CHECK` pin inserts to itself — a vendor cannot conjure a row naming a
+ * tenant it isn't connected to, and vice versa.
+ */
+export async function withVendor<T>(
+  vendorId: string,
+  fn: (tx: TenantTx) => Promise<T>,
+): Promise<T> {
+  return prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.vendor_id', ${vendorId}, true)`;
+      return fn(tx);
+    },
+    { maxWait: 5_000, timeout: 15_000 },
+  );
+}

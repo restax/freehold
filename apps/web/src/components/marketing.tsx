@@ -157,6 +157,11 @@ export function MarketingFooter() {
               </Link>
             </li>
             <li>
+              <Link href="/vendors" className="transition-colors hover:text-stone-900">
+                For vendors
+              </Link>
+            </li>
+            <li>
               <Link href="/signup" className="transition-colors hover:text-stone-900">
                 Create an account
               </Link>

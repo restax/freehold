@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { seedSampleData } from "@/lib/actions/sample-data";
 import { authClient } from "@/lib/auth-client";
+import { isReservedSlug } from "@/lib/reserved-slugs";
 
 export function OnboardingForm() {
   const router = useRouter();
@@ -17,7 +18,10 @@ export function OnboardingForm() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const slug = tenantSlug(name) || `workspace-${Date.now()}`;
+    // A reserved slug (e.g. a business literally named "Vendor") would collide
+    // with an app subdomain; nudge it aside rather than let it be claimed.
+    const base = tenantSlug(name);
+    const slug = !base || isReservedSlug(base) ? `${base || "workspace"}-${Date.now()}` : base;
     const { data, error } = await authClient.organization.create({ name, slug });
     if (error || !data) {
       setError(error?.message ?? "Could not create the workspace.");

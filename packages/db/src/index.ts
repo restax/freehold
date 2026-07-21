@@ -32,7 +32,7 @@ export type {
 } from "@prisma/client";
 export { prisma } from "./client.js";
 export { tenantSlug } from "./slug.js";
-export { type TenantTx, withTenant } from "./tenant.js";
+export { type TenantTx, withTenant, withVendor } from "./tenant.js";
 
 // Prisma's generated enums are re-exported via namespace property access
 // (not named re-exports): bundlers statically verify named imports against
@@ -83,3 +83,9 @@ export const EngagementStatus = PrismaPkg.EngagementStatus;
 export type EngagementStatus = PrismaPkg.EngagementStatus;
 export const TicketStatus = PrismaPkg.TicketStatus;
 export type TicketStatus = PrismaPkg.TicketStatus;
+export const VendorCategory = PrismaPkg.VendorCategory;
+export type VendorCategory = PrismaPkg.VendorCategory;
+export const VendorConnectionStatus = PrismaPkg.VendorConnectionStatus;
+export type VendorConnectionStatus = PrismaPkg.VendorConnectionStatus;
+export const ConnectionInitiator = PrismaPkg.ConnectionInitiator;
+export type ConnectionInitiator = PrismaPkg.ConnectionInitiator;
