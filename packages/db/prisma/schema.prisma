@@ -183,12 +183,20 @@ model VendorOrder {
   /// Recorded, never overwritten, when an appointment is missed.
   missedAt      DateTime?         @map("missed_at")
   placedBy      OrderPlacedBy     @default(TC) @map("placed_by")
+  /// Set when the order was emailed to an as-yet-unregistered vendor (vendorId
+  /// null). Kept so a reply's sender can be checked against it, and so past
+  /// orders can be claimed by that address on registration.
+  emailTo       String?           @map("email_to")
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   events        VendorOrderEvent[]
+  proposals     VendorOrderProposal[]
+  link          VendorOrderLink?
+  documents     Document[]        @relation("OrderDocuments")
 
   @@index([tenantId, transactionId])
   @@index([vendorId])
+  @@index([emailTo])
   @@map("vendor_order")
 }
 
@@ -214,6 +222,95 @@ model VendorOrderEvent {
 
   @@index([tenantId, orderId])
   @@map("vendor_order_event")
+}
+
+/// A signed capability link that lets an emailed, unregistered vendor act on
+/// one order without an account — accept, schedule, complete — the portal_link
+/// pattern with an expiry and a revoke. Like portal_link and api_key, the token
+/// IS the capability, so this table deliberately has NO RLS: it's looked up by
+/// bare token before any tenant context exists, then everything downstream runs
+/// through withTenant(order.tenantId).
+model VendorOrderLink {
+  id             String      @id @default(uuid())
+  tenantId       String      @map("tenant_id")
+  orderId        String      @unique @map("order_id")
+  order          VendorOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  token          String      @unique
+  /// The address the order was emailed to — the party the link is meant for.
+  email          String
+  expiresAt      DateTime    @map("expires_at")
+  revokedAt      DateTime?   @map("revoked_at")
+  lastAccessedAt DateTime?   @map("last_accessed_at")
+  createdAt      DateTime    @default(now())
+
+  @@map("vendor_order_link")
+}
+
+/// What the AI read an emailed vendor's plain-text reply as proposing.
+enum ProposalKind {
+  ACCEPT
+  DECLINE
+  SCHEDULE
+  COMPLETE
+  NOTE
+  UNKNOWN
+}
+
+enum ProposalStatus {
+  PENDING
+  APPLIED
+  DISMISSED
+}
+
+/// An AI-read proposal derived from an unregistered vendor's email reply. It is
+/// never applied automatically: it surfaces on the order for the coordinator to
+/// accept in one click — the features page's "nothing the AI reads touches your
+/// file until you approve it" promise. Tenant-scoped RLS: only the coordinator
+/// reviews proposals, so the vendor side never reads this table.
+model VendorOrderProposal {
+  id         String         @id @default(uuid())
+  tenantId   String         @map("tenant_id")
+  orderId    String         @map("order_id")
+  order      VendorOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  kind       ProposalKind   @default(UNKNOWN)
+  /// Proposed appointment time, for SCHEDULE proposals.
+  at         DateTime?
+  /// One-line summary the coordinator sees ("Wants to schedule Tuesday 2pm").
+  summary    String
+  /// The reply text the proposal was derived from (quoted history stripped).
+  sourceText String         @map("source_text")
+  fromAddr   String         @map("from_addr")
+  /// True when the sender didn't match the address the order was emailed to.
+  senderMismatch Boolean    @default(false) @map("sender_mismatch")
+  status     ProposalStatus @default(PENDING)
+  createdAt  DateTime       @default(now())
+  resolvedAt DateTime?      @map("resolved_at")
+
+  @@index([tenantId, orderId])
+  @@map("vendor_order_proposal")
+}
+
+/// Inbound mail that couldn't be threaded — no reply token, or a token that
+/// matched nothing. Previously dropped with a 200 and no trace; now captured so
+/// a vendor's reply never silently vanishes, with an operator alert. May have no
+/// tenant (a stray inbound), so like the other capability/system tables it has
+/// NO RLS and is read only in the operator console.
+model InboundEmail {
+  id              String    @id @default(uuid())
+  tenantId        String?   @map("tenant_id")
+  fromAddr        String    @map("from_addr")
+  toAddr          String    @map("to_addr")
+  subject         String
+  bodyText        String    @map("body_text")
+  token           String?
+  /// Why it landed here: "no_token" | "unknown_token".
+  reason          String
+  attachmentCount Int       @default(0) @map("attachment_count")
+  handledAt       DateTime? @map("handled_at")
+  createdAt       DateTime  @default(now())
+
+  @@index([createdAt])
+  @@map("inbound_email")
 }
 
 /// A person who can act for a vendor. Many per vendor (a title company has
@@ -678,6 +775,9 @@ model EmailThread {
   tenantId      String   @map("tenant_id")
   transactionId String?  @map("transaction_id")
   contactId     String?  @map("contact_id")
+  /// Set when the thread is a vendor order emailed to an unregistered vendor;
+  /// their reply routes to the AI-proposal path instead of plain thread capture.
+  orderId       String?  @map("order_id")
   providerId    String?  @map("provider_id")
   createdAt     DateTime @default(now())
 
@@ -1483,6 +1583,11 @@ model Document {
   version         Int                  @default(1)
   isCurrent       Boolean              @default(true) @map("is_current")
   replacesId      String?              @map("replaces_id")
+  /// Set when the file came from a vendor — an inbound email attachment on an
+  /// order (Stage 4) or a vendor upload (Stage 5). Kept internal by default
+  /// (visibleToClient false); only the TC can promote it to the client.
+  sourceOrderId   String?              @map("source_order_id")
+  sourceOrder     VendorOrder?         @relation("OrderDocuments", fields: [sourceOrderId], references: [id], onDelete: SetNull)
   extractions     ContractExtraction[]
   envelopes       SignatureEnvelope[]
   complianceSlots ComplianceSlot[]
@@ -1491,6 +1596,7 @@ model Document {
   @@index([tenantId])
   @@index([transactionId])
   @@index([replacesId])
+  @@index([sourceOrderId])
   @@map("document")
 }
 

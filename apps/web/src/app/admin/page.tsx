@@ -101,12 +101,17 @@ export default async function AdminPage() {
             Every workspace on this deployment, read-only. Visible only to platform admins.
           </p>
         </div>
-        <Link
-          href="/admin/tickets"
-          className={`${btnGhost} ${openTickets > 0 ? "border-brand-300 text-brand-700" : ""}`}
-        >
-          Support tickets{openTickets > 0 ? ` — ${openTickets} open` : ""}
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/admin/inbound" className={btnGhost}>
+            Unmatched inbound
+          </Link>
+          <Link
+            href="/admin/tickets"
+            className={`${btnGhost} ${openTickets > 0 ? "border-brand-300 text-brand-700" : ""}`}
+          >
+            Support tickets{openTickets > 0 ? ` — ${openTickets} open` : ""}
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">

@@ -95,3 +95,7 @@ export const OrderPlacedBy = PrismaPkg.OrderPlacedBy;
 export type OrderPlacedBy = PrismaPkg.OrderPlacedBy;
 export const OrderActor = PrismaPkg.OrderActor;
 export type OrderActor = PrismaPkg.OrderActor;
+export const ProposalKind = PrismaPkg.ProposalKind;
+export type ProposalKind = PrismaPkg.ProposalKind;
+export const ProposalStatus = PrismaPkg.ProposalStatus;
+export type ProposalStatus = PrismaPkg.ProposalStatus;

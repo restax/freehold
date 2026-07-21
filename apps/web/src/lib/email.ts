@@ -24,6 +24,9 @@ export interface SendEmailInput {
   tenantId: string;
   transactionId?: string | null;
   contactId?: string | null;
+  /** Set for a vendor order emailed to an unregistered vendor: their reply
+   *  routes to the AI-proposal path instead of plain thread capture. */
+  orderId?: string | null;
   to: string;
   subject: string;
   body: string;
@@ -71,6 +74,7 @@ export async function sendTenantEmail(input: SendEmailInput): Promise<string> {
       tenantId: input.tenantId,
       transactionId: input.transactionId ?? null,
       contactId: input.contactId ?? null,
+      orderId: input.orderId ?? null,
       providerId: json.id ?? null,
     },
   });

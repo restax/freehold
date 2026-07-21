@@ -1,12 +1,22 @@
 "use server";
 
-import { OrderActor, type TenantTx, VendorOrderStatus, withTenant, withVendor } from "@freehold/db";
+import {
+  OrderActor,
+  ProposalStatus,
+  type TenantTx,
+  VendorOrderStatus,
+  withTenant,
+  withVendor,
+} from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
+import { emailEnabled, sendTenantEmail } from "@/lib/email";
 import { dateOnly, optStr, str } from "@/lib/forms";
 import { adminAlert } from "@/lib/notify";
+import { getObjectBytes } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
 import { requireVendor } from "@/lib/vendor-auth";
+import { createOrderLink, orderLinkUrl } from "@/lib/vendor-order-links";
 import {
   canAcceptOrder,
   canCancel,
@@ -130,6 +140,220 @@ export async function cancelVendorOrder(formData: FormData) {
     action: "vendor.order_cancelled",
     summary: `Cancelled a ${cancelled.type} order`,
   });
+  revalidatePath(`/dashboard/transactions/${transactionId}`);
+}
+
+/**
+ * Email an order to a vendor who isn't on Freehold yet. The order lives on the
+ * file with a null vendorId; a capability link lets them act without an account,
+ * and their plain reply comes back as a reviewed proposal. This is how the
+ * network starts from zero — an unregistered vendor still gets a real order.
+ */
+export async function emailVendorOrder(formData: FormData) {
+  const { tenantId, session } = await requireTenant();
+  const transactionId = str(formData, "transactionId");
+  const email = str(formData, "email").trim().toLowerCase();
+  const type = str(formData, "type");
+  if (!transactionId || !email.includes("@") || !type) return;
+
+  // Gather selected transaction documents to attach (decrypted, capped 15 MB) —
+  // the same loop the Emails tab uses.
+  const attachDocIds = formData.getAll("attachDoc").map(String).filter(Boolean);
+
+  const order = await withTenant(tenantId, async (tx) => {
+    const txn = await tx.transaction.findUnique({
+      where: { id: transactionId },
+      select: { id: true, propertyAddress: true },
+    });
+    if (!txn) return null;
+    const o = await tx.vendorOrder.create({
+      data: {
+        tenantId,
+        vendorId: null,
+        transactionId,
+        type,
+        details: optStr(formData, "details"),
+        dueDate: dateOnly(formData, "dueDate"),
+        status: VendorOrderStatus.SENT,
+        placedBy: "TC",
+        emailTo: email,
+      },
+    });
+    await recordEvent(tx, o, "created", OrderActor.TC, {
+      detail: `Emailed ${type} to ${email}`,
+    });
+    return { ...o, property: txn.propertyAddress };
+  });
+  if (!order) return;
+
+  // Build the capability link and send. If email isn't configured, the order
+  // still lives on the file (the TC can share the link by hand); we never
+  // silently pretend it went out.
+  const token = await createOrderLink(tenantId, order.id, email);
+  let sent = false;
+  if (emailEnabled()) {
+    try {
+      const attachments: Array<{ filename: string; content: string }> = [];
+      if (attachDocIds.length > 0) {
+        const docs = await withTenant(tenantId, (tx) =>
+          tx.document.findMany({
+            where: { id: { in: attachDocIds }, transactionId },
+            select: {
+              filename: true,
+              data: true,
+              storageKey: true,
+              storageProvider: true,
+              tenantId: true,
+            },
+          }),
+        );
+        let total = 0;
+        for (const doc of docs) {
+          const bytes = await getObjectBytes(doc);
+          total += bytes.length;
+          if (total > 15 * 1024 * 1024) break;
+          attachments.push({ filename: doc.filename, content: bytes.toString("base64") });
+        }
+      }
+
+      const registerUrl = `${(process.env.BETTER_AUTH_URL ?? "http://localhost:3000").replace(/\/$/, "")}/vendor/register`;
+      const lines = [
+        `${session.user.name || "A transaction coordinator"} at ${session.user.email.split("@")[0]} sent you an order through Freehold.`,
+        "",
+        `Order: ${type}`,
+        order.property ? `Property: ${order.property}` : "",
+        order.details ? `Details: ${order.details}` : "",
+        order.dueDate ? `Needed by: ${order.dueDate.toISOString().slice(0, 10)}` : "",
+        "",
+        "Accept, schedule, or update this order — no account needed:",
+        orderLinkUrl(token),
+        "",
+        "Or just reply to this email and we'll turn your message into an update for the coordinator to confirm.",
+        "",
+        `Want every coordinator's orders in one place? Register your business (free): ${registerUrl}`,
+      ].filter((l) => l !== "");
+
+      await sendTenantEmail({
+        tenantId,
+        transactionId,
+        orderId: order.id,
+        to: email,
+        subject: `${type} — order from your transaction coordinator`,
+        body: lines.join("\n"),
+        attachments,
+      });
+      sent = true;
+    } catch (err) {
+      adminAlert(`⚠️ Failed to email a vendor order to ${email}: ${String(err).slice(0, 200)}`);
+    }
+  }
+
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "vendor.order_emailed",
+    summary: `Emailed a ${type} order to ${email}${sent ? "" : " (send pending — email not configured)"}`,
+    subjectType: "VendorOrder",
+    subjectId: order.id,
+  });
+  emitWebhook(tenantId, "vendor.order.placed", { transactionId, type, emailTo: email });
+  revalidatePath(`/dashboard/transactions/${transactionId}`);
+}
+
+/**
+ * Apply an AI-read proposal from an emailed vendor's reply — the one-click
+ * confirmation. The coordinator is the authority here, so the intended
+ * transition is applied and recorded as a VENDOR-actor event (it reflects what
+ * the vendor said), then the proposal is marked resolved.
+ */
+export async function applyVendorProposal(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  const transactionId = str(formData, "transactionId");
+  if (!id) return;
+
+  const applied = await withTenant(tenantId, async (tx) => {
+    const proposal = await tx.vendorOrderProposal.findUnique({ where: { id } });
+    if (!proposal || proposal.status !== ProposalStatus.PENDING) return null;
+    const order = await tx.vendorOrder.findUnique({
+      where: { id: proposal.orderId },
+      select: { id: true, tenantId: true, vendorId: true, type: true, scheduledAt: true },
+    });
+    if (!order) return null;
+
+    switch (proposal.kind) {
+      case "ACCEPT":
+        await tx.vendorOrder.update({
+          where: { id: order.id },
+          data: { status: VendorOrderStatus.ACCEPTED },
+        });
+        await recordEvent(tx, order, "accepted", OrderActor.VENDOR, { detail: proposal.summary });
+        break;
+      case "DECLINE":
+        await tx.vendorOrder.update({
+          where: { id: order.id },
+          data: { status: VendorOrderStatus.DECLINED },
+        });
+        await recordEvent(tx, order, "declined", OrderActor.VENDOR, { detail: proposal.summary });
+        break;
+      case "SCHEDULE":
+        await tx.vendorOrder.update({
+          where: { id: order.id },
+          data: {
+            status: VendorOrderStatus.SCHEDULED,
+            scheduledAt: proposal.at,
+            missedAt: null,
+          },
+        });
+        await recordEvent(
+          tx,
+          order,
+          order.scheduledAt ? "rescheduled" : "scheduled",
+          OrderActor.VENDOR,
+          { at: proposal.at, detail: proposal.summary },
+        );
+        break;
+      case "COMPLETE":
+        await tx.vendorOrder.update({
+          where: { id: order.id },
+          data: { status: VendorOrderStatus.COMPLETED, completedAt: new Date() },
+        });
+        await recordEvent(tx, order, "completed", OrderActor.VENDOR, { detail: proposal.summary });
+        break;
+      default:
+        // NOTE / UNKNOWN: keep the record, change no state.
+        await recordEvent(tx, order, "note", OrderActor.VENDOR, { detail: proposal.summary });
+    }
+
+    await tx.vendorOrderProposal.update({
+      where: { id },
+      data: { status: ProposalStatus.APPLIED, resolvedAt: new Date() },
+    });
+    return { order, kind: proposal.kind };
+  });
+  if (!applied) return;
+
+  emitWebhook(tenantId, "vendor.order.updated", {
+    orderId: applied.order.id,
+    via: "email_reply",
+    kind: applied.kind,
+  });
+  revalidatePath(`/dashboard/transactions/${transactionId}`);
+}
+
+/** Dismiss a proposal without applying it. */
+export async function dismissVendorProposal(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  const transactionId = str(formData, "transactionId");
+  if (!id) return;
+  await withTenant(tenantId, (tx) =>
+    tx.vendorOrderProposal.updateMany({
+      where: { id, status: ProposalStatus.PENDING },
+      data: { status: ProposalStatus.DISMISSED, resolvedAt: new Date() },
+    }),
+  );
   revalidatePath(`/dashboard/transactions/${transactionId}`);
 }
 

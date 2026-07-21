@@ -1,6 +1,6 @@
 "use server";
 
-import { prisma, type VendorCategory } from "@freehold/db";
+import { prisma, type VendorCategory, withTenant } from "@freehold/db";
 import { auth } from "@/lib/auth";
 import { oneOf, optStr, str } from "@/lib/forms";
 import { adminAlert } from "@/lib/notify";
@@ -63,8 +63,60 @@ export async function registerVendor(formData: FormData): Promise<VendorRegister
   });
   await prisma.vendorUser.create({ data: { vendorId: vendor.id, userId: user.id, role: "owner" } });
 
-  adminAlert(`🧰 New vendor registered: ${businessName} (${category}) <${email}>`);
+  const claimed = await claimEmailedOrders(email, vendor.id);
+
+  adminAlert(
+    `🧰 New vendor registered: ${businessName} (${category}) <${email}>` +
+      (claimed > 0 ? ` — claimed ${claimed} order(s) emailed before signup` : ""),
+  );
   return { ok: true };
+}
+
+/**
+ * The upgrade path: orders emailed to this address before the vendor had an
+ * account now attach to their new Vendor. Those orders live in other tenants'
+ * RLS-protected tables, and a just-registered vendor has no tenant context —
+ * so we find them through vendor_order_link (a no-RLS capability table that
+ * carries the tenant), then update each order tenant-scoped. Claiming an order
+ * also opens an ACTIVE connection: the coordinator already reached out by
+ * ordering, so future orders can flow the easy way.
+ */
+async function claimEmailedOrders(email: string, vendorId: string): Promise<number> {
+  const links = await prisma.vendorOrderLink.findMany({
+    where: { email },
+    select: { tenantId: true, orderId: true },
+  });
+  let claimed = 0;
+  for (const link of links) {
+    const didClaim = await withTenant(link.tenantId, async (tx) => {
+      const order = await tx.vendorOrder.findUnique({
+        where: { id: link.orderId },
+        select: { id: true, vendorId: true },
+      });
+      if (!order || order.vendorId) return false;
+      await tx.vendorOrder.update({ where: { id: order.id }, data: { vendorId } });
+      // Denormalized vendor_id on the history lets the vendor read the trail
+      // through withVendor (the two-sided RLS keys off it).
+      await tx.vendorOrderEvent.updateMany({ where: { orderId: order.id }, data: { vendorId } });
+      return true;
+    });
+    if (!didClaim) continue;
+    claimed += 1;
+    await withTenant(link.tenantId, (tx) =>
+      tx.vendorConnection.upsert({
+        where: { tenantId_vendorId: { tenantId: link.tenantId, vendorId } },
+        create: {
+          tenantId: link.tenantId,
+          vendorId,
+          status: "ACTIVE",
+          requestedBy: "TENANT",
+          respondedAt: new Date(),
+        },
+        update: {},
+      }),
+    );
+  }
+  return claimed;
 }
 
 /** Update the signed-in vendor's public profile. */
