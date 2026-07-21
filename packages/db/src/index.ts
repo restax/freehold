@@ -17,6 +17,7 @@ export type {
   Organization as Tenant,
   PaymentRequest,
   PaymentRequestItem,
+  PlatformSetting,
   PortalLink,
   Session,
   SignatureEnvelope,

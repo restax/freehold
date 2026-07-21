@@ -24,7 +24,8 @@ export async function GET(req: Request) {
   if (!scope) return NextResponse.json({ error: "invalid_grant" }, { status: 401 });
   // Persona and opening line come from here too, so the agent stays generic and
   // the copy lives with the rest of the product's voice.
-  return NextResponse.json({ tools: toolsForScope(scope), ...briefForScope(scope) });
+  const [tools, brief] = await Promise.all([toolsForScope(scope), briefForScope(scope)]);
+  return NextResponse.json({ tools, ...brief });
 }
 
 export async function POST(req: Request) {
@@ -39,7 +40,8 @@ export async function POST(req: Request) {
 
   // Only tools this scope actually publishes may run — a portal grant can't
   // invoke a workspace-wide tool by naming it.
-  if (!toolsForScope(scope).some((t) => t.name === body.tool)) {
+  const tools = await toolsForScope(scope);
+  if (!tools.some((t) => t.name === body.tool)) {
     return NextResponse.json({ error: "unknown_tool" }, { status: 400 });
   }
 

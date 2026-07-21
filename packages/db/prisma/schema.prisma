@@ -1023,6 +1023,26 @@ model ApiKey {
   @@map("api_key")
 }
 
+/// Global platform configuration, editable from /admin — a single row (there's
+/// exactly one Freehold), self-created on first read. No tenant, no RLS: this
+/// is operator-only, the same root-table shape as Vendor and ApiKey.
+///
+/// The founderCall* fields back the homepage voice demo's "call the developer"
+/// feature: a kill switch, the cooldown between calls, and the last-call
+/// timestamp that cooldown is measured against. founderLastCallAt is claimed
+/// with a single conditional UPDATE (see platform-settings.ts) so two visitors
+/// racing for the same slot can't both win it.
+model PlatformSetting {
+  id                         String    @id @default("singleton")
+  founderCallsAvailable      Boolean   @default(false) @map("founder_calls_available")
+  founderCallCooldownMinutes Int       @default(15) @map("founder_call_cooldown_minutes")
+  founderCallSellingPoints   String?   @map("founder_call_selling_points")
+  founderLastCallAt          DateTime? @map("founder_last_call_at")
+  updatedAt                  DateTime  @updatedAt @map("updated_at")
+
+  @@map("platform_setting")
+}
+
 model WebhookEndpoint {
   id        String       @id @default(uuid())
   tenantId  String       @map("tenant_id")

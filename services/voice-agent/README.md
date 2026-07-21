@@ -111,3 +111,44 @@ Three metered APIs run per session, so Cloud meters it: Free gets none, Pro
 paying the vendors directly. Replies are kept to a sentence or two by the
 system prompt, and the tool loop is capped at 3 steps, both to keep spoken
 answers listenable and the bill boring.
+
+## Calling a real phone — the homepage "call the developer" demo
+
+On the marketing homepage only, the agent can offer to bring the developer
+onto the call live: not a transfer, a **group call** — the SIP-dialed phone
+joins the same room as a third participant, so the visitor, the AI, and the
+human are all on together. Off by default; an operator turns it on and
+configures it entirely from **`/admin/settings`** (no redeploy needed):
+
+- **Kill switch** — a plain on/off. Nothing offers or dials while it's off.
+- **Cooldown** — minutes between calls, enforced with a single atomic
+  Postgres `UPDATE` (`claimFounderCallSlot` in `apps/web/src/lib/platform-settings.ts`),
+  so it can't be spammed even by several visitors racing at once.
+- **Selling points** — free text the voice assistant weaves into what it says
+  about Freehold, in its own words.
+
+**Trust boundary, same as everywhere else in this file:** the agent never
+decides on its own whether to dial. `call_the_founder` asks the app first
+(`POST /api/voice/data`, same as every other tool); the app checks the kill
+switch and cooldown and — only if both pass — atomically claims the slot and
+says yes. Only then does the agent place the SIP call, with its own
+credentials. A tampered or over-eager agent can't call out on a permission it
+granted itself.
+
+**Setup**, beyond the usual secrets:
+
+1. Buy or already have a LiveKit-hosted phone number (`lk number list`).
+2. Bring it online and create an **outbound** SIP trunk that uses it as caller
+   ID (`lk sip outbound create`) — this is telephony account configuration,
+   not something this repo's build does for you.
+3. Set `FOUNDER_CELL_NUMBER` (E.164, e.g. `+15551234567`) and
+   `FOUNDER_SIP_TRUNK_ID` (the trunk's ID from step 2) in `secrets.env`, then
+   `lk agent update-secrets --secrets-file secrets.env`.
+
+Leaving `FOUNDER_SIP_TRUNK_ID` blank keeps the feature safely off even if the
+kill switch is on — `call_the_founder` checks both and declines cleanly
+("something's not configured right on my end") rather than failing oddly.
+
+Auto-hangup and a ringing timeout are set directly on the SIP call
+(`max_call_duration`, `ringing_timeout` in `call_the_founder`, `agent.py`) so a
+missed or forgotten call can't run away on its own.

@@ -1,6 +1,7 @@
 import { withTenant } from "@freehold/db";
 import { fmtDate } from "./format";
 import { FREEHOLD_FACTS, FREEHOLD_RULES } from "./freehold-facts";
+import { claimFounderCallSlot, getPlatformSettings } from "./platform-settings";
 import { resolveAgentPortal, resolvePortal } from "./portal";
 import type { VoiceScope } from "./voice-grant";
 
@@ -91,8 +92,21 @@ const PORTAL_TOOLS: VoiceTool[] = [
   },
 ];
 
-export function toolsForScope(scope: VoiceScope): VoiceTool[] {
-  if (scope.kind === "marketing") return [];
+const CALL_THE_FOUNDER_TOOL: VoiceTool = {
+  name: "call_the_founder",
+  description:
+    "Bring the developer into this same call live, right now. Call this ONLY after the " +
+    "visitor has clearly agreed to the idea when you offered it — never on your own " +
+    "initiative mid-answer, and never more than once per conversation. It may fail if he's " +
+    "unavailable or another call just connected; if so, say so warmly and move on.",
+  input_schema: { type: "object", properties: {} },
+};
+
+export async function toolsForScope(scope: VoiceScope): Promise<VoiceTool[]> {
+  if (scope.kind === "marketing") {
+    const settings = await getPlatformSettings();
+    return settings.founderCallsAvailable ? [CALL_THE_FOUNDER_TOOL] : [];
+  }
   return scope.kind === "portal" ? PORTAL_TOOLS : TENANT_TOOLS;
 }
 
@@ -125,22 +139,48 @@ transaction and suggest they contact their coordinator. Be reassuring and brief:
 these are people mid-move, and this is often the most stressful purchase of
 their life.`;
 
-const MARKETING_INSTRUCTIONS = `You are the voice of Freehold, greeting a visitor
-on the homepage who has never used it. You have no access to any customer data
-and no tools — you are here to explain Freehold and answer questions about it.
+export function marketingInstructions(opts: {
+  sellingPoints: string | null;
+  callAvailable: boolean;
+}): string {
+  const sellingPointsBlock = opts.sellingPoints?.trim()
+    ? `\nKey things to weave in naturally when relevant (in your own words, never read verbatim):\n${opts.sellingPoints.trim()}\n`
+    : "";
+
+  // Offered once, proactively, after a real exchange has happened — never as
+  // the very first thing said, never repeated, and only ever true when an
+  // operator has explicitly turned this on for /admin (see platform-settings.ts).
+  const callOfferBlock = opts.callAvailable
+    ? `
+You also have a call_the_founder tool. Once — after you've actually answered
+something for them, not as your opening line — bring it up yourself as your own
+idea, with genuine excitement: something like "actually, we just added
+something wild — I can bring the real developer onto this call, live, right
+now. It's mostly just to show off that you can ask instead of typing things
+out — and don't worry, there's still a full written transcript of this whole
+conversation." Only call the tool if they clearly say yes. If it fails (he's
+mid-call, or just stepped away), say so warmly — never apologize excessively,
+just move on. Never bring it up more than once.`
+    : "";
+
+  return `You are the voice of Freehold, greeting a visitor on the homepage who
+has never used it. You have no access to any customer data — you are here to
+explain Freehold and answer questions about it.
 
 ${SPEAKING_STYLE}
 
 ${FREEHOLD_FACTS}
 
 ${FREEHOLD_RULES}
-
+${sellingPointsBlock}
 Be genuinely useful, not salesy. If Freehold isn't a fit for what they describe,
 say so — that honesty is the product's whole personality. Point people to the
-live demo or hello@freeholdtc.dev when it's the better answer.`;
+live demo or hello@freeholdtc.dev when it's the better answer.
+${callOfferBlock}`;
+}
 
 /** The opening line, spoken before the visitor says anything. */
-const MARKETING_GREETING = `Give a warm ten-second pitch, in your own words, no
+export const MARKETING_GREETING = `Give a warm ten-second pitch, in your own words, no
 more than three sentences: Freehold is transaction management and CRM built for
 real estate transaction coordinators — the AI reads a purchase contract and
 page-cites every date and dollar for you to confirm, clients get their own
@@ -153,9 +193,18 @@ const PORTAL_GREETING = `Greet them warmly in one short sentence, mention you ca
 answer questions about their transaction, and invite them to ask.`;
 
 /** Persona + opening line for a scope. Kept server-side so the agent stays generic. */
-export function briefForScope(scope: VoiceScope): { instructions: string; greeting: string } {
+export async function briefForScope(
+  scope: VoiceScope,
+): Promise<{ instructions: string; greeting: string }> {
   if (scope.kind === "marketing") {
-    return { instructions: MARKETING_INSTRUCTIONS, greeting: MARKETING_GREETING };
+    const settings = await getPlatformSettings();
+    return {
+      instructions: marketingInstructions({
+        sellingPoints: settings.founderCallSellingPoints,
+        callAvailable: settings.founderCallsAvailable,
+      }),
+      greeting: MARKETING_GREETING,
+    };
   }
   if (scope.kind === "portal") {
     return { instructions: PORTAL_INSTRUCTIONS, greeting: PORTAL_GREETING };
@@ -370,9 +419,18 @@ export async function runVoiceTool(
   input: Record<string, unknown>,
 ): Promise<unknown> {
   try {
-    // Marketing has no tools at all; if one is somehow named, refuse rather
-    // than fall through to a scope that can read data.
-    if (scope.kind === "marketing") return { error: "no_tools_in_this_scope" };
+    if (scope.kind === "marketing") {
+      // The only marketing tool. Re-checks availability + cooldown at
+      // execution time (not just at brief-fetch time), since the flag or the
+      // cooldown window can change mid-conversation. The agent does the
+      // actual SIP dial-out itself, using its own credentials — this only
+      // grants (and atomically claims) permission to do so.
+      if (name !== "call_the_founder") return { error: "no_tools_in_this_scope" };
+      const claimed = await claimFounderCallSlot();
+      return claimed
+        ? { ok: true }
+        : { ok: false, reason: "not available right now — try again in a few minutes" };
+    }
     if (scope.kind === "portal") return await runPortalTool(scope.portalToken, name);
     return await runTenantTool(scope, name, input);
   } catch {

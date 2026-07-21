@@ -102,6 +102,9 @@ export default async function AdminPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/admin/settings" className={btnGhost}>
+            Platform settings
+          </Link>
           <Link href="/admin/ads" className={btnGhost}>
             Vendor ads
           </Link>

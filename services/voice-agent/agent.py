@@ -25,6 +25,8 @@ from pathlib import Path
 
 import aiohttp
 from dotenv import load_dotenv
+from google.protobuf.duration_pb2 import Duration
+from livekit import api
 from livekit.agents import (
     Agent,
     AgentSession,
@@ -33,6 +35,7 @@ from livekit.agents import (
     RunContext,
     WorkerOptions,
     cli,
+    get_job_context,
 )
 from livekit.agents.llm import function_tool
 from livekit.plugins import anthropic, deepgram, elevenlabs, silero
@@ -52,6 +55,11 @@ logger = logging.getLogger("freehold-voice")
 APP_URL = os.environ.get("FREEHOLD_APP_URL", "http://localhost:3010").rstrip("/")
 VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "YY7fzZmDizFQQv8XPAIY")
 LLM_MODEL = os.environ.get("FREEHOLD_VOICE_MODEL", "claude-sonnet-4-6")
+
+# The homepage demo's "call the developer" feature. Both unset means the tool
+# is simply never usable — nothing in this file assumes they're present.
+FOUNDER_CELL_NUMBER = os.environ.get("FOUNDER_CELL_NUMBER")
+FOUNDER_SIP_TRUNK_ID = os.environ.get("FOUNDER_SIP_TRUNK_ID")
 
 class FreeholdAssistant(Agent):
     def __init__(self, grant: str, allowed: set[str], instructions: str) -> None:
@@ -154,6 +162,50 @@ async def my_documents(ctx: RunContext) -> str:
     return await ctx.session.current_agent.lookup("my_documents")
 
 
+@function_tool
+async def call_the_founder(ctx: RunContext) -> str:
+    """Bring the developer onto this call live. Only offered on the public
+    marketing demo, and only when the app has approved it (the app checks its
+    own kill switch and cooldown; a room only ever gets this tool at all when
+    the app already decided it's on). See instructions for when to use it."""
+    # The app decides yes/no and atomically claims the cooldown slot — this
+    # call never dials anything on a permission it granted itself.
+    approved = await ctx.session.current_agent.lookup("call_the_founder")
+    try:
+        decision = json.loads(approved)
+    except (json.JSONDecodeError, TypeError):
+        decision = None
+    if not isinstance(decision, dict) or not decision.get("ok"):
+        reason = decision.get("reason") if isinstance(decision, dict) else None
+        return reason or "That's not available right now."
+
+    if not FOUNDER_CELL_NUMBER or not FOUNDER_SIP_TRUNK_ID:
+        logger.error("call_the_founder approved by the app but no SIP config is set locally")
+        return "Something's not configured right on my end — sorry about that."
+
+    job_ctx = get_job_context()
+    try:
+        await job_ctx.api.sip.create_sip_participant(
+            api.CreateSIPParticipantRequest(
+                room_name=job_ctx.room.name,
+                sip_trunk_id=FOUNDER_SIP_TRUNK_ID,
+                sip_call_to=FOUNDER_CELL_NUMBER,
+                participant_identity="founder",
+                participant_name="The developer",
+                play_ringtone=True,
+                # Give up cleanly if he doesn't pick up rather than ringing
+                # into a live conversation forever, and hard-cap the call
+                # itself so nothing can run away unattended.
+                ringing_timeout=Duration(seconds=25),
+                max_call_duration=Duration(seconds=180),
+            )
+        )
+    except Exception:
+        logger.exception("call_the_founder: SIP dial-out failed")
+        return "Hmm, that call didn't go through. Let's carry on without him."
+    return "Calling now — let them know he'll be with them in just a moment."
+
+
 ALL_TOOLS = [
     workspace_summary,
     search_transactions,
@@ -162,6 +214,7 @@ ALL_TOOLS = [
     my_files,
     my_dates,
     my_documents,
+    call_the_founder,
 ]
 
 
