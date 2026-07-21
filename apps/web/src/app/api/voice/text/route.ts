@@ -3,7 +3,13 @@ import { NextResponse } from "next/server";
 import { liveLink } from "@/lib/portal";
 import { requireTenant } from "@/lib/tenant";
 import type { VoiceScope } from "@/lib/voice-grant";
-import { briefForScope, runVoiceTool, toolsForScope } from "@/lib/voice-tools";
+import {
+  briefForScope,
+  extractReferences,
+  runVoiceTool,
+  toolsForScope,
+  type VoiceReference,
+} from "@/lib/voice-tools";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +83,13 @@ export async function POST(req: Request) {
     content: m.content,
   }));
 
+  // Accumulated across every tool call this turn: navigateTo is "where the
+  // navigate tool sent us" (last call wins, there's only ever meant to be
+  // one); references are id+label pairs pulled from data-lookup tool results
+  // so the client can turn a matching mention in the reply text into a link.
+  let navigateTo: string | undefined;
+  const references: VoiceReference[] = [];
+
   for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
     const res = await client.messages.create({
       model: MODEL,
@@ -92,7 +105,11 @@ export async function POST(req: Request) {
         .map((b) => b.text)
         .join("")
         .trim();
-      return NextResponse.json({ reply: reply || "I'm not sure how to answer that one." });
+      return NextResponse.json({
+        reply: reply || "I'm not sure how to answer that one.",
+        navigateTo,
+        references: dedupeReferences(references),
+      });
     }
 
     // Run every tool the model asked for, under the verified scope, and feed
@@ -111,6 +128,12 @@ export async function POST(req: Request) {
           tool_use_id: block.id,
           content: JSON.stringify(result),
         });
+        if (block.name === "navigate" && result && typeof result === "object") {
+          const navigated = (result as { navigateTo?: unknown }).navigateTo;
+          if (typeof navigated === "string") navigateTo = navigated;
+        } else {
+          references.push(...extractReferences(result));
+        }
       }
     }
     convo.push({ role: "user", content: toolResults });
@@ -119,5 +142,13 @@ export async function POST(req: Request) {
   // Ran out of tool turns without a final answer — don't leave them hanging.
   return NextResponse.json({
     reply: "That took more steps than I can do at once — try asking it more narrowly.",
+    navigateTo,
+    references: dedupeReferences(references),
   });
+}
+
+/** Last-write-wins by id, capped so a long tool-heavy turn can't balloon the response. */
+function dedupeReferences(refs: VoiceReference[]): VoiceReference[] {
+  const byId = new Map(refs.map((r) => [r.id, r]));
+  return [...byId.values()].slice(0, 30);
 }

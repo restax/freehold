@@ -8,7 +8,10 @@ import {
   Track,
   type TranscriptionSegment,
 } from "livekit-client";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { VoiceReference } from "@/lib/voice-tools";
 
 /**
  * Voice search: hold a conversation with Claude about this workspace's data.
@@ -30,9 +33,60 @@ interface Line {
   id: string;
   who: "you" | "assistant";
   text: string;
+  /** Transactions/contacts/clients this reply's data came from, so a mention
+   *  of one by name in the text can become a link — text-chat only, never
+   *  set on live-voice transcript lines. */
+  references?: VoiceReference[];
+}
+
+/**
+ * Turn any reference label mentioned in `text` into a link to that record.
+ * Matches the label with and without a trailing parenthetical (e.g. a demo
+ * watermark like "(Sample)") — the SPEAKING_STYLE instructions tell the model
+ * to talk naturally, so it reliably drops that kind of annotation even
+ * though the tool result still carries it. Longest candidate wins first so a
+ * shorter name occurring inside a longer one doesn't steal the match.
+ */
+function linkifyReferences(text: string, references?: VoiceReference[]) {
+  if (!references || references.length === 0) return text;
+  const candidates = new Map<string, VoiceReference>();
+  for (const ref of references) {
+    candidates.set(ref.label, ref);
+    const stripped = ref.label.replace(/\s*\([^)]*\)\s*$/, "");
+    if (stripped && stripped !== ref.label) candidates.set(stripped, ref);
+  }
+  const sorted = [...candidates.keys()].sort((a, b) => b.length - a.length);
+  const pattern = sorted.map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  if (!pattern) return text;
+  const parts = text.split(new RegExp(`(${pattern})`, "g"));
+  let offset = 0;
+  return parts.map((part) => {
+    // A running character offset is a stable, unique key for this immutable
+    // split — unlike the array index, it survives biome's reorder-safety check.
+    const key = offset;
+    offset += part.length;
+    const ref = candidates.get(part);
+    if (!ref) return <span key={key}>{part}</span>;
+    const href =
+      ref.type === "transaction"
+        ? `/dashboard/transactions/${ref.id}`
+        : ref.type === "contact"
+          ? `/dashboard/contacts/${ref.id}`
+          : `/dashboard/clients/${ref.id}`;
+    return (
+      <Link
+        key={key}
+        href={href}
+        className="font-medium text-brand-700 underline underline-offset-2 hover:text-brand-800"
+      >
+        {part}
+      </Link>
+    );
+  });
 }
 
 export function VoiceWidget({ portalToken }: { portalToken?: string }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<State>("idle");
   const [lines, setLines] = useState<Line[]>([]);
@@ -161,8 +215,18 @@ export function VoiceWidget({ portalToken }: { portalToken?: string }) {
         return;
       }
       if (!res.ok) throw new Error(String(res.status));
-      const { reply } = (await res.json()) as { reply: string };
-      setLines((prev) => [...prev, { id: `a-${Date.now()}`, who: "assistant", text: reply }]);
+      const { reply, navigateTo, references } = (await res.json()) as {
+        reply: string;
+        navigateTo?: string;
+        references?: VoiceReference[];
+      };
+      setLines((prev) => [
+        ...prev,
+        { id: `a-${Date.now()}`, who: "assistant", text: reply, references },
+      ]);
+      // The widget lives in the persistent dashboard layout, so a client-side
+      // route change navigates without losing this conversation.
+      if (navigateTo) router.push(navigateTo);
     } catch {
       setNote("Couldn't get an answer just now — try again.");
     } finally {
@@ -212,7 +276,7 @@ export function VoiceWidget({ portalToken }: { portalToken?: string }) {
                     : "self-start bg-stone-100 text-stone-800"
                 }`}
               >
-                {l.text}
+                {l.who === "assistant" ? linkifyReferences(l.text, l.references) : l.text}
               </p>
             ))}
             {sending && <p className="self-start text-xs text-stone-400">…</p>}

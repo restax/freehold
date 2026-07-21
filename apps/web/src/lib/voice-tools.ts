@@ -30,6 +30,37 @@ export interface VoiceTool {
   };
 }
 
+/**
+ * Every page the navigate tool can send someone to, mirrored from the
+ * sidebar's own GROUPS (dashboard-nav.tsx) so the two never drift. Guests get
+ * the same restricted subset the sidebar shows them (GUEST_HREFS there) —
+ * duplicated here since that file is a client component and this one isn't.
+ */
+const PAGE_PATHS: Record<string, string> = {
+  dashboard: "/dashboard",
+  transactions: "/dashboard/transactions",
+  calendar: "/dashboard/calendar",
+  contacts: "/dashboard/contacts",
+  clients: "/dashboard/clients",
+  documents: "/dashboard/documents",
+  "action-plans": "/dashboard/action-plans",
+  compliance: "/dashboard/compliance",
+  templates: "/dashboard/templates",
+  emails: "/dashboard/emails",
+  vault: "/dashboard/vault",
+  import: "/dashboard/import",
+  invoices: "/dashboard/invoices",
+  directory: "/dashboard/directory",
+  vendors: "/dashboard/vendors",
+  engagements: "/dashboard/engagements",
+  website: "/dashboard/website",
+  integrations: "/dashboard/integrations",
+  team: "/dashboard/team",
+  billing: "/dashboard/billing",
+  support: "/dashboard/support",
+};
+const GUEST_PAGES = new Set(["dashboard", "transactions", "calendar", "support"]);
+
 const TENANT_TOOLS: VoiceTool[] = [
   {
     name: "workspace_summary",
@@ -69,6 +100,33 @@ const TENANT_TOOLS: VoiceTool[] = [
       type: "object",
       properties: { query: { type: "string", description: "Name, email, or phone fragment" } },
       required: ["query"],
+    },
+  },
+  {
+    name: "navigate",
+    description:
+      "Take the user to a page in the app right now. Use when they say 'show me', 'take me to', 'open', or 'go to'. For a specific transaction, contact, or client, first look it up with search_transactions or find_people in this same turn to get its id, then pass that id here instead of page.",
+    input_schema: {
+      type: "object",
+      properties: {
+        page: {
+          type: "string",
+          description: `One of: ${Object.keys(PAGE_PATHS).join(", ")}`,
+        },
+        transactionId: {
+          type: "string",
+          description:
+            "Go straight to this transaction (id from a prior search_transactions result)",
+        },
+        contactId: {
+          type: "string",
+          description: "Go straight to this contact (id from a prior find_people result)",
+        },
+        clientId: {
+          type: "string",
+          description: "Go straight to this client (id from a prior find_people result)",
+        },
+      },
     },
   },
 ];
@@ -239,6 +297,31 @@ async function runTenantTool(
   const { tenantId } = scope;
   const scoped = guestFilter(scope);
 
+  // No DB access needed: just resolve a destination the client will route to.
+  // A destination id only ever reaches here because the model read it off an
+  // earlier tool result in this same turn — those results are already scoped
+  // (guest-filtered transactions, no contacts/clients for guests at all) — and
+  // the destination page re-checks access regardless, so a wrong or
+  // hallucinated id 404s rather than leaking anything.
+  if (name === "navigate") {
+    const isGuest = scope.kind === "guest";
+    const transactionId = typeof input.transactionId === "string" ? input.transactionId : "";
+    const contactId = typeof input.contactId === "string" ? input.contactId : "";
+    const clientId = typeof input.clientId === "string" ? input.clientId : "";
+
+    if (transactionId) return { navigateTo: `/dashboard/transactions/${transactionId}` };
+    // Guests coordinate files, not the CRM — same "no directory access" rule
+    // find_people already enforces for them.
+    if (!isGuest && contactId) return { navigateTo: `/dashboard/contacts/${contactId}` };
+    if (!isGuest && clientId) return { navigateTo: `/dashboard/clients/${clientId}` };
+
+    const page = typeof input.page === "string" ? input.page : "";
+    if (!(page in PAGE_PATHS) || (isGuest && !GUEST_PAGES.has(page))) {
+      return { error: "Can't go there." };
+    }
+    return { navigateTo: PAGE_PATHS[page] };
+  }
+
   if (name === "workspace_summary") {
     return withTenant(tenantId, async (tx) => ({
       activeTransactions: await tx.transaction.count({
@@ -272,6 +355,7 @@ async function runTenantTool(
         orderBy: { updatedAt: "desc" },
         take: 15,
         select: {
+          id: true,
           propertyAddress: true,
           status: true,
           closeDate: true,
@@ -283,6 +367,7 @@ async function runTenantTool(
     );
     if (rows.length === 0) return NOT_FOUND;
     return rows.map((t) => ({
+      id: t.id,
       address: t.propertyAddress,
       status: t.status,
       client: t.client?.name ?? null,
@@ -308,7 +393,7 @@ async function runTenantTool(
           title: true,
           dueDate: true,
           priority: true,
-          transaction: { select: { propertyAddress: true } },
+          transaction: { select: { id: true, propertyAddress: true } },
         },
       });
       const closings = await tx.transaction.findMany({
@@ -318,7 +403,7 @@ async function runTenantTool(
           status: { notIn: ["CLOSED", "CANCELLED"] },
         },
         orderBy: { closeDate: "asc" },
-        select: { propertyAddress: true, closeDate: true },
+        select: { id: true, propertyAddress: true, closeDate: true },
       });
       if (tasks.length === 0 && closings.length === 0) {
         return { result: `Nothing due in the next ${days} days.` };
@@ -328,9 +413,11 @@ async function runTenantTool(
           title: t.title,
           due: fmtDate(t.dueDate),
           priority: t.priority,
+          transactionId: t.transaction?.id ?? null,
           address: t.transaction?.propertyAddress ?? null,
         })),
         closings: closings.map((c) => ({
+          id: c.id,
           address: c.propertyAddress,
           closeDate: fmtDate(c.closeDate),
         })),
@@ -348,12 +435,12 @@ async function runTenantTool(
       await tx.contact.findMany({
         where: { OR: [{ name: like }, { email: like }, { phone: like }] },
         take: 10,
-        select: { name: true, email: true, phone: true, category: true },
+        select: { id: true, name: true, email: true, phone: true, category: true },
       }),
       await tx.client.findMany({
         where: { OR: [{ name: like }, { email: like }] },
         take: 10,
-        select: { name: true, email: true, phone: true, type: true },
+        select: { id: true, name: true, email: true, phone: true, type: true },
       }),
     ]);
     if (contacts.length === 0 && clients.length === 0) return NOT_FOUND;
@@ -422,6 +509,49 @@ async function runPortalTool(token: string, name: string): Promise<unknown> {
   }
 
   return { error: "unknown_tool" };
+}
+
+export interface VoiceReference {
+  type: "transaction" | "contact" | "client";
+  id: string;
+  label: string;
+}
+
+/**
+ * Pull id+label pairs out of a tool result (search_transactions,
+ * upcoming_deadlines, find_people) so the caller can turn a matching mention
+ * in the model's reply text into a link. Shape-sniffing and best-effort — a
+ * result that doesn't look like one of these never throws, just yields
+ * nothing.
+ */
+export function extractReferences(result: unknown): VoiceReference[] {
+  const refs: VoiceReference[] = [];
+  const pushTransaction = (row: unknown, idKey: "id" | "transactionId" = "id") => {
+    if (!row || typeof row !== "object") return;
+    const rec = row as Record<string, unknown>;
+    const id = rec[idKey];
+    const address = rec.address;
+    if (typeof id === "string" && typeof address === "string") {
+      refs.push({ type: "transaction", id, label: address });
+    }
+  };
+  const pushPerson = (row: unknown, type: "contact" | "client") => {
+    if (!row || typeof row !== "object") return;
+    const { id, name } = row as Record<string, unknown>;
+    if (typeof id === "string" && typeof name === "string") {
+      refs.push({ type, id, label: name });
+    }
+  };
+  if (Array.isArray(result)) {
+    for (const row of result) pushTransaction(row);
+  } else if (result && typeof result === "object") {
+    const { contacts, clients, tasks, closings } = result as Record<string, unknown>;
+    if (Array.isArray(contacts)) for (const c of contacts) pushPerson(c, "contact");
+    if (Array.isArray(clients)) for (const c of clients) pushPerson(c, "client");
+    if (Array.isArray(tasks)) for (const t of tasks) pushTransaction(t, "transactionId");
+    if (Array.isArray(closings)) for (const c of closings) pushTransaction(c);
+  }
+  return refs;
 }
 
 /** Dispatch a tool call under a verified scope. Never throws to the caller. */

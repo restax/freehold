@@ -78,7 +78,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       >
         Skip to content
       </a>
-      <aside className="flex w-56 flex-col border-r border-stone-200 bg-white px-4 py-6">
+      <aside className="sticky top-0 flex h-screen w-56 flex-col overflow-y-auto border-r border-stone-200 bg-white px-4 py-6">
         <div className="mb-1">
           <Wordmark href="/dashboard" />
         </div>

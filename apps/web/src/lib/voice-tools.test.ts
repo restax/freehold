@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { VoiceScope } from "./voice-grant";
 import {
   briefForScope,
+  extractReferences,
   MARKETING_GREETING,
   MARKETING_GREETING_WITH_CALL,
   marketingInstructions,
+  runVoiceTool,
   toolsForScope,
 } from "./voice-tools";
 
@@ -37,6 +39,7 @@ describe("toolsForScope", () => {
   it("gives signed-in workspace users the full set", async () => {
     expect(await names(TENANT)).toEqual([
       "find_people",
+      "navigate",
       "search_transactions",
       "upcoming_deadlines",
       "workspace_summary",
@@ -57,6 +60,103 @@ describe("toolsForScope", () => {
         expect(tool.input_schema.type).toBe("object");
       }
     }
+  });
+});
+
+describe("navigate tool", () => {
+  it("resolves a known page to its dashboard path", async () => {
+    expect(await runVoiceTool(TENANT, "navigate", { page: "billing" })).toEqual({
+      navigateTo: "/dashboard/billing",
+    });
+  });
+
+  it("rejects an unknown page", async () => {
+    expect(await runVoiceTool(TENANT, "navigate", { page: "nonexistent" })).toEqual({
+      error: "Can't go there.",
+    });
+  });
+
+  it("restricts a guest to the same pages the sidebar shows them", async () => {
+    expect(await runVoiceTool(GUEST, "navigate", { page: "transactions" })).toEqual({
+      navigateTo: "/dashboard/transactions",
+    });
+    expect(await runVoiceTool(GUEST, "navigate", { page: "billing" })).toEqual({
+      error: "Can't go there.",
+    });
+  });
+
+  it("sends a tenant straight to a specific transaction, contact, or client by id", async () => {
+    expect(await runVoiceTool(TENANT, "navigate", { transactionId: "t-1" })).toEqual({
+      navigateTo: "/dashboard/transactions/t-1",
+    });
+    expect(await runVoiceTool(TENANT, "navigate", { contactId: "c-1" })).toEqual({
+      navigateTo: "/dashboard/contacts/c-1",
+    });
+    expect(await runVoiceTool(TENANT, "navigate", { clientId: "cl-1" })).toEqual({
+      navigateTo: "/dashboard/clients/cl-1",
+    });
+  });
+
+  it("lets a guest go straight to a transaction but not a contact or client", async () => {
+    expect(await runVoiceTool(GUEST, "navigate", { transactionId: "t-1" })).toEqual({
+      navigateTo: "/dashboard/transactions/t-1",
+    });
+    expect(await runVoiceTool(GUEST, "navigate", { contactId: "c-1" })).toEqual({
+      error: "Can't go there.",
+    });
+    expect(await runVoiceTool(GUEST, "navigate", { clientId: "cl-1" })).toEqual({
+      error: "Can't go there.",
+    });
+  });
+});
+
+describe("extractReferences", () => {
+  it("pulls transaction id+address pairs out of a search_transactions-shaped array", () => {
+    const result = [
+      { id: "t-1", address: "412 Maple St", status: "PENDING" },
+      { id: "t-2", address: "9 Oak Ave", status: "CLOSED" },
+    ];
+    expect(extractReferences(result)).toEqual([
+      { type: "transaction", id: "t-1", label: "412 Maple St" },
+      { type: "transaction", id: "t-2", label: "9 Oak Ave" },
+    ]);
+  });
+
+  it("pulls contacts and clients out of a find_people-shaped object", () => {
+    const result = {
+      contacts: [{ id: "c-1", name: "Dana Reyes", email: "dana@example.com" }],
+      clients: [{ id: "cl-1", name: "The Riveras" }],
+    };
+    expect(extractReferences(result)).toEqual([
+      { type: "contact", id: "c-1", label: "Dana Reyes" },
+      { type: "client", id: "cl-1", label: "The Riveras" },
+    ]);
+  });
+
+  it("pulls transactions out of an upcoming_deadlines-shaped result (tasks and closings)", () => {
+    const result = {
+      tasks: [
+        {
+          title: "Schedule inspection",
+          due: "Friday",
+          transactionId: "t-1",
+          address: "412 Maple Ave",
+        },
+        { title: "No file attached", due: "Monday", transactionId: null, address: null },
+      ],
+      closings: [{ id: "t-2", address: "9 Oak Ave", closeDate: "Thursday" }],
+    };
+    expect(extractReferences(result)).toEqual([
+      { type: "transaction", id: "t-1", label: "412 Maple Ave" },
+      { type: "transaction", id: "t-2", label: "9 Oak Ave" },
+    ]);
+  });
+
+  it("yields nothing for shapes it doesn't recognize", () => {
+    expect(extractReferences({ result: "Nothing matched." })).toEqual([]);
+    expect(extractReferences(null)).toEqual([]);
+    expect(extractReferences("plain string")).toEqual([]);
+    expect(extractReferences({ navigateTo: "/dashboard/billing" })).toEqual([]);
   });
 });
 
