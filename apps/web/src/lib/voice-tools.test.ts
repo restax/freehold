@@ -75,8 +75,8 @@ describe("briefForScope", () => {
     expect(MARKETING_GREETING).toContain("five-second");
   });
 
-  it("leads the call-available greeting with the offer itself, not a pitch", () => {
-    expect(MARKETING_GREETING_WITH_CALL).toContain("Skip the usual pitch");
+  it("still pitches Freehold before pivoting to the call offer", () => {
+    expect(MARKETING_GREETING_WITH_CALL).toContain("same warm five-second");
     expect(MARKETING_GREETING_WITH_CALL.toLowerCase()).toContain("call live");
   });
 });

@@ -37,6 +37,8 @@ export function VoiceWidget({ portalToken }: { portalToken?: string }) {
   const [state, setState] = useState<State>("idle");
   const [lines, setLines] = useState<Line[]>([]);
   const [note, setNote] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
   const roomRef = useRef<Room | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -133,12 +135,48 @@ export function VoiceWidget({ portalToken }: { portalToken?: string }) {
     }
   }
 
+  // The typed path: same tools and scope as voice, no mic or LiveKit room —
+  // just POST the running conversation to /api/voice/text and show the reply.
+  async function sendText() {
+    const text = draft.trim();
+    if (!text || sending) return;
+    setDraft("");
+    setNote(null);
+    const mine: Line = { id: `you-${Date.now()}`, who: "you", text };
+    // Snapshot the prior turns for the request before appending this one.
+    const history = [
+      ...lines.map((l) => ({ role: l.who === "you" ? "user" : "assistant", content: l.text })),
+      { role: "user", content: text },
+    ];
+    setLines((prev) => [...prev, mine]);
+    setSending(true);
+    try {
+      const res = await fetch("/api/voice/text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: history, ...(portalToken ? { portalToken } : {}) }),
+      });
+      if (res.status === 503) {
+        setNote("Search isn't configured on this install.");
+        return;
+      }
+      if (!res.ok) throw new Error(String(res.status));
+      const { reply } = (await res.json()) as { reply: string };
+      setLines((prev) => [...prev, { id: `a-${Date.now()}`, who: "assistant", text: reply }]);
+    } catch {
+      setNote("Couldn't get an answer just now — try again.");
+    } finally {
+      setSending(false);
+      scrollRef.current?.scrollTo({ top: 99999, behavior: "smooth" });
+    }
+  }
+
   return (
     <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
       {open && (
         <div className="flex w-80 flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-xl">
           <div className="flex items-center justify-between bg-brand-700 px-4 py-3 text-white">
-            <p className="text-sm font-semibold">Voice search</p>
+            <p className="text-sm font-semibold">Ask Freehold</p>
             <button
               type="button"
               onClick={async () => {
@@ -161,8 +199,8 @@ export function VoiceWidget({ portalToken }: { portalToken?: string }) {
                 {state === "live"
                   ? "Listening — ask away."
                   : portalToken
-                    ? "Ask about your file: where things stand, what's next, which documents you have."
-                    : "Ask about your files: what's closing this week, who's the lender on Maple, how many active deals."}
+                    ? "Ask about your file — type below, or talk. Where things stand, what's next, which documents you have."
+                    : "Ask about your files — type below, or talk. What's closing this week, who's the lender on Maple, how many active deals."}
               </p>
             )}
             {lines.map((l) => (
@@ -177,7 +215,33 @@ export function VoiceWidget({ portalToken }: { portalToken?: string }) {
                 {l.text}
               </p>
             ))}
+            {sending && <p className="self-start text-xs text-stone-400">…</p>}
           </div>
+
+          {/* Type instead of talk — same answers, no mic. */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void sendText();
+            }}
+            className="flex items-center gap-2 border-t border-stone-100 p-2"
+          >
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              disabled={sending}
+              placeholder="Type a question…"
+              aria-label="Type a question"
+              className="min-w-0 flex-1 rounded-lg border border-stone-300 px-3 py-1.5 text-sm focus:border-brand-600 focus:outline-none disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={sending || draft.trim().length === 0}
+              className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-50"
+            >
+              Send
+            </button>
+          </form>
 
           {note && (
             <p className="border-t border-stone-100 px-3 py-2 text-xs text-stone-500">

@@ -184,16 +184,20 @@ export const MARKETING_GREETING = `Give a warm five-second pitch, in your own
 words, exactly one sentence: Freehold is AI-powered transaction management and
 CRM for real estate transaction coordinators. Then invite them to ask anything.`;
 
-/** The opening line when the call feature is on: lead with genuine surprised
- *  excitement about it, immediately — not after any pitch or exchange — and
- *  propose trying it right away. Still needs a clear yes before the tool is
- *  ever called (see marketingInstructions' callOfferBlock); this only covers
- *  how the offer itself opens the conversation. */
-export const MARKETING_GREETING_WITH_CALL = `Skip the usual pitch. Instead,
-open with genuine surprised excitement, in your own words, one or two
-sentences: something just got added — you can bring the actual Freehold
+/** The opening line when the call feature is on: still give the short pitch
+ *  first — a visitor who's never heard of Freehold needs that before anything
+ *  else makes sense — then immediately pivot into genuine surprised
+ *  excitement about the call feature and propose trying it. Still needs a
+ *  clear yes before the tool is ever called (see marketingInstructions'
+ *  callOfferBlock); this only covers how the opening two beats are ordered. */
+export const MARKETING_GREETING_WITH_CALL = `Give the same warm five-second,
+one-sentence pitch as always, in your own words: Freehold is AI-powered
+transaction management and CRM for real estate transaction coordinators. Then,
+right after that — same breath, not a new topic — pivot into genuine surprised
+excitement: something just got added, you can bring the actual Freehold
 developer onto this call live, right now, no typing needed, just to say hi and
-prove it works. Ask if they want to try it.`;
+prove it works. Ask if they want to try it. Two short beats total, not a long
+speech.`;
 
 const WORKSPACE_GREETING = "Greet them in one short sentence and ask what they'd like to know.";
 
