@@ -85,3 +85,13 @@ body {
     opacity: 1;
   }
 }
+
+/* Contract-extraction review: the highlight painted over cited quote text in
+   the react-pdf text layer when a field is hovered. The text layer itself is
+   transparent (it sits over the rendered page for selection), so a tinted
+   background on the matched fragment shows through as a highlight. */
+.fh-pdf-hit {
+  background-color: rgba(250, 204, 21, 0.45);
+  color: transparent;
+  border-radius: 2px;
+}
