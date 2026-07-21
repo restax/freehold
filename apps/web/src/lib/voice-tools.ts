@@ -147,20 +147,18 @@ export function marketingInstructions(opts: {
     ? `\nKey things to weave in naturally when relevant (in your own words, never read verbatim):\n${opts.sellingPoints.trim()}\n`
     : "";
 
-  // Offered once, proactively, after a real exchange has happened — never as
-  // the very first thing said, never repeated, and only ever true when an
-  // operator has explicitly turned this on for /admin (see platform-settings.ts).
+  // The greeting itself already leads with the call proposal when this is
+  // available (see MARKETING_GREETING_WITH_CALL) — this block just documents
+  // the standing rule for the rest of the conversation: still requires a
+  // clear yes before the tool is ever called, and only offered the once.
   const callOfferBlock = opts.callAvailable
     ? `
-You also have a call_the_founder tool. Once — after you've actually answered
-something for them, not as your opening line — bring it up yourself as your own
-idea, with genuine excitement: something like "actually, we just added
-something wild — I can bring the real developer onto this call, live, right
-now. It's mostly just to show off that you can ask instead of typing things
-out — and don't worry, there's still a full written transcript of this whole
-conversation." Only call the tool if they clearly say yes. If it fails (he's
-mid-call, or just stepped away), say so warmly — never apologize excessively,
-just move on. Never bring it up more than once.`
+You have a call_the_founder tool. You'll typically have already proposed this
+as your opening line — if they say yes, call the tool. If they haven't
+answered yet or changed the subject, that's fine, don't push it again; you
+only get the one offer per conversation. Only ever call the tool on a clear yes
+— never on anything ambiguous. If it fails (he's mid-call, or just stepped
+away), say so warmly — never apologize excessively, just move on.`
     : "";
 
   return `You are the voice of Freehold, greeting a visitor on the homepage who
@@ -179,13 +177,23 @@ live demo or hello@freeholdtc.dev when it's the better answer.
 ${callOfferBlock}`;
 }
 
-/** The opening line, spoken before the visitor says anything. */
-export const MARKETING_GREETING = `Give a warm ten-second pitch, in your own words, no
-more than three sentences: Freehold is transaction management and CRM built for
-real estate transaction coordinators — the AI reads a purchase contract and
-page-cites every date and dollar for you to confirm, clients get their own
-portal, and the whole thing is source-available so you can self-host it free
-forever. Then invite them to ask you anything about it.`;
+/** The opening line when the call-the-founder feature is off: a short pitch,
+ *  half the length of the old one — just the one-line hook, not three
+ *  enumerated features (those still come up naturally if asked about). */
+export const MARKETING_GREETING = `Give a warm five-second pitch, in your own
+words, exactly one sentence: Freehold is AI-powered transaction management and
+CRM for real estate transaction coordinators. Then invite them to ask anything.`;
+
+/** The opening line when the call feature is on: lead with genuine surprised
+ *  excitement about it, immediately — not after any pitch or exchange — and
+ *  propose trying it right away. Still needs a clear yes before the tool is
+ *  ever called (see marketingInstructions' callOfferBlock); this only covers
+ *  how the offer itself opens the conversation. */
+export const MARKETING_GREETING_WITH_CALL = `Skip the usual pitch. Instead,
+open with genuine surprised excitement, in your own words, one or two
+sentences: something just got added — you can bring the actual Freehold
+developer onto this call live, right now, no typing needed, just to say hi and
+prove it works. Ask if they want to try it.`;
 
 const WORKSPACE_GREETING = "Greet them in one short sentence and ask what they'd like to know.";
 
@@ -203,7 +211,7 @@ export async function briefForScope(
         sellingPoints: settings.founderCallSellingPoints,
         callAvailable: settings.founderCallsAvailable,
       }),
-      greeting: MARKETING_GREETING,
+      greeting: settings.founderCallsAvailable ? MARKETING_GREETING_WITH_CALL : MARKETING_GREETING,
     };
   }
   if (scope.kind === "portal") {

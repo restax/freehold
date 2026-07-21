@@ -2,13 +2,15 @@
 Freehold voice search — a LiveKit agent that answers questions about a
 workspace's own data, out loud.
 
-Pipeline: Silero VAD → STT → Claude → TTS. STT and TTS run through LiveKit's
-own hosted inference (livekit.agents.inference) rather than direct Deepgram/
-ElevenLabs API keys — billed per-minute through LiveKit, no vendor key needed
-here, and which model each one uses is admin-configurable at /admin/settings
-(read fresh from fetch_brief() below on every session, so a change there takes
-effect on the very next call with no redeploy). The LLM stays a direct
-Anthropic call: Claude isn't in LiveKit's inference catalog.
+Pipeline: Silero VAD → STT → Claude → TTS. STT runs through LiveKit's own
+hosted inference (livekit.agents.inference) — billed per-minute through
+LiveKit, no Deepgram key needed — and which model it uses is
+admin-configurable at /admin/settings, read fresh from fetch_brief() below on
+every session so a change there takes effect on the very next call with no
+redeploy. TTS stays a DIRECT ElevenLabs call: LiveKit's inference proxy only
+has ElevenLabs' shared voice library, not our private/custom voice (confirmed
+live — it 400s "voice does not exist" for a custom voice ID). The LLM stays a
+direct Anthropic call too: Claude isn't in LiveKit's inference catalog.
 
 The agent holds no database credentials and decides nothing about what it may
 read. When a session opens, the web app puts a short-lived HMAC-signed
@@ -45,7 +47,7 @@ from livekit.agents import (
     inference,
 )
 from livekit.agents.llm import function_tool
-from livekit.plugins import anthropic, silero
+from livekit.plugins import anthropic, elevenlabs, silero
 
 # Local dev reads the repo-root .env so there's no second copy of the keys to
 # drift. Deployed, there is no such file — LiveKit Cloud injects the secrets as
@@ -263,10 +265,11 @@ async def fetch_brief(grant: str) -> dict | None:
                     "tools": {t["name"] for t in body.get("tools", [])},
                     "instructions": body.get("instructions") or "",
                     "greeting": body.get("greeting") or "",
-                    # Admin-configurable at /admin/settings; fall back to the
-                    # long-standing defaults if the app ever omits them.
+                    # Admin-configurable at /admin/settings; falls back to the
+                    # long-standing default if the app ever omits it. The app
+                    # still returns ttsModel too (unused here for now — TTS is
+                    # pinned to direct ElevenLabs, see the pipeline docstring).
                     "sttModel": body.get("sttModel") or "deepgram/nova-3",
-                    "ttsModel": body.get("ttsModel") or "elevenlabs/eleven_turbo_v2_5",
                 }
     except Exception:
         logger.exception("could not fetch brief")
@@ -319,19 +322,30 @@ async def entrypoint(ctx: JobContext) -> None:
     session = AgentSession(
         # Reuse the VAD loaded in prewarm() rather than loading it per session.
         vad=ctx.proc.userdata["vad"],
-        # STT/TTS route through LiveKit's own hosted inference — billed
-        # per-minute through LiveKit, authenticated with the worker's own
-        # LIVEKIT_API_KEY/SECRET, no Deepgram/ElevenLabs key needed. Which
-        # model each one uses is admin-configurable (/admin/settings) and
-        # read fresh from the brief on every session.
-        #
-        # `voice` is an ElevenLabs voice ID (ELEVENLABS_VOICE_ID) — if the TTS
-        # model is switched to a different provider in admin, this value will
-        # need to change to match that provider's own voice-ID format; it
-        # isn't validated or translated automatically.
+        # STT routes through LiveKit's own hosted inference — billed per-minute
+        # through LiveKit, authenticated with the worker's own LIVEKIT_API_KEY/
+        # SECRET, no Deepgram key needed. Which model it uses is
+        # admin-configurable (/admin/settings) and read fresh on every session.
         stt=inference.STT(model=brief["sttModel"]),
         llm=anthropic.LLM(model=LLM_MODEL),
-        tts=inference.TTS(model=brief["ttsModel"], voice=VOICE_ID),
+        # TTS stays a DIRECT ElevenLabs call, not inference — LiveKit's
+        # inference proxy only sees ElevenLabs' shared voice library, not a
+        # private/custom voice on our own account (confirmed live: it 400s
+        # with "voice does not exist" for VOICE_ID and the session gets no
+        # audio at all). Revisit if/when inference adds custom-voice passthrough.
+        #
+        # chunk_length_schedule disables the plugin's default auto_mode, which
+        # flushes to ElevenLabs once per sentence — each flush starts a new
+        # streaming "generation," and the seam between generations is audible
+        # as a small stutter on any reply longer than one sentence. Buffering
+        # by character count instead sends one continuous stream for a short
+        # reply and only a couple of smooth flushes for a longer one.
+        tts=elevenlabs.TTS(
+            voice_id=VOICE_ID,
+            model="eleven_turbo_v2_5",
+            api_key=os.environ["ELEVENLABS_API_KEY"],
+            chunk_length_schedule=[120, 160, 250, 290],
+        ),
         # Voice answers should resolve fast; a long tool chain means a long
         # silence, and every step costs money.
         max_tool_steps=3,

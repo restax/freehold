@@ -4,7 +4,7 @@ import { updatePlatformSettings } from "@/lib/actions/platform-settings";
 import { isOperator } from "@/lib/operator";
 import { getPlatformSettings } from "@/lib/platform-settings";
 import { card } from "@/lib/ui";
-import { STT_MODEL_GROUPS, TTS_MODEL_GROUPS } from "@/lib/voice-inference-models";
+import { STT_MODEL_GROUPS } from "@/lib/voice-inference-models";
 
 export const dynamic = "force-dynamic";
 
@@ -103,45 +103,29 @@ export default async function AdminSettingsPage() {
         </section>
 
         <section className={card}>
-          <h2 className="mb-1 font-medium">Voice pipeline — speech-to-text &amp; text-to-speech</h2>
+          <h2 className="mb-1 font-medium">Voice pipeline — speech-to-text</h2>
           <p className="mb-4 text-sm text-stone-500">
             Routed through LiveKit's own hosted inference — billed per-minute through LiveKit, no
-            vendor API key involved. Takes effect on the very next voice session, no redeploy. The
-            language model stays a direct Claude call and isn't editable here (Claude isn't in
-            LiveKit's inference catalog).
+            Deepgram key involved. Takes effect on the very next voice session, no redeploy.
+            Text-to-speech stays a fixed direct ElevenLabs call for now (LiveKit's inference proxy
+            can't reach our private voice), and the language model stays a direct Claude call —
+            neither is editable here yet.
           </p>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm">
-              Speech-to-text (STT)
-              <select name="voiceSttModel" defaultValue={settings.voiceSttModel} className={field}>
-                {STT_MODEL_GROUPS.map((g) => (
-                  <optgroup key={g.provider} label={g.provider}>
-                    {g.models.map((m) => (
-                      <option key={m.value} value={m.value}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1 text-sm">
-              Text-to-speech (TTS)
-              <select name="voiceTtsModel" defaultValue={settings.voiceTtsModel} className={field}>
-                {TTS_MODEL_GROUPS.map((g) => (
-                  <optgroup key={g.provider} label={g.provider}>
-                    {g.models.map((m) => (
-                      <option key={m.value} value={m.value}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
-          </div>
+          <label className="flex max-w-xs flex-col gap-1 text-sm">
+            Speech-to-text (STT)
+            <select name="voiceSttModel" defaultValue={settings.voiceSttModel} className={field}>
+              {STT_MODEL_GROUPS.map((g) => (
+                <optgroup key={g.provider} label={g.provider}>
+                  {g.models.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
           <p className="mt-3 text-xs text-stone-400">
             Current per-minute pricing for each model is on LiveKit Cloud's own dashboard — it
             changes over time, so it isn't duplicated here.

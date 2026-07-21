@@ -3,6 +3,7 @@ import type { VoiceScope } from "./voice-grant";
 import {
   briefForScope,
   MARKETING_GREETING,
+  MARKETING_GREETING_WITH_CALL,
   marketingInstructions,
   toolsForScope,
 } from "./voice-tools";
@@ -71,7 +72,12 @@ describe("briefForScope", () => {
   });
 
   it("gives the marketing greeting a warm, short pitch instruction", () => {
-    expect(MARKETING_GREETING).toContain("ten-second");
+    expect(MARKETING_GREETING).toContain("five-second");
+  });
+
+  it("leads the call-available greeting with the offer itself, not a pitch", () => {
+    expect(MARKETING_GREETING_WITH_CALL).toContain("Skip the usual pitch");
+    expect(MARKETING_GREETING_WITH_CALL.toLowerCase()).toContain("call live");
   });
 });
 
@@ -89,10 +95,10 @@ describe("marketingInstructions", () => {
     expect(text).not.toContain("call_the_founder");
   });
 
-  it("instructs the offer only when the kill switch is on", () => {
+  it("instructs the offer only when the kill switch is on, gated on a clear yes", () => {
     const text = marketingInstructions({ ...base, callAvailable: true });
     expect(text).toContain("call_the_founder");
-    expect(text.toLowerCase()).toContain("once");
+    expect(text.toLowerCase()).toContain("clear yes");
   });
 
   it("weaves in admin-provided selling points only when present", () => {

@@ -77,36 +77,35 @@ deployment has `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` set.
 On Vercel that means `vercel env add` for each, then a redeploy — the agent
 alone isn't enough.
 
-## Speech-to-text & text-to-speech — LiveKit inference, not vendor keys
+## Speech-to-text — LiveKit inference, not a vendor key
 
-STT and TTS run through `livekit.agents.inference` — LiveKit's own hosted
-routing layer — instead of the Deepgram/ElevenLabs plugins calling those
-vendors' APIs directly. Authenticated automatically with the worker's own
-`LIVEKIT_API_KEY`/`LIVEKIT_API_SECRET`; no `DEEPGRAM_API_KEY` or
-`ELEVENLABS_API_KEY` needed here at all, and billed per-minute through
-LiveKit Cloud instead of each vendor separately.
+STT runs through `livekit.agents.inference` — LiveKit's own hosted routing
+layer — instead of the Deepgram plugin calling their API directly.
+Authenticated automatically with the worker's own `LIVEKIT_API_KEY`/
+`LIVEKIT_API_SECRET`; no `DEEPGRAM_API_KEY` needed here at all, and billed
+per-minute through LiveKit Cloud instead of Deepgram directly.
 
-**Which model each one uses is admin-configurable, not hardcoded** —
+**Which model it uses is admin-configurable, not hardcoded** —
 `/admin/settings` → "Voice pipeline" (`apps/web/src/lib/voice-inference-models.ts`
-holds the full catalog, mirrored from `livekit.agents.inference.{STTModels,TTSModels}`
+holds the full catalog, mirrored from `livekit.agents.inference.STTModels`
 in the installed SDK). The choice is stored in `platform_setting` and read
 fresh on every session via the same `/api/voice/data` brief the agent already
 fetches (`fetch_brief()` in `agent.py`) — so a change in admin takes effect on
-the *next call*, no agent redeploy, which matters if you're actually
-comparing models for cost/quality.
+the *next call*, no agent redeploy.
 
-**The LLM stays a direct Anthropic call, on purpose.** Claude isn't in
+**TTS stays a direct ElevenLabs call, not inference — this was tried and
+reverted.** `inference.TTS` only has access to ElevenLabs' shared voice
+library, not a private/custom voice on our own account: pointing it at
+`ELEVENLABS_VOICE_ID` 400s live with `"voice_id ... does not exist"` and the
+session gets no audio at all. So TTS still needs `ELEVENLABS_API_KEY` and
+`elevenlabs.TTS(...)` directly (`livekit-plugins-elevenlabs` stays in
+`requirements.txt`) — revisit if LiveKit's inference ever adds custom-voice
+passthrough.
+
+**The LLM stays a direct Anthropic call too, on purpose.** Claude isn't in
 LiveKit's inference catalog at all (only OpenAI, Gemini, Moonshot, DeepSeek,
 GLM, Grok), so `ANTHROPIC_API_KEY` is still required and `LLM_MODEL` /
-`FREEHOLD_VOICE_MODEL` still work the same way they always did — this only
-changed STT and TTS.
-
-**A rough edge to know about:** `ELEVENLABS_VOICE_ID` (the `voice` param
-passed to `inference.TTS`) is provider-specific — it's an ElevenLabs voice ID.
-Switching the TTS model to a different provider in admin (Cartesia, Rime,
-Inworld, …) also needs that value updated to match the new provider's own
-voice-ID format; nothing validates or translates it automatically, so a
-mismatched voice/provider pair will error rather than silently fall back.
+`FREEHOLD_VOICE_MODEL` still work the same way they always did.
 
 ## Latency — the wait before the first spoken word
 
@@ -136,11 +135,11 @@ for `session.say(<fixed line>)` removes that call but makes the opener scripted
 
 ## Cost
 
-Two billing surfaces run per session, so Cloud meters it: Free gets none, Pro
-100 sessions/month, Business 300 (`voiceSessionsPerMonth` in
+Three vendors run per session, so Cloud meters it: Free gets none, Pro 100
+sessions/month, Business 300 (`voiceSessionsPerMonth` in
 `apps/web/src/lib/plans.ts`). Self-hosted installs are never metered — you're
-paying the vendors directly: Anthropic for the LLM, and LiveKit Cloud
-per-minute for everything else (STT + TTS, see above — swap models in
+paying the vendors directly: Anthropic for the LLM, ElevenLabs for TTS
+(direct, see above), and LiveKit Cloud per-minute for STT (swap models in
 `/admin/settings` to compare cost). Replies are kept to a sentence or two by
 the system prompt, and the tool loop is capped at 3 steps, both to keep
 spoken answers listenable and the bill boring.
