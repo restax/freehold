@@ -92,7 +92,7 @@ export async function applyActionPlan(formData: FormData) {
       }),
       tx.actionPlan.findUniqueOrThrow({
         where: { id: planId },
-        include: { tasks: true },
+        include: { tasks: true, documents: true },
       }),
       tx.task.aggregate({
         where: { transactionId },
@@ -133,6 +133,31 @@ export async function applyActionPlan(formData: FormData) {
         assigneeId: userId,
       })),
     });
+
+    // Seed the required-documents checklist from the plan, skipping labels the
+    // file already lists (applying twice, or overlapping plans, shouldn't
+    // duplicate a slot).
+    if (plan.documents.length > 0) {
+      const existing = await tx.transactionRequiredDocument.findMany({
+        where: { transactionId },
+        select: { label: true, sortOrder: true },
+      });
+      const seen = new Set(existing.map((d) => d.label.toLowerCase()));
+      const docBase = Math.max(0, ...existing.map((d) => d.sortOrder)) + 1;
+      const toAdd = [...plan.documents]
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .filter((d) => !seen.has(d.label.toLowerCase()));
+      if (toAdd.length > 0) {
+        await tx.transactionRequiredDocument.createMany({
+          data: toAdd.map((d, i) => ({
+            tenantId,
+            transactionId,
+            label: d.label,
+            sortOrder: docBase + i,
+          })),
+        });
+      }
+    }
   });
   revalidateTaskViews(transactionId);
 }

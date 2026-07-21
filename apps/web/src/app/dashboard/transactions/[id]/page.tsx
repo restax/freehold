@@ -37,13 +37,16 @@ import {
 } from "@/lib/actions/tasks";
 import { generateDocument } from "@/lib/actions/templates";
 import {
+  addRequiredDocument,
   addTransactionParty,
   confirmDateChange,
   deleteTransaction,
   proposeDateChange,
   removeCustomField,
+  removeRequiredDocument,
   removeTransactionParty,
   setCustomField,
+  setRequiredDocument,
   updatePayout,
   updateTransaction,
   withdrawDateChange,
@@ -126,6 +129,10 @@ export default async function TransactionDetailPage({
         invoices: { orderBy: { number: "desc" } },
         intakeSubmissions: { orderBy: { createdAt: "desc" } },
         parties: { include: { contact: true }, orderBy: { createdAt: "asc" } },
+        requiredDocuments: {
+          orderBy: { sortOrder: "asc" },
+          include: { document: { select: { id: true, filename: true } } },
+        },
         tasks: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
         documents: {
           orderBy: { createdAt: "desc" },
@@ -620,282 +627,410 @@ export default async function TransactionDetailPage({
             </section>
           )}
           {tab === "documents" && (
-            <section className={card}>
-              <h2 className="mb-1 font-medium">Documents &amp; contract extraction</h2>
-              <p className="mb-3 text-sm text-stone-500">
-                Upload the purchase contract and let AI pull every key date and figure — page-cited,
-                and nothing is saved until you confirm it.
-              </p>
-              {!process.env.ANTHROPIC_API_KEY && (
-                <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                  No <code>ANTHROPIC_API_KEY</code> is configured — extraction runs will fail until
-                  one is added to <code>.env</code>.
-                </p>
-              )}
-              {currentDocs.length > 0 && (
-                <ul className="mb-4 flex flex-col">
-                  {currentDocs.map((doc) => (
-                    <li
-                      key={doc.id}
-                      className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 last:border-0"
-                    >
-                      <a
-                        href={`/api/documents/${doc.id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-medium text-brand-600 hover:underline"
-                      >
-                        {doc.filename}
-                      </a>
-                      {doc.version > 1 && (
-                        <span className="rounded bg-stone-100 px-1.5 py-0.5 text-xs font-medium text-stone-500">
-                          v{doc.version}
-                        </span>
-                      )}
-                      <span className="text-xs text-stone-400">
-                        {(doc.sizeBytes / 1024).toFixed(0)} KB · {fmtDate(doc.createdAt)}
-                      </span>
-                      {doc.contentType === "application/pdf" &&
-                        (aiCredits.limited ? (
-                          <span className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
-                            Trial credits used ({aiCredits.used} of {aiCredits.limit}) —{" "}
-                            <Link
-                              href="/dashboard/billing"
-                              className="font-medium text-brand-700 underline"
-                            >
-                              upgrade
-                            </Link>{" "}
-                            for included AI extraction
-                          </span>
-                        ) : (
-                          <form action={runExtraction} className="flex items-center gap-2">
-                            <input type="hidden" name="documentId" value={doc.id} />
-                            <button type="submit" className={btnGhost}>
-                              Extract contract data
-                            </button>
-                            {aiCredits.limit != null && (
-                              <span className="text-xs text-stone-400">
-                                {aiCredits.limit - aiCredits.used} of {aiCredits.limit} trial
-                                credits left
-                              </span>
-                            )}
-                          </form>
-                        ))}
-                      <span className="ml-auto flex items-center gap-3">
-                        <VisibilityToggles
-                          kind="document"
-                          id={doc.id}
-                          transactionId={txn.id}
-                          visibleToAgent={doc.visibleToAgent}
-                          visibleToClient={doc.visibleToClient}
-                        />
-                      </span>
-                      <div>
-                        <DangerDelete
-                          compact
-                          action={deleteDocument}
-                          label="Delete"
-                          description="Permanently deletes this file."
-                          hidden={{ id: doc.id, transactionId: txn.id }}
-                        />
-                      </div>
-                      <details className="w-full">
-                        <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
-                          Send for signature
-                        </summary>
-                        <form
-                          action={sendForSignature}
-                          className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
-                        >
-                          <input type="hidden" name="documentId" value={doc.id} />
-                          <label className={label}>
-                            Signer 1 name *
-                            <input name="signer1Name" required className={input} />
-                          </label>
-                          <label className={label}>
-                            Signer 1 email *
-                            <input name="signer1Email" type="email" required className={input} />
-                          </label>
-                          <label className={label}>
-                            Signer 2 name
-                            <input name="signer2Name" className={input} />
-                          </label>
-                          <label className={label}>
-                            Signer 2 email
-                            <input name="signer2Email" type="email" className={input} />
-                          </label>
-                          <button type="submit" className={btnGhost}>
-                            Send
-                          </button>
-                        </form>
-                      </details>
-                      <details className="w-full">
-                        <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
-                          Replace with a new version
-                        </summary>
-                        <form
-                          action={replaceDocument}
-                          className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
-                        >
-                          <input type="hidden" name="id" value={doc.id} />
-                          <label className={label}>
-                            New file (PDF, max 10 MB)
-                            <input
-                              name="file"
-                              type="file"
-                              accept="application/pdf,.pdf"
-                              required
-                              className={input}
-                            />
-                          </label>
-                          <button type="submit" className={btnGhost}>
-                            Replace
-                          </button>
-                          <span className="pb-2 text-xs text-stone-400">
-                            The current file becomes a prior version — nothing is lost.
-                          </span>
-                        </form>
-                      </details>
-                      {priorVersions(doc).length > 0 && (
-                        <details className="w-full">
-                          <summary className="cursor-pointer select-none text-xs text-stone-500 transition-colors hover:text-stone-700">
-                            {priorVersions(doc).length} prior version
-                            {priorVersions(doc).length === 1 ? "" : "s"}
-                          </summary>
-                          <ul className="mt-1.5 flex flex-col gap-1 border-l-2 border-stone-200 pl-3">
-                            {priorVersions(doc).map((p) => (
-                              <li key={p.id} className="flex flex-wrap items-center gap-2 text-xs">
-                                <span className="rounded bg-stone-100 px-1.5 py-0.5 font-medium text-stone-500">
-                                  v{p.version}
-                                </span>
-                                <a
-                                  href={`/api/documents/${p.id}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-stone-500 hover:text-brand-600 hover:underline"
-                                >
-                                  {p.filename}
-                                </a>
-                                <span className="text-stone-400">
-                                  {(p.sizeBytes / 1024).toFixed(0)} KB · replaced{" "}
-                                  {fmtDate(p.createdAt)}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        </details>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <form action={uploadDocument} className="mb-4 flex flex-wrap items-end gap-2">
-                <input type="hidden" name="transactionId" value={txn.id} />
-                <label className={label}>
-                  Upload document (PDF, max 10 MB)
-                  <input
-                    name="file"
-                    type="file"
-                    accept="application/pdf,.pdf"
-                    required
-                    className={input}
-                  />
-                </label>
-                <button type="submit" className={btnGhost}>
-                  Upload
-                </button>
-              </form>
-              {templates.length > 0 && (
-                <form action={generateDocument} className="mb-4 flex flex-wrap items-end gap-2">
-                  <input type="hidden" name="transactionId" value={txn.id} />
-                  <label className={label}>
-                    Generate from template
-                    <select name="templateId" className={input} defaultValue={templates[0]?.id}>
-                      {templates.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button type="submit" className={btnGhost}>
-                    Generate PDF
-                  </button>
-                </form>
-              )}
-              {txn.envelopes.length > 0 && (
-                <div className="mb-4">
-                  <h3 className="mb-1 text-sm font-medium text-stone-600">Signature envelopes</h3>
-                  <ul className="flex flex-col">
-                    {txn.envelopes.map((env) => {
-                      const signers = (env.signers as Array<{ name: string; email: string }>) ?? [];
-                      return (
-                        <li
-                          key={env.id}
-                          className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
-                        >
-                          <EnvelopeBadge status={env.status} />
-                          <span className="font-medium">{env.document.filename}</span>
-                          <span className="text-stone-500">
-                            {env.provider.toLowerCase()} · {signers.map((s) => s.name).join(", ")}
-                          </span>
-                          {env.error && <span className="text-xs text-red-600">{env.error}</span>}
-                          <span className="ml-auto flex items-center gap-2">
-                            {env.provider === "MANUAL" && env.status === "SENT" && (
-                              <form action={markEnvelopeSigned}>
-                                <input type="hidden" name="id" value={env.id} />
-                                <button type="submit" className={btnGhost}>
-                                  Mark signed
-                                </button>
-                              </form>
-                            )}
-                            {env.provider !== "MANUAL" && env.externalId && (
-                              <form action={refreshEnvelope}>
-                                <input type="hidden" name="id" value={env.id} />
-                                <button type="submit" className={btnGhost}>
-                                  Refresh status
-                                </button>
-                              </form>
-                            )}
-                            <DangerDelete
-                              compact
-                              action={deleteEnvelope}
-                              label="Delete"
-                              description="Removes this signature record (the provider envelope is not cancelled)."
-                              hidden={{ id: env.id, transactionId: txn.id }}
-                            />
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
+            <div className="flex flex-col gap-6">
+              <section className={card}>
+                <div className="mb-1 flex items-center gap-2">
+                  <h2 className="font-medium">Required documents</h2>
+                  {txn.requiredDocuments.length > 0 && (
+                    <span className="text-sm text-stone-400">
+                      {txn.requiredDocuments.filter((r) => r.document).length} of{" "}
+                      {txn.requiredDocuments.length} received
+                    </span>
+                  )}
                 </div>
-              )}
-              {txn.extractions.length > 0 && (
-                <div>
-                  <h3 className="mb-1 text-sm font-medium text-stone-600">Extraction runs</h3>
-                  <ul className="flex flex-col">
-                    {txn.extractions.map((ex) => (
-                      <li
-                        key={ex.id}
-                        className="flex items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
-                      >
-                        <ExtractionBadge status={ex.status} />
-                        <span className="text-stone-500">
-                          {fmtDate(ex.createdAt)} · {ex._count.fields} fields · {ex.model}
-                        </span>
-                        <Link
-                          href={`/dashboard/transactions/${txn.id}/extractions/${ex.id}`}
-                          className="ml-auto text-brand-600 hover:underline"
+                <p className="mb-3 text-sm text-stone-500">
+                  The checklist for this file. Apply an action plan to fill it, or add your own.
+                  Attach an uploaded document to mark a slot received.
+                </p>
+                {txn.requiredDocuments.length === 0 ? (
+                  <p className="mb-3 text-sm text-stone-400">
+                    Nothing required yet — apply an action plan, or add one below.
+                  </p>
+                ) : (
+                  <ul className="mb-3 flex flex-col divide-y divide-stone-100">
+                    {txn.requiredDocuments.map((req) => (
+                      <li key={req.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
+                        <span
+                          aria-hidden
+                          className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] ${
+                            req.document
+                              ? "bg-brand-600 text-white"
+                              : "border border-dashed border-stone-300 text-stone-300"
+                          }`}
                         >
-                          {ex.status === "READY" ? "Review & apply" : "View"}
-                        </Link>
+                          {req.document ? "✓" : ""}
+                        </span>
+                        <span className={`font-medium ${req.document ? "" : "text-stone-600"}`}>
+                          {req.label}
+                        </span>
+                        {req.document ? (
+                          <>
+                            <a
+                              href={`/api/documents/${req.document.id}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-brand-600 hover:underline"
+                            >
+                              {req.document.filename}
+                            </a>
+                            <form action={setRequiredDocument} className="ml-auto">
+                              <input type="hidden" name="id" value={txn.id} />
+                              <input type="hidden" name="requiredId" value={req.id} />
+                              <input type="hidden" name="documentId" value="" />
+                              <button
+                                type="submit"
+                                className="text-xs text-stone-400 hover:text-stone-700"
+                              >
+                                detach
+                              </button>
+                            </form>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-xs font-medium uppercase tracking-wide text-amber-600">
+                              Missing
+                            </span>
+                            {currentDocs.length > 0 && (
+                              <form
+                                action={setRequiredDocument}
+                                className="ml-auto flex items-center gap-1"
+                              >
+                                <input type="hidden" name="id" value={txn.id} />
+                                <input type="hidden" name="requiredId" value={req.id} />
+                                <select
+                                  name="documentId"
+                                  defaultValue=""
+                                  className={`${input} py-1 text-xs`}
+                                >
+                                  <option value="" disabled>
+                                    Attach a file…
+                                  </option>
+                                  {currentDocs.map((d) => (
+                                    <option key={d.id} value={d.id}>
+                                      {d.filename}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                                  Attach
+                                </button>
+                              </form>
+                            )}
+                          </>
+                        )}
+                        <form action={removeRequiredDocument}>
+                          <input type="hidden" name="id" value={txn.id} />
+                          <input type="hidden" name="requiredId" value={req.id} />
+                          <button
+                            type="submit"
+                            aria-label={`Remove ${req.label} from the checklist`}
+                            className="text-xs text-stone-300 hover:text-red-600"
+                          >
+                            ✕
+                          </button>
+                        </form>
                       </li>
                     ))}
                   </ul>
-                </div>
-              )}
-            </section>
+                )}
+                <form action={addRequiredDocument} className="flex flex-wrap items-end gap-2">
+                  <input type="hidden" name="id" value={txn.id} />
+                  <label className={`${label} min-w-56 flex-1`}>
+                    Add a required document
+                    <input
+                      name="label"
+                      required
+                      placeholder="Lead paint disclosure"
+                      className={input}
+                    />
+                  </label>
+                  <button type="submit" className={btnGhost}>
+                    Add
+                  </button>
+                </form>
+              </section>
+
+              <section className={card}>
+                <h2 className="mb-1 font-medium">Documents &amp; contract extraction</h2>
+                <p className="mb-3 text-sm text-stone-500">
+                  Upload the purchase contract and let AI pull every key date and figure —
+                  page-cited, and nothing is saved until you confirm it.
+                </p>
+                {!process.env.ANTHROPIC_API_KEY && (
+                  <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    No <code>ANTHROPIC_API_KEY</code> is configured — extraction runs will fail
+                    until one is added to <code>.env</code>.
+                  </p>
+                )}
+                {currentDocs.length > 0 && (
+                  <ul className="mb-4 flex flex-col">
+                    {currentDocs.map((doc) => (
+                      <li
+                        key={doc.id}
+                        className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 last:border-0"
+                      >
+                        <a
+                          href={`/api/documents/${doc.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium text-brand-600 hover:underline"
+                        >
+                          {doc.filename}
+                        </a>
+                        {doc.version > 1 && (
+                          <span className="rounded bg-stone-100 px-1.5 py-0.5 text-xs font-medium text-stone-500">
+                            v{doc.version}
+                          </span>
+                        )}
+                        <span className="text-xs text-stone-400">
+                          {(doc.sizeBytes / 1024).toFixed(0)} KB · {fmtDate(doc.createdAt)}
+                        </span>
+                        {doc.contentType === "application/pdf" &&
+                          (aiCredits.limited ? (
+                            <span className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
+                              Trial credits used ({aiCredits.used} of {aiCredits.limit}) —{" "}
+                              <Link
+                                href="/dashboard/billing"
+                                className="font-medium text-brand-700 underline"
+                              >
+                                upgrade
+                              </Link>{" "}
+                              for included AI extraction
+                            </span>
+                          ) : (
+                            <form action={runExtraction} className="flex items-center gap-2">
+                              <input type="hidden" name="documentId" value={doc.id} />
+                              <button type="submit" className={btnGhost}>
+                                Extract contract data
+                              </button>
+                              {aiCredits.limit != null && (
+                                <span className="text-xs text-stone-400">
+                                  {aiCredits.limit - aiCredits.used} of {aiCredits.limit} trial
+                                  credits left
+                                </span>
+                              )}
+                            </form>
+                          ))}
+                        <span className="ml-auto flex items-center gap-3">
+                          <VisibilityToggles
+                            kind="document"
+                            id={doc.id}
+                            transactionId={txn.id}
+                            visibleToAgent={doc.visibleToAgent}
+                            visibleToClient={doc.visibleToClient}
+                          />
+                        </span>
+                        <div>
+                          <DangerDelete
+                            compact
+                            action={deleteDocument}
+                            label="Delete"
+                            description="Permanently deletes this file."
+                            hidden={{ id: doc.id, transactionId: txn.id }}
+                          />
+                        </div>
+                        <details className="w-full">
+                          <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
+                            Send for signature
+                          </summary>
+                          <form
+                            action={sendForSignature}
+                            className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
+                          >
+                            <input type="hidden" name="documentId" value={doc.id} />
+                            <label className={label}>
+                              Signer 1 name *
+                              <input name="signer1Name" required className={input} />
+                            </label>
+                            <label className={label}>
+                              Signer 1 email *
+                              <input name="signer1Email" type="email" required className={input} />
+                            </label>
+                            <label className={label}>
+                              Signer 2 name
+                              <input name="signer2Name" className={input} />
+                            </label>
+                            <label className={label}>
+                              Signer 2 email
+                              <input name="signer2Email" type="email" className={input} />
+                            </label>
+                            <button type="submit" className={btnGhost}>
+                              Send
+                            </button>
+                          </form>
+                        </details>
+                        <details className="w-full">
+                          <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
+                            Replace with a new version
+                          </summary>
+                          <form
+                            action={replaceDocument}
+                            className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
+                          >
+                            <input type="hidden" name="id" value={doc.id} />
+                            <label className={label}>
+                              New file (PDF, max 10 MB)
+                              <input
+                                name="file"
+                                type="file"
+                                accept="application/pdf,.pdf"
+                                required
+                                className={input}
+                              />
+                            </label>
+                            <button type="submit" className={btnGhost}>
+                              Replace
+                            </button>
+                            <span className="pb-2 text-xs text-stone-400">
+                              The current file becomes a prior version — nothing is lost.
+                            </span>
+                          </form>
+                        </details>
+                        {priorVersions(doc).length > 0 && (
+                          <details className="w-full">
+                            <summary className="cursor-pointer select-none text-xs text-stone-500 transition-colors hover:text-stone-700">
+                              {priorVersions(doc).length} prior version
+                              {priorVersions(doc).length === 1 ? "" : "s"}
+                            </summary>
+                            <ul className="mt-1.5 flex flex-col gap-1 border-l-2 border-stone-200 pl-3">
+                              {priorVersions(doc).map((p) => (
+                                <li
+                                  key={p.id}
+                                  className="flex flex-wrap items-center gap-2 text-xs"
+                                >
+                                  <span className="rounded bg-stone-100 px-1.5 py-0.5 font-medium text-stone-500">
+                                    v{p.version}
+                                  </span>
+                                  <a
+                                    href={`/api/documents/${p.id}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-stone-500 hover:text-brand-600 hover:underline"
+                                  >
+                                    {p.filename}
+                                  </a>
+                                  <span className="text-stone-400">
+                                    {(p.sizeBytes / 1024).toFixed(0)} KB · replaced{" "}
+                                    {fmtDate(p.createdAt)}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <form action={uploadDocument} className="mb-4 flex flex-wrap items-end gap-2">
+                  <input type="hidden" name="transactionId" value={txn.id} />
+                  <label className={label}>
+                    Upload document (PDF, max 10 MB)
+                    <input
+                      name="file"
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      required
+                      className={input}
+                    />
+                  </label>
+                  <button type="submit" className={btnGhost}>
+                    Upload
+                  </button>
+                </form>
+                {templates.length > 0 && (
+                  <form action={generateDocument} className="mb-4 flex flex-wrap items-end gap-2">
+                    <input type="hidden" name="transactionId" value={txn.id} />
+                    <label className={label}>
+                      Generate from template
+                      <select name="templateId" className={input} defaultValue={templates[0]?.id}>
+                        {templates.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button type="submit" className={btnGhost}>
+                      Generate PDF
+                    </button>
+                  </form>
+                )}
+                {txn.envelopes.length > 0 && (
+                  <div className="mb-4">
+                    <h3 className="mb-1 text-sm font-medium text-stone-600">Signature envelopes</h3>
+                    <ul className="flex flex-col">
+                      {txn.envelopes.map((env) => {
+                        const signers =
+                          (env.signers as Array<{ name: string; email: string }>) ?? [];
+                        return (
+                          <li
+                            key={env.id}
+                            className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
+                          >
+                            <EnvelopeBadge status={env.status} />
+                            <span className="font-medium">{env.document.filename}</span>
+                            <span className="text-stone-500">
+                              {env.provider.toLowerCase()} · {signers.map((s) => s.name).join(", ")}
+                            </span>
+                            {env.error && <span className="text-xs text-red-600">{env.error}</span>}
+                            <span className="ml-auto flex items-center gap-2">
+                              {env.provider === "MANUAL" && env.status === "SENT" && (
+                                <form action={markEnvelopeSigned}>
+                                  <input type="hidden" name="id" value={env.id} />
+                                  <button type="submit" className={btnGhost}>
+                                    Mark signed
+                                  </button>
+                                </form>
+                              )}
+                              {env.provider !== "MANUAL" && env.externalId && (
+                                <form action={refreshEnvelope}>
+                                  <input type="hidden" name="id" value={env.id} />
+                                  <button type="submit" className={btnGhost}>
+                                    Refresh status
+                                  </button>
+                                </form>
+                              )}
+                              <DangerDelete
+                                compact
+                                action={deleteEnvelope}
+                                label="Delete"
+                                description="Removes this signature record (the provider envelope is not cancelled)."
+                                hidden={{ id: env.id, transactionId: txn.id }}
+                              />
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+                {txn.extractions.length > 0 && (
+                  <div>
+                    <h3 className="mb-1 text-sm font-medium text-stone-600">Extraction runs</h3>
+                    <ul className="flex flex-col">
+                      {txn.extractions.map((ex) => (
+                        <li
+                          key={ex.id}
+                          className="flex items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
+                        >
+                          <ExtractionBadge status={ex.status} />
+                          <span className="text-stone-500">
+                            {fmtDate(ex.createdAt)} · {ex._count.fields} fields · {ex.model}
+                          </span>
+                          <Link
+                            href={`/dashboard/transactions/${txn.id}/extractions/${ex.id}`}
+                            className="ml-auto text-brand-600 hover:underline"
+                          >
+                            {ex.status === "READY" ? "Review & apply" : "View"}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </section>
+            </div>
           )}
           {tab === "vendors" && <VendorOrderTab tenantId={tenantId} transactionId={id} />}
           {tab === "compliance" && (

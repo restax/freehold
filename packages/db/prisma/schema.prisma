@@ -615,6 +615,8 @@ model Organization {
   tasks                   Task[]
   actionPlans             ActionPlan[]
   actionPlanTasks         ActionPlanTask[]
+  actionPlanDocuments     ActionPlanDocument[]
+  requiredDocuments       TransactionRequiredDocument[]
   complianceChecklists    ComplianceChecklist[]
   complianceItems         ComplianceItem[]
   transactionCompliances  TransactionCompliance[]
@@ -1036,6 +1038,7 @@ model Transaction {
   contractParties   Json?                   @map("contract_parties")
   isSample          Boolean                 @default(false)
   parties           TransactionParty[]
+  requiredDocuments TransactionRequiredDocument[]
   tasks             Task[]
   documents         Document[]
   extractions       ContractExtraction[]
@@ -1347,11 +1350,27 @@ model ActionPlan {
   description String?
   isSample    Boolean          @default(false)
   tasks       ActionPlanTask[]
+  documents   ActionPlanDocument[]
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
   @@index([tenantId])
   @@map("action_plan")
+}
+
+/// A document a plan expects on the file — the checklist template. Applying the
+/// plan seeds one TransactionRequiredDocument per row alongside the tasks.
+model ActionPlanDocument {
+  id           String     @id @default(uuid())
+  tenantId     String     @map("tenant_id")
+  tenant       Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actionPlanId String     @map("action_plan_id")
+  actionPlan   ActionPlan @relation(fields: [actionPlanId], references: [id], onDelete: Cascade)
+  label        String
+  sortOrder    Int        @default(0) @map("sort_order")
+
+  @@index([tenantId])
+  @@map("action_plan_document")
 }
 
 model ActionPlanTask {
@@ -1807,6 +1826,7 @@ model Document {
   extractions     ContractExtraction[]
   envelopes       SignatureEnvelope[]
   complianceSlots ComplianceSlot[]
+  requiredSlots   TransactionRequiredDocument[]
   createdAt       DateTime             @default(now())
 
   @@index([tenantId])
@@ -1814,6 +1834,27 @@ model Document {
   @@index([replacesId])
   @@index([sourceOrderId])
   @@map("document")
+}
+
+/// A slot on a transaction's required-documents checklist: an expected document
+/// (seeded from an applied plan, or added by hand) that is satisfied when a
+/// Document is linked to it. documentId null = still missing. Deleting the
+/// linked document just reopens the slot (SetNull), never the checklist item.
+model TransactionRequiredDocument {
+  id            String       @id @default(uuid())
+  tenantId      String       @map("tenant_id")
+  tenant        Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactionId String       @map("transaction_id")
+  transaction   Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  label         String
+  documentId    String?      @map("document_id")
+  document      Document?    @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  sortOrder     Int          @default(0) @map("sort_order")
+  createdAt     DateTime     @default(now())
+
+  @@index([tenantId])
+  @@index([transactionId])
+  @@map("transaction_required_document")
 }
 
 /// One AI extraction run over a document. Nothing an extraction finds touches

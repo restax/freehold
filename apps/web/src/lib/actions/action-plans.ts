@@ -64,3 +64,31 @@ export async function deleteTemplateTask(formData: FormData) {
   await withTenant(tenantId, (tx) => tx.actionPlanTask.delete({ where: { id } }));
   revalidatePath(`/dashboard/action-plans/${actionPlanId}`);
 }
+
+/** A document this plan expects on the file. Applying the plan seeds the
+ *  transaction's required-documents checklist from these. */
+export async function addTemplateDocument(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const actionPlanId = str(formData, "actionPlanId");
+  const label = str(formData, "label");
+  if (!actionPlanId || !label) return;
+  await withTenant(tenantId, async (tx) => {
+    const max = await tx.actionPlanDocument.aggregate({
+      where: { actionPlanId },
+      _max: { sortOrder: true },
+    });
+    await tx.actionPlanDocument.create({
+      data: { tenantId, actionPlanId, label, sortOrder: (max._max.sortOrder ?? 0) + 1 },
+    });
+  });
+  revalidatePath(`/dashboard/action-plans/${actionPlanId}`);
+}
+
+export async function deleteTemplateDocument(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  const actionPlanId = str(formData, "actionPlanId");
+  if (!id) return;
+  await withTenant(tenantId, (tx) => tx.actionPlanDocument.delete({ where: { id } }));
+  revalidatePath(`/dashboard/action-plans/${actionPlanId}`);
+}

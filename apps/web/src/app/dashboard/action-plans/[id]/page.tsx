@@ -2,7 +2,13 @@ import { DateAnchor, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DangerDelete } from "@/components/danger-delete";
-import { addTemplateTask, deletePlan, deleteTemplateTask } from "@/lib/actions/action-plans";
+import {
+  addTemplateDocument,
+  addTemplateTask,
+  deletePlan,
+  deleteTemplateDocument,
+  deleteTemplateTask,
+} from "@/lib/actions/action-plans";
 import { requireAdminTenant } from "@/lib/tenant";
 import { btnDanger, btnGhost, card, input, label, td, th } from "@/lib/ui";
 
@@ -28,7 +34,10 @@ export default async function ActionPlanDetailPage({
   const { plan, emailTemplates } = await withTenant(tenantId, async (tx) => ({
     plan: await tx.actionPlan.findUnique({
       where: { id },
-      include: { tasks: { orderBy: { sortOrder: "asc" } } },
+      include: {
+        tasks: { orderBy: { sortOrder: "asc" } },
+        documents: { orderBy: { sortOrder: "asc" } },
+      },
     }),
     emailTemplates: await tx.emailTemplate.findMany({
       orderBy: { name: "asc" },
@@ -151,6 +160,47 @@ export default async function ActionPlanDetailPage({
           Negative offsets fall before the anchor: “Close date, −1” is the day before closing. Tasks
           with an email template open compose with that email ready.
         </p>
+      </section>
+
+      <section className={card}>
+        <h2 className="mb-1 font-medium">Required documents</h2>
+        <p className="mb-3 text-sm text-stone-500">
+          The documents a file on this plan should collect. Applying the plan drops this checklist
+          onto the transaction's Documents tab, each one marked received or missing.
+        </p>
+        {plan.documents.length === 0 ? (
+          <p className="mb-3 text-sm text-stone-400">No required documents yet — add one below.</p>
+        ) : (
+          <ul className="mb-3 flex flex-col divide-y divide-stone-100">
+            {plan.documents.map((d) => (
+              <li key={d.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
+                <span>{d.label}</span>
+                <form action={deleteTemplateDocument}>
+                  <input type="hidden" name="id" value={d.id} />
+                  <input type="hidden" name="actionPlanId" value={plan.id} />
+                  <button type="submit" className="text-xs text-stone-400 hover:text-red-600">
+                    remove
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form action={addTemplateDocument} className="flex flex-wrap items-end gap-2">
+          <input type="hidden" name="actionPlanId" value={plan.id} />
+          <label className={`${label} min-w-64 flex-1`}>
+            Document
+            <input
+              name="label"
+              required
+              className={input}
+              placeholder="Purchase & Sale Agreement"
+            />
+          </label>
+          <button type="submit" className={btnGhost}>
+            Add required document
+          </button>
+        </form>
       </section>
     </div>
   );
