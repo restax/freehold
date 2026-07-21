@@ -1,6 +1,7 @@
 import { TransactionSide, TransactionStatus, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { StatusBadge } from "@/components/badges";
+import { ContractUploadForm } from "@/components/contract-upload-form";
 import { EmptyState } from "@/components/empty-state";
 import { createFromContract } from "@/lib/actions/extractions";
 import { createTransaction } from "@/lib/actions/transactions";
@@ -12,6 +13,10 @@ import { requireTenant } from "@/lib/tenant";
 import { btn, btnGhost, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
+// Contract extraction runs synchronously in the createFromContract server
+// action (invoked from this route), and a real contract can take ~30–90s.
+// Give it the full Hobby function budget so production never kills it mid-run.
+export const maxDuration = 60;
 
 const STATUSES = Object.values(TransactionStatus);
 const SIDES = Object.values(TransactionSide);
@@ -162,18 +167,7 @@ export default async function TransactionsPage({
               Drop in the signed PDF — the AI reads the parties, price, and every deadline, each one
               page-cited and confidence-scored. You confirm before anything is saved. No typing.
             </p>
-            <form action={createFromContract} className="mt-3 flex flex-wrap items-center gap-2">
-              <input
-                name="file"
-                type="file"
-                accept="application/pdf,.pdf"
-                required
-                className="text-sm file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-brand-700"
-              />
-              <button type="submit" className={btn}>
-                Upload &amp; extract
-              </button>
-            </form>
+            <ContractUploadForm action={createFromContract} />
             <p className="mt-2 text-xs text-stone-400">
               PDF, up to 10&nbsp;MB. Extraction takes ~30–90 seconds.
             </p>
