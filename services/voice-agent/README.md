@@ -77,6 +77,32 @@ deployment has `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and
 `ELEVENLABS_API_KEY` set. On Vercel that means `vercel env add` for each,
 then a redeploy — the agent alone isn't enough.
 
+## Latency — the wait before the first spoken word
+
+The gap between clicking "Talk to it" and hearing the greeting is the sum of:
+the token round trip (browser → Vercel `iad1`), the LiveKit connect (global
+edge, already near the user), the agent being dispatched, its `fetch_brief`
+round trip (agent → `/api/voice/data` on Vercel `iad1`), VAD load, and the
+first Claude reply + TTS. Only the first two shrink when the *user* is closer
+to `iad1`; the rest track where the *agent* runs. Levers, by impact:
+
+1. **Region.** Pin the agent to US East (above) so it sits beside `iad1` — that
+   makes `fetch_brief` and every data lookup a same-region hop and keeps US
+   users' audio off the Pacific. Deploying from Tokyo puts the agent there and
+   pays that cross-Pacific cost on every turn, for everyone.
+2. **Prewarm + warm workers.** The VAD is loaded in `prewarm_fnc` (once per
+   worker, not per call). Keep at least one worker warm in the LiveKit Cloud
+   agent settings so the first click after idle doesn't cold-start a container.
+3. **Measure.** The worker logs stamp each step (`connected`, `grant accepted`,
+   `session live`, `greeting dispatched`); the browser console logs `[voice]`
+   marks (token, connect, first agent audio). Compare the two to see whether a
+   wait is network, dispatch, or the first-reply pipeline before tuning more.
+
+`generate_reply(instructions=greeting)` composes the greeting with the LLM so
+it varies naturally; that's one Claude call on the critical path. Swapping it
+for `session.say(<fixed line>)` removes that call but makes the opener scripted
+— a deliberate quality/latency trade, left as generate_reply on purpose.
+
 ## Cost
 
 Three metered APIs run per session, so Cloud meters it: Free gets none, Pro

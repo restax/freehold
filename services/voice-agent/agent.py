@@ -20,11 +20,20 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from pathlib import Path
 
 import aiohttp
 from dotenv import load_dotenv
-from livekit.agents import Agent, AgentSession, JobContext, RunContext, WorkerOptions, cli
+from livekit.agents import (
+    Agent,
+    AgentSession,
+    JobContext,
+    JobProcess,
+    RunContext,
+    WorkerOptions,
+    cli,
+)
 from livekit.agents.llm import function_tool
 from livekit.plugins import anthropic, deepgram, elevenlabs, silero
 
@@ -41,7 +50,7 @@ for _parent in Path(__file__).resolve().parents:
 logger = logging.getLogger("freehold-voice")
 
 APP_URL = os.environ.get("FREEHOLD_APP_URL", "http://localhost:3010").rstrip("/")
-VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "OYTbf65OHHFELVut7v2H")
+VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "YY7fzZmDizFQQv8XPAIY")
 LLM_MODEL = os.environ.get("FREEHOLD_VOICE_MODEL", "claude-sonnet-4-6")
 
 class FreeholdAssistant(Agent):
@@ -181,8 +190,24 @@ async def fetch_brief(grant: str) -> dict | None:
         return None
 
 
+def prewarm(proc: JobProcess) -> None:
+    """Load the VAD once when the worker boots, not on every call. Loading a
+    model on the hot path is dead time the caller hears as extra silence before
+    the greeting; doing it here means a warm worker starts talking sooner."""
+    proc.userdata["vad"] = silero.VAD.load()
+
+
 async def entrypoint(ctx: JobContext) -> None:
+    # Timing marks (t0 = the moment the agent picks up the job). These print to
+    # the worker logs so it's clear which step owns the wait — dispatch, the
+    # brief round-trip to the app, or the first reply. See README → Latency.
+    t0 = time.monotonic()
+
+    def elapsed() -> str:
+        return f"{time.monotonic() - t0:.2f}s"
+
     await ctx.connect()
+    logger.info("connected to room at %s", elapsed())
 
     raw = ctx.room.metadata or "{}"
     try:
@@ -202,11 +227,15 @@ async def entrypoint(ctx: JobContext) -> None:
         logger.error("grant not honoured by the app — refusing to serve")
         return
     logger.info(
-        "grant accepted for room %s; tools: %s", ctx.room.name, sorted(brief["tools"]) or "none"
+        "grant accepted for room %s at %s; tools: %s",
+        ctx.room.name,
+        elapsed(),
+        sorted(brief["tools"]) or "none",
     )
 
     session = AgentSession(
-        vad=silero.VAD.load(),
+        # Reuse the VAD loaded in prewarm() rather than loading it per session.
+        vad=ctx.proc.userdata["vad"],
         stt=deepgram.STT(model="nova-3", smart_format=True),
         llm=anthropic.LLM(model=LLM_MODEL),
         # Passed explicitly: the plugin looks for ELEVEN_API_KEY, but the repo
@@ -225,8 +254,10 @@ async def entrypoint(ctx: JobContext) -> None:
         room=ctx.room,
         agent=FreeholdAssistant(grant, brief["tools"], brief["instructions"]),
     )
+    logger.info("session live at %s", elapsed())
     await session.generate_reply(instructions=brief["greeting"])
+    logger.info("greeting dispatched at %s", elapsed())
 
 
 if __name__ == "__main__":
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
+    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, prewarm_fnc=prewarm))

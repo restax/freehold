@@ -46,12 +46,17 @@ export function VoiceDemo() {
     setState("connecting");
     setLines([]);
     setNote(null);
+    // Timing marks (console.debug) so the wait can be attributed: token round
+    // trip, LiveKit connect, then time-to-first-audio (the agent's greeting).
+    const t0 = performance.now();
+    const since = () => `${Math.round(performance.now() - t0)}ms`;
     try {
       const res = await fetch("/api/voice/token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ demo: true }),
       });
+      console.debug(`[voice] token ready +${since()}`);
 
       if (res.status === 429) {
         const body = (await res.json()) as { message?: string };
@@ -70,8 +75,13 @@ export function VoiceDemo() {
       const room = new Room({ adaptiveStream: true });
       roomRef.current = room;
 
+      let firstAudioLogged = false;
       room.on(RoomEvent.TrackSubscribed, (track: Track) => {
         if (track.kind === Track.Kind.Audio) {
+          if (!firstAudioLogged) {
+            firstAudioLogged = true;
+            console.debug(`[voice] first agent audio +${since()}`);
+          }
           const el = track.attach();
           el.autoplay = true;
           document.body.appendChild(el);
@@ -103,6 +113,7 @@ export function VoiceDemo() {
       });
 
       await room.connect(url, token);
+      console.debug(`[voice] room connected +${since()}`);
       await room.localParticipant.setMicrophoneEnabled(true);
       setState("live");
     } catch {
