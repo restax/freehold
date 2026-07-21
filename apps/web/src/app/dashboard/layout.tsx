@@ -9,6 +9,7 @@ import { openBillingPortal } from "@/lib/actions/billing";
 import { DEMO_SLUG } from "@/lib/demo";
 import { getTenantPlan } from "@/lib/plans";
 import { getSession, listTenants } from "@/lib/session";
+import { supportUnreadCount } from "@/lib/support-unread";
 import { GUEST_ROLE, getMemberRole } from "@/lib/tenant";
 import { btn } from "@/lib/ui";
 
@@ -23,6 +24,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // settings, only the files they were handed. Pages enforce this themselves —
   // the sidebar just stops offering doors that won't open.
   const isGuest = (await getMemberRole(active.id, session.user.id)) === GUEST_ROLE;
+  const supportUnread = await supportUnreadCount(active.id, session.user.id);
 
   // Failed-renewal lock: access is paused until payment is fixed, but nothing
   // is deleted and the recovery path (Stripe portal, sign-out) stays open.
@@ -123,7 +125,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </div>
           </details>
         )}
-        <DashboardNav isGuest={isGuest} />
+        <DashboardNav isGuest={isGuest} supportUnread={supportUnread} />
         <div className="mt-auto flex flex-col gap-1 border-t border-stone-200 pt-3">
           <SupportTicketWidget />
           <ProfileNavLink />

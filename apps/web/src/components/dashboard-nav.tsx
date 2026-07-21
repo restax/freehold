@@ -28,8 +28,12 @@ import {
   UsersThree,
 } from "@phosphor-icons/react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { VOICE_OPEN_EVENT } from "@/components/voice-widget";
+
+const SUPPORT_HREF = "/dashboard/support";
+const UNREAD_POLL_MS = 15000;
 
 interface NavItem {
   href: string;
@@ -84,7 +88,7 @@ const GROUPS: NavGroup[] = [
   },
 ];
 
-function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+function NavLink({ item, active, badge = 0 }: { item: NavItem; active: boolean; badge?: number }) {
   const IconComponent = item.icon;
   return (
     <Link
@@ -103,6 +107,15 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
         aria-hidden
       />
       {item.label}
+      {badge > 0 && (
+        <span
+          role="status"
+          aria-label={`${badge} new`}
+          className="ml-auto inline-flex min-w-4 animate-bounce items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-semibold leading-4 text-white"
+        >
+          {badge > 9 ? "9+" : badge}
+        </span>
+      )}
     </Link>
   );
 }
@@ -115,10 +128,56 @@ const GUEST_HREFS = new Set([
   "/dashboard/support",
 ]);
 
-export function DashboardNav({ isGuest = false }: { isGuest?: boolean }) {
+export function DashboardNav({
+  isGuest = false,
+  supportUnread = 0,
+}: {
+  isGuest?: boolean;
+  supportUnread?: number;
+}) {
   const pathname = usePathname();
+  const router = useRouter();
   const isActive = (href: string) =>
     href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
+
+  const onSupport = pathname.startsWith(SUPPORT_HREF);
+  const [unread, setUnread] = useState(supportUnread);
+
+  // Landing on the Support page clears the badge immediately — the server also
+  // marks it seen, but that only reaches us on the next poll.
+  useEffect(() => {
+    if (onSupport) setUnread(0);
+  }, [onSupport]);
+
+  // Poll for operator/Slack replies. While the Support page is open, a new one
+  // also triggers a soft refresh so it shows up without a manual reload (client
+  // state and form inputs are preserved). Skip while the tab is hidden.
+  useEffect(() => {
+    let active = true;
+    const tick = async () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      try {
+        const res = await fetch("/api/support/unread", { cache: "no-store" });
+        if (!res.ok || !active) return;
+        const { unread: n } = (await res.json()) as { unread: number };
+        if (n > 0 && pathname.startsWith(SUPPORT_HREF)) {
+          router.refresh();
+          setUnread(0);
+        } else {
+          setUnread(n);
+        }
+      } catch {
+        // A failed poll just means we try again next tick.
+      }
+    };
+    const id = setInterval(tick, UNREAD_POLL_MS);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [pathname, router]);
+
+  const badgeFor = (href: string) => (href === SUPPORT_HREF && !onSupport ? unread : 0);
 
   // Hiding these is courtesy, not security — every page refuses guests
   // server-side regardless of what the sidebar shows.
@@ -138,7 +197,12 @@ export function DashboardNav({ isGuest = false }: { isGuest?: boolean }) {
             </p>
           )}
           {group.items.map((item) => (
-            <NavLink key={item.href} item={item} active={isActive(item.href)} />
+            <NavLink
+              key={item.href}
+              item={item}
+              active={isActive(item.href)}
+              badge={badgeFor(item.href)}
+            />
           ))}
           {/* Voice search isn't a page — it's the panel that lives on every
               screen — so the menu entry opens it where you already are. */}

@@ -1,7 +1,9 @@
 import { withTenant } from "@freehold/db";
+import { after } from "next/server";
 import { TicketBadge } from "@/components/badges";
 import { addTicketReply } from "@/lib/actions/support";
 import { fmtDate } from "@/lib/format";
+import { markSupportSeen } from "@/lib/support-unread";
 import { getMemberRole, requireTenant } from "@/lib/tenant";
 import { btn, card, input } from "@/lib/ui";
 
@@ -11,6 +13,10 @@ export default async function SupportPage() {
   const { tenantId, userId } = await requireTenant({ allowGuest: true });
   const role = await getMemberRole(tenantId, userId);
   const isAdmin = role === "owner" || role === "admin";
+
+  // Opening the page marks everything currently here as seen — clears the
+  // sidebar badge, and (on a poll-driven refresh) re-marks after a new reply.
+  after(() => markSupportSeen(tenantId, userId));
 
   const tickets = await withTenant(tenantId, (tx) =>
     tx.supportTicket.findMany({

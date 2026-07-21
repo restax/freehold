@@ -682,6 +682,10 @@ model Member {
   /// same as everything else here — roles and assignments don't cross tenants).
   /// Generated lazily on first request for the link; null until then.
   calendarToken  String?      @unique @map("calendar_token")
+  /// When this person last looked at the Support page in this workspace. Any
+  /// operator/Slack reply newer than this counts as unread, driving the
+  /// sidebar's "new message" badge. Null = never opened it.
+  supportSeenAt  DateTime?    @map("support_seen_at")
   createdAt      DateTime     @default(now())
 
   @@index([organizationId])
