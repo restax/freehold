@@ -1593,6 +1593,7 @@ model SupportTicket {
   createdAt DateTime             @default(now())
   updatedAt DateTime             @updatedAt
   replies   SupportTicketReply[]
+  slackLink SlackTicketLink?
 
   @@index([tenantId, status])
   @@map("support_ticket")
@@ -1615,6 +1616,27 @@ model SupportTicketReply {
 
   @@index([tenantId, ticketId])
   @@map("support_ticket_reply")
+}
+
+/// Links a ticket to the Slack thread its alert was posted into, so a
+/// threaded reply in Slack can find its way back to the right ticket without
+/// any tenant context — the inbound Slack webhook has none, only a channel +
+/// thread timestamp. No RLS: a bare lookup by (slackChannel, slackThreadTs)
+/// resolves the tenant, then every downstream read/write goes through
+/// withTenant, the same "resolve the capability first" discipline
+/// vendor_order_link and portal_link already use. Optional — a ticket only
+/// gets one when SLACK_BOT_TOKEN + SLACK_ADMIN_CHANNEL are configured.
+model SlackTicketLink {
+  id            String        @id @default(uuid())
+  tenantId      String        @map("tenant_id")
+  ticketId      String        @unique @map("ticket_id")
+  ticket        SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  slackChannel  String        @map("slack_channel")
+  slackThreadTs String        @map("slack_thread_ts")
+  createdAt     DateTime      @default(now())
+
+  @@unique([slackChannel, slackThreadTs])
+  @@map("slack_ticket_link")
 }
 
 /// A state the workspace operates in, and whether it requires a licensed

@@ -4,7 +4,7 @@ import { prisma, TicketStatus, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
 import { str } from "@/lib/forms";
-import { adminAlert } from "@/lib/notify";
+import { adminAlert, postTicketAlert, postToSlackThread } from "@/lib/notify";
 import { isOperator } from "@/lib/operator";
 import { getSession } from "@/lib/session";
 import { requireTenant } from "@/lib/tenant";
@@ -14,7 +14,26 @@ import { requireTenant } from "@/lib/tenant";
  * textarea — "just type an issue and send"), with the page it was opened from
  * carried along automatically. A ticket is a thread: the tenant's own
  * replies and the operator's live in the same list, ordered by time.
+ *
+ * When SLACK_BOT_TOKEN + SLACK_ADMIN_CHANNEL are configured, a new ticket is
+ * posted as the bot (not the one-way incoming webhook) and its channel +
+ * message timestamp are kept on SlackTicketLink — that's what lets a reply
+ * typed right in the Slack thread come back in as a real ticket reply via the
+ * inbound webhook at api/webhooks/slack. Every reply, from either side, also
+ * gets echoed into that same thread so Slack and the app never diverge.
+ * Without bot credentials this degrades to the original one-way adminAlert
+ * ping — nothing breaks, it just isn't repliable from Slack.
  */
+
+/** The Slack thread a ticket is linked to, if the bot posted it. No tenant
+ *  context needed — this table has no RLS, same "resolve the capability
+ *  first" shape as VendorOrderLink. */
+async function slackLinkFor(ticketId: string) {
+  return prisma.slackTicketLink.findUnique({
+    where: { ticketId },
+    select: { slackChannel: true, slackThreadTs: true },
+  });
+}
 
 function deriveSubject(body: string): string {
   const flat = body.trim().replace(/\s+/g, " ");
@@ -47,11 +66,24 @@ export async function createTicket(formData: FormData) {
     subjectType: "SupportTicket",
     subjectId: ticket.id,
   });
-  adminAlert(
-    `🎫 New ticket from ${session.user.email} (${org?.name ?? tenantId})${
-      pagePath ? ` on ${pagePath}` : ""
-    }\n> ${body.slice(0, 400)}`,
-  );
+
+  const alertText = `🎫 New ticket from ${session.user.email} (${org?.name ?? tenantId})${
+    pagePath ? ` on ${pagePath}` : ""
+  }\n> ${body.slice(0, 400)}`;
+  const posted = await postTicketAlert(alertText);
+  if (posted) {
+    await prisma.slackTicketLink.create({
+      data: {
+        tenantId,
+        ticketId: ticket.id,
+        slackChannel: posted.channel,
+        slackThreadTs: posted.ts,
+      },
+    });
+  } else {
+    // Bot not configured — the original one-way ping (webhook or none).
+    adminAlert(alertText);
+  }
 
   revalidatePath("/dashboard/support");
   if (pagePath) revalidatePath(pagePath);
@@ -80,7 +112,16 @@ export async function addTicketReply(formData: FormData) {
     }
   });
 
-  adminAlert(`🎫 Reply on a ticket from ${session.user.email}\n> ${body.slice(0, 400)}`);
+  const link = await slackLinkFor(ticketId);
+  if (link) {
+    postToSlackThread(
+      link.slackChannel,
+      link.slackThreadTs,
+      `💬 ${session.user.email} replied in the app:\n> ${body.slice(0, 400)}`,
+    );
+  } else {
+    adminAlert(`🎫 Reply on a ticket from ${session.user.email}\n> ${body.slice(0, 400)}`);
+  }
   revalidatePath("/dashboard/support");
 }
 
@@ -108,6 +149,11 @@ export async function adminReplyToTicket(formData: FormData) {
       data: { status: TicketStatus.ANSWERED },
     });
   });
+
+  // Mirror into the Slack thread so an operator answering from the admin
+  // panel and one answering right in Slack both see the whole conversation.
+  const link = await slackLinkFor(ticketId);
+  if (link) postToSlackThread(link.slackChannel, link.slackThreadTs, body);
 
   revalidatePath("/admin/tickets");
   revalidatePath(`/admin/tickets/${ticketId}`);
