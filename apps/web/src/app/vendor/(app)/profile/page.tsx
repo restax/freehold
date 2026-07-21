@@ -1,9 +1,18 @@
 import { prisma } from "@freehold/db";
+import { adPriceConfigured, billingEnabled } from "@freehold/ee-billing";
 import { notFound } from "next/navigation";
 import { updateVendorProfile } from "@/lib/actions/vendor";
+import { createVendorAd, openAdBilling } from "@/lib/actions/vendor-ads";
 import { requireVendor } from "@/lib/vendor-auth";
 
 export const dynamic = "force-dynamic";
+
+const AD_STATUS: Record<string, { label: string; tone: string }> = {
+  PENDING: { label: "In review — we'll approve it shortly", tone: "bg-amber-100 text-amber-800" },
+  ACTIVE: { label: "Live in the Sponsored slots", tone: "bg-brand-600 text-white" },
+  PAUSED: { label: "Paused — payment needs attention", tone: "bg-stone-200 text-stone-600" },
+  REJECTED: { label: "Not approved", tone: "bg-red-100 text-red-700" },
+};
 
 const CATEGORIES: Array<[string, string]> = [
   ["TITLE", "Title / escrow"],
@@ -21,6 +30,8 @@ export default async function VendorProfilePage() {
   const { vendorId } = await requireVendor();
   const vendor = await prisma.vendor.findUnique({ where: { id: vendorId } });
   if (!vendor) notFound();
+  const ad = await prisma.vendorAd.findFirst({ where: { vendorId } });
+  const adsAvailable = billingEnabled() && adPriceConfigured();
 
   return (
     <div className="max-w-2xl">
@@ -88,6 +99,90 @@ export default async function VendorProfilePage() {
           </button>
         </div>
       </form>
+
+      <section className="mt-8 rounded-2xl border border-stone-200 bg-white p-6">
+        <div className="mb-1 flex items-center gap-2">
+          <h2 className="font-semibold">Advertise here</h2>
+          {ad && (
+            <span
+              className={`rounded-md px-2 py-0.5 text-xs font-medium ${AD_STATUS[ad.status]?.tone ?? ""}`}
+            >
+              {AD_STATUS[ad.status]?.label ?? ad.status}
+            </span>
+          )}
+        </div>
+        <p className="mb-4 text-sm text-stone-500">
+          Buy a Sponsored spot on the coordinator directory and the vendors page — a small monthly
+          fee, clearly labelled as advertising. Freehold reviews every ad before it goes live.
+        </p>
+
+        {ad?.status === "REJECTED" && ad.reviewNote && (
+          <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            Not approved: {ad.reviewNote}
+          </p>
+        )}
+
+        {adsAvailable ? (
+          <>
+            <form action={createVendorAd} className="flex flex-col gap-3">
+              <label className="flex flex-col gap-1 text-sm">
+                Headline
+                <input
+                  name="headline"
+                  required
+                  maxLength={80}
+                  defaultValue={ad?.headline ?? ""}
+                  placeholder="Fast, accurate title work in Cook County"
+                  className={field}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                Body
+                <textarea
+                  name="body"
+                  required
+                  rows={2}
+                  maxLength={200}
+                  defaultValue={ad?.body ?? ""}
+                  placeholder="One or two lines about what you offer."
+                  className={field}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                Link
+                <input
+                  name="linkUrl"
+                  required
+                  type="url"
+                  defaultValue={ad?.linkUrl ?? ""}
+                  placeholder="https://your-site.com"
+                  className={field}
+                />
+              </label>
+              <div className="flex items-center gap-3">
+                <button
+                  type="submit"
+                  className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+                >
+                  {ad ? "Save & resubmit" : "Advertise here"}
+                </button>
+                <span className="text-xs text-stone-400">
+                  {ad ? "Edits go back through review." : "You'll set up billing next."}
+                </span>
+              </div>
+            </form>
+            {ad?.stripeCustomerId && (
+              <form action={openAdBilling} className="mt-3">
+                <button type="submit" className="text-xs text-brand-700 hover:underline">
+                  Manage ad billing →
+                </button>
+              </form>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-stone-400">Advertising isn't set up on this deployment.</p>
+        )}
+      </section>
     </div>
   );
 }

@@ -86,9 +86,48 @@ model Vendor {
   users       VendorUser[]
   connections VendorConnection[]
   orders      VendorOrder[]
+  ads         VendorAd[]
 
   @@index([category])
   @@map("vendor")
+}
+
+/// A paid ad placement a vendor buys — a deliberate revenue line. Shown only
+/// where it's clearly labelled Sponsored (the vendor directory and the /vendors
+/// marketing page), never on /compare or /recommend, which carry the
+/// no-affiliate promise. Moderated: an ad is only ACTIVE (visible) once an
+/// operator approves it AND its monthly subscription is paid; a lapsed payment
+/// PAUSES it (never deletes). Like Vendor, this is a vendor-owned root table
+/// with no tenant, so it has no RLS — the app scopes it (the vendor manages
+/// their own, operators moderate, placement reads only ACTIVE).
+enum AdStatus {
+  PENDING
+  ACTIVE
+  PAUSED
+  REJECTED
+}
+
+model VendorAd {
+  id                   String    @id @default(uuid())
+  vendorId             String    @map("vendor_id")
+  vendor               Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  headline             String
+  body                 String
+  linkUrl              String    @map("link_url")
+  status               AdStatus  @default(PENDING)
+  /// Operator note on a rejection, shown back to the vendor.
+  reviewNote           String?   @map("review_note")
+  stripeCustomerId     String?   @map("stripe_customer_id")
+  stripeSubscriptionId String?   @map("stripe_subscription_id")
+  /// Current paid-through date from Stripe; the ad is dark past it.
+  periodEnd            DateTime? @map("period_end")
+  createdAt            DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([status])
+  @@index([vendorId])
+  @@index([stripeSubscriptionId])
+  @@map("vendor_ad")
 }
 
 enum VendorConnectionStatus {

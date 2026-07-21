@@ -1,5 +1,10 @@
 import { prisma } from "@freehold/db";
-import { billingEnabled, planUpdateFromEvent, verifyWebhook } from "@freehold/ee-billing";
+import {
+  adSubscriptionFromEvent,
+  billingEnabled,
+  planUpdateFromEvent,
+  verifyWebhook,
+} from "@freehold/ee-billing";
 import { adminAlert } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +46,37 @@ export async function POST(req: Request) {
 
   // Client invoicing is payment-agnostic and never touches Stripe: tenants
   // mark their own invoices paid. This webhook is subscriptions only.
+
+  // Vendor ad subscriptions carry vendorAdId (not tenantId), so the tenant-plan
+  // path below ignores them. Payment gates visibility: an approved ad goes dark
+  // (PAUSED) when payment lapses and lights back up when it resumes; the ad is
+  // never deleted. A newly paid ad stays PENDING until an operator approves it.
+  const adUpdate = adSubscriptionFromEvent(event);
+  if (adUpdate) {
+    const ad = await prisma.vendorAd.findUnique({ where: { id: adUpdate.vendorAdId } });
+    if (ad) {
+      let status = ad.status;
+      if (adUpdate.paid && ad.status === "PAUSED") status = "ACTIVE"; // payment resumed
+      if (!adUpdate.paid && ad.status === "ACTIVE") status = "PAUSED"; // payment lapsed
+      await prisma.vendorAd
+        .update({
+          where: { id: ad.id },
+          data: {
+            status,
+            stripeCustomerId: adUpdate.customerId,
+            stripeSubscriptionId: adUpdate.subscriptionId,
+            periodEnd: adUpdate.periodEnd,
+          },
+        })
+        .catch(() => {});
+      if (adUpdate.paid && ad.status === "PENDING") {
+        adminAlert(`📢 A vendor ad is paid and awaiting review (ad ${ad.id})`);
+      } else if (status === "PAUSED") {
+        adminAlert(`⏸️ A vendor ad was paused for non-payment (ad ${ad.id})`);
+      }
+    }
+    return new Response("ok", { status: 200 });
+  }
 
   const update = planUpdateFromEvent(event);
   if (update) {

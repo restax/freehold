@@ -1,5 +1,6 @@
 import { prisma, withTenant } from "@freehold/db";
 import { Badge } from "@/components/badges";
+import { SponsoredAds } from "@/components/sponsored-ads";
 import {
   requestConnection,
   tenantAcceptConnection,
@@ -70,6 +71,8 @@ export default async function VendorsPage() {
           Once connected, orders skip the email thread.
         </p>
       </div>
+
+      <SponsoredAds />
 
       {incoming.length > 0 && (
         <section className={card}>

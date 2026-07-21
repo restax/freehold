@@ -1,6 +1,9 @@
 import { Check } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { MarketingFooter, MarketingNav } from "@/components/marketing";
+import { SponsoredAds } from "@/components/sponsored-ads";
+
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "For vendors | Freehold",
@@ -82,6 +85,10 @@ export default function VendorsPage() {
             can list in the coordinator directory and buy a spot in it. That's optional and always
             clearly marked as advertising.
           </p>
+        </div>
+
+        <div className="mt-14">
+          <SponsoredAds />
         </div>
       </section>
 

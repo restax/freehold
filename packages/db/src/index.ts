@@ -99,3 +99,5 @@ export const ProposalKind = PrismaPkg.ProposalKind;
 export type ProposalKind = PrismaPkg.ProposalKind;
 export const ProposalStatus = PrismaPkg.ProposalStatus;
 export type ProposalStatus = PrismaPkg.ProposalStatus;
+export const AdStatus = PrismaPkg.AdStatus;
+export type AdStatus = PrismaPkg.AdStatus;
