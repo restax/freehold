@@ -1,7 +1,7 @@
 "use client";
 
 import { CircleNotch, Warning } from "@phosphor-icons/react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/TextLayer.css";
 import "react-pdf/dist/Page/AnnotationLayer.css";
@@ -13,6 +13,9 @@ import { btn, btnDanger, card } from "@/lib/ui";
 // bundler — Turbopack can't emit it via import.meta.url under pnpm's isolated
 // node_modules, and serving it locally keeps everything offline/self-host safe.
 pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+
+const PANE_PADDING = 24; // p-3 on both sides of the scroll container
+const MIN_PDF_WIDTH = 360;
 
 const CONF_TONE: Record<string, BadgeTone> = {
   HIGH: "success",
@@ -95,9 +98,25 @@ export function ExtractionReview({
   const [activePage, setActivePage] = useState<number | null>(null);
   const [activeQuote, setActiveQuote] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [pdfWidth, setPdfWidth] = useState(PDF_WIDTH);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const pageEls = useRef<Record<number, HTMLDivElement | null>>({});
+
+  // Render pages at the pane's actual width so the PDF fills the space it has —
+  // big on a wide monitor, still fine when the panes stack on mobile.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const measure = () => {
+      const w = el.clientWidth - PANE_PADDING;
+      if (w > 0) setPdfWidth(Math.max(MIN_PDF_WIDTH, w));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const highlighter = useCallback(
     (page: number) =>
@@ -122,8 +141,8 @@ export function ExtractionReview({
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-      {/* Fields */}
-      <form action={applyAction} className="flex min-w-0 flex-1 flex-col gap-4">
+      {/* Fields — a fixed, comfortable reading column; the PDF takes the rest. */}
+      <form action={applyAction} className="flex min-w-0 flex-col gap-4 lg:w-[440px] lg:shrink-0">
         <input type="hidden" name="extractionId" value={extractionId} />
         <section className={card}>
           <div className="mb-1 flex items-center justify-between">
@@ -208,8 +227,8 @@ export function ExtractionReview({
         )}
       </form>
 
-      {/* Source PDF */}
-      <div className="shrink-0 lg:w-[560px]">
+      {/* Source PDF — fills the remaining width. */}
+      <div className="min-w-0 flex-1">
         <div
           ref={scrollRef}
           className="sticky top-4 max-h-[80vh] overflow-y-auto rounded-xl border border-stone-200 bg-stone-100 p-3 lg:max-h-[calc(100dvh-2rem)]"
@@ -251,7 +270,7 @@ export function ExtractionReview({
                 >
                   <Page
                     pageNumber={p}
-                    width={PDF_WIDTH}
+                    width={pdfWidth}
                     customTextRenderer={highlighter(p)}
                     renderAnnotationLayer={false}
                   />

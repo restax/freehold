@@ -137,7 +137,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </div>
       </aside>
       <main id="main" className="flex-1 px-8 py-8">
-        <div className="mx-auto max-w-6xl">{children}</div>
+        <div className="mx-auto max-w-[1600px]">{children}</div>
       </main>
       {/* Lives in the layout so voice search is one press away on every
           dashboard page, not just a destination you have to navigate to. */}

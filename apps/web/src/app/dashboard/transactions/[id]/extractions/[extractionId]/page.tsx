@@ -32,7 +32,7 @@ export default async function ExtractionReviewPage({
   const lowCount = extraction.fields.filter((f) => f.confidence === "LOW").length;
 
   return (
-    <div className="flex max-w-6xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <div>
         <Link
           href={`/dashboard/transactions/${extraction.transactionId}`}
