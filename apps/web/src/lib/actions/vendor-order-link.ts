@@ -4,9 +4,12 @@ import { OrderActor, VendorOrderStatus, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { str } from "@/lib/forms";
 import { adminAlert } from "@/lib/notify";
+import { putObject } from "@/lib/storage";
 import { resolveOrderLink } from "@/lib/vendor-order-links";
 import { canAcceptOrder, canComplete, canDeclineOrder, canSchedule } from "@/lib/vendor-orders";
 import { emitWebhook } from "@/lib/webhook-emit";
+
+const MAX_UPLOAD = 25 * 1024 * 1024;
 
 /**
  * The unregistered vendor's side of an emailed order: accept / schedule /
@@ -93,4 +96,72 @@ export async function linkDeclineOrder(formData: FormData) {
     { detail: reason },
   );
   if (r) adminAlert(`🚫 ${r.email} declined the ${r.order.type} order`);
+}
+
+/** Unregistered vendor posts a message on the order conversation. */
+export async function linkSendMessage(formData: FormData) {
+  const token = str(formData, "token");
+  const body = str(formData, "body").trim();
+  if (!body) return;
+  const resolved = await resolveOrderLink(token);
+  if (!resolved) return;
+  const { order } = resolved;
+  await withTenant(order.tenantId, (tx) =>
+    tx.vendorOrderMessage.create({
+      data: {
+        tenantId: order.tenantId,
+        vendorId: order.vendorId,
+        orderId: order.id,
+        authorKind: OrderActor.VENDOR,
+        authorName: resolved.email,
+        body,
+      },
+    }),
+  );
+  adminAlert(`💬 ${resolved.email} sent a message on the ${order.type} order`);
+  revalidatePath(`/vendor-order/${token}`);
+}
+
+/** Unregistered vendor uploads a document → the coordinator's transaction. */
+export async function linkUploadDoc(formData: FormData) {
+  const token = str(formData, "token");
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0 || file.size > MAX_UPLOAD) return;
+  const resolved = await resolveOrderLink(token);
+  if (!resolved) return;
+  const { order } = resolved;
+
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const contentType = file.type || "application/octet-stream";
+  const put = await putObject(order.tenantId, file.name, bytes, contentType);
+
+  await withTenant(order.tenantId, async (tx) => {
+    await tx.document.create({
+      data: {
+        tenantId: order.tenantId,
+        transactionId: order.transactionId,
+        filename: file.name,
+        contentType,
+        sizeBytes: bytes.length,
+        data: put.data,
+        storageKey: put.storageKey,
+        storageProvider: put.storageProvider,
+        visibleToClient: false,
+        visibleToAgent: false,
+        sourceOrderId: order.id,
+      },
+    });
+    await tx.vendorOrderMessage.create({
+      data: {
+        tenantId: order.tenantId,
+        vendorId: order.vendorId,
+        orderId: order.id,
+        authorKind: OrderActor.VENDOR,
+        authorName: resolved.email,
+        body: `📎 Uploaded ${file.name}`,
+      },
+    });
+  });
+  adminAlert(`📎 ${resolved.email} uploaded ${file.name} on the ${order.type} order`);
+  revalidatePath(`/vendor-order/${token}`);
 }

@@ -1,4 +1,6 @@
 import { prisma, withVendor } from "@freehold/db";
+import { VendorOrderThread } from "@/components/vendor-order-thread";
+import { sendOrderMessageVendor, uploadOrderDocVendor } from "@/lib/actions/vendor-order-messages";
 import {
   vendorAcceptOrder,
   vendorCompleteOrder,
@@ -27,7 +29,10 @@ export async function VendorOrderInbox({ vendorId }: { vendorId: string }) {
     tx.vendorOrder.findMany({
       where: { status: { not: "DRAFT" } },
       orderBy: [{ updatedAt: "desc" }],
-      include: { events: { orderBy: { createdAt: "asc" } } },
+      include: {
+        events: { orderBy: { createdAt: "asc" } },
+        messages: { orderBy: { createdAt: "asc" } },
+      },
     }),
   );
   if (orders.length === 0) return null;
@@ -127,6 +132,33 @@ export async function VendorOrderInbox({ vendorId }: { vendorId: string }) {
                 )}
               </div>
             )}
+
+            {/* Conversation with the coordinator, plus document upload. */}
+            <div className="mt-3 border-t border-stone-100 pt-3">
+              <VendorOrderThread messages={o.messages} mine="VENDOR" />
+              <form action={sendOrderMessageVendor} className="mt-2 flex items-center gap-2">
+                <input type="hidden" name="orderId" value={o.id} />
+                <input
+                  name="body"
+                  required
+                  placeholder="Message the coordinator…"
+                  className={`${field} flex-1`}
+                />
+                <button type="submit" className={btn}>
+                  Send
+                </button>
+              </form>
+              <form
+                action={uploadOrderDocVendor}
+                className="mt-2 flex items-center gap-2 text-xs text-stone-500"
+              >
+                <input type="hidden" name="orderId" value={o.id} />
+                <input type="file" name="file" required className="text-xs" />
+                <button type="submit" className={btnGhost}>
+                  Upload a document
+                </button>
+              </form>
+            </div>
 
             {o.events.length > 0 && (
               <ol className="mt-3 flex flex-col gap-1 border-t border-stone-100 pt-3 text-xs text-stone-500">

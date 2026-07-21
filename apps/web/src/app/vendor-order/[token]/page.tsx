@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { Wordmark } from "@/components/marketing";
+import { VendorOrderThread } from "@/components/vendor-order-thread";
 import {
   linkAcceptOrder,
   linkCompleteOrder,
   linkDeclineOrder,
   linkScheduleOrder,
+  linkSendMessage,
+  linkUploadDoc,
 } from "@/lib/actions/vendor-order-link";
 import { fmtDate } from "@/lib/format";
 import { fmtDateTime, ORDER_STATUS_STYLE } from "@/lib/vendor-order-labels";
@@ -125,6 +128,34 @@ export default async function VendorOrderLinkPage({
               Nothing more to do here — this order is {resolved.order.status.toLowerCase()}.
             </p>
           )}
+
+          {/* Talk to the coordinator and send documents, no account needed. */}
+          <div className="mt-5 border-t border-stone-100 pt-5">
+            <p className="mb-2 text-xs font-medium text-stone-500">Messages</p>
+            <VendorOrderThread messages={resolved.messages} mine="VENDOR" />
+            <form action={linkSendMessage} className="mt-2 flex items-center gap-2">
+              <input type="hidden" name="token" value={token} />
+              <input
+                name="body"
+                required
+                placeholder="Message the coordinator…"
+                className={`${field} flex-1`}
+              />
+              <button type="submit" className={btnGhost}>
+                Send
+              </button>
+            </form>
+            <form
+              action={linkUploadDoc}
+              className="mt-2 flex items-center gap-2 text-xs text-stone-500"
+            >
+              <input type="hidden" name="token" value={token} />
+              <input type="file" name="file" required className="text-xs" />
+              <button type="submit" className={btnGhost}>
+                Upload a document
+              </button>
+            </form>
+          </div>
 
           <p className="mt-6 text-center text-xs text-stone-400">
             Work with lots of coordinators?{" "}

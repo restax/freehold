@@ -223,12 +223,35 @@ async function proposeFromReply(
   const order = await withTenant(tenantId, (tx) =>
     tx.vendorOrder.findUnique({
       where: { id: orderId },
-      select: { id: true, type: true, status: true, scheduledAt: true, emailTo: true },
+      select: {
+        id: true,
+        vendorId: true,
+        type: true,
+        status: true,
+        scheduledAt: true,
+        emailTo: true,
+      },
     }),
   );
   if (!order) return;
 
   const senderMismatch = Boolean(order.emailTo) && emailAddress(from) !== order.emailTo;
+
+  // The reply is also a message in the order conversation, so the one thread
+  // holds it regardless of whether it arrived by email or in-app.
+  await withTenant(tenantId, (tx) =>
+    tx.vendorOrderMessage.create({
+      data: {
+        tenantId,
+        vendorId: order.vendorId,
+        orderId,
+        authorKind: "VENDOR",
+        authorName: order.emailTo ?? from,
+        body: text.slice(0, 8000),
+        viaEmail: true,
+      },
+    }),
+  );
 
   let kind: ProposalKind = "NOTE";
   let at: Date | null = null;

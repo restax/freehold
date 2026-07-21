@@ -191,6 +191,7 @@ model VendorOrder {
   updatedAt     DateTime          @updatedAt
   events        VendorOrderEvent[]
   proposals     VendorOrderProposal[]
+  messages      VendorOrderMessage[]
   link          VendorOrderLink?
   documents     Document[]        @relation("OrderDocuments")
 
@@ -288,6 +289,31 @@ model VendorOrderProposal {
 
   @@index([tenantId, orderId])
   @@map("vendor_order_proposal")
+}
+
+/// One message in an order's conversation. Both sides post here — the
+/// coordinator, the vendor (in-app or by email reply), later the client — so a
+/// single thread exists regardless of channel. Same two-sided RLS as the order
+/// itself: tenant_id for the coordinator, denormalized vendor_id for a
+/// registered vendor. An emailed (unregistered) vendor reads and writes through
+/// their capability link, which resolves the order and scopes to its tenant.
+model VendorOrderMessage {
+  id         String      @id @default(uuid())
+  tenantId   String      @map("tenant_id")
+  vendorId   String?     @map("vendor_id")
+  orderId    String      @map("order_id")
+  order      VendorOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  authorKind OrderActor  @map("author_kind")
+  authorId   String?     @map("author_id")
+  /// Display name captured at send time (TC user, vendor business, or client).
+  authorName String?     @map("author_name")
+  body       String
+  /// True when the message arrived as an email reply rather than typed in-app.
+  viaEmail   Boolean     @default(false) @map("via_email")
+  createdAt  DateTime    @default(now())
+
+  @@index([tenantId, orderId, createdAt])
+  @@map("vendor_order_message")
 }
 
 /// Inbound mail that couldn't be threaded — no reply token, or a token that

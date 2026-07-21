@@ -1,4 +1,6 @@
 import { prisma, withTenant } from "@freehold/db";
+import { VendorOrderThread } from "@/components/vendor-order-thread";
+import { sendOrderMessageTC } from "@/lib/actions/vendor-order-messages";
 import {
   applyVendorProposal,
   cancelVendorOrder,
@@ -44,6 +46,7 @@ export async function VendorOrderTab({
         events: { orderBy: { createdAt: "asc" } },
         proposals: { where: { status: "PENDING" }, orderBy: { createdAt: "desc" } },
         documents: { where: { isCurrent: true }, select: { id: true, filename: true } },
+        messages: { orderBy: { createdAt: "asc" } },
       },
     }),
     await tx.vendorConnection.findMany({
@@ -255,6 +258,29 @@ export async function VendorOrderTab({
                   see the Attachments tab (internal until you share).
                 </p>
               )}
+
+              {/* The order conversation, both sides. */}
+              <div className="mt-3 border-t border-stone-100 pt-3">
+                <VendorOrderThread messages={o.messages} mine="TC" />
+                <form action={sendOrderMessageTC} className="mt-2 flex items-center gap-2">
+                  <input type="hidden" name="orderId" value={o.id} />
+                  <input type="hidden" name="transactionId" value={transactionId} />
+                  <input
+                    name="body"
+                    required
+                    placeholder={
+                      o.vendorId ? "Message the vendor…" : "Message the vendor (also emailed)…"
+                    }
+                    className={`${field} flex-1`}
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
+                  >
+                    Send
+                  </button>
+                </form>
+              </div>
 
               {o.events.length > 0 && (
                 <ol className="mt-3 flex flex-col gap-1 border-t border-stone-100 pt-3 text-xs text-stone-500">

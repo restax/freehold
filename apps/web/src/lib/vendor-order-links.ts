@@ -11,7 +11,12 @@ import { prisma, withTenant } from "@freehold/db";
 
 const DEFAULT_TTL_DAYS = 30;
 
-/** Create (or refresh) the single live link for an order. Returns the token. */
+/**
+ * Create the link for an order, or refresh an existing one's window. The token
+ * is stable across re-sends — an update keeps it and only extends the expiry and
+ * clears any revoke — so a link already in the vendor's inbox keeps working.
+ * Returns whichever token is now stored.
+ */
 export async function createOrderLink(
   tenantId: string,
   orderId: string,
@@ -20,12 +25,13 @@ export async function createOrderLink(
 ): Promise<string> {
   const token = randomBytes(18).toString("base64url");
   const expiresAt = new Date(Date.now() + ttlDays * 24 * 3600 * 1000);
-  await prisma.vendorOrderLink.upsert({
+  const link = await prisma.vendorOrderLink.upsert({
     where: { orderId },
     create: { tenantId, orderId, token, email, expiresAt },
-    update: { token, email, expiresAt, revokedAt: null },
+    update: { email, expiresAt, revokedAt: null },
+    select: { token: true },
   });
-  return token;
+  return link.token;
 }
 
 /** The absolute URL an emailed vendor clicks. Apex host — no tenant subdomain,
@@ -43,6 +49,7 @@ export interface ResolvedOrderLink {
     id: string;
     tenantId: string;
     vendorId: string | null;
+    transactionId: string;
     type: string;
     status: string;
     details: string | null;
@@ -52,6 +59,14 @@ export interface ResolvedOrderLink {
   };
   tenantName: string;
   property: string | null;
+  messages: Array<{
+    id: string;
+    authorKind: string;
+    authorName: string | null;
+    body: string;
+    viaEmail: boolean;
+    createdAt: Date;
+  }>;
 }
 
 /** Resolve a live link token to its order, or null if missing/expired/revoked. */
@@ -59,13 +74,14 @@ export async function resolveOrderLink(token: string): Promise<ResolvedOrderLink
   const link = await prisma.vendorOrderLink.findUnique({ where: { token } });
   if (!link || link.revokedAt || link.expiresAt.getTime() < Date.now()) return null;
 
-  const order = await withTenant(link.tenantId, (tx) =>
-    tx.vendorOrder.findUnique({
+  const [order, messages] = await withTenant(link.tenantId, async (tx) => [
+    await tx.vendorOrder.findUnique({
       where: { id: link.orderId },
       select: {
         id: true,
         tenantId: true,
         vendorId: true,
+        transactionId: true,
         type: true,
         status: true,
         details: true,
@@ -75,7 +91,19 @@ export async function resolveOrderLink(token: string): Promise<ResolvedOrderLink
         transaction: { select: { propertyAddress: true } },
       },
     }),
-  );
+    await tx.vendorOrderMessage.findMany({
+      where: { orderId: link.orderId },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        authorKind: true,
+        authorName: true,
+        body: true,
+        viaEmail: true,
+        createdAt: true,
+      },
+    }),
+  ]);
   if (!order) return null;
 
   const org = await prisma.organization.findUnique({
@@ -96,5 +124,6 @@ export async function resolveOrderLink(token: string): Promise<ResolvedOrderLink
     order: orderCore,
     tenantName: org?.name ?? "A transaction coordinator",
     property: transaction?.propertyAddress ?? null,
+    messages,
   };
 }
