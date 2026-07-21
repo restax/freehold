@@ -114,7 +114,7 @@ export default async function IntegrationsPage({
             ? "Active"
             : "Needs connection",
       body: documenso.source
-        ? `Sending via ${documenso.url}. Documents go out for signature from any transaction's Attachments tab; per-client provider choice on the client page.`
+        ? `Sending via ${documenso.url}. Documents go out for signature from any transaction's Documents tab; per-client provider choice on the client page.`
         : "Open-source e-signing. Connect your Documenso account below — paste your instance URL (or https://app.documenso.com) and an API token; we verify it before saving. Manual signing works regardless.",
       href: documenso.source ? "/dashboard/transactions" : undefined,
       hrefLabel: "Send from a transaction",
@@ -212,7 +212,7 @@ export default async function IntegrationsPage({
       tone: (docusignAdapter.available().ok ? "active" : "included") as Tone,
       status: docusignAdapter.available().ok ? "Active" : "Self-hosted option",
       body: docusignAdapter.available().ok
-        ? "Send documents for signature from any transaction's Attachments tab; per-client provider choice on the client page."
+        ? "Send documents for signature from any transaction's Documents tab; per-client provider choice on the client page."
         : "Prefer DocuSign? It runs on self-hosted Freehold with your own DocuSign developer account. Don't want to touch servers? Our team sets up self-hosted Freehold, DocuSign, and your data migration for you — flat fee, quoted up front.",
       href: docusignAdapter.available().ok ? "/dashboard/transactions" : "/services",
       hrefLabel: docusignAdapter.available().ok ? "Send from a transaction" : "Setup & IT services",

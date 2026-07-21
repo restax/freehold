@@ -270,7 +270,7 @@ export async function VendorOrderTab({
               {o.documents.length > 0 && (
                 <p className="mt-2 text-xs text-stone-500">
                   📎 {o.documents.length} file{o.documents.length > 1 ? "s" : ""} from the vendor —
-                  see the Attachments tab (internal until you share).
+                  see the Documents tab (internal until you share).
                 </p>
               )}
 

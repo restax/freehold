@@ -83,7 +83,7 @@ const ROLES = Object.values(PartyRole);
 
 const TXN_TABS = [
   ["tasks", "Tasks"],
-  ["attachments", "Attachments"],
+  ["documents", "Documents"],
   ["vendors", "Vendors"],
   ["compliance", "Compliance"],
   ["dates", "Dates & details"],
@@ -304,8 +304,50 @@ export default async function TransactionDetailPage({
         </p>
       )}
 
-      <div className="grid gap-5 xl:grid-cols-[280px_minmax(0,1fr)_280px]">
+      <div className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
         <aside className="flex flex-col gap-4 xl:order-1">
+          <section className={card}>
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-400">
+              Key dates
+            </h2>
+            <dl className="flex flex-col gap-1.5 text-sm">
+              {(
+                [
+                  ["List date", txn.listDate],
+                  ["On market", txn.onMarketDate],
+                  ["Contract", txn.contractDate],
+                  ["Close", txn.closeDate],
+                  ["Expires", txn.expireDate],
+                ] as const
+              ).map(([labelText, d]) => (
+                <div key={labelText} className="flex justify-between gap-2">
+                  <dt className="text-stone-500">{labelText}</dt>
+                  <dd className="tabular-nums font-medium">{fmtDate(d)}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+          <section className={card}>
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-400">
+              Next deadlines
+            </h2>
+            <ul className="flex flex-col gap-1.5 text-sm">
+              {txn.tasks
+                .filter((t) => t.status === "OPEN" && t.dueDate)
+                .slice(0, 6)
+                .map((t) => (
+                  <li key={t.id} className="flex justify-between gap-2">
+                    <span className="truncate">{t.title}</span>
+                    <span className="shrink-0 tabular-nums text-stone-400">
+                      {fmtDate(t.dueDate)}
+                    </span>
+                  </li>
+                ))}
+              {txn.tasks.filter((t) => t.status === "OPEN" && t.dueDate).length === 0 && (
+                <li className="text-stone-400">Nothing dated is open.</li>
+              )}
+            </ul>
+          </section>
           <section className={card}>
             <details open>
               <summary className="cursor-pointer select-none text-sm font-semibold uppercase tracking-wide text-stone-400">
@@ -577,7 +619,7 @@ export default async function TransactionDetailPage({
               </form>
             </section>
           )}
-          {tab === "attachments" && (
+          {tab === "documents" && (
             <section className={card}>
               <h2 className="mb-1 font-medium">Documents &amp; contract extraction</h2>
               <p className="mb-3 text-sm text-stone-500">
@@ -1816,7 +1858,7 @@ export default async function TransactionDetailPage({
                   <h2 className="mb-1 font-medium">Intake submissions</h2>
                   <p className="mb-3 text-sm text-stone-500">
                     Submitted by your clients through the portal. Uploaded files are on the
-                    Attachments tab, prefixed “Intake —”.
+                    Documents tab, prefixed “Intake —”.
                   </p>
                   <ul className="flex flex-col gap-4">
                     {txn.intakeSubmissions.map((sub) => {
@@ -1976,50 +2018,6 @@ export default async function TransactionDetailPage({
             </>
           )}
         </div>
-        <aside className="flex flex-col gap-4 xl:order-3">
-          <section className={card}>
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-400">
-              Key dates
-            </h2>
-            <dl className="flex flex-col gap-1.5 text-sm">
-              {(
-                [
-                  ["List date", txn.listDate],
-                  ["On market", txn.onMarketDate],
-                  ["Contract", txn.contractDate],
-                  ["Close", txn.closeDate],
-                  ["Expires", txn.expireDate],
-                ] as const
-              ).map(([labelText, d]) => (
-                <div key={labelText} className="flex justify-between gap-2">
-                  <dt className="text-stone-500">{labelText}</dt>
-                  <dd className="tabular-nums font-medium">{fmtDate(d)}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-          <section className={card}>
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-400">
-              Next deadlines
-            </h2>
-            <ul className="flex flex-col gap-1.5 text-sm">
-              {txn.tasks
-                .filter((t) => t.status === "OPEN" && t.dueDate)
-                .slice(0, 6)
-                .map((t) => (
-                  <li key={t.id} className="flex justify-between gap-2">
-                    <span className="truncate">{t.title}</span>
-                    <span className="shrink-0 tabular-nums text-stone-400">
-                      {fmtDate(t.dueDate)}
-                    </span>
-                  </li>
-                ))}
-              {txn.tasks.filter((t) => t.status === "OPEN" && t.dueDate).length === 0 && (
-                <li className="text-stone-400">Nothing dated is open.</li>
-              )}
-            </ul>
-          </section>
-        </aside>
       </div>
 
       {isAdmin && (

@@ -32,7 +32,7 @@ const LIMIT = 300;
 
 /**
  * Document library: every file across every transaction in one searchable
- * place. A read/find surface over the same Document rows the Attachments tab
+ * place. A read/find surface over the same Document rows the Documents tab
  * shows — upload still happens on a transaction (or via the upload-first
  * create flow); this is where they all live together.
  */
