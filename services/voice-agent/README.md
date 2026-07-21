@@ -30,8 +30,8 @@ and no fallback. See `apps/web/src/lib/voice-grant.ts`.
 ## Running it
 
 Keys come from the repo-root `.env` — no second copy:
-`LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `DEEPGRAM_API_KEY`,
-`ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`.
+`LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `ANTHROPIC_API_KEY`.
+STT and TTS don't need their own vendor keys — see the next section.
 
 ```bash
 python3.12 -m venv .venv          # 3.10+ required; livekit-agents needs it
@@ -73,9 +73,40 @@ lk agent rollback        # undo
 ```
 
 **The app needs its half too.** `/api/voice/token` returns 501 unless the web
-deployment has `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and
-`ELEVENLABS_API_KEY` set. On Vercel that means `vercel env add` for each,
-then a redeploy — the agent alone isn't enough.
+deployment has `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` set.
+On Vercel that means `vercel env add` for each, then a redeploy — the agent
+alone isn't enough.
+
+## Speech-to-text & text-to-speech — LiveKit inference, not vendor keys
+
+STT and TTS run through `livekit.agents.inference` — LiveKit's own hosted
+routing layer — instead of the Deepgram/ElevenLabs plugins calling those
+vendors' APIs directly. Authenticated automatically with the worker's own
+`LIVEKIT_API_KEY`/`LIVEKIT_API_SECRET`; no `DEEPGRAM_API_KEY` or
+`ELEVENLABS_API_KEY` needed here at all, and billed per-minute through
+LiveKit Cloud instead of each vendor separately.
+
+**Which model each one uses is admin-configurable, not hardcoded** —
+`/admin/settings` → "Voice pipeline" (`apps/web/src/lib/voice-inference-models.ts`
+holds the full catalog, mirrored from `livekit.agents.inference.{STTModels,TTSModels}`
+in the installed SDK). The choice is stored in `platform_setting` and read
+fresh on every session via the same `/api/voice/data` brief the agent already
+fetches (`fetch_brief()` in `agent.py`) — so a change in admin takes effect on
+the *next call*, no agent redeploy, which matters if you're actually
+comparing models for cost/quality.
+
+**The LLM stays a direct Anthropic call, on purpose.** Claude isn't in
+LiveKit's inference catalog at all (only OpenAI, Gemini, Moonshot, DeepSeek,
+GLM, Grok), so `ANTHROPIC_API_KEY` is still required and `LLM_MODEL` /
+`FREEHOLD_VOICE_MODEL` still work the same way they always did — this only
+changed STT and TTS.
+
+**A rough edge to know about:** `ELEVENLABS_VOICE_ID` (the `voice` param
+passed to `inference.TTS`) is provider-specific — it's an ElevenLabs voice ID.
+Switching the TTS model to a different provider in admin (Cartesia, Rime,
+Inworld, …) also needs that value updated to match the new provider's own
+voice-ID format; nothing validates or translates it automatically, so a
+mismatched voice/provider pair will error rather than silently fall back.
 
 ## Latency — the wait before the first spoken word
 
@@ -105,12 +136,14 @@ for `session.say(<fixed line>)` removes that call but makes the opener scripted
 
 ## Cost
 
-Three metered APIs run per session, so Cloud meters it: Free gets none, Pro
+Two billing surfaces run per session, so Cloud meters it: Free gets none, Pro
 100 sessions/month, Business 300 (`voiceSessionsPerMonth` in
 `apps/web/src/lib/plans.ts`). Self-hosted installs are never metered — you're
-paying the vendors directly. Replies are kept to a sentence or two by the
-system prompt, and the tool loop is capped at 3 steps, both to keep spoken
-answers listenable and the bill boring.
+paying the vendors directly: Anthropic for the LLM, and LiveKit Cloud
+per-minute for everything else (STT + TTS, see above — swap models in
+`/admin/settings` to compare cost). Replies are kept to a sentence or two by
+the system prompt, and the tool loop is capped at 3 steps, both to keep
+spoken answers listenable and the bill boring.
 
 ## Calling a real phone — the homepage "call the developer" demo
 
@@ -137,17 +170,32 @@ granted itself.
 
 **Setup**, beyond the usual secrets:
 
-1. Buy or already have a LiveKit-hosted phone number (`lk number list`).
-2. Bring it online and create an **outbound** SIP trunk that uses it as caller
-   ID (`lk sip outbound create`) — this is telephony account configuration,
-   not something this repo's build does for you.
-3. Set `FOUNDER_CELL_NUMBER` (E.164, e.g. `+15551234567`) and
-   `FOUNDER_SIP_TRUNK_ID` (the trunk's ID from step 2) in `secrets.env`, then
+The dial target is a bare **SIP username** (e.g. `paulslazas`), not a phone
+number and not a full `sip:user@host` URI. LiveKit Cloud's own hosted "phone
+numbers" product turned out to be **inbound-only** — dialing out through one
+requires a real PSTN carrier outbound trunk plus, for US local numbers, an
+E911/compliance step that isn't a self-serve toggle. Dialing a SIP address
+directly (e.g. a free SIP account like
+[linphone.org](https://www.linphone.org/en/free-sip-service/)) sidesteps all
+of that: no carrier, no compliance step, no per-minute billing. The
+*hostname* (`sip.linphone.org`) lives on the outbound trunk's `--address`,
+not in `FOUNDER_CALL_DESTINATION` — the API rejects a full URI there with
+"should be a phone number or SIP user, not a full SIP URI".
+
+1. Create an outbound SIP trunk whose address is the SIP provider's domain —
+   `lk sip outbound create --name "..." --address sip.linphone.org --numbers "<any number already on the project>"`
+   (`--numbers` sets the caller ID; a free SIP provider generally doesn't
+   care what it is, but the API requires something be set).
+2. Set `FOUNDER_CALL_DESTINATION` (the bare username, e.g. `paulslazas`) and
+   `FOUNDER_SIP_TRUNK_ID` (the trunk's ID from step 1) in `secrets.env`, then
    `lk agent update-secrets --secrets-file secrets.env`.
 
-Leaving `FOUNDER_SIP_TRUNK_ID` blank keeps the feature safely off even if the
-kill switch is on — `call_the_founder` checks both and declines cleanly
-("something's not configured right on my end") rather than failing oddly.
+Leaving either blank keeps the feature safely off even if the kill switch is
+on — `call_the_founder` checks both and declines cleanly ("something's not
+configured right on my end") rather than failing oddly. On a dial failure,
+the agent logs the actual SIP response (e.g. "480 Temporarily Unavailable" =
+not registered, "486 Busy Here") via `livekit.api.SipCallError`, not just a
+generic exception — check `lk agent logs` first when a call doesn't connect.
 
 Auto-hangup and a ringing timeout are set directly on the SIP call
 (`max_call_duration`, `ringing_timeout` in `call_the_founder`, `agent.py`) so a

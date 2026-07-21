@@ -2,7 +2,13 @@
 Freehold voice search — a LiveKit agent that answers questions about a
 workspace's own data, out loud.
 
-Pipeline: Silero VAD → Deepgram STT → Claude → ElevenLabs TTS.
+Pipeline: Silero VAD → STT → Claude → TTS. STT and TTS run through LiveKit's
+own hosted inference (livekit.agents.inference) rather than direct Deepgram/
+ElevenLabs API keys — billed per-minute through LiveKit, no vendor key needed
+here, and which model each one uses is admin-configurable at /admin/settings
+(read fresh from fetch_brief() below on every session, so a change there takes
+effect on the very next call with no redeploy). The LLM stays a direct
+Anthropic call: Claude isn't in LiveKit's inference catalog.
 
 The agent holds no database credentials and decides nothing about what it may
 read. When a session opens, the web app puts a short-lived HMAC-signed
@@ -36,9 +42,10 @@ from livekit.agents import (
     WorkerOptions,
     cli,
     get_job_context,
+    inference,
 )
 from livekit.agents.llm import function_tool
-from livekit.plugins import anthropic, deepgram, elevenlabs, silero
+from livekit.plugins import anthropic, silero
 
 # Local dev reads the repo-root .env so there's no second copy of the keys to
 # drift. Deployed, there is no such file — LiveKit Cloud injects the secrets as
@@ -58,7 +65,15 @@ LLM_MODEL = os.environ.get("FREEHOLD_VOICE_MODEL", "claude-sonnet-4-6")
 
 # The homepage demo's "call the developer" feature. Both unset means the tool
 # is simply never usable — nothing in this file assumes they're present.
-FOUNDER_CELL_NUMBER = os.environ.get("FOUNDER_CELL_NUMBER")
+#
+# A bare SIP username (e.g. "paulslazas"), NOT a full "sip:user@host" URI and
+# NOT a phone number: LiveKit's own hosted numbers turned out to be
+# inbound-only, so this dials a SIP account instead of going through the PSTN
+# — no carrier, no E911/compliance step, no per-minute billing. The host lives
+# on the outbound trunk's --address (FOUNDER_SIP_TRUNK_ID), not here — the API
+# rejects a full URI in sip_call_to with "should be a phone number or SIP
+# user, not a full SIP URI".
+FOUNDER_CALL_DESTINATION = os.environ.get("FOUNDER_CALL_DESTINATION")
 FOUNDER_SIP_TRUNK_ID = os.environ.get("FOUNDER_SIP_TRUNK_ID")
 
 class FreeholdAssistant(Agent):
@@ -177,19 +192,21 @@ async def call_the_founder(ctx: RunContext) -> str:
         decision = None
     if not isinstance(decision, dict) or not decision.get("ok"):
         reason = decision.get("reason") if isinstance(decision, dict) else None
+        logger.info("call_the_founder: app declined (%s)", reason or "no reason given")
         return reason or "That's not available right now."
 
-    if not FOUNDER_CELL_NUMBER or not FOUNDER_SIP_TRUNK_ID:
-        logger.error("call_the_founder approved by the app but no SIP config is set locally")
+    if not FOUNDER_CALL_DESTINATION or not FOUNDER_SIP_TRUNK_ID:
+        logger.error("call_the_founder: app approved but no SIP config is set locally")
         return "Something's not configured right on my end — sorry about that."
 
     job_ctx = get_job_context()
+    logger.info("call_the_founder: dialing %s via trunk %s", FOUNDER_CALL_DESTINATION, FOUNDER_SIP_TRUNK_ID)
     try:
         await job_ctx.api.sip.create_sip_participant(
             api.CreateSIPParticipantRequest(
                 room_name=job_ctx.room.name,
                 sip_trunk_id=FOUNDER_SIP_TRUNK_ID,
-                sip_call_to=FOUNDER_CELL_NUMBER,
+                sip_call_to=FOUNDER_CALL_DESTINATION,
                 participant_identity="founder",
                 participant_name="The developer",
                 play_ringtone=True,
@@ -200,9 +217,18 @@ async def call_the_founder(ctx: RunContext) -> str:
                 max_call_duration=Duration(seconds=180),
             )
         )
-    except Exception:
-        logger.exception("call_the_founder: SIP dial-out failed")
+    except api.ServerError as e:
+        # SipCallError adds the actual SIP response (e.g. 480 Temporarily
+        # Unavailable = not registered, 486 Busy Here) on top of the generic
+        # server error — surface that specifically when it's there, since
+        # "it didn't work" is useless for debugging a call that never rings.
+        sip_err = api.SipCallError.from_server_error(e)
+        logger.error("call_the_founder: SIP dial-out failed: %s", sip_err)
         return "Hmm, that call didn't go through. Let's carry on without him."
+    except Exception:
+        logger.exception("call_the_founder: SIP dial-out failed (non-SIP error)")
+        return "Hmm, that call didn't go through. Let's carry on without him."
+    logger.info("call_the_founder: SIP participant created, ringing")
     return "Calling now — let them know he'll be with them in just a moment."
 
 
@@ -237,6 +263,10 @@ async def fetch_brief(grant: str) -> dict | None:
                     "tools": {t["name"] for t in body.get("tools", [])},
                     "instructions": body.get("instructions") or "",
                     "greeting": body.get("greeting") or "",
+                    # Admin-configurable at /admin/settings; fall back to the
+                    # long-standing defaults if the app ever omits them.
+                    "sttModel": body.get("sttModel") or "deepgram/nova-3",
+                    "ttsModel": body.get("ttsModel") or "elevenlabs/eleven_turbo_v2_5",
                 }
     except Exception:
         logger.exception("could not fetch brief")
@@ -289,25 +319,19 @@ async def entrypoint(ctx: JobContext) -> None:
     session = AgentSession(
         # Reuse the VAD loaded in prewarm() rather than loading it per session.
         vad=ctx.proc.userdata["vad"],
-        stt=deepgram.STT(model="nova-3", smart_format=True),
-        llm=anthropic.LLM(model=LLM_MODEL),
-        # Passed explicitly: the plugin looks for ELEVEN_API_KEY, but the repo
-        # names it ELEVENLABS_API_KEY like every other vendor key.
+        # STT/TTS route through LiveKit's own hosted inference — billed
+        # per-minute through LiveKit, authenticated with the worker's own
+        # LIVEKIT_API_KEY/SECRET, no Deepgram/ElevenLabs key needed. Which
+        # model each one uses is admin-configurable (/admin/settings) and
+        # read fresh from the brief on every session.
         #
-        # chunk_length_schedule disables the plugin's default auto_mode, which
-        # flushes to ElevenLabs once per sentence — each flush starts a new
-        # streaming "generation," and the seam between generations is audible
-        # as a small stutter on any reply longer than one sentence. Buffering
-        # by character count instead (ElevenLabs' own recommended schedule)
-        # sends one continuous stream for a short reply and only a couple of
-        # smooth flushes for a longer one — first-word latency is essentially
-        # unchanged since the first chunk is still just ~120 characters.
-        tts=elevenlabs.TTS(
-            voice_id=VOICE_ID,
-            model="eleven_turbo_v2_5",
-            api_key=os.environ["ELEVENLABS_API_KEY"],
-            chunk_length_schedule=[120, 160, 250, 290],
-        ),
+        # `voice` is an ElevenLabs voice ID (ELEVENLABS_VOICE_ID) — if the TTS
+        # model is switched to a different provider in admin, this value will
+        # need to change to match that provider's own voice-ID format; it
+        # isn't validated or translated automatically.
+        stt=inference.STT(model=brief["sttModel"]),
+        llm=anthropic.LLM(model=LLM_MODEL),
+        tts=inference.TTS(model=brief["ttsModel"], voice=VOICE_ID),
         # Voice answers should resolve fast; a long tool chain means a long
         # silence, and every step costs money.
         max_tool_steps=3,

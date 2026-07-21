@@ -1038,6 +1038,15 @@ model PlatformSetting {
   founderCallCooldownMinutes Int       @default(15) @map("founder_call_cooldown_minutes")
   founderCallSellingPoints   String?   @map("founder_call_selling_points")
   founderLastCallAt          DateTime? @map("founder_last_call_at")
+  /// STT/TTS provider+model routed through LiveKit's own hosted inference
+  /// (billed per-minute through LiveKit, no vendor key needed) — e.g.
+  /// "deepgram/nova-3", "elevenlabs/eleven_turbo_v2_5". Read by the agent on
+  /// every session via the same /api/voice/data brief it already fetches, so
+  /// a change here takes effect on the very next call, no redeploy. The LLM
+  /// stays a fixed direct Anthropic call (Claude isn't in LiveKit's
+  /// inference catalog) — not editable here on purpose.
+  voiceSttModel              String    @default("deepgram/nova-3") @map("voice_stt_model")
+  voiceTtsModel              String    @default("elevenlabs/eleven_turbo_v2_5") @map("voice_tts_model")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
 
   @@map("platform_setting")

@@ -4,14 +4,25 @@ import { prisma } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { optStr, str } from "@/lib/forms";
 import { isOperator } from "@/lib/operator";
+import { isValidSttModel, isValidTtsModel } from "@/lib/voice-inference-models";
 
 /** Operator edits the global platform settings — the founder-call kill switch,
- *  cooldown, and the homepage voice demo's selling points. */
+ *  cooldown, homepage voice demo selling points, and the STT/TTS models the
+ *  voice agent uses (routed through LiveKit's own inference; the LLM stays a
+ *  fixed direct Claude call, not editable here — see schema.prisma). */
 export async function updatePlatformSettings(formData: FormData) {
   if (!(await isOperator())) return;
 
   const cooldownRaw = str(formData, "founderCallCooldownMinutes");
   const cooldown = Number.parseInt(cooldownRaw, 10);
+
+  const sttModelRaw = str(formData, "voiceSttModel");
+  const ttsModelRaw = str(formData, "voiceTtsModel");
+  // A bad value here would silently break every voice session on the next
+  // call, so an invalid submission is dropped rather than saved — the field
+  // just keeps its previous value.
+  const sttModel = isValidSttModel(sttModelRaw) ? sttModelRaw : undefined;
+  const ttsModel = isValidTtsModel(ttsModelRaw) ? ttsModelRaw : undefined;
 
   await prisma.platformSetting.upsert({
     where: { id: "singleton" },
@@ -20,6 +31,8 @@ export async function updatePlatformSettings(formData: FormData) {
       founderCallsAvailable: formData.get("founderCallsAvailable") === "on",
       founderCallCooldownMinutes: Number.isFinite(cooldown) && cooldown > 0 ? cooldown : 15,
       founderCallSellingPoints: optStr(formData, "founderCallSellingPoints"),
+      ...(sttModel ? { voiceSttModel: sttModel } : {}),
+      ...(ttsModel ? { voiceTtsModel: ttsModel } : {}),
     },
     update: {
       founderCallsAvailable: formData.get("founderCallsAvailable") === "on",
@@ -27,6 +40,8 @@ export async function updatePlatformSettings(formData: FormData) {
         ? { founderCallCooldownMinutes: cooldown }
         : {}),
       founderCallSellingPoints: optStr(formData, "founderCallSellingPoints"),
+      ...(sttModel ? { voiceSttModel: sttModel } : {}),
+      ...(ttsModel ? { voiceTtsModel: ttsModel } : {}),
     },
   });
 

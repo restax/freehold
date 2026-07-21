@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getPlatformSettings } from "@/lib/platform-settings";
 import { verifyVoiceGrant } from "@/lib/voice-grant";
 import { briefForScope, runVoiceTool, toolsForScope } from "@/lib/voice-tools";
 
@@ -11,7 +12,11 @@ export const dynamic = "force-dynamic";
  * fallback scope.
  *
  * GET returns the tool catalogue for the grant's scope (a portal visitor and
- * a signed-in coordinator get different tools); POST runs one.
+ * a signed-in coordinator get different tools), the persona, AND the
+ * STT/TTS model to use — every scope, not just marketing, since that's a
+ * pipeline setting, not a persona one. An operator changing it in
+ * /admin/settings takes effect on the very next session fetched here, no
+ * agent redeploy needed. POST runs one tool.
  */
 
 function grantFrom(req: Request): string | null {
@@ -24,8 +29,17 @@ export async function GET(req: Request) {
   if (!scope) return NextResponse.json({ error: "invalid_grant" }, { status: 401 });
   // Persona and opening line come from here too, so the agent stays generic and
   // the copy lives with the rest of the product's voice.
-  const [tools, brief] = await Promise.all([toolsForScope(scope), briefForScope(scope)]);
-  return NextResponse.json({ tools, ...brief });
+  const [tools, brief, settings] = await Promise.all([
+    toolsForScope(scope),
+    briefForScope(scope),
+    getPlatformSettings(),
+  ]);
+  return NextResponse.json({
+    tools,
+    ...brief,
+    sttModel: settings.voiceSttModel,
+    ttsModel: settings.voiceTtsModel,
+  });
 }
 
 export async function POST(req: Request) {
