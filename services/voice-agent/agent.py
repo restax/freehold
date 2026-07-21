@@ -25,6 +25,7 @@ Run it:  ./.venv/bin/python agent.py dev
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -60,6 +61,10 @@ for _parent in Path(__file__).resolve().parents:
         break
 
 logger = logging.getLogger("freehold-voice")
+
+# Holds references to fire-and-forget tasks so the event loop doesn't GC them
+# mid-flight (the standard asyncio.create_task footgun).
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 APP_URL = os.environ.get("FREEHOLD_APP_URL", "http://localhost:3010").rstrip("/")
 VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "YY7fzZmDizFQQv8XPAIY")
@@ -212,10 +217,12 @@ async def call_the_founder(ctx: RunContext) -> str:
                 participant_identity="founder",
                 participant_name="The developer",
                 play_ringtone=True,
-                # Give up cleanly if he doesn't pick up rather than ringing
-                # into a live conversation forever, and hard-cap the call
-                # itself so nothing can run away unattended.
-                ringing_timeout=Duration(seconds=25),
+                # Ring only briefly — if he's not right there, we don't want the
+                # visitor sitting in silence. The cover task below resumes the
+                # conversation at ~12s; keeping the ring to 12s means the phone
+                # stops about when the agent moves on, so he can't join late
+                # into an already-resumed chat. Hard-cap a connected call too.
+                ringing_timeout=Duration(seconds=12),
                 max_call_duration=Duration(seconds=180),
             )
         )
@@ -230,8 +237,47 @@ async def call_the_founder(ctx: RunContext) -> str:
     except Exception:
         logger.exception("call_the_founder: SIP dial-out failed (non-SIP error)")
         return "Hmm, that call didn't go through. Let's carry on without him."
+
     logger.info("call_the_founder: SIP participant created, ringing")
-    return "Calling now — let them know he'll be with them in just a moment."
+
+    # Don't leave the visitor in dead air while it rings. Give him ~12s to pick
+    # up; if he hasn't actually connected by then, resume the conversation and
+    # cover for him rather than sitting silent (the bug this fixes: a missed
+    # call left the agent mute for minutes).
+    session = ctx.session
+
+    async def _resume_if_unanswered() -> None:
+        await asyncio.sleep(12)
+        room = get_job_context().room
+        # Treat him as on the line if the SIP status says active OR he's
+        # publishing audio — either way, don't talk over him. Erring toward
+        # "connected" is the safe mistake here (worst case: a beat of silence),
+        # whereas a false "he didn't answer" would speak over a live human.
+        answered = any(
+            p.identity == "founder"
+            and (
+                p.attributes.get("sip.callStatus") == "active"
+                or len(p.track_publications) > 0
+            )
+            for p in room.remote_participants.values()
+        )
+        if answered:
+            logger.info("call_the_founder: connected — leaving the conversation to them")
+            return
+        logger.info("call_the_founder: no answer after 12s, resuming the conversation")
+        await session.generate_reply(
+            instructions=(
+                "The developer didn't pick up just now — he must be heads-down building. "
+                "Say that warmly and lightly, one sentence (he's clearly hard at work!), "
+                "then carry on as normal: invite them to ask you anything about Freehold."
+            )
+        )
+
+    task = asyncio.create_task(_resume_if_unanswered())
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)
+
+    return "Ringing him now — give it just a few seconds."
 
 
 ALL_TOOLS = [
