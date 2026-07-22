@@ -9,6 +9,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
 import { createCompCode, grantComp, revokeComp } from "@/lib/comp";
+import { createCreditCoupon } from "@/lib/credit-coupons";
 import { dateOnly, optStr, str } from "@/lib/forms";
 import { isOperator } from "@/lib/operator";
 import { requireTenant } from "@/lib/tenant";
@@ -53,6 +54,22 @@ export async function adminCreateCompCode(formData: FormData) {
     code: optStr(formData, "code"),
     tier: tierParam(formData),
     durationMonths: Number.isFinite(durMonths) && durMonths > 0 ? durMonths : null,
+    expiresAt: dateOnly(formData, "expiresAt"),
+    maxRedemptions: Number.isFinite(maxRed) && maxRed > 0 ? maxRed : 1,
+    note: optStr(formData, "note"),
+  });
+  revalidatePath("/admin");
+}
+
+/** Operator: mint a redeemable AI-credit coupon (N credits per redemption). */
+export async function adminCreateCreditCoupon(formData: FormData) {
+  if (!(await isOperator())) return;
+  const credits = Number(optStr(formData, "credits") ?? "");
+  if (!Number.isFinite(credits) || credits <= 0) return;
+  const maxRed = Number(optStr(formData, "maxRedemptions") ?? "1");
+  await createCreditCoupon({
+    code: optStr(formData, "code"),
+    credits: Math.floor(credits),
     expiresAt: dateOnly(formData, "expiresAt"),
     maxRedemptions: Number.isFinite(maxRed) && maxRed > 0 ? maxRed : 1,
     note: optStr(formData, "note"),

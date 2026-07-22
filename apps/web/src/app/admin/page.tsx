@@ -6,10 +6,12 @@ import {
   adminApplyCoupon,
   adminCreateCompCode,
   adminCreateCoupon,
+  adminCreateCreditCoupon,
   adminGrantComp,
   adminRevokeComp,
   adminUnlockWorkspace,
 } from "@/lib/actions/admin";
+import { listCreditCoupons } from "@/lib/credit-coupons";
 import { fmtDate } from "@/lib/format";
 import { isOperator } from "@/lib/operator";
 import { PLAN_INFO } from "@/lib/plans";
@@ -58,6 +60,8 @@ export default async function AdminPage() {
     }),
     prisma.compCode.findMany({ orderBy: { createdAt: "desc" }, take: 50 }),
   ]);
+
+  const creditCoupons = await listCreditCoupons();
 
   // Workspaces that need attention: locked for nonpayment, or Stripe reports past_due/unpaid.
   const paymentProblems = orgs.filter(
@@ -431,6 +435,67 @@ export default async function AdminPage() {
                 <span className="text-xs text-stone-400">
                   {c.durationMonths ? `${c.durationMonths} mo` : "no expiry"} · {c.timesRedeemed}/
                   {c.maxRedemptions} used
+                  {c.expiresAt ? ` · code expires ${fmtDate(c.expiresAt)}` : ""}
+                  {c.note ? ` · ${c.note}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className={card}>
+        <h2 className="mb-1 font-medium">AI credit coupons</h2>
+        <p className="mb-3 text-xs text-stone-400">
+          A credit coupon grants <strong>free AI credits</strong> (no charge). Give the code to a
+          workspace; they redeem it on their billing page. Each workspace can redeem a given code
+          once; the code stops working after its max uses.
+        </p>
+        <form action={adminCreateCreditCoupon} className="mb-4 flex flex-wrap items-end gap-3">
+          <label className={labelCls}>
+            Code (blank = auto)
+            <input name="code" placeholder="auto-generated" className={`${input} w-44 uppercase`} />
+          </label>
+          <label className={labelCls}>
+            Credits
+            <input
+              name="credits"
+              inputMode="numeric"
+              defaultValue="5"
+              className={`${input} w-24`}
+            />
+          </label>
+          <label className={labelCls}>
+            Max uses
+            <input
+              name="maxRedemptions"
+              inputMode="numeric"
+              defaultValue="1"
+              className={`${input} w-20`}
+            />
+          </label>
+          <label className={labelCls}>
+            Code expires (optional)
+            <input name="expiresAt" type="date" className={`${input} w-40`} />
+          </label>
+          <label className={labelCls}>
+            Note
+            <input name="note" placeholder="who / why" className={`${input} w-44`} />
+          </label>
+          <button type="submit" className={btn}>
+            Create credit coupon
+          </button>
+        </form>
+        {creditCoupons.length > 0 && (
+          <ul className="flex flex-col gap-1 text-sm">
+            {creditCoupons.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center gap-3">
+                <code className="font-mono font-semibold">{c.code}</code>
+                <span className="text-stone-500">
+                  {c.credits} credit{c.credits === 1 ? "" : "s"}
+                </span>
+                <span className="text-xs text-stone-400">
+                  {c.timesRedeemed}/{c.maxRedemptions} used
                   {c.expiresAt ? ` · code expires ${fmtDate(c.expiresAt)}` : ""}
                   {c.note ? ` · ${c.note}` : ""}
                 </span>

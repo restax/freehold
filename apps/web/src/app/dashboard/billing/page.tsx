@@ -2,6 +2,7 @@ import { billingEnabled, creditsEnabled } from "@freehold/ee-billing";
 import {
   openBillingPortal,
   redeemCode,
+  redeemCreditCode,
   startCreditCheckout,
   startUpgrade,
 } from "@/lib/actions/billing";
@@ -28,10 +29,13 @@ export default async function BillingPage({
     redeemed?: string;
     codeError?: string;
     purchased?: string;
+    creditRedeemed?: string;
+    creditError?: string;
   }>;
 }) {
   const { tenantId, isAdmin } = await requireAdminTenant();
-  const { upgraded, redeemed, codeError, purchased } = await searchParams;
+  const { upgraded, redeemed, codeError, purchased, creditRedeemed, creditError } =
+    await searchParams;
   const [plan, seats, activeTxns, credits] = await Promise.all([
     getTenantPlan(tenantId),
     seatState(tenantId),
@@ -73,6 +77,17 @@ export default async function BillingPage({
 
       {codeError && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{codeError}</p>
+      )}
+
+      {creditRedeemed && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          Coupon applied — {creditRedeemed} credit{creditRedeemed === "1" ? "" : "s"} added to your
+          workspace.
+        </p>
+      )}
+
+      {creditError && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{creditError}</p>
       )}
 
       {plan.comped && (
@@ -159,6 +174,26 @@ export default async function BillingPage({
             ))}
           </div>
           <p className="mt-2 text-xs text-stone-400">One-time purchase. Credits never expire.</p>
+        </section>
+      )}
+
+      {isAdmin && freeMetered && (
+        <section className={card}>
+          <h2 className="mb-1 font-medium">Have a credit code?</h2>
+          <p className="mb-3 text-sm text-stone-500">
+            Redeem a coupon for free AI credits — no charge.
+          </p>
+          <form action={redeemCreditCode} className="flex flex-wrap items-center gap-2">
+            <input
+              name="code"
+              required
+              placeholder="CREDIT-XXXX-XXXX"
+              className={`${input} w-56 font-mono uppercase`}
+            />
+            <button type="submit" className={btn}>
+              Redeem
+            </button>
+          </form>
         </section>
       )}
 

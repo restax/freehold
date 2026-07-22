@@ -12,6 +12,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logAudit } from "@/lib/audit";
 import { redeemCompCode } from "@/lib/comp";
+import { redeemCreditCoupon } from "@/lib/credit-coupons";
 import { oneOf, str } from "@/lib/forms";
 import { PAYMENTS_PAUSED } from "@/lib/payments-paused";
 import { CREDIT_PACK_SIZES } from "@/lib/plans";
@@ -90,6 +91,24 @@ export async function redeemCode(formData: FormData) {
   });
   revalidatePath("/dashboard", "layout");
   redirect(`/dashboard/billing?redeemed=${result.tier}`);
+}
+
+/** Tenant admin: redeem an AI-credit coupon (adds credits, no charge). */
+export async function redeemCreditCode(formData: FormData) {
+  const { tenantId, isAdmin } = await requireAdminTenant();
+  if (!isAdmin) {
+    redirect(
+      `/dashboard/billing?creditError=${encodeURIComponent("Only admins can redeem a code.")}`,
+    );
+  }
+  const result = await redeemCreditCoupon(tenantId, str(formData, "code"));
+  if (!result.ok) {
+    redirect(
+      `/dashboard/billing?creditError=${encodeURIComponent(result.error ?? "Invalid code.")}`,
+    );
+  }
+  revalidatePath("/dashboard/billing");
+  redirect(`/dashboard/billing?creditRedeemed=${result.credits}`);
 }
 
 export async function openBillingPortal(formData: FormData) {
