@@ -8,7 +8,7 @@ import { authClient } from "@/lib/auth-client";
 function LoginForm() {
   const router = useRouter();
   const verified = useSearchParams().get("verified") === "1";
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -17,13 +17,24 @@ function LoginForm() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const { error } = await authClient.signIn.email({ email, password });
+    const id = identifier.trim();
+    // An "@" means they typed an email; otherwise it's a username. Only the
+    // email path can resend a verification code (we have the address).
+    const isEmail = id.includes("@");
+    const { error } = isEmail
+      ? await authClient.signIn.email({ email: id, password })
+      : await authClient.signIn.username({ username: id.toLowerCase(), password });
     if (error) {
       if (error.status === 403) {
-        await authClient.emailOtp
-          .sendVerificationOtp({ email, type: "email-verification" })
-          .catch(() => {});
-        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+        if (isEmail) {
+          await authClient.emailOtp
+            .sendVerificationOtp({ email: id, type: "email-verification" })
+            .catch(() => {});
+          router.push(`/verify-email?email=${encodeURIComponent(id)}`);
+          return;
+        }
+        setError("Verify your email first — sign in with your email address to get a new code.");
+        setBusy(false);
         return;
       }
       setError(error.message ?? "Sign-in failed.");
@@ -43,12 +54,15 @@ function LoginForm() {
         </p>
       )}
       <label className="flex flex-col gap-1 text-sm">
-        Email
+        Username or email
         <input
-          type="email"
+          type="text"
           required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
           className="rounded-lg border border-stone-300 px-3 py-2 focus:border-brand-600 focus:outline-none"
         />
       </label>

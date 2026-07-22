@@ -1,9 +1,17 @@
 import { prisma } from "@freehold/db";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { emailOTP, organization, twoFactor } from "better-auth/plugins";
+import { APIError } from "better-auth/api";
+import { emailOTP, organization, twoFactor, username } from "better-auth/plugins";
 import { adminAlert } from "@/lib/notify";
 import { platformEmailEnabled, sendPlatformEmail } from "@/lib/platform-email";
+import {
+  checkUsernameAvailability,
+  normalizeUsername,
+  USERNAME_MAX,
+  USERNAME_MIN,
+  usernameFormatError,
+} from "@/lib/username";
 
 type SocialProvider = { clientId: string; clientSecret: string };
 
@@ -34,11 +42,21 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification,
+    minPasswordLength: 8,
   },
   socialProviders,
   plugins: [
     organization(),
     twoFactor({ issuer: "Freehold" }),
+    // Usernames double as subdomains. Format/length/reserved is enforced here
+    // (sync); uniqueness against other usernames AND workspace slugs is enforced
+    // in the user.create.before hook below, which shares the availability check
+    // with the live signup endpoint.
+    username({
+      minUsernameLength: USERNAME_MIN,
+      maxUsernameLength: USERNAME_MAX,
+      usernameValidator: (value) => usernameFormatError(normalizeUsername(value)) === null,
+    }),
     emailOTP({
       otpLength: 6,
       expiresIn: 600,
@@ -56,6 +74,20 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
+        // Authoritative gate: a username can't collide with another user or a
+        // workspace slug (shared subdomain namespace). The plugin already
+        // rejects malformed handles; this closes the async gap.
+        before: async (user) => {
+          const handle = (user as { username?: unknown }).username;
+          if (typeof handle === "string" && handle.length > 0) {
+            const check = await checkUsernameAvailability(handle);
+            if (!check.available) {
+              throw new APIError("BAD_REQUEST", {
+                message: check.reason ?? "Username unavailable.",
+              });
+            }
+          }
+        },
         after: async (user) => {
           adminAlert(`🆕 New Freehold signup: ${user.name} <${user.email}>`);
         },

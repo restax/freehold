@@ -24,6 +24,11 @@ model User {
   name             String
   email            String        @unique
   emailVerified    Boolean       @default(false)
+  /// Unique login handle that doubles as the user's subdomain, so it lives in
+  /// the same *.freeholdtc.dev namespace as workspace slugs and reserved
+  /// subdomains. Lowercase, URL-safe. displayUsername keeps the as-typed form.
+  username         String?       @unique
+  displayUsername  String?
   image            String?
   /// Profile photo bytes, stored inline (photos are small and user-global, so
   /// they never route to a tenant's bucket). Served by /api/users/[id]/avatar;

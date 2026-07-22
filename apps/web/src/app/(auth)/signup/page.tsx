@@ -1,23 +1,72 @@
 "use client";
 
+import { Check, CircleNotch, X } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { MIN_PASSWORD_SCORE, PasswordStrength } from "@/components/password-strength";
 import { authClient } from "@/lib/auth-client";
+
+type AvailState =
+  | { status: "idle" }
+  | { status: "checking" }
+  | { status: "ok" }
+  | { status: "bad"; reason: string };
+
+const inputCls =
+  "rounded-lg border border-stone-300 px-3 py-2 focus:border-brand-600 focus:outline-none";
 
 export default function SignupPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [avail, setAvail] = useState<AvailState>({ status: "idle" });
   const [password, setPassword] = useState("");
+  const [score, setScore] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Live availability: debounce, and cancel in-flight checks so the last
+  // keystroke wins.
+  useEffect(() => {
+    if (!username) {
+      setAvail({ status: "idle" });
+      return;
+    }
+    setAvail({ status: "checking" });
+    const controller = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/username-available?u=${encodeURIComponent(username)}`, {
+          signal: controller.signal,
+        });
+        const data = (await res.json()) as { available: boolean; reason?: string };
+        setAvail(
+          data.available
+            ? { status: "ok" }
+            : { status: "bad", reason: data.reason ?? "Unavailable." },
+        );
+      } catch {
+        if (!controller.signal.aborted) setAvail({ status: "idle" });
+      }
+    }, 350);
+    return () => {
+      controller.abort();
+      clearTimeout(t);
+    };
+  }, [username]);
+
+  const passwordOk = password.length >= 8 && score >= MIN_PASSWORD_SCORE;
+  const canSubmit =
+    !busy && name.trim() !== "" && email.trim() !== "" && avail.status === "ok" && passwordOk;
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!canSubmit) return;
     setBusy(true);
     setError(null);
-    const { error } = await authClient.signUp.email({ name, email, password });
+    const { error } = await authClient.signUp.email({ name, email, username, password });
     if (error) {
       setError(error.message ?? "Sign-up failed.");
       setBusy(false);
@@ -43,8 +92,55 @@ export default function SignupPage() {
           required
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="rounded-lg border border-stone-300 px-3 py-2 focus:border-brand-600 focus:outline-none"
+          className={inputCls}
         />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        Username
+        <div className="relative">
+          <input
+            required
+            value={username}
+            // Usernames are subdomains: force lowercase and drop whitespace as
+            // they type so the field only ever holds a legal-shaped handle.
+            onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s+/g, ""))}
+            placeholder="yourname"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            className={`${inputCls} w-full pr-9 ${
+              avail.status === "bad"
+                ? "border-red-400"
+                : avail.status === "ok"
+                  ? "border-emerald-500"
+                  : ""
+            }`}
+          />
+          <span className="-translate-y-1/2 absolute top-1/2 right-3">
+            {avail.status === "checking" && (
+              <CircleNotch
+                size={18}
+                className="animate-spin text-stone-400"
+                aria-label="Checking"
+              />
+            )}
+            {avail.status === "ok" && (
+              <Check size={18} weight="bold" className="text-emerald-600" aria-label="Available" />
+            )}
+            {avail.status === "bad" && (
+              <X size={18} weight="bold" className="text-red-500" aria-label="Unavailable" />
+            )}
+          </span>
+        </div>
+        {avail.status === "bad" ? (
+          <span className="text-xs text-red-600">{avail.reason}</span>
+        ) : avail.status === "ok" ? (
+          <span className="text-xs text-emerald-700">{username}.freeholdtc.dev is available</span>
+        ) : (
+          <span className="text-xs text-stone-400">
+            Lowercase letters, numbers, and hyphens. This is your sign-in name and subdomain.
+          </span>
+        )}
       </label>
       <label className="flex flex-col gap-1 text-sm">
         Email
@@ -53,7 +149,7 @@ export default function SignupPage() {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="rounded-lg border border-stone-300 px-3 py-2 focus:border-brand-600 focus:outline-none"
+          className={inputCls}
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
@@ -64,13 +160,14 @@ export default function SignupPage() {
           minLength={8}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="rounded-lg border border-stone-300 px-3 py-2 focus:border-brand-600 focus:outline-none"
+          className={inputCls}
         />
       </label>
+      <PasswordStrength password={password} onScore={setScore} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button
         type="submit"
-        disabled={busy}
+        disabled={!canSubmit}
         className="rounded-lg bg-brand-600 px-4 py-2 font-medium text-white hover:bg-brand-700 disabled:opacity-50"
       >
         {busy ? "Creating…" : "Create account"}
