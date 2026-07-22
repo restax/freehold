@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { prisma, withTenant } from "@freehold/db";
+import { parseEmailSettings } from "@/lib/email-template";
 
 /**
  * Transactional email with reply capture, via Resend. No IMAP, no SMTP, no
@@ -41,11 +42,17 @@ export async function sendTenantEmail(input: SendEmailInput): Promise<string> {
   if (!emailEnabled()) throw new Error("Email is not configured.");
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: input.tenantId },
-    select: { name: true, slug: true },
+    select: { name: true, slug: true, emailSettings: true },
   });
   const replyToken = randomBytes(12).toString("base64url");
   const from = `${org.name} <${org.slug}@${process.env.EMAIL_FROM_DOMAIN}>`;
   const replyTo = `reply+${replyToken}@${process.env.EMAIL_REPLY_DOMAIN}`;
+
+  // Workspace CC on transaction email: the "CC on all transactions" address is
+  // added automatically here. Only for transaction-scoped mail, and never when
+  // it's also the recipient (no pointless self-CC).
+  const ccAddr = input.transactionId ? (parseEmailSettings(org.emailSettings).cc ?? "").trim() : "";
+  const cc = ccAddr && ccAddr.toLowerCase() !== input.to.trim().toLowerCase() ? ccAddr : "";
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -56,6 +63,7 @@ export async function sendTenantEmail(input: SendEmailInput): Promise<string> {
     body: JSON.stringify({
       from,
       to: [input.to],
+      ...(cc ? { cc: [cc] } : {}),
       reply_to: replyTo,
       subject: input.subject,
       text: input.body,

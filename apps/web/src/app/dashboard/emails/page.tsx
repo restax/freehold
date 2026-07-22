@@ -88,8 +88,9 @@ export default async function EmailTemplatesPage() {
               className={input}
             />
             <span className="text-xs text-stone-400">
-              Shown on every transaction as a one-click copy, so you can CC it when emailing from
-              outside Freehold. Leave blank to hide it.
+              Automatically CC'd on every email Freehold sends for a transaction, and shown on each
+              transaction as a one-click copy for when you email from outside Freehold. Leave blank
+              to turn off.
             </span>
           </label>
           <div className="flex flex-wrap items-end gap-3">
