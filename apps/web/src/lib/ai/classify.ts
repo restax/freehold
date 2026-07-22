@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { type AiUsage, usageFrom } from "./usage";
 
 /**
  * Lightweight document classification for the drag-and-drop uploader: given a
@@ -32,7 +33,12 @@ export interface DocClassification {
   matchIndex: number | null;
 }
 
-export async function classifyDocument(pdf: Buffer, labels: string[]): Promise<DocClassification> {
+export interface ClassifyRun {
+  classification: DocClassification;
+  usage: AiUsage;
+}
+
+export async function classifyDocument(pdf: Buffer, labels: string[]): Promise<ClassifyRun> {
   const client = new Anthropic();
   const list =
     labels.length > 0 ? labels.map((l, i) => `${i}: ${l}`).join("\n") : "(no checklist items)";
@@ -77,5 +83,5 @@ Return docType (a short, human name for the document) and matchIndex (the index 
   ) {
     parsed.matchIndex = null;
   }
-  return parsed;
+  return { classification: parsed, usage: usageFrom(CLASSIFY_MODEL, res) };
 }

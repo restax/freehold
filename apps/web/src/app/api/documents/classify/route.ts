@@ -1,6 +1,7 @@
 import { withTenant } from "@freehold/db";
 import { NextResponse } from "next/server";
 import { classifyDocument } from "@/lib/ai/classify";
+import { logAiUsage } from "@/lib/ai/usage";
 import { transactionHasPro } from "@/lib/plans";
 import { putObject } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
@@ -88,14 +89,15 @@ export async function POST(req: Request) {
     (await transactionHasPro(tenantId, proEnabled))
   ) {
     try {
-      const result = await classifyDocument(
+      const { classification, usage } = await classifyDocument(
         bytes,
         missingSlots.map((s) => s.label),
       );
-      docType = result.docType || null;
-      if (result.matchIndex != null) {
-        suggestedRequiredId = missingSlots[result.matchIndex]?.id ?? null;
+      docType = classification.docType || null;
+      if (classification.matchIndex != null) {
+        suggestedRequiredId = missingSlots[classification.matchIndex]?.id ?? null;
       }
+      await logAiUsage(tenantId, "classify", usage, transactionId);
     } catch {
       // Leave the suggestion empty — the file is already saved.
     }

@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { CONTRACT_SCHEMA, type ContractExtractionResult } from "./contract-schema";
+import { type AiUsage, usageFrom } from "./usage";
 
 /**
  * Self-hosters bring their own Anthropic key (ANTHROPIC_API_KEY in .env);
@@ -18,13 +19,21 @@ Rules:
 - deadlines: report every deadline-bearing obligation — earnest money due date, inspection/option period end, financing and appraisal deadlines, title objection deadlines, possession date. The closing date belongs in close_date, not in deadlines.
 - confidence: "high" = stated explicitly and unambiguously; "medium" = requires interpretation or computation; "low" = uncertain.`;
 
-export async function extractContract(pdf: Buffer): Promise<ContractExtractionResult> {
+export interface ExtractionRun {
+  result: ContractExtractionResult;
+  usage: AiUsage;
+}
+
+export async function extractContract(
+  pdf: Buffer,
+  model: string = EXTRACTION_MODEL,
+): Promise<ExtractionRun> {
   // Zero-arg client: resolves ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, or a
   // stored `ant auth login` profile.
   const client = new Anthropic();
 
   const response = await client.messages.create({
-    model: EXTRACTION_MODEL,
+    model,
     max_tokens: 16000,
     thinking: { type: "adaptive" },
     output_config: {
@@ -61,5 +70,8 @@ export async function extractContract(pdf: Buffer): Promise<ContractExtractionRe
   if (!text) {
     throw new Error(`Model returned no output (stop_reason: ${response.stop_reason}).`);
   }
-  return JSON.parse(text) as ContractExtractionResult;
+  return {
+    result: JSON.parse(text) as ContractExtractionResult,
+    usage: usageFrom(model, response),
+  };
 }

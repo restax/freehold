@@ -574,6 +574,10 @@ model Organization {
   /// their AI is unmetered. New workspaces start with 2; topped up by purchase
   /// or coupon. The balance of record; every change is mirrored to CreditLedger.
   aiCredits               Int                     @default(2) @map("ai_credits")
+  /// Operator override for this tenant's contract-extraction model. When set,
+  /// heavy or costly workspaces run extraction on a cheaper model instead of
+  /// the default. Null = platform default (FREEHOLD_AI_MODEL / Opus).
+  aiModelOverride         String?                 @map("ai_model_override")
   /// Admin setting: when true, members only see contacts they own.
   restrictContactsToOwner Boolean                 @default(false) @map("restrict_contacts_to_owner")
   /// Per-tenant Follow Up Boss connection: {enc:{...}, importedAt?, importedCount?}.

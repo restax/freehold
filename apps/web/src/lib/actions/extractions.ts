@@ -1,6 +1,6 @@
 "use server";
 
-import { ExtractionStatus, FieldTarget, TransactionStatus, withTenant } from "@freehold/db";
+import { ExtractionStatus, FieldTarget, prisma, TransactionStatus, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -9,6 +9,7 @@ import {
   transactionUpdateFor,
 } from "@/lib/ai/contract-schema";
 import { EXTRACTION_MODEL, extractContract } from "@/lib/ai/extract";
+import { logAiUsage, resolveModel } from "@/lib/ai/usage";
 import { str } from "@/lib/forms";
 import {
   creditBalance,
@@ -40,13 +41,24 @@ function provisionalAddress(filename: string): string {
  * for now (the browser waits on the POST; ~30–90s) — moves to a BullMQ job
  * when the queue layer lands. Never throws: failures land on the row.
  */
+/** The contract-extraction model for a tenant: an operator override, else default. */
+async function extractionModel(tenantId: string): Promise<string> {
+  const org = await prisma.organization.findUnique({
+    where: { id: tenantId },
+    select: { aiModelOverride: true },
+  });
+  return resolveModel(org?.aiModelOverride, EXTRACTION_MODEL);
+}
+
 async function completeExtraction(
   tenantId: string,
   extractionId: string,
   doc: StoredBytes,
+  model: string,
+  transactionId: string,
 ): Promise<void> {
   try {
-    const result = await extractContract(await getObjectBytes(doc));
+    const { result, usage } = await extractContract(await getObjectBytes(doc), model);
     const rows = flattenExtraction(result);
     await withTenant(tenantId, async (tx) => {
       await tx.extractionField.createMany({
@@ -69,6 +81,8 @@ async function completeExtraction(
         data: { status: ExtractionStatus.READY },
       });
     });
+    // Record token usage for operator cost visibility (best-effort).
+    await logAiUsage(tenantId, "extract", usage, transactionId);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await withTenant(tenantId, (tx) =>
@@ -86,6 +100,7 @@ export async function runExtraction(formData: FormData) {
   const documentId = str(formData, "documentId");
   if (!documentId) return;
 
+  const model = await extractionModel(tenantId);
   const { extraction, doc, allowed } = await withTenant(tenantId, async (tx) => {
     const doc = await tx.document.findUniqueOrThrow({
       where: { id: documentId },
@@ -110,7 +125,7 @@ export async function runExtraction(formData: FormData) {
         tenantId,
         documentId: doc.id,
         transactionId: doc.transactionId,
-        model: EXTRACTION_MODEL,
+        model,
         status: ExtractionStatus.RUNNING,
       },
     });
@@ -119,7 +134,7 @@ export async function runExtraction(formData: FormData) {
 
   if (!allowed || !extraction) return;
 
-  await completeExtraction(tenantId, extraction.id, doc);
+  await completeExtraction(tenantId, extraction.id, doc, model, doc.transactionId);
 
   revalidatePath(`/dashboard/transactions/${doc.transactionId}`);
   redirect(`/dashboard/transactions/${doc.transactionId}/extractions/${extraction.id}`);
@@ -153,6 +168,7 @@ export async function createFromContract(formData: FormData) {
   const filename = file.name || "contract.pdf";
   const contentType = file.type || "application/pdf";
   const stored = await putObject(tenantId, filename, bytes, contentType);
+  const model = await extractionModel(tenantId);
 
   const { transaction, extraction, doc } = await withTenant(tenantId, async (tx) => {
     const transaction = await tx.transaction.create({
@@ -181,7 +197,7 @@ export async function createFromContract(formData: FormData) {
         tenantId,
         documentId: doc.id,
         transactionId: transaction.id,
-        model: EXTRACTION_MODEL,
+        model,
         status: ExtractionStatus.RUNNING,
       },
       select: { id: true },
@@ -201,7 +217,7 @@ export async function createFromContract(formData: FormData) {
   // permanently. Paid/self-host skip this entirely.
   if (needsCredit) await spendCreditForTransaction(tenantId, transaction.id, userId);
 
-  await completeExtraction(tenantId, extraction.id, doc);
+  await completeExtraction(tenantId, extraction.id, doc, model, transaction.id);
 
   revalidatePath("/dashboard/transactions");
   redirect(`/dashboard/transactions/${transaction.id}/extractions/${extraction.id}`);

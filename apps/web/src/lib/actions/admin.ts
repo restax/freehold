@@ -77,6 +77,19 @@ export async function adminCreateCreditCoupon(formData: FormData) {
   revalidatePath("/admin");
 }
 
+/** Operator: set or clear a workspace's contract-extraction model override. */
+export async function adminSetAiModel(formData: FormData) {
+  if (!(await isOperator())) return;
+  const tenantId = str(formData, "tenantId");
+  if (!tenantId) return;
+  const raw = (optStr(formData, "model") ?? "").trim();
+  await prisma.organization.update({
+    where: { id: tenantId },
+    data: { aiModelOverride: raw ? raw.slice(0, 60) : null },
+  });
+  revalidatePath("/admin");
+}
+
 /** Operator: comp a specific workspace directly (no code). */
 export async function adminGrantComp(formData: FormData) {
   if (!(await isOperator())) return;

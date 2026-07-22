@@ -9,8 +9,10 @@ import {
   adminCreateCreditCoupon,
   adminGrantComp,
   adminRevokeComp,
+  adminSetAiModel,
   adminUnlockWorkspace,
 } from "@/lib/actions/admin";
+import { usageByTenant } from "@/lib/ai/usage";
 import { listCreditCoupons } from "@/lib/credit-coupons";
 import { fmtDate } from "@/lib/format";
 import { isOperator } from "@/lib/operator";
@@ -62,6 +64,22 @@ export default async function AdminPage() {
   ]);
 
   const creditCoupons = await listCreditCoupons();
+
+  // AI token usage (last 30 days), per tenant + rolled up by plan.
+  const aiUsage = await usageByTenant(30);
+  const planUsage: Record<string, { input: number; output: number; calls: number }> = {
+    FREE: { input: 0, output: 0, calls: 0 },
+    PRO: { input: 0, output: 0, calls: 0 },
+    BUSINESS: { input: 0, output: 0, calls: 0 },
+  };
+  for (const o of orgs) {
+    const u = aiUsage.get(o.id);
+    if (!u) continue;
+    const bucket = planUsage[o.planTier];
+    bucket.input += u.inputTokens;
+    bucket.output += u.outputTokens;
+    bucket.calls += u.calls;
+  }
 
   // Workspaces that need attention: locked for nonpayment, or Stripe reports past_due/unpaid.
   const paymentProblems = orgs.filter(
@@ -503,6 +521,70 @@ export default async function AdminPage() {
             ))}
           </ul>
         )}
+      </section>
+
+      <section className={card}>
+        <h2 className="mb-1 font-medium">AI usage &amp; model overrides</h2>
+        <p className="mb-3 text-xs text-stone-400">
+          Anthropic token usage over the last 30 days (contract extraction + document classify). Set
+          a model override to move a heavy or costly workspace to a cheaper extraction model; blank
+          = platform default.
+        </p>
+        <div className="mb-4 grid gap-2 sm:grid-cols-3">
+          {(["FREE", "PRO", "BUSINESS"] as const).map((t) => (
+            <div key={t} className="rounded-lg bg-stone-50 px-3 py-2">
+              <p className="text-sm font-medium">{PLAN_INFO[t].label}</p>
+              <p className="text-xs text-stone-500">
+                {planUsage[t].input.toLocaleString()} in · {planUsage[t].output.toLocaleString()}{" "}
+                out · {planUsage[t].calls} call{planUsage[t].calls === 1 ? "" : "s"}
+              </p>
+            </div>
+          ))}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr>
+                <th className={th}>Workspace</th>
+                <th className={th}>Plan</th>
+                <th className={th}>In (30d)</th>
+                <th className={th}>Out (30d)</th>
+                <th className={th}>Calls</th>
+                <th className={th}>Extraction model override</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orgs.map((o) => {
+                const u = aiUsage.get(o.id);
+                return (
+                  <tr key={o.id} className={trHover}>
+                    <td className={td}>
+                      {o.name} <span className="text-xs text-stone-400">/{o.slug}</span>
+                    </td>
+                    <td className={td}>{PLAN_INFO[o.planTier].label}</td>
+                    <td className={td}>{(u?.inputTokens ?? 0).toLocaleString()}</td>
+                    <td className={td}>{(u?.outputTokens ?? 0).toLocaleString()}</td>
+                    <td className={td}>{u?.calls ?? 0}</td>
+                    <td className={td}>
+                      <form action={adminSetAiModel} className="flex items-center gap-1">
+                        <input type="hidden" name="tenantId" value={o.id} />
+                        <input
+                          name="model"
+                          defaultValue={o.aiModelOverride ?? ""}
+                          placeholder="default"
+                          className={`${input} w-44`}
+                        />
+                        <button type="submit" className={btnGhost}>
+                          Set
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className={card}>
