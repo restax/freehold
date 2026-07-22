@@ -78,6 +78,20 @@ export default async function EmailTemplatesPage() {
               className={input}
             />
           </label>
+          <label className={labelCls}>
+            CC address for all transactions
+            <input
+              name="cc"
+              type="email"
+              defaultValue={settings.cc}
+              placeholder="compliance@acme.com"
+              className={input}
+            />
+            <span className="text-xs text-stone-400">
+              Shown on every transaction as a one-click copy, so you can CC it when emailing from
+              outside Freehold. Leave blank to hide it.
+            </span>
+          </label>
           <div className="flex flex-wrap items-end gap-3">
             <label className={labelCls}>
               Quiet hours start

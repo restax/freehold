@@ -183,9 +183,14 @@ async function mergeEmailSettings(tenantId: string, patch: Record<string, EmailS
 export async function saveEmailSettings(formData: FormData) {
   const { tenantId, isAdmin } = await requireAdminTenant();
   if (!isAdmin) return;
+  const ccRaw = String(formData.get("cc") ?? "")
+    .trim()
+    .toLowerCase();
   await mergeEmailSettings(tenantId, {
     signature: String(formData.get("signature") ?? "").trim(),
     footer: String(formData.get("footer") ?? "").trim(),
+    // Only persist a plausible address; a blank clears it.
+    cc: ccRaw === "" || ccRaw.includes("@") ? ccRaw : "",
     quietStart: Number(formData.get("quietStart") ?? 20),
     quietEnd: Number(formData.get("quietEnd") ?? 8),
     timeZone: String(formData.get("timeZone") ?? "America/Chicago").trim(),

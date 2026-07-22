@@ -4,6 +4,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Avatar } from "@/components/avatar";
 import { Badge, EnvelopeBadge, ExtractionBadge } from "@/components/badges";
+import { CcEmailPill } from "@/components/cc-email-pill";
+import {
+  ClosingDateCalendar,
+  type DateMarker,
+  type MarkerKind,
+} from "@/components/closing-date-calendar";
 import { DangerDelete } from "@/components/danger-delete";
 import { DictateButton } from "@/components/dictate-button";
 import { DocumentDropZone } from "@/components/document-drop-zone";
@@ -62,7 +68,7 @@ import {
   effectiveTier,
 } from "@/lib/compliance";
 import { emailEnabled } from "@/lib/email";
-import { EMAIL_MERGE_CODES, renderMerge } from "@/lib/email-template";
+import { EMAIL_MERGE_CODES, parseEmailSettings, renderMerge } from "@/lib/email-template";
 import { suggestForTask } from "@/lib/email-template-library";
 import { fmtDate, fmtMoney, ROLE_LABEL, STATUS_LABEL } from "@/lib/format";
 import { invoiceLabel, TERM_PRESETS } from "@/lib/invoicing";
@@ -285,6 +291,33 @@ export default async function TransactionDetailPage({
   const today = fmtDate(new Date());
   const openCount = txn.tasks.filter((t) => t.status === "OPEN").length;
 
+  // Workspace CC address (copy-to-clipboard pill in the header).
+  const orgEmail = await prisma.organization.findUnique({
+    where: { id: tenantId },
+    select: { emailSettings: true },
+  });
+  const ccEmail = parseEmailSettings(orgEmail?.emailSettings).cc ?? "";
+
+  // Key dates for the header calendar popover: contract, close, listing dates,
+  // and every open deadline task.
+  const iso = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
+  const closeIso = iso(txn.closeDate);
+  const dateMarkers: DateMarker[] = [];
+  const addMarker = (d: Date | null, label: string, kind: MarkerKind) => {
+    const key = iso(d);
+    if (key) dateMarkers.push({ date: key, label, kind });
+  };
+  addMarker(txn.contractDate, "Contract date", "contract");
+  addMarker(txn.closeDate, "Closing", "close");
+  addMarker(txn.listDate, "List date", "other");
+  addMarker(txn.onMarketDate, "On market", "other");
+  addMarker(txn.expireDate, "Listing expires", "other");
+  for (const t of txn.tasks) {
+    if (t.dueDate && t.status !== "DONE") {
+      dateMarkers.push({ date: iso(t.dueDate) as string, label: t.title, kind: "deadline" });
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -298,6 +331,19 @@ export default async function TransactionDetailPage({
             {sideLabel(txn.side, labels)} · contract {fmtMoney(txn.purchasePrice)} · list{" "}
             {fmtMoney(txn.listPrice)}
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <ClosingDateCalendar closeDate={closeIso} markers={dateMarkers} />
+          {ccEmail ? (
+            <CcEmailPill email={ccEmail} />
+          ) : (
+            <Link
+              href="/dashboard/emails"
+              className="rounded-lg border border-dashed border-stone-300 px-3 py-1.5 text-sm text-stone-400 transition hover:border-stone-400 hover:text-stone-500"
+            >
+              + CC email
+            </Link>
+          )}
         </div>
       </div>
 

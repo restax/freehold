@@ -31,11 +31,13 @@ export interface EmailRenderInput {
 export interface EmailSettings {
   signature?: string;
   footer?: string;
+  /** Address the workspace CCs on all transaction email (copy-to-clipboard in the UI). */
+  cc?: string;
 }
 
 export function parseEmailSettings(raw: unknown): EmailSettings {
   const c = raw as EmailSettings | null;
-  return { signature: c?.signature ?? "", footer: c?.footer ?? "" };
+  return { signature: c?.signature ?? "", footer: c?.footer ?? "", cc: c?.cc ?? "" };
 }
 
 const esc = (s: string) =>
