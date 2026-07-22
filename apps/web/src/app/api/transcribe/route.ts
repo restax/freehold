@@ -1,14 +1,19 @@
+import { withTenant } from "@freehold/db";
 import { NextResponse } from "next/server";
-import { getTenantPlan, isCloud } from "@/lib/plans";
+import { isCloud, transactionHasPro } from "@/lib/plans";
 import { requireTenant } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Voice dictation for email compose, powered by Deepgram (Nova model —
- * industry-leading transcription accuracy). Paid Cloud tiers use the
- * platform key; self-hosted installs bring their own DEEPGRAM_API_KEY.
- * Cloud Free gets a 402 that the UI turns into an upgrade prompt.
+ * Voice dictation, powered by Deepgram (Nova model — industry-leading
+ * transcription accuracy). Paid Cloud tiers use the platform key; self-hosted
+ * installs bring their own DEEPGRAM_API_KEY.
+ *
+ * Dictation inside a transaction is a per-transaction pro feature: a Free
+ * workspace that spent a credit on the transaction (x-transaction-id header)
+ * gets it. Dictation with no transaction context (e.g. template editing) stays
+ * paid-only. Either way a blocked caller gets a 402 the UI turns into a prompt.
  */
 export async function POST(req: Request) {
   let tenantId: string;
@@ -19,8 +24,17 @@ export async function POST(req: Request) {
   }
 
   if (isCloud()) {
-    const plan = await getTenantPlan(tenantId);
-    if (plan.tier === "FREE") {
+    const txId = req.headers.get("x-transaction-id");
+    const proEnabled = txId
+      ? await withTenant(tenantId, async (tx) => {
+          const t = await tx.transaction.findUnique({
+            where: { id: txId },
+            select: { proFeaturesEnabled: true },
+          });
+          return t?.proFeaturesEnabled ?? false;
+        })
+      : false;
+    if (!(await transactionHasPro(tenantId, proEnabled))) {
       return NextResponse.json({ error: "upgrade_required" }, { status: 402 });
     }
   }

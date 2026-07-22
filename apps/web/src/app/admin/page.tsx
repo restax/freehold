@@ -139,7 +139,7 @@ export default async function AdminPage() {
                 <th className={th}>Plan</th>
                 <th className={th}>Seats</th>
                 <th className={th}>Active txns</th>
-                <th className={th}>AI used</th>
+                <th className={th}>AI credits</th>
                 <th className={th}>Created</th>
                 <th className={th}>Stripe</th>
                 <th className={th}>Coupon</th>
@@ -172,7 +172,7 @@ export default async function AdminPage() {
                       ? ` / ${PLAN_INFO[o.planTier].activeTransactionLimit}`
                       : ""}
                   </td>
-                  <td className={td}>{o.aiExtractionsUsed}</td>
+                  <td className={td}>{o.aiCredits}</td>
                   <td className={td}>{fmtDate(o.createdAt)}</td>
                   <td className={td}>
                     {o.stripeCustomerId ? (

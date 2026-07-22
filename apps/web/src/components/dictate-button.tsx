@@ -9,7 +9,15 @@ import { useRef, useState } from "react";
  * sends the audio to /api/transcribe (Deepgram), and appends the transcript
  * to the target textarea. Cloud Free sees an upgrade prompt instead.
  */
-export function DictateButton({ targetId }: { targetId: string }) {
+export function DictateButton({
+  targetId,
+  transactionId,
+}: {
+  targetId: string;
+  /** When set, dictation is gated on this transaction's pro state, so a Free
+   *  workspace that unlocked pro on it can dictate. Absent = paid-only. */
+  transactionId?: string;
+}) {
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const [state, setState] = useState<"idle" | "recording" | "busy" | "upgrade" | "error">("idle");
@@ -26,7 +34,10 @@ export function DictateButton({ targetId }: { targetId: string }) {
         const blob = new Blob(chunks.current, { type: rec.mimeType || "audio/webm" });
         const res = await fetch("/api/transcribe", {
           method: "POST",
-          headers: { "content-type": blob.type },
+          headers: {
+            "content-type": blob.type,
+            ...(transactionId ? { "x-transaction-id": transactionId } : {}),
+          },
           body: blob,
         });
         if (res.status === 402) {

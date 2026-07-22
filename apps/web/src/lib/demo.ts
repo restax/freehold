@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { prisma, withTenant } from "@freehold/db";
 import { auth } from "@/lib/auth";
+import { FREE_STARTING_CREDITS } from "@/lib/plans";
 import { seedTenantData } from "@/lib/seed-core";
 
 /**
@@ -125,9 +126,12 @@ export async function resetDemoData() {
   await prisma.apiKey.deleteMany({ where: { tenantId: org.id } });
 
   // Log out any lingering visitor sessions so each day starts clean, and
-  // refresh the free-tier AI trial credits visitors burn through.
+  // refresh the AI credits visitors spend enabling pro features.
   await prisma.session.deleteMany({ where: { userId: visitor.id } });
-  await prisma.organization.update({ where: { id: org.id }, data: { aiExtractionsUsed: 0 } });
+  await prisma.organization.update({
+    where: { id: org.id },
+    data: { aiCredits: FREE_STARTING_CREDITS },
+  });
 
   await seedTenantData(org.id, visitor.id);
 }

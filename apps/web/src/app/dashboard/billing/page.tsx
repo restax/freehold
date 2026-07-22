@@ -3,7 +3,7 @@ import { openBillingPortal, redeemCode, startUpgrade } from "@/lib/actions/billi
 import { PAYMENTS_PAUSED } from "@/lib/payments-paused";
 import {
   countActiveTransactions,
-  extractionCreditState,
+  creditBalance,
   getTenantPlan,
   isCloud,
   PLAN_INFO,
@@ -21,12 +21,13 @@ export default async function BillingPage({
 }) {
   const { tenantId, isAdmin } = await requireAdminTenant();
   const { upgraded, redeemed, codeError } = await searchParams;
-  const [plan, seats, activeTxns, aiCredits] = await Promise.all([
+  const [plan, seats, activeTxns, credits] = await Promise.all([
     getTenantPlan(tenantId),
     seatState(tenantId),
     countActiveTransactions(tenantId),
-    extractionCreditState(tenantId),
+    creditBalance(tenantId),
   ]);
+  const freeMetered = isCloud() && plan.tier === "FREE";
   const info = PLAN_INFO[plan.tier];
 
   return (
@@ -91,10 +92,10 @@ export default async function BillingPage({
               : " (unlimited)"}
           </li>
           <li>
-            AI extractions:{" "}
-            {aiCredits.limit != null
-              ? `${aiCredits.used} of ${aiCredits.limit} trial credits used`
-              : "included (fair use)"}
+            AI:{" "}
+            {freeMetered
+              ? `${credits} credit${credits === 1 ? "" : "s"} available — each unlocks pro AI (extraction, classify, dictation) on one transaction`
+              : "included, unmetered"}
           </li>
         </ul>
         {plan.stripeCustomerId && isAdmin && billingEnabled() && (

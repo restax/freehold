@@ -569,6 +569,11 @@ model Organization {
   /// voiceQuotaResetAt is in the past the counter starts over.
   voiceSessionsUsed       Int                     @default(0) @map("voice_sessions_used")
   voiceQuotaResetAt       DateTime?               @map("voice_quota_reset_at")
+  /// Prepaid AI credits (Cloud Free only). Spending one credit permanently
+  /// unlocks pro AI features on a single transaction. Paid tiers ignore this —
+  /// their AI is unmetered. New workspaces start with 2; topped up by purchase
+  /// or coupon. The balance of record; every change is mirrored to CreditLedger.
+  aiCredits               Int                     @default(2) @map("ai_credits")
   /// Admin setting: when true, members only see contacts they own.
   restrictContactsToOwner Boolean                 @default(false) @map("restrict_contacts_to_owner")
   /// Per-tenant Follow Up Boss connection: {enc:{...}, importedAt?, importedCount?}.
@@ -1036,6 +1041,13 @@ model Transaction {
   /// out of customFields so they can't be casually deleted, and distinct from
   /// the CRM-linked `parties` relation (this is text, no Contact rows).
   contractParties   Json?                   @map("contract_parties")
+  /// Per-transaction pro-AI unlock. A Free workspace spends one credit to turn
+  /// this on for a single transaction; once on it stays on (contract
+  /// extraction, AI classify, in-transaction dictation). Paid tiers are pro
+  /// implicitly and never set this.
+  proFeaturesEnabled Boolean                @default(false) @map("pro_features_enabled")
+  proEnabledAt      DateTime?               @map("pro_enabled_at")
+  proEnabledBy      String?                 @map("pro_enabled_by")
   isSample          Boolean                 @default(false)
   parties           TransactionParty[]
   requiredDocuments TransactionRequiredDocument[]
@@ -1958,6 +1970,88 @@ model CompCode {
   createdAt      DateTime  @default(now())
 
   @@map("comp_code")
+}
+
+// --- AI credits: prepaid pro-AI unlocks for the Free tier ---
+
+/// Reason a workspace's AI-credit balance changed. Audit only — the balance of
+/// record lives on organization.aiCredits.
+enum CreditLedgerReason {
+  PURCHASE
+  COUPON
+  SPEND
+  REFUND
+  ADMIN
+}
+
+/// Append-only audit of AI-credit movements. Platform table (no RLS): operators
+/// review it in /admin, tenants see their own via explicit tenantId filters;
+/// rows are written only by server actions that stamp the authenticated tenant.
+model CreditLedger {
+  id            String             @id @default(uuid())
+  tenantId      String             @map("tenant_id")
+  /// Positive = granted/purchased, negative = spent.
+  delta         Int
+  reason        CreditLedgerReason
+  /// Balance immediately after this movement, for reconciliation.
+  balanceAfter  Int                @map("balance_after")
+  /// The transaction a SPEND unlocked, when applicable.
+  transactionId String?            @map("transaction_id")
+  note          String?
+  createdAt     DateTime           @default(now())
+
+  @@index([tenantId, createdAt])
+  @@map("credit_ledger")
+}
+
+/// Per-call AI token usage, so operators can see how much each plan/tenant
+/// consumes and move heavy tenants to cheaper models. Platform table (no RLS):
+/// admin aggregates cross-tenant; rows written by server-side AI calls that
+/// stamp the tenant. Best-effort — a logging failure never blocks the AI call.
+model AiUsageEvent {
+  id            String   @id @default(uuid())
+  tenantId      String   @map("tenant_id")
+  /// "extract" | "classify" | "dictation" | ...
+  feature       String
+  model         String
+  inputTokens   Int      @default(0) @map("input_tokens")
+  outputTokens  Int      @default(0) @map("output_tokens")
+  transactionId String?  @map("transaction_id")
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([createdAt])
+  @@map("ai_usage_event")
+}
+
+/// Redeemable code granting free AI credits. Platform table (no RLS), same
+/// shape as CompCode: operators mint in /admin, tenants redeem on billing.
+model CreditCoupon {
+  id             String                   @id @default(uuid())
+  code           String                   @unique
+  /// Credits granted per redemption.
+  credits        Int
+  expiresAt      DateTime?                @map("expires_at")
+  maxRedemptions Int                      @default(1) @map("max_redemptions")
+  timesRedeemed  Int                      @default(0) @map("times_redeemed")
+  note           String?
+  createdAt      DateTime                 @default(now())
+  redemptions    CreditCouponRedemption[]
+
+  @@map("credit_coupon")
+}
+
+/// One row per (coupon, tenant) so a workspace can't redeem the same code
+/// twice. Platform table (no RLS); written by the tenant redeem action.
+model CreditCouponRedemption {
+  id        String       @id @default(uuid())
+  couponId  String       @map("coupon_id")
+  coupon    CreditCoupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  tenantId  String       @map("tenant_id")
+  createdAt DateTime     @default(now())
+
+  @@unique([couponId, tenantId])
+  @@map("credit_coupon_redemption")
 }
 
 /// Scheduled/queued outgoing email. NO RLS on purpose: the hourly cron

@@ -10,7 +10,14 @@ import {
 } from "@/lib/ai/contract-schema";
 import { EXTRACTION_MODEL, extractContract } from "@/lib/ai/extract";
 import { str } from "@/lib/forms";
-import { extractionCreditState, recordExtractionUse, transactionLimit } from "@/lib/plans";
+import {
+  creditBalance,
+  getTenantPlan,
+  isCloud,
+  spendCreditForTransaction,
+  transactionHasPro,
+  transactionLimit,
+} from "@/lib/plans";
 import { getObjectBytes, putObject, type StoredBytes } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
@@ -37,7 +44,6 @@ async function completeExtraction(
   tenantId: string,
   extractionId: string,
   doc: StoredBytes,
-  consumeCredit: boolean,
 ): Promise<void> {
   try {
     const result = await extractContract(await getObjectBytes(doc));
@@ -63,8 +69,6 @@ async function completeExtraction(
         data: { status: ExtractionStatus.READY },
       });
     });
-    // Credits are consumed only on success — a failed run costs nothing.
-    if (consumeCredit) await recordExtractionUse(tenantId);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await withTenant(tenantId, (tx) =>
@@ -82,12 +86,7 @@ export async function runExtraction(formData: FormData) {
   const documentId = str(formData, "documentId");
   if (!documentId) return;
 
-  // Free-tier trial credits (Cloud only). The page hides the button when
-  // exhausted; this is the enforcement either way.
-  const credits = await extractionCreditState(tenantId);
-  if (credits.limited) return;
-
-  const { extraction, doc } = await withTenant(tenantId, async (tx) => {
+  const { extraction, doc, allowed } = await withTenant(tenantId, async (tx) => {
     const doc = await tx.document.findUniqueOrThrow({
       where: { id: documentId },
       select: {
@@ -98,8 +97,14 @@ export async function runExtraction(formData: FormData) {
         contentType: true,
         storageProvider: true,
         tenantId: true,
+        transaction: { select: { proFeaturesEnabled: true } },
       },
     });
+    // Pro-AI gate: paid plans (and self-host) always pass; a Free workspace
+    // must have spent a credit on this transaction. The page hides the button
+    // otherwise — this is the server-side enforcement.
+    const allowed = await transactionHasPro(tenantId, doc.transaction.proFeaturesEnabled);
+    if (!allowed) return { extraction: null, doc, allowed };
     const extraction = await tx.contractExtraction.create({
       data: {
         tenantId,
@@ -109,10 +114,12 @@ export async function runExtraction(formData: FormData) {
         status: ExtractionStatus.RUNNING,
       },
     });
-    return { extraction, doc };
+    return { extraction, doc, allowed };
   });
 
-  await completeExtraction(tenantId, extraction.id, doc, credits.limit != null);
+  if (!allowed || !extraction) return;
+
+  await completeExtraction(tenantId, extraction.id, doc);
 
   revalidatePath(`/dashboard/transactions/${doc.transactionId}`);
   redirect(`/dashboard/transactions/${doc.transactionId}/extractions/${extraction.id}`);
@@ -126,17 +133,21 @@ export async function runExtraction(formData: FormData) {
  * and deadline tasks. Nothing but the placeholder title exists until they apply.
  */
 export async function createFromContract(formData: FormData) {
-  const { tenantId } = await requireTenant();
+  const { tenantId, userId } = await requireTenant();
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0 || file.size > MAX_BYTES) return;
 
-  // Same two gates as the manual create + the extract button: plan cap first
-  // (never strand an upload against a full plan), then trial credits.
-  const [limit, credits] = await Promise.all([
-    transactionLimit(tenantId),
-    extractionCreditState(tenantId),
-  ]);
-  if (limit.limited || credits.limited) redirect("/dashboard/transactions");
+  // Plan cap first — never strand an upload against a full plan. Then, on Cloud
+  // Free, upload-and-extract opts this brand-new transaction into pro AI (the
+  // action IS the AI use), so it needs a credit up front; with none, send them
+  // to buy rather than create an unusable transaction.
+  const limit = await transactionLimit(tenantId);
+  if (limit.limited) redirect("/dashboard/transactions");
+  const plan = await getTenantPlan(tenantId);
+  const needsCredit = isCloud() && plan.tier === "FREE";
+  if (needsCredit && (await creditBalance(tenantId)) < 1) {
+    redirect("/dashboard/billing?need=credits");
+  }
 
   const bytes = Buffer.from(await file.arrayBuffer());
   const filename = file.name || "contract.pdf";
@@ -186,7 +197,11 @@ export async function createFromContract(formData: FormData) {
     sizeBytes: file.size,
   });
 
-  await completeExtraction(tenantId, extraction.id, doc, credits.limit != null);
+  // Spend the credit on the transaction we just created, unlocking pro for it
+  // permanently. Paid/self-host skip this entirely.
+  if (needsCredit) await spendCreditForTransaction(tenantId, transaction.id, userId);
+
+  await completeExtraction(tenantId, extraction.id, doc);
 
   revalidatePath("/dashboard/transactions");
   redirect(`/dashboard/transactions/${transaction.id}/extractions/${extraction.id}`);

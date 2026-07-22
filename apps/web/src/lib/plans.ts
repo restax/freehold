@@ -1,4 +1,4 @@
-import { type PlanTier, prisma, withTenant } from "@freehold/db";
+import { CreditLedgerReason, type PlanTier, prisma, withTenant } from "@freehold/db";
 
 /**
  * Cloud plan definitions and limit checks.
@@ -18,8 +18,6 @@ export const PLAN_INFO: Record<
     activeTransactionLimit: number | null;
     /** Distinct clients that may have portal links; null = uncapped. */
     portalClientLimit: number | null;
-    /** Lifetime AI extraction trial credits; null = fair-use, not metered. */
-    aiExtractionCredits: number | null;
     /** Voice-search sessions per month; 0 = not included, null = uncapped. */
     voiceSessionsPerMonth: number | null;
   }
@@ -27,10 +25,9 @@ export const PLAN_INFO: Record<
   FREE: {
     label: "Free",
     priceMonthly: 0,
-    includedSeats: 2,
-    activeTransactionLimit: 5,
-    portalClientLimit: 5,
-    aiExtractionCredits: 10,
+    includedSeats: 1,
+    activeTransactionLimit: 2,
+    portalClientLimit: 15,
     voiceSessionsPerMonth: 0,
   },
   PRO: {
@@ -39,7 +36,6 @@ export const PLAN_INFO: Record<
     includedSeats: 2,
     activeTransactionLimit: 50,
     portalClientLimit: 50,
-    aiExtractionCredits: null,
     voiceSessionsPerMonth: 100,
   },
   BUSINESS: {
@@ -48,10 +44,12 @@ export const PLAN_INFO: Record<
     includedSeats: 10,
     activeTransactionLimit: 100,
     portalClientLimit: 100,
-    aiExtractionCredits: null,
     voiceSessionsPerMonth: 300,
   },
 };
+
+/** Credits a brand-new Free workspace starts with (mirrors the DB default). */
+export const FREE_STARTING_CREDITS = 2;
 
 export function isCloud(): boolean {
   return process.env.FREEHOLD_CLOUD === "1";
@@ -136,33 +134,134 @@ export async function transactionLimit(tenantId: string): Promise<TransactionLim
   };
 }
 
-export interface ExtractionCreditState {
-  limited: boolean;
-  used: number;
-  limit: number | null;
+/** A workspace's current prepaid AI-credit balance. */
+export async function creditBalance(tenantId: string): Promise<number> {
+  const org = await prisma.organization.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: { aiCredits: true },
+  });
+  return org.aiCredits;
 }
 
 /**
- * Free-tier AI trial credits. Metered only on Cloud + FREE; paid tiers are
- * fair-use. Counted with a durable per-tenant counter (not row counts, so
- * deleting documents never refunds credits).
+ * Whether a transaction may use pro AI features (contract extraction, AI
+ * classify, in-transaction dictation). Always true on self-host and for any
+ * paid/comped plan — their AI is unmetered. On Cloud Free it is true only once
+ * a credit has been spent on this specific transaction (proFeaturesEnabled).
+ *
+ * Callers that already loaded the transaction pass its flag directly, so this
+ * costs at most one plan lookup and never re-reads the row.
  */
-export async function extractionCreditState(tenantId: string): Promise<ExtractionCreditState> {
-  if (!isCloud()) return { limited: false, used: 0, limit: null };
-  const org = await prisma.organization.findUniqueOrThrow({
-    where: { id: tenantId },
-    select: { planTier: true, aiExtractionsUsed: true, compTier: true, compExpiresAt: true },
-  });
-  const limit = PLAN_INFO[effectiveTier(org)].aiExtractionCredits;
-  if (limit == null) return { limited: false, used: org.aiExtractionsUsed, limit: null };
-  return { limited: org.aiExtractionsUsed >= limit, used: org.aiExtractionsUsed, limit };
+export async function transactionHasPro(
+  tenantId: string,
+  proFeaturesEnabled: boolean,
+): Promise<boolean> {
+  if (!isCloud()) return true;
+  if (proFeaturesEnabled) return true;
+  const plan = await getTenantPlan(tenantId);
+  return proAllowed(plan.tier, proFeaturesEnabled, true);
 }
 
-/** Consume one trial credit after a successful extraction. */
-export async function recordExtractionUse(tenantId: string): Promise<void> {
-  await prisma.organization.update({
-    where: { id: tenantId },
-    data: { aiExtractionsUsed: { increment: 1 } },
+/**
+ * The pure pro-AI decision: self-host is always pro; on Cloud, a paid/comped
+ * tier is always pro, and Free is pro only for a transaction that spent a
+ * credit. Extracted so it can be unit-tested without a database.
+ */
+export function proAllowed(tier: PlanTier, proFeaturesEnabled: boolean, cloud: boolean): boolean {
+  if (!cloud) return true;
+  if (proFeaturesEnabled) return true;
+  return tier !== "FREE";
+}
+
+export interface SpendResult {
+  ok: boolean;
+  reason?: "no_credits" | "not_found";
+  /** Balance after the spend (or the current balance when already on). */
+  balance?: number;
+  /** True when the transaction was already pro — no credit was charged. */
+  alreadyOn?: boolean;
+}
+
+/**
+ * Spend one credit to permanently unlock pro AI on a transaction. Atomic: the
+ * balance is decremented only when a credit is available (guarding against a
+ * double click), the transaction is flagged, and the movement is written to the
+ * ledger — all in one tenant-scoped transaction. Idempotent: a transaction that
+ * is already pro returns ok without charging again.
+ */
+export async function spendCreditForTransaction(
+  tenantId: string,
+  transactionId: string,
+  userId: string,
+): Promise<SpendResult> {
+  return withTenant(tenantId, async (tx) => {
+    const txn = await tx.transaction.findUnique({
+      where: { id: transactionId },
+      select: { proFeaturesEnabled: true },
+    });
+    if (!txn) return { ok: false, reason: "not_found" };
+    if (txn.proFeaturesEnabled) {
+      const org = await tx.organization.findUniqueOrThrow({
+        where: { id: tenantId },
+        select: { aiCredits: true },
+      });
+      return { ok: true, alreadyOn: true, balance: org.aiCredits };
+    }
+    // Conditional decrement: succeeds for exactly one of two racing clicks.
+    const dec = await tx.organization.updateMany({
+      where: { id: tenantId, aiCredits: { gt: 0 } },
+      data: { aiCredits: { decrement: 1 } },
+    });
+    if (dec.count === 0) return { ok: false, reason: "no_credits" };
+    const org = await tx.organization.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { aiCredits: true },
+    });
+    await tx.transaction.update({
+      where: { id: transactionId },
+      data: { proFeaturesEnabled: true, proEnabledAt: new Date(), proEnabledBy: userId },
+    });
+    await tx.creditLedger.create({
+      data: {
+        tenantId,
+        delta: -1,
+        reason: CreditLedgerReason.SPEND,
+        balanceAfter: org.aiCredits,
+        transactionId,
+      },
+    });
+    return { ok: true, balance: org.aiCredits };
+  });
+}
+
+/**
+ * Add credits to a workspace (purchase, coupon, or an operator grant) and log
+ * the movement. Returns the new balance. The balance and ledger update together
+ * in one transaction so they can never drift.
+ */
+export async function grantCredits(
+  tenantId: string,
+  amount: number,
+  reason: CreditLedgerReason,
+  note?: string,
+): Promise<number> {
+  if (amount <= 0) return creditBalance(tenantId);
+  return prisma.$transaction(async (tx) => {
+    const org = await tx.organization.update({
+      where: { id: tenantId },
+      data: { aiCredits: { increment: amount } },
+      select: { aiCredits: true },
+    });
+    await tx.creditLedger.create({
+      data: {
+        tenantId,
+        delta: amount,
+        reason,
+        balanceAfter: org.aiCredits,
+        ...(note ? { note } : {}),
+      },
+    });
+    return org.aiCredits;
   });
 }
 

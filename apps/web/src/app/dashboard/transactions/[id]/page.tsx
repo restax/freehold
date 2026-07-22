@@ -16,6 +16,7 @@ import {
   startRound,
   submitForReview,
 } from "@/lib/actions/compliance";
+import { enableProFeatures } from "@/lib/actions/credits";
 import { deleteDocument, replaceDocument, uploadDocument } from "@/lib/actions/documents";
 import { cancelScheduledEmail, sendTransactionEmail } from "@/lib/actions/emails";
 import {
@@ -67,7 +68,7 @@ import { fmtDate, fmtMoney, ROLE_LABEL, STATUS_LABEL } from "@/lib/format";
 import { invoiceLabel, TERM_PRESETS } from "@/lib/invoicing";
 import { gapForTransaction, gapMessage } from "@/lib/licensing";
 import { fmtCents } from "@/lib/pay";
-import { extractionCreditState } from "@/lib/plans";
+import { creditBalance, transactionHasPro } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
 import { PRIORITY_BADGE, PRIORITY_LABEL } from "@/lib/priority";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
@@ -231,7 +232,13 @@ export default async function TransactionDetailPage({
   const gap = await withTenant(tenantId, (tx) => gapForTransaction(tx, txn.id));
 
   const portalBase = await portalOrigin(tenantId);
-  const aiCredits = await extractionCreditState(tenantId);
+  // Pro-AI state for this transaction: proActive = may use AI here (paid plan,
+  // self-host, or a Free workspace that spent a credit on it); credits = the
+  // workspace balance available to turn it on.
+  const [proActive, credits] = await Promise.all([
+    transactionHasPro(tenantId, txn.proFeaturesEnabled),
+    creditBalance(tenantId),
+  ]);
 
   // Template-driven compose prefill: merge fields render server-side so the
   // TC sees (and can edit) the final text before sending.
@@ -753,11 +760,43 @@ export default async function TransactionDetailPage({
               </section>
 
               <section className={card}>
-                <h2 className="mb-1 font-medium">Documents &amp; contract extraction</h2>
+                <h2 className="mb-1 flex items-center gap-2 font-medium">
+                  Documents &amp; contract extraction
+                  {txn.proFeaturesEnabled && (
+                    <span className="rounded-full bg-brand-600/10 px-2 py-0.5 text-xs font-medium text-brand-700">
+                      Pro AI on
+                    </span>
+                  )}
+                </h2>
                 <p className="mb-3 text-sm text-stone-500">
                   Upload the purchase contract and let AI pull every key date and figure —
                   page-cited, and nothing is saved until you confirm it.
                 </p>
+                {!proActive && (
+                  <div className="mb-3 rounded-lg border border-brand-200 bg-brand-50/60 px-3 py-2.5">
+                    <p className="text-sm font-medium text-brand-900">
+                      Pro AI is off for this transaction
+                    </p>
+                    <p className="mt-0.5 text-xs text-brand-800">
+                      Turn it on to extract contract data, auto-classify dropped documents, and
+                      dictate here. It stays on for this transaction.
+                    </p>
+                    <div className="mt-2">
+                      {credits > 0 ? (
+                        <form action={enableProFeatures}>
+                          <input type="hidden" name="transactionId" value={txn.id} />
+                          <button type="submit" className={btn}>
+                            Enable pro features · 1 credit ({credits} left)
+                          </button>
+                        </form>
+                      ) : (
+                        <Link href="/dashboard/billing" className={btn}>
+                          Buy credits to enable
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {!process.env.ANTHROPIC_API_KEY && (
                   <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
                     No <code>ANTHROPIC_API_KEY</code> is configured — extraction runs will fail
@@ -788,30 +827,17 @@ export default async function TransactionDetailPage({
                           {(doc.sizeBytes / 1024).toFixed(0)} KB · {fmtDate(doc.createdAt)}
                         </span>
                         {doc.contentType === "application/pdf" &&
-                          (aiCredits.limited ? (
-                            <span className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
-                              Trial credits used ({aiCredits.used} of {aiCredits.limit}) —{" "}
-                              <Link
-                                href="/dashboard/billing"
-                                className="font-medium text-brand-700 underline"
-                              >
-                                upgrade
-                              </Link>{" "}
-                              for included AI extraction
-                            </span>
-                          ) : (
+                          (proActive ? (
                             <form action={runExtraction} className="flex items-center gap-2">
                               <input type="hidden" name="documentId" value={doc.id} />
                               <button type="submit" className={btnGhost}>
                                 Extract contract data
                               </button>
-                              {aiCredits.limit != null && (
-                                <span className="text-xs text-stone-400">
-                                  {aiCredits.limit - aiCredits.used} of {aiCredits.limit} trial
-                                  credits left
-                                </span>
-                              )}
                             </form>
+                          ) : (
+                            <span className="rounded-lg bg-stone-100 px-2.5 py-1.5 text-xs text-stone-500">
+                              Enable pro features to extract
+                            </span>
                           ))}
                         <span className="ml-auto flex items-center gap-3">
                           <VisibilityToggles
@@ -1720,7 +1746,7 @@ export default async function TransactionDetailPage({
                         <button type="submit" className={btn}>
                           Send email
                         </button>
-                        <DictateButton targetId="compose-body" />
+                        <DictateButton targetId="compose-body" transactionId={txn.id} />
                         <label className="ml-auto flex items-center gap-2 text-xs text-stone-500">
                           Send later
                           <input

@@ -1,6 +1,7 @@
 import { withTenant } from "@freehold/db";
 import { NextResponse } from "next/server";
 import { classifyDocument } from "@/lib/ai/classify";
+import { transactionHasPro } from "@/lib/plans";
 import { putObject } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
@@ -31,12 +32,17 @@ export async function POST(req: Request) {
   const contentType = file.type || "application/pdf";
 
   // The transaction must belong to this tenant; store the bytes and the row.
-  const { document, missingSlots } = await withTenant(tenantId, async (tx) => {
+  const { document, missingSlots, proEnabled } = await withTenant(tenantId, async (tx) => {
     const txn = await tx.transaction.findUnique({
       where: { id: transactionId },
-      select: { id: true },
+      select: { id: true, proFeaturesEnabled: true },
     });
-    if (!txn) return { document: null, missingSlots: [] as { id: string; label: string }[] };
+    if (!txn)
+      return {
+        document: null,
+        missingSlots: [] as { id: string; label: string }[],
+        proEnabled: false,
+      };
 
     const stored = await putObject(tenantId, filename, bytes, contentType);
     const document = await tx.document.create({
@@ -57,7 +63,7 @@ export async function POST(req: Request) {
       orderBy: { sortOrder: "asc" },
       select: { id: true, label: true },
     });
-    return { document, missingSlots: missing };
+    return { document, missingSlots: missing, proEnabled: txn.proFeaturesEnabled };
   });
 
   if (!document) return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -70,10 +76,17 @@ export async function POST(req: Request) {
     sizeBytes: file.size,
   });
 
-  // Best-effort classification against the missing slots.
+  // Best-effort classification against the missing slots — but only when this
+  // transaction has pro AI (paid plan, or a Free workspace that spent a credit
+  // on it). The upload itself always succeeds; Free without pro just files the
+  // document with no AI suggestion.
   let docType: string | null = null;
   let suggestedRequiredId: string | null = null;
-  if (contentType === "application/pdf" && process.env.ANTHROPIC_API_KEY) {
+  if (
+    contentType === "application/pdf" &&
+    process.env.ANTHROPIC_API_KEY &&
+    (await transactionHasPro(tenantId, proEnabled))
+  ) {
     try {
       const result = await classifyDocument(
         bytes,

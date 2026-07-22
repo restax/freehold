@@ -7,7 +7,7 @@ import { createFromContract } from "@/lib/actions/extractions";
 import { createTransaction } from "@/lib/actions/transactions";
 import { fmtDate, fmtMoney, STATUS_LABEL } from "@/lib/format";
 import { licenseGap, requiredStates } from "@/lib/licensing";
-import { extractionCreditState, transactionLimit } from "@/lib/plans";
+import { creditBalance, getTenantPlan, isCloud, transactionLimit } from "@/lib/plans";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
 import { requireTenant } from "@/lib/tenant";
 import { btn, btnGhost, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
@@ -28,10 +28,15 @@ export default async function TransactionsPage({
 }) {
   const { tenantId, userId, isGuest } = await requireTenant({ allowGuest: true });
   const labels = await tenantSideLabels(tenantId);
-  const [limit, credits] = await Promise.all([
+  const [limit, plan, credits] = await Promise.all([
     transactionLimit(tenantId),
-    extractionCreditState(tenantId),
+    getTenantPlan(tenantId),
+    creditBalance(tenantId),
   ]);
+  // Upload-first extraction opts a new transaction into pro AI, which a Free
+  // workspace pays for with one credit.
+  const needsCredit = isCloud() && plan.tier === "FREE";
+  const outOfCredits = needsCredit && credits < 1;
   // Upload-first needs the AI: always on Cloud (platform key), opt-in on
   // self-host. Without a key, extraction can't run, so we hide the card
   // rather than leave a stranded provisional transaction behind a failure.
@@ -152,13 +157,13 @@ export default async function TransactionsPage({
 
       {aiAvailable &&
         !limit.limited &&
-        (credits.limited ? (
+        (outOfCredits ? (
           <p className="rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-600">
-            You've used your trial contract extractions.{" "}
+            You're out of AI credits.{" "}
             <Link href="/dashboard/billing" className="font-medium text-brand-700 underline">
-              Upgrade
+              Buy more
             </Link>{" "}
-            for unlimited, or enter a transaction manually below.
+            to start from a contract, or enter a transaction manually below.
           </p>
         ) : (
           <section className={`${card} border-brand-600/25 bg-brand-50/40`}>
@@ -170,6 +175,7 @@ export default async function TransactionsPage({
             <ContractUploadForm action={createFromContract} />
             <p className="mt-2 text-xs text-stone-400">
               PDF, up to 10&nbsp;MB. Extraction takes ~30–90 seconds.
+              {needsCredit && ` Uses 1 of your ${credits} AI credit${credits === 1 ? "" : "s"}.`}
             </p>
           </section>
         ))}

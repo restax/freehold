@@ -102,3 +102,5 @@ export const ProposalStatus = PrismaPkg.ProposalStatus;
 export type ProposalStatus = PrismaPkg.ProposalStatus;
 export const AdStatus = PrismaPkg.AdStatus;
 export type AdStatus = PrismaPkg.AdStatus;
+export const CreditLedgerReason = PrismaPkg.CreditLedgerReason;
+export type CreditLedgerReason = PrismaPkg.CreditLedgerReason;
