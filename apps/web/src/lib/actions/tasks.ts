@@ -127,6 +127,7 @@ export async function applyActionPlan(formData: FormData) {
         offsetDays: sortedTemplates[i]?.offsetDays ?? null,
         emailTemplateId: sortedPlanTasks[i]?.emailTemplateId ?? null,
         autoSendEmail: sortedPlanTasks[i]?.autoSendEmail ?? false,
+        priority: sortedPlanTasks[i]?.priority ?? "NORMAL",
         sortOrder: base + i,
         // Role-based auto-assignment lands with multi-user teams; for now the
         // applying user owns every instantiated task.

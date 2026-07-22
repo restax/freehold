@@ -1408,6 +1408,9 @@ model ActionPlanTask {
   emailTemplateId String?      @map("email_template_id")
   /// Auto-send the template to the client when the task is completed.
   autoSendEmail   Boolean      @default(false) @map("auto_send_email")
+  priority        TaskPriority @default(NORMAL)
+  /// Days before the due date to remind the assignee; null disables the reminder.
+  reminderDays    Int?         @map("reminder_days")
   sortOrder       Int          @default(0) @map("sort_order")
 
   @@index([tenantId])

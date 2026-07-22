@@ -43,6 +43,14 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification,
     minPasswordLength: 8,
+    async sendResetPassword({ user, url }) {
+      if (!platformEmailEnabled()) return;
+      await sendPlatformEmail(
+        user.email,
+        "Reset your Freehold password",
+        `We received a request to reset your Freehold password. Click the link below to choose a new one:\n\n${url}\n\nThis link expires in an hour. If you didn't request it, ignore this email — your password is unchanged.`,
+      );
+    },
   },
   socialProviders,
   plugins: [

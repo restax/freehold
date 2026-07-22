@@ -1,12 +1,13 @@
 "use server";
 
-import { DateAnchor, withTenant } from "@freehold/db";
+import { DateAnchor, TaskPriority, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { confirmed, intOr, oneOf, optStr, str } from "@/lib/forms";
 import { requireAdminTenant, requireTenant } from "@/lib/tenant";
 
 const ANCHORS = Object.values(DateAnchor);
+const PRIORITIES = Object.values(TaskPriority);
 
 export async function createPlan(formData: FormData) {
   const { tenantId } = await requireTenant();
@@ -49,10 +50,35 @@ export async function addTemplateTask(formData: FormData) {
         offsetDays: intOr(formData, "offsetDays", 0) ?? 0,
         emailTemplateId: optStr(formData, "emailTemplateId"),
         autoSendEmail: formData.get("autoSendEmail") === "on",
+        priority: oneOf(formData, "priority", PRIORITIES, TaskPriority.NORMAL),
+        reminderDays: intOr(formData, "reminderDays", null),
         sortOrder: (max._max.sortOrder ?? 0) + 1,
       },
     });
   });
+  revalidatePath(`/dashboard/action-plans/${actionPlanId}`);
+}
+
+export async function updateTemplateTask(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  const actionPlanId = str(formData, "actionPlanId");
+  const title = str(formData, "title");
+  if (!id || !title) return;
+  await withTenant(tenantId, (tx) =>
+    tx.actionPlanTask.update({
+      where: { id },
+      data: {
+        title,
+        anchor: oneOf(formData, "anchor", ANCHORS, DateAnchor.CLOSE_DATE),
+        offsetDays: intOr(formData, "offsetDays", 0) ?? 0,
+        emailTemplateId: optStr(formData, "emailTemplateId"),
+        autoSendEmail: formData.get("autoSendEmail") === "on",
+        priority: oneOf(formData, "priority", PRIORITIES, TaskPriority.NORMAL),
+        reminderDays: intOr(formData, "reminderDays", null),
+      },
+    }),
+  );
   revalidatePath(`/dashboard/action-plans/${actionPlanId}`);
 }
 

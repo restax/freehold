@@ -1,4 +1,5 @@
-import { DateAnchor, withTenant } from "@freehold/db";
+import { DateAnchor, TaskPriority, withTenant } from "@freehold/db";
+import { Check, TrashSimple } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DangerDelete } from "@/components/danger-delete";
@@ -8,9 +9,10 @@ import {
   deletePlan,
   deleteTemplateDocument,
   deleteTemplateTask,
+  updateTemplateTask,
 } from "@/lib/actions/action-plans";
 import { requireAdminTenant } from "@/lib/tenant";
-import { btnDanger, btnGhost, card, input, label, td, th } from "@/lib/ui";
+import { btnGhost, card, input, label } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +21,14 @@ const ANCHOR_LABEL: Record<string, string> = {
   CLOSE_DATE: "Close date",
 };
 
-function offsetLabel(days: number): string {
-  if (days === 0) return "on the day";
-  return days > 0 ? `+${days} days` : `${days} days`;
-}
+const PRIORITY_OPTIONS: { value: string; label: string }[] = [
+  { value: TaskPriority.NORMAL, label: "Normal" },
+  { value: TaskPriority.HIGH, label: "High" },
+  { value: TaskPriority.CRITICAL, label: "Critical" },
+];
+
+const fieldLabel = "flex flex-col gap-1 text-xs font-medium text-stone-500";
+const compactInput = `${input} py-1.5`;
 
 export default async function ActionPlanDetailPage({
   params,
@@ -45,7 +51,6 @@ export default async function ActionPlanDetailPage({
     }),
   }));
   if (!plan) notFound();
-  const templateName = new Map(emailTemplates.map((t) => [t.id, t.name.replace(" (Sample)", "")]));
 
   return (
     <div className="flex flex-col gap-6">
@@ -74,49 +79,117 @@ export default async function ActionPlanDetailPage({
             No template tasks yet — add the first below.
           </p>
         ) : (
-          <table className="mb-4 w-full">
-            <thead>
-              <tr>
-                <th className={th}>#</th>
-                <th className={th}>Task</th>
-                <th className={th}>Anchor</th>
-                <th className={th}>Offset</th>
-                <th className={th}>Email template</th>
-                <th className={th} />
-              </tr>
-            </thead>
-            <tbody>
-              {plan.tasks.map((t) => (
-                <tr key={t.id}>
-                  <td className={td}>{t.sortOrder}</td>
-                  <td className={`${td} font-medium`}>{t.title}</td>
-                  <td className={td}>{ANCHOR_LABEL[t.anchor]}</td>
-                  <td className={td}>{offsetLabel(t.offsetDays)}</td>
-                  <td className={td}>
-                    {t.emailTemplateId ? (
-                      <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs text-brand-800">
-                        ✉ {templateName.get(t.emailTemplateId) ?? "template"}
-                        {t.autoSendEmail && " · auto"}
-                      </span>
-                    ) : (
-                      <span className="text-stone-300">—</span>
-                    )}
-                  </td>
-                  <td className={td}>
-                    <form action={deleteTemplateTask}>
-                      <input type="hidden" name="id" value={t.id} />
-                      <input type="hidden" name="actionPlanId" value={plan.id} />
-                      <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
-                        delete
-                      </button>
-                    </form>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <ul className="mb-4 flex flex-col divide-y divide-stone-100">
+            {plan.tasks.map((t) => (
+              <li key={t.id} className="py-3 first:pt-0">
+                <form action={updateTemplateTask} className="flex flex-wrap items-end gap-2">
+                  <input type="hidden" name="id" value={t.id} />
+                  <input type="hidden" name="actionPlanId" value={plan.id} />
+                  <span className="pb-2 w-5 shrink-0 text-center text-xs text-stone-400 tabular-nums">
+                    {t.sortOrder}
+                  </span>
+                  <label className={`${fieldLabel} min-w-56 flex-1`}>
+                    Task title
+                    <input name="title" required defaultValue={t.title} className={compactInput} />
+                  </label>
+                  <label className={fieldLabel}>
+                    Anchor
+                    <select
+                      name="anchor"
+                      defaultValue={t.anchor}
+                      className={`${compactInput} w-36`}
+                    >
+                      {Object.values(DateAnchor).map((a) => (
+                        <option key={a} value={a}>
+                          {ANCHOR_LABEL[a]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className={fieldLabel}>
+                    Offset (days)
+                    <input
+                      name="offsetDays"
+                      type="number"
+                      defaultValue={t.offsetDays}
+                      className={`${compactInput} w-20`}
+                    />
+                  </label>
+                  <label className={fieldLabel}>
+                    Remind (days before)
+                    <input
+                      name="reminderDays"
+                      type="number"
+                      min={0}
+                      placeholder="—"
+                      defaultValue={t.reminderDays ?? ""}
+                      className={`${compactInput} w-24`}
+                    />
+                  </label>
+                  <label className={fieldLabel}>
+                    Priority
+                    <select
+                      name="priority"
+                      defaultValue={t.priority}
+                      className={`${compactInput} w-28`}
+                    >
+                      {PRIORITY_OPTIONS.map((p) => (
+                        <option key={p.value} value={p.value}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className={fieldLabel}>
+                    Email template
+                    <select
+                      name="emailTemplateId"
+                      defaultValue={t.emailTemplateId ?? ""}
+                      className={`${compactInput} w-40`}
+                    >
+                      <option value="">None</option>
+                      {emailTemplates.map((et) => (
+                        <option key={et.id} value={et.id}>
+                          {et.name.replace(" (Sample)", "")}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1.5 pb-2 text-xs text-stone-600">
+                    <input
+                      type="checkbox"
+                      name="autoSendEmail"
+                      defaultChecked={t.autoSendEmail}
+                      className="accent-brand-600"
+                    />
+                    Auto-send
+                  </label>
+                  <button
+                    type="submit"
+                    title="Save changes"
+                    className="mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-500 shadow-xs transition hover:border-brand-600 hover:text-brand-700 active:scale-[0.98]"
+                  >
+                    <Check size={15} weight="bold" />
+                  </button>
+                </form>
+                <form action={deleteTemplateTask} className="mt-1">
+                  <input type="hidden" name="id" value={t.id} />
+                  <input type="hidden" name="actionPlanId" value={plan.id} />
+                  <button
+                    type="submit"
+                    title="Delete task"
+                    className="ml-7 flex items-center gap-1 text-xs text-stone-300 transition-colors hover:text-red-600"
+                  >
+                    <TrashSimple size={12} />
+                    delete
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
         )}
 
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-stone-400">Add task</p>
         <form action={addTemplateTask} className="flex flex-wrap items-end gap-2">
           <input type="hidden" name="actionPlanId" value={plan.id} />
           <label className={`${label} min-w-64 flex-1`}>
@@ -136,6 +209,20 @@ export default async function ActionPlanDetailPage({
           <label className={label}>
             Offset (days)
             <input name="offsetDays" type="number" defaultValue={0} className={input} />
+          </label>
+          <label className={label}>
+            Remind (days before)
+            <input name="reminderDays" type="number" min={0} placeholder="—" className={input} />
+          </label>
+          <label className={label}>
+            Priority
+            <select name="priority" className={input} defaultValue={TaskPriority.NORMAL}>
+              {PRIORITY_OPTIONS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
           </label>
           <label className={label}>
             Email template
@@ -158,7 +245,8 @@ export default async function ActionPlanDetailPage({
         </form>
         <p className="mt-2 text-xs text-stone-400">
           Negative offsets fall before the anchor: “Close date, −1” is the day before closing. Tasks
-          with an email template open compose with that email ready.
+          with an email template open compose with that email ready. Edit any row inline and save;
+          the reminder is how many days before the due date to flag the task.
         </p>
       </section>
 
