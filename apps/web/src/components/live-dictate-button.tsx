@@ -129,10 +129,10 @@ export function LiveDictateButton({
       <button
         type="button"
         onClick={live || state === "connecting" ? stop : start}
-        className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition ${
+        className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm shadow-xs transition ${
           live
             ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
-            : "border-stone-300 text-stone-600 hover:bg-stone-50"
+            : "border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50"
         }`}
       >
         {live ? (
@@ -141,7 +141,8 @@ export function LiveDictateButton({
           </>
         ) : (
           <>
-            <Microphone size={16} aria-hidden /> {state === "connecting" ? "Starting…" : "Dictate"}
+            <Microphone size={16} className="text-brand-600" aria-hidden />{" "}
+            {state === "connecting" ? "Starting…" : "Dictate"}
           </>
         )}
       </button>

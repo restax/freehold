@@ -534,152 +534,157 @@ export default async function SettingsPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Settings</h1>
 
-      <section className={card}>
-        <h2 className="mb-2 font-medium">Workspace</h2>
-        <p className="text-sm">
-          <span className="text-stone-500">Name:</span> {tenant?.name}
-        </p>
-        <p className="text-sm">
-          <span className="text-stone-500">Signed in as:</span> {session.user.email}
-        </p>
-      </section>
-
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Your data</h2>
-        <p className="mb-3 text-sm text-stone-500">
-          Everything in this workspace — transactions, contacts, clients, tasks, and every document
-          — as one ZIP you can take anywhere. Freehold is source-available, so this export plus the{" "}
-          <a
-            href="https://github.com/restax/freehold"
-            className="text-brand-700 hover:text-brand-600"
-          >
-            public repo
-          </a>{" "}
-          is a working copy of your business that never depends on us.
-        </p>
-        <a href="/api/exports/latest" className={btn} download>
-          Download everything
-        </a>
-        {storage.source === "tenant" ? (
-          <p className="mt-3 text-xs text-stone-500">
-            Nightly export is <strong>on</strong> — a fresh copy is pushed to your own storage (
-            {storage.bucket}) every morning, and the owner gets an email with a link. A backup in
-            infrastructure you control.
-          </p>
-        ) : (
-          <p className="mt-3 text-xs text-stone-400">
-            Want it automatic?{" "}
-            <Link href="/dashboard/integrations" className="text-brand-700 hover:underline">
-              Connect your own storage bucket
-            </Link>{" "}
-            and we'll deliver a nightly export there — a backup in infrastructure you control.
-          </p>
-        )}
-      </section>
-
-      {emailEnabled() && isAdmin && (
+      {/* Independent setting cards sit two-up on wide screens (kept to two so
+          each card — including the one with a table — stays comfortably wide). */}
+      <div className="columns-1 gap-6 lg:columns-2 [&>*]:mb-6 [&>*]:break-inside-avoid">
         <section className={card}>
-          <h2 className="mb-1 font-medium">Daily briefing</h2>
-          <p className="mb-3 text-sm text-stone-500">
-            Every morning, owners and admins get an emailed summary of every active transaction —
-            status, key dates, and the contact details for every party — with a PDF attached. Once
-            it's in your inbox it's yours: readable offline, whatever happens to your connection,
-            your storage, or us. {briefingOn ? "It's on." : "It's off."}
+          <h2 className="mb-2 font-medium">Workspace</h2>
+          <p className="text-sm">
+            <span className="text-stone-500">Name:</span> {tenant?.name}
           </p>
-          <form action={setDailyBriefing}>
-            <input type="hidden" name="enabled" value={briefingOn ? "0" : "1"} />
-            <button type="submit" className={btnGhost}>
-              {briefingOn ? "Turn off daily briefing" : "Turn on daily briefing"}
-            </button>
-          </form>
+          <p className="text-sm">
+            <span className="text-stone-500">Signed in as:</span> {session.user.email}
+          </p>
         </section>
-      )}
 
-      {emailEnabled() && isAdmin && (
         <section className={card}>
-          <h2 className="mb-1 font-medium">Invoice report</h2>
+          <h2 className="mb-1 font-medium">Your data</h2>
           <p className="mb-3 text-sm text-stone-500">
-            Each morning, one chosen person gets the outstanding-invoices list — what's unpaid,
-            what's overdue, who to chase. Mornings with nothing outstanding send nothing.{" "}
-            {invoiceReportUserId ? "It's on." : "It's off."}
+            Everything in this workspace — transactions, contacts, clients, tasks, and every
+            document — as one ZIP you can take anywhere. Freehold is source-available, so this
+            export plus the{" "}
+            <a
+              href="https://github.com/restax/freehold"
+              className="text-brand-700 hover:text-brand-600"
+            >
+              public repo
+            </a>{" "}
+            is a working copy of your business that never depends on us.
           </p>
-          <form action={setInvoiceReport} className="flex flex-wrap items-end gap-3">
+          <a href="/api/exports/latest" className={btn} download>
+            Download everything
+          </a>
+          {storage.source === "tenant" ? (
+            <p className="mt-3 text-xs text-stone-500">
+              Nightly export is <strong>on</strong> — a fresh copy is pushed to your own storage (
+              {storage.bucket}) every morning, and the owner gets an email with a link. A backup in
+              infrastructure you control.
+            </p>
+          ) : (
+            <p className="mt-3 text-xs text-stone-400">
+              Want it automatic?{" "}
+              <Link href="/dashboard/integrations" className="text-brand-700 hover:underline">
+                Connect your own storage bucket
+              </Link>{" "}
+              and we'll deliver a nightly export there — a backup in infrastructure you control.
+            </p>
+          )}
+        </section>
+
+        {emailEnabled() && isAdmin && (
+          <section className={card}>
+            <h2 className="mb-1 font-medium">Daily briefing</h2>
+            <p className="mb-3 text-sm text-stone-500">
+              Every morning, owners and admins get an emailed summary of every active transaction —
+              status, key dates, and the contact details for every party — with a PDF attached. Once
+              it's in your inbox it's yours: readable offline, whatever happens to your connection,
+              your storage, or us. {briefingOn ? "It's on." : "It's off."}
+            </p>
+            <form action={setDailyBriefing}>
+              <input type="hidden" name="enabled" value={briefingOn ? "0" : "1"} />
+              <button type="submit" className={btnGhost}>
+                {briefingOn ? "Turn off daily briefing" : "Turn on daily briefing"}
+              </button>
+            </form>
+          </section>
+        )}
+
+        {emailEnabled() && isAdmin && (
+          <section className={card}>
+            <h2 className="mb-1 font-medium">Invoice report</h2>
+            <p className="mb-3 text-sm text-stone-500">
+              Each morning, one chosen person gets the outstanding-invoices list — what's unpaid,
+              what's overdue, who to chase. Mornings with nothing outstanding send nothing.{" "}
+              {invoiceReportUserId ? "It's on." : "It's off."}
+            </p>
+            <form action={setInvoiceReport} className="flex flex-wrap items-end gap-3">
+              <label className={label}>
+                Send to
+                <select name="userId" defaultValue={invoiceReportUserId} className={input}>
+                  <option value="">— off —</option>
+                  {reportMembers.map((m) => (
+                    <option key={m.user.id} value={m.user.id}>
+                      {m.user.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button type="submit" className={btnGhost}>
+                Save
+              </button>
+            </form>
+          </section>
+        )}
+
+        <section className={card}>
+          <h2 className="mb-1 font-medium">Two-factor authentication</h2>
+          <TwoFactorSettings enabled={Boolean(session.user.twoFactorEnabled)} />
+        </section>
+
+        <OperatingStatesSection tenantId={tenantId} userId={session.user.id} />
+
+        <DirectorySection tenantId={tenantId} userId={session.user.id} />
+
+        <section className={card}>
+          <h2 className="mb-1 font-medium">Side wording</h2>
+          <p className="mb-3 text-sm text-stone-500">
+            Different markets say it differently — sell side, sale side, list side. Whatever you
+            type here is used everywhere sides appear: transactions, portals, and intake forms.
+          </p>
+          <form action={saveSideLabels} className="flex flex-wrap items-end gap-3">
             <label className={label}>
-              Send to
-              <select name="userId" defaultValue={invoiceReportUserId} className={input}>
-                <option value="">— off —</option>
-                {reportMembers.map((m) => (
-                  <option key={m.user.id} value={m.user.id}>
-                    {m.user.name}
-                  </option>
-                ))}
-              </select>
+              Buy side is called
+              <input name="buyLabel" defaultValue={sideLabels.buy} className={input} />
+            </label>
+            <label className={label}>
+              Sell side is called
+              <input name="sellLabel" defaultValue={sideLabels.sell} className={input} />
             </label>
             <button type="submit" className={btnGhost}>
-              Save
+              Save wording
             </button>
           </form>
         </section>
-      )}
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Two-factor authentication</h2>
-        <TwoFactorSettings enabled={Boolean(session.user.twoFactorEnabled)} />
-      </section>
+        <section className={card}>
+          <h2 className="mb-2 font-medium">Sample data</h2>
+          {sampleCount > 0 ? (
+            <form action={removeSampleData} className="flex items-center gap-3">
+              <p className="text-sm text-stone-500">
+                This workspace contains sample records (marked “(Sample)”).
+              </p>
+              <button type="submit" className={btnGhost}>
+                Remove all sample data
+              </button>
+            </form>
+          ) : (
+            <p className="text-sm text-stone-500">No sample data in this workspace.</p>
+          )}
+        </section>
 
-      <OperatingStatesSection tenantId={tenantId} userId={session.user.id} />
+        <ApiSection tenantId={tenantId} userId={session.user.id} />
 
-      <DirectorySection tenantId={tenantId} userId={session.user.id} />
+        <ContactVisibilitySection tenantId={tenantId} userId={session.user.id} />
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Side wording</h2>
-        <p className="mb-3 text-sm text-stone-500">
-          Different markets say it differently — sell side, sale side, list side. Whatever you type
-          here is used everywhere sides appear: transactions, portals, and intake forms.
-        </p>
-        <form action={saveSideLabels} className="flex flex-wrap items-end gap-3">
-          <label className={label}>
-            Buy side is called
-            <input name="buyLabel" defaultValue={sideLabels.buy} className={input} />
-          </label>
-          <label className={label}>
-            Sell side is called
-            <input name="sellLabel" defaultValue={sideLabels.sell} className={input} />
-          </label>
-          <button type="submit" className={btnGhost}>
-            Save wording
-          </button>
-        </form>
-      </section>
+        <AuditSection tenantId={tenantId} userId={session.user.id} />
 
-      <section className={card}>
-        <h2 className="mb-2 font-medium">Sample data</h2>
-        {sampleCount > 0 ? (
-          <form action={removeSampleData} className="flex items-center gap-3">
-            <p className="text-sm text-stone-500">
-              This workspace contains sample records (marked “(Sample)”).
-            </p>
-            <button type="submit" className={btnGhost}>
-              Remove all sample data
-            </button>
-          </form>
-        ) : (
-          <p className="text-sm text-stone-500">No sample data in this workspace.</p>
-        )}
-      </section>
-
-      <ApiSection tenantId={tenantId} userId={session.user.id} />
-
-      <ContactVisibilitySection tenantId={tenantId} userId={session.user.id} />
-
-      <AuditSection tenantId={tenantId} userId={session.user.id} />
-
-      <section className={card}>
-        <h2 className="mb-2 font-medium">System health</h2>
-        <p className="text-sm text-stone-500">
-          Version 0.0.1 (Stage 01). Include this page in self-host support requests.
-        </p>
-      </section>
+        <section className={card}>
+          <h2 className="mb-2 font-medium">System health</h2>
+          <p className="text-sm text-stone-500">
+            Version 0.0.1 (Stage 01). Include this page in self-host support requests.
+          </p>
+        </section>
+      </div>
     </div>
   );
 }
