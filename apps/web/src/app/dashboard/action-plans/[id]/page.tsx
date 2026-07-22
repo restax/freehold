@@ -1,5 +1,5 @@
 import { DateAnchor, TaskPriority, withTenant } from "@freehold/db";
-import { Check, TrashSimple } from "@phosphor-icons/react/dist/ssr";
+import { Check, Plus, TrashSimple } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DangerDelete } from "@/components/danger-delete";
@@ -12,7 +12,7 @@ import {
   updateTemplateTask,
 } from "@/lib/actions/action-plans";
 import { requireAdminTenant } from "@/lib/tenant";
-import { btnGhost, card, input, label } from "@/lib/ui";
+import { btnGhost, card, input, label, th } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +27,13 @@ const PRIORITY_OPTIONS: { value: string; label: string }[] = [
   { value: TaskPriority.CRITICAL, label: "Critical" },
 ];
 
-const fieldLabel = "flex flex-col gap-1 text-xs font-medium text-stone-500";
-const compactInput = `${input} py-1.5`;
+/** Spreadsheet-style cell: invisible until hovered or focused, so the grid
+ *  reads as data first and an editable field second. */
+const cellInput =
+  "w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-sm shadow-none transition-colors hover:border-stone-300 focus:border-brand-600 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-600/20";
+const cellTd = "border-b border-stone-100 p-0 align-middle";
+const actionBtn =
+  "flex h-7 w-7 items-center justify-center rounded-md text-stone-300 transition-colors hover:bg-stone-100 hover:text-stone-600";
 
 export default async function ActionPlanDetailPage({
   params,
@@ -74,179 +79,236 @@ export default async function ActionPlanDetailPage({
       </div>
 
       <section className={card}>
-        {plan.tasks.length === 0 ? (
-          <p className="mb-4 text-sm text-stone-500">
-            No template tasks yet — add the first below.
-          </p>
-        ) : (
-          <ul className="mb-4 flex flex-col divide-y divide-stone-100">
-            {plan.tasks.map((t) => (
-              <li key={t.id} className="py-3 first:pt-0">
-                <form action={updateTemplateTask} className="flex flex-wrap items-end gap-2">
-                  <input type="hidden" name="id" value={t.id} />
-                  <input type="hidden" name="actionPlanId" value={plan.id} />
-                  <span className="pb-2 w-5 shrink-0 text-center text-xs text-stone-400 tabular-nums">
-                    {t.sortOrder}
-                  </span>
-                  <label className={`${fieldLabel} min-w-56 flex-1`}>
-                    Task title
-                    <input name="title" required defaultValue={t.title} className={compactInput} />
-                  </label>
-                  <label className={fieldLabel}>
-                    Anchor
-                    <select
-                      name="anchor"
-                      defaultValue={t.anchor}
-                      className={`${compactInput} w-36`}
+        <div className="mb-2 overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                <th className={`${th} w-8`}>#</th>
+                <th className={th}>Task</th>
+                <th className={`${th} w-32`}>Anchor</th>
+                <th className={`${th} w-20 text-center`}>Offset</th>
+                <th className={`${th} w-24 text-center`}>Remind</th>
+                <th className={`${th} w-28`}>Priority</th>
+                <th className={`${th} w-44`}>Email template</th>
+                <th className={`${th} w-16 text-center`}>Auto-send</th>
+                <th className={`${th} w-16`} />
+              </tr>
+            </thead>
+            <tbody>
+              {plan.tasks.map((t) => {
+                const fid = `task-${t.id}`;
+                return (
+                  <tr key={t.id} className="group hover:bg-stone-50">
+                    <td
+                      className={`${cellTd} px-2 text-center text-xs text-stone-400 tabular-nums`}
                     >
-                      {Object.values(DateAnchor).map((a) => (
-                        <option key={a} value={a}>
-                          {ANCHOR_LABEL[a]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className={fieldLabel}>
-                    Offset (days)
-                    <input
-                      name="offsetDays"
-                      type="number"
-                      defaultValue={t.offsetDays}
-                      className={`${compactInput} w-20`}
-                    />
-                  </label>
-                  <label className={fieldLabel}>
-                    Remind (days before)
-                    <input
-                      name="reminderDays"
-                      type="number"
-                      min={0}
-                      placeholder="—"
-                      defaultValue={t.reminderDays ?? ""}
-                      className={`${compactInput} w-24`}
-                    />
-                  </label>
-                  <label className={fieldLabel}>
-                    Priority
-                    <select
-                      name="priority"
-                      defaultValue={t.priority}
-                      className={`${compactInput} w-28`}
-                    >
-                      {PRIORITY_OPTIONS.map((p) => (
-                        <option key={p.value} value={p.value}>
-                          {p.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className={fieldLabel}>
-                    Email template
-                    <select
-                      name="emailTemplateId"
-                      defaultValue={t.emailTemplateId ?? ""}
-                      className={`${compactInput} w-40`}
-                    >
-                      <option value="">None</option>
-                      {emailTemplates.map((et) => (
-                        <option key={et.id} value={et.id}>
-                          {et.name.replace(" (Sample)", "")}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-1.5 pb-2 text-xs text-stone-600">
-                    <input
-                      type="checkbox"
-                      name="autoSendEmail"
-                      defaultChecked={t.autoSendEmail}
-                      className="accent-brand-600"
-                    />
-                    Auto-send
-                  </label>
-                  <button
-                    type="submit"
-                    title="Save changes"
-                    className="mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-500 shadow-xs transition hover:border-brand-600 hover:text-brand-700 active:scale-[0.98]"
+                      {t.sortOrder}
+                    </td>
+                    <td className={cellTd}>
+                      <input
+                        form={fid}
+                        name="title"
+                        required
+                        defaultValue={t.title}
+                        className={cellInput}
+                      />
+                    </td>
+                    <td className={cellTd}>
+                      <select
+                        form={fid}
+                        name="anchor"
+                        defaultValue={t.anchor}
+                        className={cellInput}
+                      >
+                        {Object.values(DateAnchor).map((a) => (
+                          <option key={a} value={a}>
+                            {ANCHOR_LABEL[a]}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className={cellTd}>
+                      <input
+                        form={fid}
+                        name="offsetDays"
+                        type="number"
+                        defaultValue={t.offsetDays}
+                        className={`${cellInput} text-center`}
+                      />
+                    </td>
+                    <td className={cellTd}>
+                      <input
+                        form={fid}
+                        name="reminderDays"
+                        type="number"
+                        min={0}
+                        placeholder="—"
+                        defaultValue={t.reminderDays ?? ""}
+                        className={`${cellInput} text-center`}
+                      />
+                    </td>
+                    <td className={cellTd}>
+                      <select
+                        form={fid}
+                        name="priority"
+                        defaultValue={t.priority}
+                        className={cellInput}
+                      >
+                        {PRIORITY_OPTIONS.map((p) => (
+                          <option key={p.value} value={p.value}>
+                            {p.label}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className={cellTd}>
+                      <select
+                        form={fid}
+                        name="emailTemplateId"
+                        defaultValue={t.emailTemplateId ?? ""}
+                        className={cellInput}
+                      >
+                        <option value="">None</option>
+                        {emailTemplates.map((et) => (
+                          <option key={et.id} value={et.id}>
+                            {et.name.replace(" (Sample)", "")}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className={`${cellTd} text-center`}>
+                      <input
+                        form={fid}
+                        type="checkbox"
+                        name="autoSendEmail"
+                        defaultChecked={t.autoSendEmail}
+                        className="accent-brand-600"
+                      />
+                    </td>
+                    <td className={cellTd}>
+                      <div className="flex items-center justify-end gap-0.5 pr-1">
+                        <form id={fid} action={updateTemplateTask} className="contents">
+                          <input type="hidden" name="id" value={t.id} />
+                          <input type="hidden" name="actionPlanId" value={plan.id} />
+                          <button type="submit" title="Save changes" className={actionBtn}>
+                            <Check size={14} weight="bold" />
+                          </button>
+                        </form>
+                        <form action={deleteTemplateTask} className="contents">
+                          <input type="hidden" name="id" value={t.id} />
+                          <input type="hidden" name="actionPlanId" value={plan.id} />
+                          <button
+                            type="submit"
+                            title="Delete task"
+                            className={`${actionBtn} hover:bg-red-50 hover:text-red-600`}
+                          >
+                            <TrashSimple size={14} />
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr className="bg-stone-50/60">
+                <td className={cellTd} />
+                <td className={cellTd}>
+                  <input
+                    form="add-task"
+                    name="title"
+                    required
+                    placeholder="Add a task…"
+                    className={cellInput}
+                  />
+                </td>
+                <td className={cellTd}>
+                  <select
+                    form="add-task"
+                    name="anchor"
+                    defaultValue={DateAnchor.CLOSE_DATE}
+                    className={cellInput}
                   >
-                    <Check size={15} weight="bold" />
-                  </button>
-                </form>
-                <form action={deleteTemplateTask} className="mt-1">
-                  <input type="hidden" name="id" value={t.id} />
-                  <input type="hidden" name="actionPlanId" value={plan.id} />
-                  <button
-                    type="submit"
-                    title="Delete task"
-                    className="ml-7 flex items-center gap-1 text-xs text-stone-300 transition-colors hover:text-red-600"
+                    {Object.values(DateAnchor).map((a) => (
+                      <option key={a} value={a}>
+                        {ANCHOR_LABEL[a]}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className={cellTd}>
+                  <input
+                    form="add-task"
+                    name="offsetDays"
+                    type="number"
+                    defaultValue={0}
+                    className={`${cellInput} text-center`}
+                  />
+                </td>
+                <td className={cellTd}>
+                  <input
+                    form="add-task"
+                    name="reminderDays"
+                    type="number"
+                    min={0}
+                    placeholder="—"
+                    className={`${cellInput} text-center`}
+                  />
+                </td>
+                <td className={cellTd}>
+                  <select
+                    form="add-task"
+                    name="priority"
+                    defaultValue={TaskPriority.NORMAL}
+                    className={cellInput}
                   >
-                    <TrashSimple size={12} />
-                    delete
-                  </button>
-                </form>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-stone-400">Add task</p>
-        <form action={addTemplateTask} className="flex flex-wrap items-end gap-2">
-          <input type="hidden" name="actionPlanId" value={plan.id} />
-          <label className={`${label} min-w-64 flex-1`}>
-            Task title *
-            <input name="title" required className={input} placeholder="Order title commitment" />
-          </label>
-          <label className={label}>
-            Anchor
-            <select name="anchor" className={input} defaultValue={DateAnchor.CLOSE_DATE}>
-              {Object.values(DateAnchor).map((a) => (
-                <option key={a} value={a}>
-                  {ANCHOR_LABEL[a]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={label}>
-            Offset (days)
-            <input name="offsetDays" type="number" defaultValue={0} className={input} />
-          </label>
-          <label className={label}>
-            Remind (days before)
-            <input name="reminderDays" type="number" min={0} placeholder="—" className={input} />
-          </label>
-          <label className={label}>
-            Priority
-            <select name="priority" className={input} defaultValue={TaskPriority.NORMAL}>
-              {PRIORITY_OPTIONS.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={label}>
-            Email template
-            <select name="emailTemplateId" className={input} defaultValue="">
-              <option value="">None</option>
-              {emailTemplates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name.replace(" (Sample)", "")}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
-            <input type="checkbox" name="autoSendEmail" className="accent-brand-600" />
-            Auto-send on completion
-          </label>
-          <button type="submit" className={btnGhost}>
-            Add template task
-          </button>
-        </form>
-        <p className="mt-2 text-xs text-stone-400">
+                    {PRIORITY_OPTIONS.map((p) => (
+                      <option key={p.value} value={p.value}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className={cellTd}>
+                  <select
+                    form="add-task"
+                    name="emailTemplateId"
+                    defaultValue=""
+                    className={cellInput}
+                  >
+                    <option value="">None</option>
+                    {emailTemplates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name.replace(" (Sample)", "")}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className={`${cellTd} text-center`}>
+                  <input
+                    form="add-task"
+                    type="checkbox"
+                    name="autoSendEmail"
+                    className="accent-brand-600"
+                  />
+                </td>
+                <td className={cellTd}>
+                  <div className="flex items-center justify-end pr-1">
+                    <form id="add-task" action={addTemplateTask} className="contents">
+                      <input type="hidden" name="actionPlanId" value={plan.id} />
+                      <button type="submit" title="Add task" className={actionBtn}>
+                        <Plus size={14} weight="bold" />
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-stone-400">
           Negative offsets fall before the anchor: “Close date, −1” is the day before closing. Tasks
-          with an email template open compose with that email ready. Edit any row inline and save;
-          the reminder is how many days before the due date to flag the task.
+          with an email template open compose with that email ready. Click any cell to edit, then
+          save the row; the reminder is how many days before the due date to flag the task.
         </p>
       </section>
 
