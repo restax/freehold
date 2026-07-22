@@ -1,11 +1,13 @@
-import { prisma } from "@freehold/db";
+import { CreditLedgerReason, prisma } from "@freehold/db";
 import {
   adSubscriptionFromEvent,
   billingEnabled,
+  creditPurchaseFromEvent,
   planUpdateFromEvent,
   verifyWebhook,
 } from "@freehold/ee-billing";
 import { adminAlert } from "@/lib/notify";
+import { grantCredits } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +28,28 @@ export async function POST(req: Request) {
 
   // Cart tracking: close the loop on checkout sessions we started.
   if (event.type === "checkout.session.completed" || event.type === "checkout.session.expired") {
+    // One-time AI credit-pack purchase. Idempotent: a redelivered event finds
+    // the ledger row from the first grant (keyed by session id) and skips. The
+    // grant itself (balance + ledger) is atomic in grantCredits.
+    const purchase = creditPurchaseFromEvent(event);
+    if (purchase) {
+      const already = await prisma.creditLedger.findFirst({
+        where: { reason: CreditLedgerReason.PURCHASE, note: purchase.sessionId },
+        select: { id: true },
+      });
+      if (!already) {
+        await grantCredits(
+          purchase.tenantId,
+          purchase.credits,
+          CreditLedgerReason.PURCHASE,
+          purchase.sessionId,
+        ).catch(() => {});
+        adminAlert(
+          `🪙 ${purchase.credits} AI credit${purchase.credits === 1 ? "" : "s"} purchased by tenant ${purchase.tenantId}`,
+        );
+      }
+    }
+
     const cs = event.data.object as {
       id?: string;
       after_expiration?: { recovery?: { url?: string | null } | null } | null;

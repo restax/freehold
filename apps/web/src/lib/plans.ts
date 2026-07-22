@@ -51,6 +51,20 @@ export const PLAN_INFO: Record<
 /** Credits a brand-new Free workspace starts with (mirrors the DB default). */
 export const FREE_STARTING_CREDITS = 2;
 
+/**
+ * Buyable credit packs. `credits` doubles as the pack key and maps to the
+ * STRIPE_PRICE_CREDIT_<credits> env price in ee-billing. Bigger packs are
+ * cheaper per credit ($5 / $4 / $3).
+ */
+export const CREDIT_PACKS = [
+  { credits: 1, amountUsd: 5 },
+  { credits: 5, amountUsd: 20 },
+  { credits: 10, amountUsd: 30 },
+] as const;
+
+/** Valid pack sizes, for server-side validation of a purchase request. */
+export const CREDIT_PACK_SIZES = CREDIT_PACKS.map((p) => p.credits) as readonly number[];
+
 export function isCloud(): boolean {
   return process.env.FREEHOLD_CLOUD === "1";
 }

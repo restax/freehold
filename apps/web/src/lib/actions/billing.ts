@@ -1,13 +1,20 @@
 "use server";
 
 import { prisma } from "@freehold/db";
-import { billingEnabled, createPortalSession, createUpgradeCheckout } from "@freehold/ee-billing";
+import {
+  billingEnabled,
+  createCreditCheckout,
+  createPortalSession,
+  createUpgradeCheckout,
+  creditsEnabled,
+} from "@freehold/ee-billing";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logAudit } from "@/lib/audit";
 import { redeemCompCode } from "@/lib/comp";
 import { oneOf, str } from "@/lib/forms";
 import { PAYMENTS_PAUSED } from "@/lib/payments-paused";
+import { CREDIT_PACK_SIZES } from "@/lib/plans";
 import { requireAdminTenant } from "@/lib/tenant";
 
 function baseUrl(): string {
@@ -37,6 +44,28 @@ export async function startUpgrade(formData: FormData) {
       data: { id: checkout.sessionId, tenantId, email: session.user.email, tier },
     })
     .catch(() => {});
+  redirect(checkout.url);
+}
+
+/** Tenant admin: buy a one-time AI credit pack (1, 5, or 10 credits). */
+export async function startCreditCheckout(formData: FormData) {
+  if (PAYMENTS_PAUSED) return;
+  const { tenantId, session, isAdmin } = await requireAdminTenant();
+  if (!isAdmin || !billingEnabled() || !creditsEnabled()) return;
+  const credits = Number(str(formData, "credits"));
+  if (!CREDIT_PACK_SIZES.includes(credits)) return;
+
+  const org = await prisma.organization.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: { stripeCustomerId: true },
+  });
+  const checkout = await createCreditCheckout({
+    tenantId,
+    credits,
+    customerEmail: session.user.email,
+    existingCustomerId: org.stripeCustomerId,
+    baseUrl: baseUrl(),
+  });
   redirect(checkout.url);
 }
 

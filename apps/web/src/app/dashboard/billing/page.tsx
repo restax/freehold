@@ -1,7 +1,13 @@
-import { billingEnabled } from "@freehold/ee-billing";
-import { openBillingPortal, redeemCode, startUpgrade } from "@/lib/actions/billing";
+import { billingEnabled, creditsEnabled } from "@freehold/ee-billing";
+import {
+  openBillingPortal,
+  redeemCode,
+  startCreditCheckout,
+  startUpgrade,
+} from "@/lib/actions/billing";
 import { PAYMENTS_PAUSED } from "@/lib/payments-paused";
 import {
+  CREDIT_PACKS,
   countActiveTransactions,
   creditBalance,
   getTenantPlan,
@@ -17,10 +23,15 @@ export const dynamic = "force-dynamic";
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ upgraded?: string; redeemed?: string; codeError?: string }>;
+  searchParams: Promise<{
+    upgraded?: string;
+    redeemed?: string;
+    codeError?: string;
+    purchased?: string;
+  }>;
 }) {
   const { tenantId, isAdmin } = await requireAdminTenant();
-  const { upgraded, redeemed, codeError } = await searchParams;
+  const { upgraded, redeemed, codeError, purchased } = await searchParams;
   const [plan, seats, activeTxns, credits] = await Promise.all([
     getTenantPlan(tenantId),
     seatState(tenantId),
@@ -50,6 +61,13 @@ export default async function BillingPage({
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           Code applied — your workspace is now on the complimentary{" "}
           {PLAN_INFO[redeemed as keyof typeof PLAN_INFO]?.label ?? redeemed} plan.
+        </p>
+      )}
+
+      {purchased && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          Payment received — {purchased} credit{purchased === "1" ? "" : "s"} will appear within a
+          few seconds of Stripe's confirmation.
         </p>
       )}
 
@@ -106,6 +124,43 @@ export default async function BillingPage({
           </form>
         )}
       </section>
+
+      {isAdmin && freeMetered && billingEnabled() && creditsEnabled() && !PAYMENTS_PAUSED && (
+        <section className={card}>
+          <h2 className="mb-1 font-medium">Buy AI credits</h2>
+          <p className="mb-3 text-sm text-stone-500">
+            Each credit permanently unlocks pro AI — contract extraction, document classify, and
+            dictation — on one transaction. You have{" "}
+            <strong>
+              {credits} credit{credits === 1 ? "" : "s"}
+            </strong>{" "}
+            now.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {CREDIT_PACKS.map((pack) => (
+              <form
+                key={pack.credits}
+                action={startCreditCheckout}
+                className={`${card} flex flex-col items-start gap-1`}
+              >
+                <input type="hidden" name="credits" value={pack.credits} />
+                <p className="font-serif text-2xl font-semibold tabular-nums">${pack.amountUsd}</p>
+                <p className="text-sm text-stone-600">
+                  {pack.credits} credit{pack.credits === 1 ? "" : "s"}
+                  <span className="text-stone-400">
+                    {" "}
+                    · ${(pack.amountUsd / pack.credits).toFixed(0)}/credit
+                  </span>
+                </p>
+                <button type="submit" className={`${btn} mt-2 w-full justify-center`}>
+                  Buy
+                </button>
+              </form>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-stone-400">One-time purchase. Credits never expire.</p>
+        </section>
+      )}
 
       {!billingEnabled() ? (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
