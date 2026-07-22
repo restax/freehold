@@ -41,13 +41,15 @@ from livekit.agents import (
     AgentSession,
     JobContext,
     JobProcess,
+    RoomInputOptions,
+    RoomOutputOptions,
     RunContext,
     WorkerOptions,
     cli,
     get_job_context,
     inference,
 )
-from livekit.agents.llm import function_tool
+from livekit.agents.llm import StopResponse, function_tool
 from livekit.plugins import anthropic, elevenlabs, silero
 
 # Local dev reads the repo-root .env so there's no second copy of the keys to
@@ -311,6 +313,8 @@ async def fetch_brief(grant: str) -> dict | None:
                     "tools": {t["name"] for t in body.get("tools", [])},
                     "instructions": body.get("instructions") or "",
                     "greeting": body.get("greeting") or "",
+                    # "dictation" = STT-only transcription, no LLM/TTS.
+                    "mode": body.get("mode") or "",
                     # Admin-configurable at /admin/settings; falls back to the
                     # long-standing default if the app ever omits it. The app
                     # still returns ttsModel too (unused here for now — TTS is
@@ -327,6 +331,20 @@ def prewarm(proc: JobProcess) -> None:
     model on the hot path is dead time the caller hears as extra silence before
     the greeting; doing it here means a warm worker starts talking sooner."""
     proc.userdata["vad"] = silero.VAD.load()
+
+
+class Transcriber(Agent):
+    """STT-only agent for live dictation: transcribes the speaker and forwards
+    it to the room, never running an LLM or speaking back. The browser streams
+    the forwarded transcription straight into the target field."""
+
+    def __init__(self, stt_model: str) -> None:
+        super().__init__(instructions="", stt=inference.STT(model=stt_model))
+
+    async def on_user_turn_completed(self, turn_ctx, new_message) -> None:
+        # Interim + final transcriptions are already forwarded live as the STT
+        # produces them; stop here so no LLM reply is ever generated.
+        raise StopResponse()
 
 
 async def entrypoint(ctx: JobContext) -> None:
@@ -364,6 +382,23 @@ async def entrypoint(ctx: JobContext) -> None:
         elapsed(),
         sorted(brief["tools"]) or "none",
     )
+
+    # Dictation: pure speech-to-text. Run an STT-only session (no LLM, no TTS)
+    # that forwards the speaker's live transcription to the browser, which
+    # streams it into the target field. Never speaks back.
+    if brief["mode"] == "dictation":
+        session = AgentSession(vad=ctx.proc.userdata["vad"])
+        await session.start(
+            room=ctx.room,
+            agent=Transcriber(brief["sttModel"]),
+            room_input_options=RoomInputOptions(),
+            # Silence the agent — we only want transcriptions on the wire.
+            room_output_options=RoomOutputOptions(
+                audio_enabled=False, transcription_enabled=True
+            ),
+        )
+        logger.info("dictation session live at %s", elapsed())
+        return
 
     session = AgentSession(
         # Reuse the VAD loaded in prewarm() rather than loading it per session.

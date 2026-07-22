@@ -30,7 +30,13 @@ export type VoiceScope =
    * it answers about Freehold itself, from a fixed brief. Deliberately carries
    * no tenant or token, so there is nothing for it to widen into.
    */
-  | { kind: "marketing" };
+  | { kind: "marketing" }
+  /**
+   * Live dictation: the agent only transcribes the speaker into text and
+   * forwards it — no LLM, no tools, no data access. Carries no tenant, so like
+   * marketing there is nothing for it to widen into.
+   */
+  | { kind: "dictation" };
 
 interface GrantBody {
   scope: VoiceScope;

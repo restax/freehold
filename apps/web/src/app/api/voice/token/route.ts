@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { withTenant } from "@freehold/db";
 import { AccessToken, RoomServiceClient } from "livekit-server-sdk";
 import { NextResponse } from "next/server";
-import { isCloud, recordVoiceSession, voiceQuotaState } from "@/lib/plans";
+import { isCloud, recordVoiceSession, transactionHasPro, voiceQuotaState } from "@/lib/plans";
 import { liveLink } from "@/lib/portal";
 import { requireTenant } from "@/lib/tenant";
 import { checkDemoLimit, clientIp } from "@/lib/voice-demo-limit";
@@ -32,12 +33,40 @@ export async function POST(req: Request) {
   const cfg = config();
   if (!cfg) return NextResponse.json({ error: "not_configured" }, { status: 501 });
 
-  const body = (await req.json().catch(() => ({}))) as { portalToken?: string; demo?: boolean };
+  const body = (await req.json().catch(() => ({}))) as {
+    portalToken?: string;
+    demo?: boolean;
+    dictation?: boolean;
+    transactionId?: string;
+  };
   let scope: VoiceScope;
   let identity: string;
   let billTenantId: string | null = null;
 
-  if (body.demo) {
+  if (body.dictation) {
+    // Live dictation: STT-only, no data access. Gated exactly like the old
+    // /api/transcribe path — in a transaction it needs pro (paid plan, or a
+    // credit spent on that transaction); outside a transaction it's paid-only.
+    // Deliberately NOT metered as a voice session (kept as the current flat
+    // gate), so billTenantId stays null.
+    const { tenantId, userId } = await requireTenant();
+    if (isCloud()) {
+      const proEnabled = body.transactionId
+        ? await withTenant(tenantId, async (tx) => {
+            const t = await tx.transaction.findUnique({
+              where: { id: body.transactionId },
+              select: { proFeaturesEnabled: true },
+            });
+            return t?.proFeaturesEnabled ?? false;
+          })
+        : false;
+      if (!(await transactionHasPro(tenantId, proEnabled))) {
+        return NextResponse.json({ error: "upgrade_required" }, { status: 402 });
+      }
+    }
+    scope = { kind: "dictation" };
+    identity = `dictate-${userId}-${randomUUID().slice(0, 8)}`;
+  } else if (body.demo) {
     // Public homepage demo: no session, no customer data, no tenant to bill.
     // Throttled instead, because this one is open to the whole internet.
     const limit = checkDemoLimit(clientIp(req));

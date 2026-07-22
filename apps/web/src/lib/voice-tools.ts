@@ -161,6 +161,7 @@ const CALL_THE_FOUNDER_TOOL: VoiceTool = {
 };
 
 export async function toolsForScope(scope: VoiceScope): Promise<VoiceTool[]> {
+  if (scope.kind === "dictation") return [];
   if (scope.kind === "marketing") {
     const settings = await getPlatformSettings();
     return settings.founderCallsAvailable ? [CALL_THE_FOUNDER_TOOL] : [];
@@ -265,7 +266,12 @@ answer questions about their transaction, and invite them to ask.`;
 /** Persona + opening line for a scope. Kept server-side so the agent stays generic. */
 export async function briefForScope(
   scope: VoiceScope,
-): Promise<{ instructions: string; greeting: string }> {
+): Promise<{ instructions: string; greeting: string; mode?: string }> {
+  if (scope.kind === "dictation") {
+    // Non-empty instructions so the agent's "did the app vouch for this grant?"
+    // gate passes; `mode` tells it to run STT-only (no LLM, no TTS, no greeting).
+    return { mode: "dictation", instructions: "(dictation)", greeting: "" };
+  }
   if (scope.kind === "marketing") {
     const settings = await getPlatformSettings();
     return {
@@ -561,6 +567,8 @@ export async function runVoiceTool(
   input: Record<string, unknown>,
 ): Promise<unknown> {
   try {
+    // Dictation transcribes only — it publishes no tools, so nothing to run.
+    if (scope.kind === "dictation") return { error: "no_tools_in_this_scope" };
     if (scope.kind === "marketing") {
       // The only marketing tool. Re-checks availability + cooldown at
       // execution time (not just at brief-fetch time), since the flag or the

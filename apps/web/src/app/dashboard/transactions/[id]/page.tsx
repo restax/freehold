@@ -11,8 +11,8 @@ import {
   type MarkerKind,
 } from "@/components/closing-date-calendar";
 import { DangerDelete } from "@/components/danger-delete";
-import { DictateButton } from "@/components/dictate-button";
 import { DocumentDropZone } from "@/components/document-drop-zone";
+import { LiveDictateButton } from "@/components/live-dictate-button";
 import { VendorOrderTab } from "@/components/vendor-order-tab";
 import { VisibilityToggles } from "@/components/visibility-toggles";
 import { assignUser, unassignUser } from "@/lib/actions/assignees";
@@ -1657,6 +1657,13 @@ export default async function TransactionDetailPage({
                     <p className="mb-3 text-sm text-stone-500">
                       Sends from your workspace's address; replies land right back on this
                       transaction.
+                      {ccEmail && (
+                        <>
+                          {" "}
+                          Auto-CC'd to <span className="font-medium text-stone-600">{ccEmail}</span>
+                          .
+                        </>
+                      )}
                     </p>
                     {emailTemplates.length > 0 && (
                       <div className="mb-3 flex flex-col gap-1.5 text-xs">
@@ -1792,7 +1799,7 @@ export default async function TransactionDetailPage({
                         <button type="submit" className={btn}>
                           Send email
                         </button>
-                        <DictateButton targetId="compose-body" transactionId={txn.id} />
+                        <LiveDictateButton targetId="compose-body" transactionId={txn.id} />
                         <label className="ml-auto flex items-center gap-2 text-xs text-stone-500">
                           Send later
                           <input

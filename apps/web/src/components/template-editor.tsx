@@ -2,7 +2,7 @@
 
 import { Eye, ListBullets, TextB, TextHOne, TextHTwo, TextItalic } from "@phosphor-icons/react";
 import { useId, useState } from "react";
-import { DictateButton } from "@/components/dictate-button";
+import { LiveDictateButton } from "@/components/live-dictate-button";
 import { EMAIL_MERGE_CODES, renderLiteMarkdown } from "@/lib/email-template";
 
 /**
@@ -107,7 +107,7 @@ export function TemplateEditor({
           ))}
         </select>
         <span className="ml-auto flex items-center gap-2">
-          <DictateButton targetId={areaId} />
+          <LiveDictateButton targetId={areaId} />
           <button
             type="button"
             onClick={() => setPreview((p) => !p)}
