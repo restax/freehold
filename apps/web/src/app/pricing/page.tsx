@@ -1,4 +1,11 @@
-import { Check } from "@phosphor-icons/react/dist/ssr";
+import type { Icon } from "@phosphor-icons/react";
+import {
+  Buildings,
+  Check,
+  GlobeHemisphereWest,
+  Lightning,
+  Sparkle,
+} from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { PaidPlanCta } from "@/components/free-plan-dialog";
 import { ExtractionReviewCard, MarketingFooter, MarketingNav } from "@/components/marketing";
@@ -7,30 +14,35 @@ import { PAYMENTS_PAUSED } from "@/lib/payments-paused";
 export const metadata = {
   title: "Pricing | Freehold",
   description:
-    "Simple pricing with one honest free tier. Cloud from $0, Pro $40 a month for a 2-person team with a 7-day free trial, self-hosting free forever.",
+    "Simple pricing with one honest free tier. Cloud from $0, Pro $40 and Business $85 a month with a 7-day free trial, Enterprise for standalone installs, self-hosting free forever.",
 };
+
+const ENTERPRISE_EMAIL = "hello@freeholdtc.dev";
 
 const TIERS: Array<{
   name: string;
+  icon: Icon;
   audience: string;
   price: string;
   period: string;
   features: string[];
   cta: string;
+  href?: string;
   note?: string;
   featured?: boolean;
   paid?: boolean;
 }> = [
   {
-    name: "Cloud Free",
+    name: "Free",
+    icon: Sparkle,
     audience: "For a solo TC getting started.",
     price: "$0",
     period: "forever",
     features: [
-      "2 users — client & agent portal logins don't count",
-      "5 active transactions at a time",
-      "5 clients with portals",
-      "10 AI contract extractions to try it",
+      "1 workspace user",
+      "2 active transactions at a time",
+      "15 client portal accounts",
+      "2 AI credits to try pro features",
       "Client portals and e-sign",
       "Data always readable and exportable",
     ],
@@ -38,19 +50,19 @@ const TIERS: Array<{
     note: "No credit card required",
   },
   {
-    name: "Cloud Pro",
+    name: "Pro",
+    icon: Lightning,
     audience: "For working TCs and small teams.",
     price: "$40",
     period: "/ month",
     features: [
-      "2 users included — client & agent portal logins never count as users",
+      "2 users — portal logins never count",
       "50 active transactions at a time",
-      "50 clients with portals",
-      "AI contract extraction, fair use included",
+      "AI contract extraction, unmetered",
       "Merge-field document templates",
       "Credential vault with reveal audit",
-      "Branded client portals, per-client e-sign",
-      "Client invoicing with follow-up tracking",
+      "Branded portals, per-client e-sign",
+      "Client invoicing with follow-up",
     ],
     cta: "Start with Pro",
     note: "7-day free trial · cancel in two clicks",
@@ -58,7 +70,8 @@ const TIERS: Array<{
     paid: true,
   },
   {
-    name: "Cloud Business",
+    name: "Business",
+    icon: Buildings,
     audience: "For brokerages and title companies.",
     price: "$85",
     period: "/ month",
@@ -66,14 +79,30 @@ const TIERS: Array<{
       "Everything in Pro",
       "10 users included",
       "100 active transactions at a time",
-      "100 clients with portals",
       "Priority, real-estate-focused support",
-      "Onboarding done with you: send your exports, we set up your workspace on a call",
-      "Early access to new features, reporting first",
+      "Onboarding done with you on a call",
+      "Early access to new features",
     ],
     cta: "Start with Business",
     note: "7-day free trial · cancel in two clicks",
     paid: true,
+  },
+  {
+    name: "Enterprise",
+    icon: GlobeHemisphereWest,
+    audience: "For multi-office and multi-brand operators.",
+    price: "Custom",
+    period: "",
+    features: [
+      "Everything in Business",
+      "Standalone hosted install, dedicated to you",
+      "Multi-tenancy — many brokerages, one system",
+      "Multiple locations under one roof",
+      "Support, upgrades, and SLAs included",
+      "Guided migration and onboarding",
+    ],
+    cta: "Contact us",
+    href: `mailto:${ENTERPRISE_EMAIL}?subject=Freehold%20Enterprise`,
   },
 ];
 
@@ -89,9 +118,9 @@ export default function PricingPage() {
         <p className="mt-5 max-w-xl leading-relaxed text-stone-600">
           Legacy TC platforms run $99 or more a month. Freehold starts free, and hitting a limit
           never locks your data: existing transactions stay readable and exportable, only creating
-          new ones asks you to upgrade. Both paid plans include room for{" "}
-          <strong className="font-semibold text-stone-900">200 active clients</strong> — enough for
-          a TC serving an entire brokerage's agent roster.
+          new ones asks you to upgrade. Paid plans include room for{" "}
+          <strong className="font-semibold text-stone-900">hundreds of active clients</strong> —
+          enough for a TC serving an entire brokerage's agent roster.
         </p>
         <p className="mt-3 max-w-xl text-sm leading-relaxed text-stone-500">
           One more difference: we pay no affiliate commissions. Other platforms hand recommenders
@@ -100,71 +129,85 @@ export default function PricingPage() {
         </p>
 
         {/* Tier cards */}
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
-          {TIERS.map((tier) => (
-            <div
-              key={tier.name}
-              className={`flex flex-col rounded-2xl p-6 ${
-                tier.featured ? "bg-brand-700 text-white" : "border border-stone-200/70 bg-white"
-              }`}
-            >
-              <h2 className="font-display font-bold">{tier.name}</h2>
-              <p
-                className={`mt-1 text-sm ${tier.featured ? "text-brand-50/90" : "text-stone-500"}`}
+        <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {TIERS.map((tier) => {
+            const TierIcon = tier.icon;
+            return (
+              <div
+                key={tier.name}
+                className={`flex flex-col rounded-2xl p-6 ${
+                  tier.featured
+                    ? "bg-brand-700 text-white shadow-lg shadow-brand-700/20"
+                    : "border border-stone-200/70 bg-white"
+                }`}
               >
-                {tier.audience}
-              </p>
-              <p className="font-display mt-5 text-4xl font-extrabold tabular-nums">
-                {tier.price}
                 <span
-                  className={`ml-1.5 font-sans text-sm font-normal ${
-                    tier.featured ? "text-brand-50/80" : "text-stone-500"
+                  className={`mb-4 grid h-10 w-10 place-items-center rounded-xl ${
+                    tier.featured ? "bg-white/15 text-white" : "bg-brand-600/10 text-brand-700"
                   }`}
                 >
-                  {tier.period}
+                  <TierIcon size={20} weight="duotone" aria-hidden />
                 </span>
-              </p>
-              <ul className="mt-5 flex flex-col gap-2.5 text-sm">
-                {tier.features.map((f) => (
-                  <li key={f} className="flex gap-2.5">
-                    <Check
-                      size={16}
-                      weight="bold"
-                      aria-hidden
-                      className={`mt-0.5 shrink-0 ${tier.featured ? "text-brand-100" : "text-brand-600"}`}
-                    />
-                    <span className={tier.featured ? "text-brand-50/95" : "text-stone-600"}>
-                      {f}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              {PAYMENTS_PAUSED && tier.paid ? (
-                <div className="mt-auto pt-7">
-                  <PaidPlanCta label={tier.cta} featured={tier.featured} />
-                </div>
-              ) : (
-                <Link href="/signup" className="mt-auto pt-7">
-                  <span
-                    className={`block rounded-lg px-4 py-2.5 text-center text-sm font-medium transition active:scale-[0.98] ${
-                      tier.featured
-                        ? "bg-white text-brand-800 hover:bg-brand-50"
-                        : "bg-stone-900 text-white hover:bg-stone-700"
-                    }`}
-                  >
-                    {tier.cta}
-                  </span>
-                </Link>
-              )}
-              {tier.note && (
+                <h2 className="font-display font-bold">{tier.name}</h2>
                 <p
-                  className={`mt-2 text-center text-xs ${tier.featured ? "text-brand-100" : "text-stone-400"}`}
+                  className={`mt-1 text-sm ${tier.featured ? "text-brand-50/90" : "text-stone-500"}`}
                 >
-                  {tier.note}
+                  {tier.audience}
                 </p>
-              )}
-            </div>
-          ))}
+                <p className="font-display mt-5 text-4xl font-extrabold tabular-nums">
+                  {tier.price}
+                  {tier.period && (
+                    <span
+                      className={`ml-1.5 font-sans text-sm font-normal ${
+                        tier.featured ? "text-brand-50/80" : "text-stone-500"
+                      }`}
+                    >
+                      {tier.period}
+                    </span>
+                  )}
+                </p>
+                <ul className="mt-5 flex flex-col gap-2.5 text-sm">
+                  {tier.features.map((f) => (
+                    <li key={f} className="flex gap-2.5">
+                      <Check
+                        size={16}
+                        weight="bold"
+                        aria-hidden
+                        className={`mt-0.5 shrink-0 ${tier.featured ? "text-brand-100" : "text-brand-600"}`}
+                      />
+                      <span className={tier.featured ? "text-brand-50/95" : "text-stone-600"}>
+                        {f}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {PAYMENTS_PAUSED && tier.paid ? (
+                  <div className="mt-auto pt-7">
+                    <PaidPlanCta label={tier.cta} featured={tier.featured} />
+                  </div>
+                ) : (
+                  <Link href={tier.href ?? "/signup"} className="mt-auto pt-7">
+                    <span
+                      className={`block rounded-lg px-4 py-2.5 text-center text-sm font-medium transition active:scale-[0.98] ${
+                        tier.featured
+                          ? "bg-white text-brand-800 hover:bg-brand-50"
+                          : "bg-stone-900 text-white hover:bg-stone-700"
+                      }`}
+                    >
+                      {tier.cta}
+                    </span>
+                  </Link>
+                )}
+                {tier.note && (
+                  <p
+                    className={`mt-2 text-center text-xs ${tier.featured ? "text-brand-100" : "text-stone-400"}`}
+                  >
+                    {tier.note}
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         <p className="mt-5 text-center text-xs text-stone-400">
