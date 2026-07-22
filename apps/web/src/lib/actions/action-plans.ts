@@ -82,12 +82,21 @@ export async function updateTemplateTask(formData: FormData) {
   revalidatePath(`/dashboard/action-plans/${actionPlanId}`);
 }
 
-export async function deleteTemplateTask(formData: FormData) {
+/**
+ * Bulk-commit a batch of trashed template tasks. The UI stages deletions
+ * client-side (a row moves to a restorable "trash" list on click) and only
+ * calls this — with a typed DELETE confirmation — once the user commits.
+ * Nothing is destroyed by clicking delete alone.
+ */
+export async function deleteTemplateTasks(formData: FormData) {
   const { tenantId } = await requireTenant();
-  const id = str(formData, "id");
   const actionPlanId = str(formData, "actionPlanId");
-  if (!id) return;
-  await withTenant(tenantId, (tx) => tx.actionPlanTask.delete({ where: { id } }));
+  if (!actionPlanId || !confirmed(formData)) return;
+  const ids = formData.getAll("ids").map(String).filter(Boolean);
+  if (ids.length === 0) return;
+  await withTenant(tenantId, (tx) =>
+    tx.actionPlanTask.deleteMany({ where: { id: { in: ids }, actionPlanId } }),
+  );
   revalidatePath(`/dashboard/action-plans/${actionPlanId}`);
 }
 
