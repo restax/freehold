@@ -112,7 +112,10 @@ export async function getTenantPlan(tenantId: string): Promise<TenantPlan> {
   const tier = comped ? (org.compTier as PlanTier) : org.planTier;
   return {
     tier,
-    seatLimit: comped ? PLAN_INFO[tier].includedSeats : org.seatLimit,
+    // Free's seat cap is fixed by the plan (1), not the stored column — an org
+    // that was previously on a paid tier keeps a stale seat_limit otherwise.
+    // Paid tiers keep the Stripe-driven stored value; a comp uses its tier's.
+    seatLimit: comped || tier === "FREE" ? PLAN_INFO[tier].includedSeats : org.seatLimit,
     stripeCustomerId: org.stripeCustomerId,
     stripeSubscriptionId: org.stripeSubscriptionId,
     activeTransactionLimit: PLAN_INFO[tier].activeTransactionLimit,
