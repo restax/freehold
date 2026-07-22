@@ -1,9 +1,11 @@
 "use server";
 
-import { withTenant } from "@freehold/db";
+import { prisma, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { EMAIL_PHASES } from "@/lib/default-email-templates";
 import { confirmed, optStr, str } from "@/lib/forms";
+import { seedDefaultEmailTemplates } from "@/lib/seed-core";
 import { listTenants } from "@/lib/session";
 import { putObject } from "@/lib/storage";
 import { buildMergeContext, renderTemplatePdf, resolveTemplate } from "@/lib/templates";
@@ -114,15 +116,7 @@ export async function saveEmailTemplates(formData: FormData) {
 }
 
 /** Email template library CRUD (reusable merge-field emails). */
-const EMAIL_CATEGORIES = [
-  "STATUS",
-  "INTRO",
-  "PORTAL",
-  "MILESTONE",
-  "LISTING",
-  "POST_CLOSE",
-  "OTHER",
-];
+const EMAIL_CATEGORIES = EMAIL_PHASES.map((p) => p.key);
 
 function templateFields(formData: FormData) {
   const cat = str(formData, "category");
@@ -130,10 +124,33 @@ function templateFields(formData: FormData) {
     name: str(formData, "name"),
     subject: str(formData, "subject"),
     body: str(formData, "body"),
-    category: EMAIL_CATEGORIES.includes(cat) ? cat : "OTHER",
+    category: EMAIL_CATEGORIES.includes(cat) ? cat : "GENERAL",
     taskMatch: optStr(formData, "taskMatch"),
     attachMatch: optStr(formData, "attachMatch"),
   };
+}
+
+/** Re-add any built-in phase templates the workspace is missing (idempotent). */
+export async function restoreDefaultTemplates() {
+  const { tenantId } = await requireTenant();
+  const added = await seedDefaultEmailTemplates(tenantId);
+  revalidatePath("/dashboard/emails");
+  redirect(`/dashboard/emails?restored=${added}`);
+}
+
+/**
+ * Seed the built-in defaults for a freshly created workspace. Called from
+ * onboarding regardless of the sample-data choice — defaults aren't sample
+ * data. tenantId comes from the client, so membership is verified first.
+ */
+export async function seedDefaultTemplatesFor(tenantId: string) {
+  const { userId } = await requireTenant();
+  const membership = await prisma.member.findFirst({
+    where: { organizationId: tenantId, userId },
+    select: { id: true },
+  });
+  if (!membership) return;
+  await seedDefaultEmailTemplates(tenantId);
 }
 
 export async function createEmailTemplateLib(formData: FormData) {

@@ -5,15 +5,16 @@ import { TemplateEditor } from "@/components/template-editor";
 import {
   createEmailTemplateLib,
   deleteEmailTemplateLib,
+  restoreDefaultTemplates,
   saveEmailSettings,
   saveEmailTemplates,
   updateEmailTemplateLib,
 } from "@/lib/actions/templates";
+import { EMAIL_PHASES, phaseOf } from "@/lib/default-email-templates";
 import { EMAIL_MERGE_CODES, parseEmailSettings, parseEmailTemplates } from "@/lib/email-template";
-import { EMAIL_CATEGORY_LABELS } from "@/lib/email-template-library";
 import { parseQuietHours } from "@/lib/outbox";
 import { requireAdminTenant } from "@/lib/tenant";
-import { btn, card, input, label as labelCls, summaryLink } from "@/lib/ui";
+import { btn, btnGhost, card, input, label as labelCls, summaryLink } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -22,12 +23,15 @@ const HOURS: Array<[number, string]> = Array.from({ length: 24 }, (_, h) => [
   `${((h + 11) % 12) + 1} ${h < 12 ? "AM" : "PM"}`,
 ]);
 
-const CATEGORY_ORDER = ["STATUS", "INTRO", "PORTAL", "MILESTONE", "LISTING", "POST_CLOSE", "OTHER"];
-
-export default async function EmailTemplatesPage() {
+export default async function EmailTemplatesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ restored?: string }>;
+}) {
   const { tenantId, isAdmin } = await requireAdminTenant();
+  const { restored } = await searchParams;
   const templates = await withTenant(tenantId, (tx) =>
-    tx.emailTemplate.findMany({ orderBy: [{ category: "asc" }, { name: "asc" }] }),
+    tx.emailTemplate.findMany({ orderBy: [{ name: "asc" }] }),
   );
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: tenantId },
@@ -37,8 +41,9 @@ export default async function EmailTemplatesPage() {
   const settings = parseEmailSettings(org.emailSettings);
   const quiet = parseQuietHours(org.emailSettings);
 
-  const grouped = CATEGORY_ORDER.map(
-    (cat) => [cat, templates.filter((t) => t.category === cat)] as const,
+  // Group by transaction phase; anything with a legacy category falls into General.
+  const grouped = EMAIL_PHASES.map(
+    (phase) => [phase, templates.filter((t) => phaseOf(t.category) === phase.key)] as const,
   ).filter(([, list]) => list.length > 0);
 
   return (
@@ -132,6 +137,28 @@ export default async function EmailTemplatesPage() {
         </form>
       </section>
 
+      {restored !== undefined && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          {Number(restored) > 0
+            ? `Restored ${restored} default template${restored === "1" ? "" : "s"}.`
+            : "You already have every default template."}
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-stone-500">
+          Reusable templates, grouped by transaction phase. One click from any task; edit or delete
+          any of them.
+        </p>
+        {isAdmin && (
+          <form action={restoreDefaultTemplates}>
+            <button type="submit" className={btnGhost}>
+              Restore default templates
+            </button>
+          </form>
+        )}
+      </div>
+
       <details className={card}>
         <summary className={summaryLink}>+ New email template</summary>
         <form action={createEmailTemplateLib} className="mt-4 flex flex-col gap-3">
@@ -142,10 +169,10 @@ export default async function EmailTemplatesPage() {
             </label>
             <label className={labelCls}>
               Category
-              <select name="category" className={input} defaultValue="MILESTONE">
-                {CATEGORY_ORDER.map((c) => (
-                  <option key={c} value={c}>
-                    {EMAIL_CATEGORY_LABELS[c]}
+              <select name="category" className={input} defaultValue="CONTRACT">
+                {EMAIL_PHASES.map((p) => (
+                  <option key={p.key} value={p.key}>
+                    {p.label}
                   </option>
                 ))}
               </select>
@@ -178,9 +205,15 @@ export default async function EmailTemplatesPage() {
         </form>
       </details>
 
-      {grouped.map(([cat, list]) => (
-        <section key={cat} className={card}>
-          <h2 className="mb-3 font-medium">{EMAIL_CATEGORY_LABELS[cat]}</h2>
+      {grouped.map(([phase, list]) => (
+        <section key={phase.key} className={card}>
+          <div className="mb-3 flex items-baseline gap-2">
+            <h2 className="font-medium">{phase.label}</h2>
+            <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
+              {list.length}
+            </span>
+            <span className="text-xs text-stone-400">{phase.blurb}</span>
+          </div>
           <ul className="flex flex-col gap-2">
             {list.map((t) => (
               <li key={t.id} className="rounded-lg border border-stone-200/70">
@@ -207,10 +240,14 @@ export default async function EmailTemplatesPage() {
                         </label>
                         <label className={labelCls}>
                           Category
-                          <select name="category" defaultValue={t.category} className={input}>
-                            {CATEGORY_ORDER.map((c) => (
-                              <option key={c} value={c}>
-                                {EMAIL_CATEGORY_LABELS[c]}
+                          <select
+                            name="category"
+                            defaultValue={phaseOf(t.category)}
+                            className={input}
+                          >
+                            {EMAIL_PHASES.map((p) => (
+                              <option key={p.key} value={p.key}>
+                                {p.label}
                               </option>
                             ))}
                           </select>

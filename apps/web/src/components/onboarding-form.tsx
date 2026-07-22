@@ -4,6 +4,7 @@ import { tenantSlug } from "@freehold/db/slug";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { seedSampleData } from "@/lib/actions/sample-data";
+import { seedDefaultTemplatesFor } from "@/lib/actions/templates";
 import { authClient } from "@/lib/auth-client";
 import { isReservedSlug } from "@/lib/reserved-slugs";
 
@@ -32,6 +33,8 @@ export function OnboardingForm() {
     // screen because an optional step (activation, sample seeding) failed.
     try {
       await authClient.organization.setActive({ organizationId: data.id });
+      // Default email templates always seed — they're built-ins, not sample data.
+      await seedDefaultTemplatesFor(data.id);
       if (withSample) {
         await seedSampleData(data.id);
       }

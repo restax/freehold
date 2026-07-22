@@ -82,6 +82,11 @@ export function renderLiteMarkdown(body: string): string {
           .join("");
         return `<ul style="margin:0 0 14px;padding-left:22px;font-size:15px;line-height:1.6;color:#292524;">${items}</ul>`;
       }
+      if (block.startsWith("!! ")) {
+        // Warning callout — an amber panel, e.g. the wire-fraud notice on the
+        // closing email. Renders reliably across email clients (table + inline).
+        return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;"><tr><td style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:14px 16px;font-size:14px;line-height:1.6;color:#78350f;">${inline(block.slice(3)).replace(/\n/g, "<br/>")}</td></tr></table>`;
+      }
       if (block.startsWith("## ")) {
         return `<p style="margin:0 0 10px;font-size:17px;font-weight:600;color:#1c1917;">${inline(block.slice(3))}</p>`;
       }

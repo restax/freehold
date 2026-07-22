@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { prisma, withTenant } from "@freehold/db";
 import { auth } from "@/lib/auth";
 import { FREE_STARTING_CREDITS } from "@/lib/plans";
-import { seedTenantData } from "@/lib/seed-core";
+import { seedDefaultEmailTemplates, seedTenantData } from "@/lib/seed-core";
 
 /**
  * The public shared demo: one fictional brokerage every visitor explores
@@ -134,4 +134,5 @@ export async function resetDemoData() {
   });
 
   await seedTenantData(org.id, visitor.id);
+  await seedDefaultEmailTemplates(org.id);
 }
