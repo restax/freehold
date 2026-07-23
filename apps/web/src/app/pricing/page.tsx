@@ -19,6 +19,11 @@ export const metadata = {
     "Simple pricing with one honest free tier. Cloud from $0, Pro $40 and Business $85 a month with a 7-day free trial, Enterprise for standalone installs, self-hosting free forever.",
 };
 
+// Rendered per request so the launch offer reflects the current coupon env and
+// deadline — a prerendered page would freeze the offer at build time (and not
+// self-retire after the deadline).
+export const dynamic = "force-dynamic";
+
 const ENTERPRISE_EMAIL = "hello@freeholdtc.dev";
 
 const TIERS: Array<{
