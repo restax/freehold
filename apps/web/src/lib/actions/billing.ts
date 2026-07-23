@@ -14,6 +14,7 @@ import { logAudit } from "@/lib/audit";
 import { redeemCompCode } from "@/lib/comp";
 import { redeemCreditCoupon } from "@/lib/credit-coupons";
 import { oneOf, str } from "@/lib/forms";
+import { launchCouponId } from "@/lib/launch-offer";
 import { PAYMENTS_PAUSED } from "@/lib/payments-paused";
 import { CREDIT_PACK_SIZES } from "@/lib/plans";
 import { requireAdminTenant } from "@/lib/tenant";
@@ -38,6 +39,9 @@ export async function startUpgrade(formData: FormData) {
     customerEmail: session.user.email,
     existingCustomerId: org.stripeCustomerId,
     baseUrl: baseUrl(),
+    // Launch discount: auto-applied while the offer is live, so early signups
+    // lock in 50% off without typing a code.
+    couponId: launchCouponId(),
   });
   // Cart tracking for the operator analytics panel; never blocks checkout.
   await prisma.checkoutAttempt

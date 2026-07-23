@@ -18,6 +18,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { LaunchBanner } from "@/components/launch-banner";
 import {
   CloudWordmark,
   ExtractionReviewCard,
@@ -169,6 +170,7 @@ export default async function LandingPage() {
 
   return (
     <main className="bg-stone-50 text-stone-900">
+      <LaunchBanner />
       <MarketingNav />
 
       {/* Hero */}

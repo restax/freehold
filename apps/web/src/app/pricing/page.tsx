@@ -8,7 +8,9 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { PaidPlanCta } from "@/components/free-plan-dialog";
+import { LaunchBanner } from "@/components/launch-banner";
 import { ExtractionReviewCard, MarketingFooter, MarketingNav } from "@/components/marketing";
+import { fmtPrice, LAUNCH_OFFER, launchOfferActive } from "@/lib/launch-offer";
 import { PAYMENTS_PAUSED } from "@/lib/payments-paused";
 
 export const metadata = {
@@ -106,9 +108,16 @@ const TIERS: Array<{
   },
 ];
 
+const LAUNCH_BY_NAME: Record<string, number> = {
+  Pro: LAUNCH_OFFER.pro.launch,
+  Business: LAUNCH_OFFER.business.launch,
+};
+
 export default function PricingPage() {
+  const launchActive = launchOfferActive();
   return (
     <main className="bg-stone-50 text-stone-900">
+      <LaunchBanner />
       <MarketingNav />
 
       <section className="mx-auto max-w-6xl px-4 pb-16 pt-12 sm:px-6 lg:pb-24 lg:pt-16">
@@ -132,6 +141,7 @@ export default function PricingPage() {
         <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {TIERS.map((tier) => {
             const TierIcon = tier.icon;
+            const launchUsd = launchActive && tier.paid ? LAUNCH_BY_NAME[tier.name] : undefined;
             return (
               <div
                 key={tier.name}
@@ -155,7 +165,16 @@ export default function PricingPage() {
                   {tier.audience}
                 </p>
                 <p className="font-display mt-5 text-4xl font-extrabold tabular-nums">
-                  {tier.price}
+                  {launchUsd != null && (
+                    <span
+                      className={`mr-2 align-middle text-2xl font-bold line-through ${
+                        tier.featured ? "text-brand-100/70" : "text-stone-400"
+                      }`}
+                    >
+                      {tier.price}
+                    </span>
+                  )}
+                  {launchUsd != null ? fmtPrice(launchUsd) : tier.price}
                   {tier.period && (
                     <span
                       className={`ml-1.5 font-sans text-sm font-normal ${
@@ -166,6 +185,16 @@ export default function PricingPage() {
                     </span>
                   )}
                 </p>
+                {launchUsd != null && (
+                  <p
+                    className={`mt-1 text-xs font-medium ${
+                      tier.featured ? "text-brand-100" : "text-brand-700"
+                    }`}
+                  >
+                    Launch price — 50% off, locked in through 2027. Ends{" "}
+                    {LAUNCH_OFFER.deadlineLabel}.
+                  </p>
+                )}
                 <ul className="mt-5 flex flex-col gap-2.5 text-sm">
                   {tier.features.map((f) => (
                     <li key={f} className="flex gap-2.5">
