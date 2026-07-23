@@ -10,8 +10,9 @@ import { fmtDate, STATUS_LABEL } from "@/lib/format";
 import {
   byPriorityThenDate,
   effectivePriority,
-  PRIORITY_BADGE,
   PRIORITY_LABEL,
+  priorityBadgeStyle,
+  rowHighlightStyle,
 } from "@/lib/priority";
 import { requireTenant } from "@/lib/tenant";
 import { card, td, th, trHover } from "@/lib/ui";
@@ -258,8 +259,12 @@ export default async function DashboardPage() {
   });
 
   function TaskRow({ t, tone }: { t: (typeof openTasks)[number]; tone: "red" | "default" }) {
+    const eff = effectivePriority(t, t.transaction ?? null);
     return (
-      <li className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0">
+      <li
+        className="flex items-center gap-3 border-b border-stone-100 px-1 py-2 last:border-0"
+        style={rowHighlightStyle(eff)}
+      >
         <form action={toggleTask}>
           <input type="hidden" name="id" value={t.id} />
           <input type="hidden" name="transactionId" value={t.transactionId ?? ""} />
@@ -277,16 +282,14 @@ export default async function DashboardPage() {
           {fmtDate(t.dueDate)}
         </span>
         <span className="text-sm">{t.title}</span>
-        {(() => {
-          const eff = effectivePriority(t, t.transaction ?? null);
-          return PRIORITY_LABEL[eff] ? (
-            <span
-              className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${PRIORITY_BADGE[eff]}`}
-            >
-              {PRIORITY_LABEL[eff]}
-            </span>
-          ) : null;
-        })()}
+        {PRIORITY_LABEL[eff] && (
+          <span
+            className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+            style={priorityBadgeStyle(eff)}
+          >
+            {PRIORITY_LABEL[eff]}
+          </span>
+        )}
         {t.transaction && (
           <Link
             href={`/dashboard/transactions/${t.transaction.id}`}

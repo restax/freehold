@@ -1,6 +1,7 @@
 import { Check } from "@phosphor-icons/react/dist/ssr";
 import Image from "next/image";
 import Link from "next/link";
+import { LiveThemeSwitcher } from "@/components/live-theme-switcher";
 import { MarketingFooter, MarketingNav } from "@/components/marketing";
 
 export const metadata = {
@@ -203,6 +204,11 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       [
         "Brand customization",
         "Your logo on your website and emails, your own subdomain, even your own wording for transaction sides (sell side, sale side, list side).",
+        "today",
+      ],
+      [
+        "Portal colour themes & fonts",
+        "Pick a colour theme and typeface for the client portal in Settings — header, buttons, and links repaint to match, and the same controls colour-code task priorities and highlight urgent rows on your dashboard. Try the live switcher at the top of this page.",
         "today",
       ],
       [
@@ -419,7 +425,7 @@ const SCREENS: Array<[string, string, string]> = [
 
 export default function FeaturesPage() {
   return (
-    <main className="bg-stone-50 text-stone-900">
+    <main id="features-root" className="bg-stone-50 text-stone-900">
       <MarketingNav />
 
       <section className="mx-auto max-w-6xl px-4 pb-20 pt-12 sm:px-6 lg:pt-16">
@@ -442,6 +448,11 @@ export default function FeaturesPage() {
             </span>
             <span className="text-stone-600">Ask, and it usually ships in days</span>
           </span>
+        </div>
+
+        {/* Interactive proof of the portal-theming feature: recolors this page live. */}
+        <div className="mt-10">
+          <LiveThemeSwitcher />
         </div>
 
         {/* Real screens — actual product, demo-workspace data */}

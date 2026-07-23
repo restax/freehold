@@ -4,7 +4,7 @@ import Link from "next/link";
 import { CopyButton } from "@/components/copy-button";
 import { regenerateCalendarToken } from "@/lib/actions/calendar";
 import { calendarFeedUrl, ensureCalendarToken } from "@/lib/calendar";
-import { PRIORITY_BADGE } from "@/lib/priority";
+import { priorityBadgeStyle } from "@/lib/priority";
 import { requireTenant } from "@/lib/tenant";
 import { btnGhost, card } from "@/lib/ui";
 
@@ -230,9 +230,14 @@ export default async function CalendarPage({
                         e.kind === "closing"
                           ? "bg-brand-50 text-brand-800"
                           : e.kind === "CRITICAL" || e.kind === "HIGH"
-                            ? PRIORITY_BADGE[e.kind]
+                            ? ""
                             : "bg-stone-100 text-stone-700"
                       }`}
+                      style={
+                        e.kind === "CRITICAL" || e.kind === "HIGH"
+                          ? priorityBadgeStyle(e.kind)
+                          : undefined
+                      }
                     >
                       {e.kind === "closing" && (
                         <HouseLine size={10} weight="fill" className="mr-0.5 inline" aria-hidden />

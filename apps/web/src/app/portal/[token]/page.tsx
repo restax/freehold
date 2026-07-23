@@ -14,6 +14,7 @@ import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/badges";
 import { submitIntake } from "@/lib/actions/intake";
 import { placeClientOrder } from "@/lib/actions/portal-orders";
+import { type Appearance, portalVars, tenantAppearance } from "@/lib/appearance";
 import { fmtDate, fmtMoney, ROLE_LABEL, STATUS_LABEL } from "@/lib/format";
 import { INTAKE_UPLOAD_HINT, intakeFields } from "@/lib/intake";
 import { resolveAgentPortal, resolvePortal } from "@/lib/portal";
@@ -35,7 +36,13 @@ function PortalHeader({
   subtitle?: string;
 }) {
   return (
-    <header className="bg-[radial-gradient(100%_140%_at_50%_0%,#0b7a49_0%,#054f30_100%)] pb-14 pt-8 text-white">
+    <header
+      className="pb-14 pt-8 text-white"
+      style={{
+        background:
+          "radial-gradient(100% 140% at 50% 0%, var(--portal-accent) 0%, var(--portal-accent-dark) 100%)",
+      }}
+    >
       <div className="mx-auto flex max-w-3xl items-start justify-between px-4">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-brand-200">
@@ -158,6 +165,7 @@ function ClientPortal(
   labels: SideLabels,
   intakeDone: boolean,
   vendorData: PortalVendorData | null,
+  appearance: Appearance,
 ) {
   const { link, txn, tenantName } = portal;
   const today = fmtDate(new Date());
@@ -197,7 +205,10 @@ function ClientPortal(
   const completed = milestones.filter((m) => m.done);
 
   return (
-    <main className="min-h-screen bg-stone-50">
+    <main
+      className="min-h-screen bg-stone-50"
+      style={{ ...portalVars(appearance), fontFamily: "var(--font-sans)" }}
+    >
       <PortalHeader
         eyebrow={`${txn.client?.name ?? tenantName} · your transaction`}
         title={txn.propertyAddress}
@@ -492,6 +503,7 @@ const PIPELINE_ORDER = ["UNDER_CONTRACT", "PENDING", "LISTING", "CLOSED"] as con
 function AgentPortal(
   portal: NonNullable<Awaited<ReturnType<typeof resolveAgentPortal>>>,
   q: string,
+  appearance: Appearance,
 ) {
   const { link, client, transactions, recentTasks, recentDocs, tenantName } = portal;
 
@@ -526,7 +538,10 @@ function AgentPortal(
     .slice(0, 15);
 
   return (
-    <main className="min-h-screen bg-stone-50">
+    <main
+      className="min-h-screen bg-stone-50"
+      style={{ ...portalVars(appearance), fontFamily: "var(--font-sans)" }}
+    >
       <PortalHeader
         eyebrow={`${tenantName} · agent portal`}
         title={client.name}
@@ -724,15 +739,21 @@ export default async function PortalPage({
 
   const clientPortal = await resolvePortal(token);
   if (clientPortal) {
-    const labels = await tenantSideLabels(clientPortal.link.tenantId);
-    const vendorData = clientPortal.link.showVendorOrders
-      ? await portalVendorData(clientPortal.link.tenantId, clientPortal.txn.id)
-      : null;
-    return ClientPortal(clientPortal, labels, intake === "done", vendorData);
+    const [labels, appearance, vendorData] = await Promise.all([
+      tenantSideLabels(clientPortal.link.tenantId),
+      tenantAppearance(clientPortal.link.tenantId),
+      clientPortal.link.showVendorOrders
+        ? portalVendorData(clientPortal.link.tenantId, clientPortal.txn.id)
+        : Promise.resolve(null),
+    ]);
+    return ClientPortal(clientPortal, labels, intake === "done", vendorData, appearance);
   }
 
   const agentPortal = await resolveAgentPortal(token);
-  if (agentPortal) return AgentPortal(agentPortal, q ?? "");
+  if (agentPortal) {
+    const appearance = await tenantAppearance(agentPortal.link.tenantId);
+    return AgentPortal(agentPortal, q ?? "", appearance);
+  }
 
   notFound();
 }

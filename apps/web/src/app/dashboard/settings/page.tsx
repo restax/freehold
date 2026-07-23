@@ -547,6 +547,19 @@ export default async function SettingsPage() {
           </p>
         </section>
 
+        {isAdmin && (
+          <section className={card}>
+            <h2 className="mb-1 font-medium">Appearance</h2>
+            <p className="mb-3 text-sm text-stone-500">
+              Brand the client portal with a colour theme and font, and colour-code task priorities
+              and row highlights across your dashboard.
+            </p>
+            <Link href="/dashboard/settings/appearance" className={btnGhost}>
+              Customize appearance
+            </Link>
+          </section>
+        )}
+
         <section className={card}>
           <h2 className="mb-1 font-medium">Your data</h2>
           <p className="mb-3 text-sm text-stone-500">

@@ -8,6 +8,7 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/badges";
+import { portalVars, tenantAppearance } from "@/lib/appearance";
 import { fmtDate, fmtMoney, ROLE_LABEL } from "@/lib/format";
 import { resolveAgentPortalTxn } from "@/lib/portal";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
@@ -28,12 +29,22 @@ export default async function AgentPortalTxnPage({
   const labels = await tenantSideLabels(portal?.link.tenantId ?? "");
   if (!portal) notFound();
   const { link, txn, tenantName } = portal;
+  const appearance = await tenantAppearance(link.tenantId);
   const today = fmtDate(new Date());
   const doneCount = txn.tasks.filter((t) => t.status === "DONE").length;
 
   return (
-    <main className="min-h-screen bg-stone-50">
-      <header className="bg-[radial-gradient(100%_140%_at_50%_0%,#0b7a49_0%,#054f30_100%)] pb-14 pt-8 text-white">
+    <main
+      className="min-h-screen bg-stone-50"
+      style={{ ...portalVars(appearance), fontFamily: "var(--font-sans)" }}
+    >
+      <header
+        className="pb-14 pt-8 text-white"
+        style={{
+          background:
+            "radial-gradient(100% 140% at 50% 0%, var(--portal-accent) 0%, var(--portal-accent-dark) 100%)",
+        }}
+      >
         <div className="mx-auto max-w-3xl px-4">
           <Link
             href={`/portal/${token}`}

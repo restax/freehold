@@ -76,7 +76,12 @@ import { gapForTransaction, gapMessage } from "@/lib/licensing";
 import { fmtCents } from "@/lib/pay";
 import { creditBalance, transactionHasPro } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
-import { PRIORITY_BADGE, PRIORITY_LABEL } from "@/lib/priority";
+import {
+  PRIORITY_LABEL,
+  priorityBadgeStyle,
+  priorityColorStyle,
+  rowHighlightStyle,
+} from "@/lib/priority";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
 import {
   getMemberCompliance,
@@ -577,7 +582,8 @@ export default async function TransactionDetailPage({
                     return (
                       <li
                         key={t.id}
-                        className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0"
+                        className="flex items-center gap-3 border-b border-stone-100 px-1 py-2 last:border-0"
+                        style={rowHighlightStyle(t.priority)}
                       >
                         <form action={toggleTask}>
                           <input type="hidden" name="id" value={t.id} />
@@ -604,7 +610,8 @@ export default async function TransactionDetailPage({
                         </span>
                         {PRIORITY_LABEL[t.priority] && (
                           <span
-                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${PRIORITY_BADGE[t.priority]}`}
+                            className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                            style={priorityBadgeStyle(t.priority)}
                           >
                             {PRIORITY_LABEL[t.priority]}
                           </span>
@@ -632,12 +639,9 @@ export default async function TransactionDetailPage({
                               type="submit"
                               title={`Priority: ${t.priority.toLowerCase()} — click to change`}
                               className={
-                                t.priority === "CRITICAL"
-                                  ? "text-red-600"
-                                  : t.priority === "HIGH"
-                                    ? "text-amber-500"
-                                    : "text-stone-300 hover:text-amber-500"
+                                t.priority === "NORMAL" ? "text-stone-300 hover:text-amber-500" : ""
                               }
+                              style={priorityColorStyle(t.priority)}
                             >
                               ⚑
                             </button>

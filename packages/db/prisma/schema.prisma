@@ -599,6 +599,11 @@ model Organization {
   emailSettings           Json?                   @map("email_settings")
   /// Tenant mini-site at <slug>.<root>: {published, tagline, about, phone, email, services, showRegistration}.
   siteConfig              Json?                   @map("site_config")
+  /// Look-and-feel choices, all optional with sensible defaults:
+  /// {theme, portalFont, priorityColors:{HIGH,CRITICAL}, rowHighlight:{scope,color}}.
+  /// theme + portalFont style the client portal; priorityColors + rowHighlight
+  /// tint the internal task lists. Null = Freehold defaults (forest/green).
+  appearanceConfig        Json?                   @map("appearance_config")
   /// Per-tenant Documenso connection: {url, enc:{ciphertext,iv,tag,wrappedKey,wrapIv,wrapTag,keyVersion}}.
   /// Token encrypted with VAULT_MASTER_KEY; null = use server-wide env default.
   documensoConfig         Json?                   @map("documenso_config")

@@ -6,6 +6,7 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { SupportTicketWidget } from "@/components/support-ticket-widget";
 import { VoiceWidget } from "@/components/voice-widget";
 import { openBillingPortal } from "@/lib/actions/billing";
+import { priorityVars, tenantAppearance } from "@/lib/appearance";
 import { DEMO_SLUG } from "@/lib/demo";
 import { getTenantPlan } from "@/lib/plans";
 import { getSession, listTenants } from "@/lib/session";
@@ -25,6 +26,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // the sidebar just stops offering doors that won't open.
   const isGuest = (await getMemberRole(active.id, session.user.id)) === GUEST_ROLE;
   const supportUnread = await supportUnreadCount(active.id, session.user.id);
+  const appearance = await tenantAppearance(active.id);
 
   // Failed-renewal lock: access is paused until payment is fixed, but nothing
   // is deleted and the recovery path (Stripe portal, sign-out) stays open.
@@ -72,7 +74,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const isDemoTenant = active?.slug === DEMO_SLUG;
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen" style={priorityVars(appearance)}>
       {isDemoTenant && <DemoWatermark />}
       <a
         href="#main"
