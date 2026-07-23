@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ChatWidget } from "@/components/chat-widget";
+import { StripeTrust } from "@/components/stripe-trust";
 
 /* Shared brand chrome: wordmark, nav, footer, and the extraction review card. */
 
@@ -180,11 +181,14 @@ export function MarketingFooter() {
         </nav>
       </div>
       <div className="border-t border-stone-100">
-        <p className="mx-auto max-w-6xl px-4 py-5 text-center text-sm text-stone-400 sm:px-6">
-          Freehold is source-available (Elastic License 2.0). Self-hosting for your own organization
-          is free forever — Freehold may never be resold or offered as someone else's hosted
-          service.
-        </p>
+        <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+          <StripeTrust />
+          <p className="mt-5 text-center text-sm text-stone-400">
+            Freehold is source-available (Elastic License 2.0). Self-hosting for your own
+            organization is free forever — Freehold may never be resold or offered as someone else's
+            hosted service.
+          </p>
+        </div>
       </div>
       <ChatWidget />
     </footer>
