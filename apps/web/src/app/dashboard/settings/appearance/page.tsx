@@ -71,11 +71,12 @@ export default async function AppearancePage() {
       </div>
 
       <form action={saveAppearance} className="flex flex-col gap-6">
-        {/* ---------------- Portal theme ---------------- */}
+        {/* ---------------- Colour theme ---------------- */}
         <section className={card}>
-          <h2 className="mb-1 font-medium">Portal theme</h2>
+          <h2 className="mb-1 font-medium">Colour theme</h2>
           <p className="mb-4 text-sm text-stone-500">
-            The accent colour clients see on their portal — header, buttons, and links.
+            The accent colour across your dashboard and the client portal — headers, buttons, links,
+            and highlights.
           </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {(Object.keys(THEMES) as ThemeKey[]).map((key) => {

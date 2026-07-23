@@ -48,20 +48,17 @@ export function LiveThemeSwitcher({ targetId = "features-root" }: { targetId?: s
         }}
       >
         <PaintBrushBroad size={18} weight="fill" aria-hidden />
-        <span className="text-sm font-semibold">Brand it in one click</span>
+        <span className="text-sm font-semibold">Colour theme</span>
       </div>
 
       <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="max-w-md">
           <h3 className="font-display text-lg font-bold tracking-tight">
-            Your clients' portal, your colours
+            Change the theme for your pages and client portal
           </h3>
           <p className="mt-1 text-sm leading-relaxed text-stone-500">
-            Pick a theme and a font in Settings; the client portal — header, buttons, links —
-            repaints instantly.{" "}
-            <span className="font-medium text-brand-700">
-              Try it below: this whole page changes on the fly.
-            </span>
+            Pick a colour theme in Settings and it applies to your dashboard and the client portal.
+            The swatches below recolour this page so you can see it.
           </p>
         </div>
 

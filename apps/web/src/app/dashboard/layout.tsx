@@ -6,7 +6,7 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { SupportTicketWidget } from "@/components/support-ticket-widget";
 import { VoiceWidget } from "@/components/voice-widget";
 import { openBillingPortal } from "@/lib/actions/billing";
-import { priorityVars, tenantAppearance } from "@/lib/appearance";
+import { brandRamp, priorityVars, tenantAppearance } from "@/lib/appearance";
 import { DEMO_SLUG } from "@/lib/demo";
 import { getTenantPlan } from "@/lib/plans";
 import { getSession, listTenants } from "@/lib/session";
@@ -73,8 +73,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const isDemoTenant = active?.slug === DEMO_SLUG;
 
+  // The colour theme paints the whole dashboard the same way it paints the
+  // portal — overriding the brand ramp reskins every brand class, sidebar
+  // included. Forest is the native palette, so skip the override there and
+  // leave existing default workspaces pixel-identical.
+  const themeVars = appearance.theme === "forest" ? {} : brandRamp(appearance.theme);
+
   return (
-    <div className="flex min-h-screen" style={priorityVars(appearance)}>
+    <div
+      className="flex min-h-screen"
+      style={{ ...themeVars, ...priorityVars(appearance) } as React.CSSProperties}
+    >
       {isDemoTenant && <DemoWatermark />}
       <a
         href="#main"
