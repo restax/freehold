@@ -674,6 +674,7 @@ model Organization {
   vaultCredentials        VaultCredential[]
   vaultAccessLogs         VaultAccessLog[]
   auditLogs               AuditLog[]
+  transactionActivity     TransactionActivity[]
   contactNotes            ContactNote[]
   clientNotes             ClientNote[]
   clientAgents            ClientAgent[]
@@ -761,6 +762,11 @@ model Client {
   /// One per client because SkySlope issues AccessKey/Secret per user, not
   /// per brokerage. Null = not connected.
   skyslopeConfig        Json?                @map("skyslope_config")
+  /// Per-client staleness thresholds, overriding the workspace defaults:
+  /// {staleDays?, criticalWindowDays?, criticalStaleDays?}. Some clients want
+  /// to hear about a quiet file sooner than others. Unset keys fall back to
+  /// the defaults in lib/transaction-alerts.ts.
+  alertConfig           Json?                @map("alert_config")
   /// Compliance: every transaction for this client follows the assigned
   /// checklist. Switch complianceEnabled off to exempt the client entirely
   /// (leaving no checklist assigned is also inert).
@@ -1048,6 +1054,13 @@ model Transaction {
   proposedDates     Json?                   @map("proposed_dates")
   contractDate      DateTime?               @map("contract_date") @db.Date
   closeDate         DateTime?               @map("close_date") @db.Date
+  /// Critical dates, in escalation priority order: closing (above), then
+  /// mortgage commitment, then the inspection deadline. Inside the alert
+  /// window before any of these, a file is called stale far sooner — see
+  /// lib/transaction-alerts.ts. Kept as first-class columns (not tasks) so
+  /// the alert query never depends on task titles matching a phrase.
+  mortgageCommitmentDate DateTime?          @map("mortgage_commitment_date") @db.Date
+  inspectionDeadlineDate DateTime?          @map("inspection_deadline_date") @db.Date
   notes             String?
   customFields      Json?                   @map("custom_fields")
   /// Parties pulled from the contract (buyer, seller, attorneys, title, agents)
@@ -1076,6 +1089,7 @@ model Transaction {
   intakeSubmissions IntakeSubmission[]
   compliance        TransactionCompliance[]
   vendorOrders      VendorOrder[]
+  activity          TransactionActivity[]
 
   @@index([tenantId, status])
   @@map("transaction")
@@ -1278,6 +1292,35 @@ model VaultCredential {
 
   @@index([tenantId])
   @@map("vault_credential")
+}
+
+/// "This file is being worked" — one row per meaningful action a user takes
+/// on a transaction (task completed, document uploaded, email sent, dates
+/// changed). Deliberately separate from AuditLog: that table is the low-volume
+/// compliance record of sensitive events and is read unfiltered by the
+/// Settings audit view, so routine work would drown it. This one is
+/// high-volume, transaction-scoped, and indexed for the hot "when was this
+/// last touched, by whom" lookup that drives every staleness alert.
+///
+/// actorName is denormalized on purpose: `user` is a Better Auth table
+/// outside tenant RLS, so a briefing or dashboard row must never need to join
+/// across that boundary just to print who did something.
+model TransactionActivity {
+  id            String       @id @default(uuid())
+  tenantId      String       @map("tenant_id")
+  tenant        Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactionId String       @map("transaction_id")
+  transaction   Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  actorId       String?      @map("actor_id")
+  actorName     String       @map("actor_name")
+  /// Stable machine key (task.completed, document.uploaded, …) for grouping.
+  action        String
+  /// Human sentence shown in the UI, the briefing email, and the PDF.
+  summary       String
+  createdAt     DateTime     @default(now())
+
+  @@index([tenantId, transactionId, createdAt])
+  @@map("transaction_activity")
 }
 
 model AuditLog {

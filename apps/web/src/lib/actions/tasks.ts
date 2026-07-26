@@ -3,6 +3,7 @@
 import { TaskStatus, withTenant } from "@freehold/db";
 import { instantiatePlan, type PlanTaskTemplate } from "@freehold/workflows";
 import { revalidatePath } from "next/cache";
+import { activityTitle, logActivity } from "@/lib/activity";
 import { fireTaskTemplateEmail } from "@/lib/auto-emails";
 import { confirmed, dateOnly, str } from "@/lib/forms";
 import { guestMaySeeTransaction, requireTenant } from "@/lib/tenant";
@@ -14,7 +15,7 @@ function revalidateTaskViews(transactionId: string | null) {
 }
 
 export async function createTask(formData: FormData) {
-  const { tenantId, userId } = await requireTenant();
+  const { tenantId, userId, session } = await requireTenant();
   const title = str(formData, "title");
   if (!title) return;
   const transactionId = str(formData, "transactionId") || null;
@@ -29,6 +30,13 @@ export async function createTask(formData: FormData) {
       },
     }),
   );
+  logActivity({
+    tenantId,
+    transactionId,
+    actor: session.user,
+    action: "task.created",
+    summary: `Added task “${activityTitle(title)}”`,
+  });
   revalidateTaskViews(transactionId);
 }
 
@@ -42,49 +50,64 @@ export async function toggleTask(formData: FormData) {
   if (transactionId && !(await guestMaySeeTransaction(tenantId, session.user.id, transactionId))) {
     return;
   }
-  const completed = await withTenant(tenantId, async (tx) => {
+  const { title, nowDone } = await withTenant(tenantId, async (tx) => {
     const task = await tx.task.findUniqueOrThrow({
       where: { id },
       select: { status: true, title: true, emailTemplateId: true, autoSendEmail: true },
     });
-    const nowDone = task.status !== TaskStatus.DONE;
+    const done = task.status !== TaskStatus.DONE;
     await tx.task.update({
       where: { id },
       data: {
-        status: nowDone ? TaskStatus.DONE : TaskStatus.OPEN,
-        completedAt: nowDone ? new Date() : null,
+        status: done ? TaskStatus.DONE : TaskStatus.OPEN,
+        completedAt: done ? new Date() : null,
       },
     });
-    return nowDone ? task.title : null;
+    return { title: task.title, nowDone: done };
   });
-  if (completed !== null && transactionId) {
+  if (nowDone && transactionId) {
     // Optional automation: the task's email, merged and sent to the client
     // (quiet hours respected via the outbox).
     fireTaskTemplateEmail(tenantId, transactionId, id, session.user);
   }
-  if (completed !== null) {
-    await emitWebhook(tenantId, "task.completed", { id, title: completed, transactionId });
+  if (nowDone) {
+    await emitWebhook(tenantId, "task.completed", { id, title, transactionId });
   }
+  // Reopening is activity too — it means someone looked at the file.
+  logActivity({
+    tenantId,
+    transactionId,
+    actor: session.user,
+    action: nowDone ? "task.completed" : "task.reopened",
+    summary: `${nowDone ? "Completed" : "Reopened"} task “${activityTitle(title)}”`,
+  });
   revalidateTaskViews(transactionId);
 }
 
 export async function deleteTask(formData: FormData) {
-  const { tenantId } = await requireTenant();
+  const { tenantId, session } = await requireTenant();
   const id = str(formData, "id");
   if (!id || !confirmed(formData)) return;
   const transactionId = str(formData, "transactionId") || null;
-  await withTenant(tenantId, (tx) => tx.task.delete({ where: { id } }));
+  const removed = await withTenant(tenantId, (tx) => tx.task.delete({ where: { id } }));
+  logActivity({
+    tenantId,
+    transactionId,
+    actor: session.user,
+    action: "task.deleted",
+    summary: `Deleted task “${activityTitle(removed.title)}”`,
+  });
   revalidateTaskViews(transactionId);
 }
 
 /** Instantiate an action plan's template tasks onto a transaction. */
 export async function applyActionPlan(formData: FormData) {
-  const { tenantId, userId } = await requireTenant();
+  const { tenantId, userId, session } = await requireTenant();
   const transactionId = str(formData, "transactionId");
   const planId = str(formData, "planId");
   if (!transactionId || !planId) return;
 
-  await withTenant(tenantId, async (tx) => {
+  const planName = await withTenant(tenantId, async (tx) => {
     const [txn, plan, maxSort] = await Promise.all([
       tx.transaction.findUniqueOrThrow({
         where: { id: transactionId },
@@ -159,6 +182,14 @@ export async function applyActionPlan(formData: FormData) {
         });
       }
     }
+    return plan.name;
+  });
+  logActivity({
+    tenantId,
+    transactionId,
+    actor: session.user,
+    action: "plan.applied",
+    summary: `Applied action plan “${activityTitle(planName)}”`,
   });
   revalidateTaskViews(transactionId);
 }

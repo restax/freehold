@@ -1,6 +1,6 @@
 "use server";
 
-import { ClientType, EsignProvider, withTenant } from "@freehold/db";
+import { ClientType, EsignProvider, Prisma, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logAudit } from "@/lib/audit";
@@ -121,6 +121,37 @@ export async function removeClientAgent(formData: FormData) {
 }
 
 /** Per-client automated-email switches (intro, post-close). */
+/**
+ * Per-client staleness thresholds. A blank field clears that override and
+ * falls back to the workspace default, so "leave it alone" and "set it to
+ * something" stay distinguishable — clearing all three removes the config
+ * entirely rather than freezing today's defaults into the row.
+ */
+export async function saveClientAlertConfig(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  if (!id) return;
+  const num = (key: string): number | undefined => {
+    const raw = String(formData.get(key) ?? "").trim();
+    if (raw === "") return undefined;
+    const n = Number(raw);
+    return Number.isFinite(n) ? Math.round(n) : undefined;
+  };
+  const cfg: Record<string, number> = {};
+  for (const key of ["staleDays", "criticalWindowDays", "criticalStaleDays"]) {
+    const v = num(key);
+    if (v !== undefined) cfg[key] = v;
+  }
+  await withTenant(tenantId, (tx) =>
+    tx.client.update({
+      where: { id },
+      data: { alertConfig: Object.keys(cfg).length > 0 ? cfg : Prisma.DbNull },
+    }),
+  );
+  revalidatePath(`/dashboard/clients/${id}`);
+  revalidatePath("/dashboard");
+}
+
 export async function saveClientEmailPrefs(formData: FormData) {
   const { tenantId } = await requireTenant();
   const id = str(formData, "id");

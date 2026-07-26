@@ -2,6 +2,7 @@ import { PartyRole, prisma, TransactionSide, TransactionStatus, withTenant } fro
 import { Warning } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ActivityPanel } from "@/components/activity-panel";
 import { Avatar } from "@/components/avatar";
 import { Badge, EnvelopeBadge, ExtractionBadge } from "@/components/badges";
 import { CcEmailPill } from "@/components/cc-email-pill";
@@ -60,6 +61,7 @@ import {
   withdrawDateChange,
 } from "@/lib/actions/transactions";
 import { type ContractParty, PARTY_LABEL, partyLabel } from "@/lib/ai/contract-schema";
+import { transactionAlert } from "@/lib/alerts";
 import { emailContextForTransaction, transactionMergeContext } from "@/lib/auto-emails";
 import {
   SLOT_LABEL as COMPLIANCE_SLOT_LABEL,
@@ -242,6 +244,10 @@ export default async function TransactionDetailPage({
   // blocked write bounced back here.
   const gap = await withTenant(tenantId, (tx) => gapForTransaction(tx, txn.id));
 
+  // Last-touched record + staleness verdict, computed by the same helper the
+  // dashboard and the daily briefing use.
+  const alert = await transactionAlert(tenantId, txn.id);
+
   const portalBase = await portalOrigin(tenantId);
   // Pro-AI state for this transaction: proActive = may use AI here (paid plan,
   // self-host, or a Free workspace that spent a credit on it); credits = the
@@ -314,6 +320,8 @@ export default async function TransactionDetailPage({
   };
   addMarker(txn.contractDate, "Contract date", "contract");
   addMarker(txn.closeDate, "Closing", "close");
+  addMarker(txn.mortgageCommitmentDate, "Mortgage commitment", "deadline");
+  addMarker(txn.inspectionDeadlineDate, "Inspection deadline", "deadline");
   addMarker(txn.listDate, "List date", "other");
   addMarker(txn.onMarketDate, "On market", "other");
   addMarker(txn.expireDate, "Listing expires", "other");
@@ -324,7 +332,7 @@ export default async function TransactionDetailPage({
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
           <Link href="/dashboard/transactions" className="text-sm text-stone-500 hover:underline">
@@ -351,6 +359,8 @@ export default async function TransactionDetailPage({
           )}
         </div>
       </div>
+
+      {alert && <ActivityPanel alert={alert} />}
 
       {licenseError && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
@@ -383,6 +393,8 @@ export default async function TransactionDetailPage({
                   ["On market", txn.onMarketDate],
                   ["Contract", txn.contractDate],
                   ["Close", txn.closeDate],
+                  ["Mortgage commitment", txn.mortgageCommitmentDate],
+                  ["Inspection deadline", txn.inspectionDeadlineDate],
                   ["Expires", txn.expireDate],
                 ] as const
               ).map(([labelText, d]) => (
@@ -685,7 +697,7 @@ export default async function TransactionDetailPage({
             </section>
           )}
           {tab === "documents" && (
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-4">
               <DocumentDropZone transactionId={txn.id} linkAction={setRequiredDocument} />
               <section className={card}>
                 <div className="mb-1 flex items-center gap-2">
@@ -1155,7 +1167,7 @@ export default async function TransactionDetailPage({
                   </p>
                   <ul className="mb-4 flex flex-col">
                     {currentRound.slots.map((slot) => (
-                      <li key={slot.id} className="border-b border-stone-100 py-3 last:border-0">
+                      <li key={slot.id} className="border-b border-stone-100 py-2 last:border-0">
                         <div className="flex flex-wrap items-center gap-3">
                           <span className="font-medium">{slot.name}</span>
                           {slot.required ? (
@@ -1478,6 +1490,28 @@ export default async function TransactionDetailPage({
                       name="closeDate"
                       type="date"
                       defaultValue={txn.closeDate ? fmtDate(txn.closeDate) : ""}
+                      className={input}
+                    />
+                  </label>
+                  <label className={label}>
+                    Mortgage commitment
+                    <input
+                      name="mortgageCommitmentDate"
+                      type="date"
+                      defaultValue={
+                        txn.mortgageCommitmentDate ? fmtDate(txn.mortgageCommitmentDate) : ""
+                      }
+                      className={input}
+                    />
+                  </label>
+                  <label className={label}>
+                    Inspection deadline
+                    <input
+                      name="inspectionDeadlineDate"
+                      type="date"
+                      defaultValue={
+                        txn.inspectionDeadlineDate ? fmtDate(txn.inspectionDeadlineDate) : ""
+                      }
                       className={input}
                     />
                   </label>

@@ -2,6 +2,7 @@
 
 import { withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
+import { logActivity } from "@/lib/activity";
 import { logAudit } from "@/lib/audit";
 import { emailContextForTransaction } from "@/lib/auto-emails";
 import { emailEnabled, sendTenantEmail } from "@/lib/email";
@@ -111,6 +112,13 @@ export async function sendTransactionEmail(formData: FormData) {
     summary: `Emailed ${to}: "${subject.slice(0, 80)}"`,
     subjectType: "transaction",
     subjectId: transactionId,
+  });
+  logActivity({
+    tenantId,
+    transactionId,
+    actor: session.user,
+    action: "email.sent",
+    summary: `Emailed ${to} — “${subject.slice(0, 60)}”`,
   });
   revalidatePath(`/dashboard/transactions/${transactionId}`);
 }

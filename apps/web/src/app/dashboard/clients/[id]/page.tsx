@@ -11,6 +11,7 @@ import {
   addClientNote,
   deleteClient,
   removeClientAgent,
+  saveClientAlertConfig,
   saveClientEmailPrefs,
 } from "@/lib/actions/clients";
 import { setClientCompliance } from "@/lib/actions/compliance";
@@ -21,7 +22,18 @@ import { fmtDate, fmtMoney } from "@/lib/format";
 import { portalOrigin } from "@/lib/portal";
 import { decodeSkyslopeConfig, maskKey, parseSkyslopeConfig, skyslopeState } from "@/lib/skyslope";
 import { requireAdminTenant } from "@/lib/tenant";
-import { btn, btnGhost, card, input, label as labelCls, td, th, trHover } from "@/lib/ui";
+import { DEFAULT_ALERT_CONFIG } from "@/lib/transaction-alerts";
+import {
+  btn,
+  btnGhost,
+  card,
+  input,
+  label as labelCls,
+  tableWrap,
+  td,
+  th,
+  trHover,
+} from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +95,13 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const addableContacts = contacts.filter((c) => !agentIds.has(c.id));
   const legacyAgentLinks = client.portalLinks.filter((pl) => !pl.contactId);
   const emailPrefs = parseEmailPrefs(client.emailPrefs);
+  // The *stored* overrides, not the resolved config: an empty input means
+  // "use the workspace default", so the placeholder shows what that default is.
+  const alertCfg = (client.alertConfig ?? {}) as Partial<{
+    staleDays: number;
+    criticalWindowDays: number;
+    criticalStaleDays: number;
+  }>;
 
   // SkySlope: the stored key is only ever shown masked, so decrypt just enough
   // to render its last four. The full value needs the audited reveal.
@@ -98,7 +117,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <Link href="/dashboard/clients" className="text-sm text-stone-500 hover:underline">
           ← Clients
@@ -124,35 +143,37 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             </Link>
           </p>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr>
-                <th className={th}>Property</th>
-                <th className={th}>Status</th>
-                <th className={th}>Price</th>
-                <th className={th}>Close date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {client.transactions.map((t) => (
-                <tr key={t.id} className={trHover}>
-                  <td className={td}>
-                    <Link
-                      href={`/dashboard/transactions/${t.id}`}
-                      className="font-medium text-brand-700 hover:text-brand-600"
-                    >
-                      {t.propertyAddress}
-                    </Link>
-                  </td>
-                  <td className={td}>
-                    <StatusBadge status={t.status} />
-                  </td>
-                  <td className={td}>{fmtMoney(t.purchasePrice)}</td>
-                  <td className={td}>{fmtDate(t.closeDate)}</td>
+          <div className={tableWrap}>
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className={th}>Property</th>
+                  <th className={th}>Status</th>
+                  <th className={th}>Price</th>
+                  <th className={th}>Close date</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {client.transactions.map((t) => (
+                  <tr key={t.id} className={trHover}>
+                    <td className={td}>
+                      <Link
+                        href={`/dashboard/transactions/${t.id}`}
+                        className="font-medium text-brand-700 hover:text-brand-600"
+                      >
+                        {t.propertyAddress}
+                      </Link>
+                    </td>
+                    <td className={td}>
+                      <StatusBadge status={t.status} />
+                    </td>
+                    <td className={td}>{fmtMoney(t.purchasePrice)}</td>
+                    <td className={td}>{fmtDate(t.closeDate)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
@@ -170,7 +191,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
               const agentLinks = client.portalLinks.filter((pl) => pl.contactId === a.contact.id);
               const activeLink = agentLinks.find((pl) => !pl.revokedAt);
               return (
-                <li key={a.id} className="border-b border-stone-100 py-3 last:border-0">
+                <li key={a.id} className="border-b border-stone-100 py-2 last:border-0">
                   <div className="flex flex-wrap items-center gap-3">
                     <Link
                       href={`/dashboard/contacts/${a.contact.id}`}
@@ -355,63 +376,65 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             </Link>
           </p>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr>
-                <th className={th}>System</th>
-                <th className={th}>Belongs to</th>
-                <th className={th}>Username</th>
-                <th className={th}>Secret</th>
-                <th className={th}>URL</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                ...client.credentials.map((c) => ({ ...c, who: client.name, contactId: null })),
-                ...client.agents.flatMap((a) =>
-                  a.contact.credentials.map((c) => ({
-                    ...c,
-                    who: a.contact.name,
-                    contactId: a.contact.id,
-                  })),
-                ),
-              ].map((c) => (
-                <tr key={c.id} className={trHover}>
-                  <td className={`${td} font-medium`}>{c.system}</td>
-                  <td className={td}>
-                    {c.contactId ? (
-                      <Link
-                        href={`/dashboard/contacts/${c.contactId}`}
-                        className="text-brand-700 hover:underline"
-                      >
-                        {c.who}
-                      </Link>
-                    ) : (
-                      c.who
-                    )}
-                  </td>
-                  <td className={td}>{c.username}</td>
-                  <td className={td}>
-                    <RevealCredential credentialId={c.id} />
-                  </td>
-                  <td className={td}>
-                    {c.url ? (
-                      <a
-                        href={c.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-brand-600 hover:underline"
-                      >
-                        open
-                      </a>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
+          <div className={tableWrap}>
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className={th}>System</th>
+                  <th className={th}>Belongs to</th>
+                  <th className={th}>Username</th>
+                  <th className={th}>Secret</th>
+                  <th className={th}>URL</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {[
+                  ...client.credentials.map((c) => ({ ...c, who: client.name, contactId: null })),
+                  ...client.agents.flatMap((a) =>
+                    a.contact.credentials.map((c) => ({
+                      ...c,
+                      who: a.contact.name,
+                      contactId: a.contact.id,
+                    })),
+                  ),
+                ].map((c) => (
+                  <tr key={c.id} className={trHover}>
+                    <td className={`${td} font-medium`}>{c.system}</td>
+                    <td className={td}>
+                      {c.contactId ? (
+                        <Link
+                          href={`/dashboard/contacts/${c.contactId}`}
+                          className="text-brand-700 hover:underline"
+                        >
+                          {c.who}
+                        </Link>
+                      ) : (
+                        c.who
+                      )}
+                    </td>
+                    <td className={td}>{c.username}</td>
+                    <td className={td}>
+                      <RevealCredential credentialId={c.id} />
+                    </td>
+                    <td className={td}>
+                      {c.url ? (
+                        <a
+                          href={c.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-brand-600 hover:underline"
+                        >
+                          open
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
         <p className="mt-3 text-xs text-stone-400">
           Add or delete credentials in the{" "}
@@ -514,7 +537,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
               return (
                 <li
                   key={pl.id}
-                  className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2.5 last:border-0"
+                  className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 last:border-0"
                 >
                   <span
                     className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -622,6 +645,63 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             </span>
           )}
         </form>
+      </section>
+
+      <section className={card}>
+        <h2 className="mb-1 font-medium">Quiet-file alerts</h2>
+        <p className="mb-3 text-sm text-stone-500">
+          How long one of {client.name}'s files may sit untouched before it's flagged — on the
+          dashboard, the transaction, and the daily briefing. Counted in business days, so weekends
+          never age a file. Leave a box empty to use the workspace default.
+        </p>
+        <form action={saveClientAlertConfig} className="flex flex-wrap items-end gap-3">
+          <input type="hidden" name="id" value={client.id} />
+          <label className={labelCls}>
+            Flag after
+            <input
+              name="staleDays"
+              type="number"
+              min={1}
+              max={60}
+              defaultValue={alertCfg.staleDays ?? ""}
+              placeholder={String(DEFAULT_ALERT_CONFIG.staleDays)}
+              className={`${input} w-28`}
+            />
+            <span className="text-xs text-stone-400">business days quiet</span>
+          </label>
+          <label className={labelCls}>
+            Tighten within
+            <input
+              name="criticalWindowDays"
+              type="number"
+              min={1}
+              max={90}
+              defaultValue={alertCfg.criticalWindowDays ?? ""}
+              placeholder={String(DEFAULT_ALERT_CONFIG.criticalWindowDays)}
+              className={`${input} w-28`}
+            />
+            <span className="text-xs text-stone-400">days of a critical date</span>
+          </label>
+          <label className={labelCls}>
+            Then flag after
+            <input
+              name="criticalStaleDays"
+              type="number"
+              min={1}
+              max={60}
+              defaultValue={alertCfg.criticalStaleDays ?? ""}
+              placeholder={String(DEFAULT_ALERT_CONFIG.criticalStaleDays)}
+              className={`${input} w-28`}
+            />
+            <span className="text-xs text-stone-400">business days quiet</span>
+          </label>
+          <button type="submit" className={btnGhost}>
+            Save alert timing
+          </button>
+        </form>
+        <p className="mt-2 text-xs text-stone-400">
+          Critical dates, in priority order: closing, mortgage commitment, inspection deadline.
+        </p>
       </section>
 
       <section className={card}>

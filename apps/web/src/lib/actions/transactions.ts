@@ -3,6 +3,7 @@
 import { type TenantTx, TransactionSide, TransactionStatus, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { logActivity } from "@/lib/activity";
 import type { ContractParty } from "@/lib/ai/contract-schema";
 import { logAudit } from "@/lib/audit";
 import { fireIntroEmail, firePostCloseEmail } from "@/lib/auto-emails";
@@ -26,6 +27,10 @@ function commonFields(formData: FormData) {
     purchasePrice: intOr(formData, "purchasePrice"),
     contractDate: dateOnly(formData, "contractDate"),
     closeDate: dateOnly(formData, "closeDate"),
+    // Critical dates the staleness alerts escalate on. Unlike closeDate these
+    // aren't contract-governed, so they edit directly without an amendment.
+    mortgageCommitmentDate: dateOnly(formData, "mortgageCommitmentDate"),
+    inspectionDeadlineDate: dateOnly(formData, "inspectionDeadlineDate"),
     listPrice: intOr(formData, "listPrice"),
     listDate: dateOnly(formData, "listDate"),
     onMarketDate: dateOnly(formData, "onMarketDate"),
@@ -208,6 +213,13 @@ export async function updateTransaction(formData: FormData) {
       subjectId: id,
     });
   }
+  logActivity({
+    tenantId,
+    transactionId: id,
+    actor: session.user,
+    action: "transaction.updated",
+    summary: "Updated transaction details",
+  });
   revalidatePath(`/dashboard/transactions/${id}`);
   revalidatePath("/dashboard/transactions");
   revalidatePath("/dashboard");

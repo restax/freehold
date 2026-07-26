@@ -1,7 +1,9 @@
 import { prisma, withTenant } from "@freehold/db";
+import { PDFDocument, type PDFFont, type PDFPage, rgb, StandardFonts } from "pdf-lib";
+import { transactionAlerts } from "@/lib/alerts";
 import { emailEnabled, sendTenantEmail } from "@/lib/email";
 import { fmtDate, ROLE_LABEL, STATUS_LABEL } from "@/lib/format";
-import { renderTemplatePdf } from "@/lib/templates";
+import { type Staleness, stalenessMessage } from "@/lib/transaction-alerts";
 
 /**
  * Daily briefing: every morning, each opted-in workspace gets an executive
@@ -24,6 +26,9 @@ interface BriefingTxn {
   closeDate: Date | null;
   nextDeadline: { title: string; due: Date | null } | null;
   parties: BriefingParty[];
+  /** Who last worked the file and what they did; null = never touched. */
+  lastActivity: { at: Date; actorName: string; summary: string } | null;
+  staleness: Staleness | null;
 }
 
 async function briefingTransactions(tenantId: string): Promise<BriefingTxn[]> {
@@ -41,18 +46,26 @@ async function briefingTransactions(tenantId: string): Promise<BriefingTxn[]> {
       },
     }),
   );
-  return rows.map((t) => ({
-    address: t.propertyAddress,
-    status: STATUS_LABEL[t.status] ?? t.status,
-    closeDate: t.closeDate,
-    nextDeadline: t.tasks[0] ? { title: t.tasks[0].title, due: t.tasks[0].dueDate } : null,
-    parties: t.parties.map((p) => ({
-      role: ROLE_LABEL[p.role] ?? p.role,
-      name: p.contact.name,
-      email: p.contact.email,
-      phone: p.contact.phone,
-    })),
-  }));
+  // Same helper the dashboard and transaction page use, so the briefing can
+  // never disagree with the app about whether a file is flagged.
+  const alerts = new Map((await transactionAlerts(tenantId)).map((a) => [a.id, a]));
+  return rows.map((t) => {
+    const alert = alerts.get(t.id);
+    return {
+      address: t.propertyAddress,
+      status: STATUS_LABEL[t.status] ?? t.status,
+      closeDate: t.closeDate,
+      nextDeadline: t.tasks[0] ? { title: t.tasks[0].title, due: t.tasks[0].dueDate } : null,
+      parties: t.parties.map((p) => ({
+        role: ROLE_LABEL[p.role] ?? p.role,
+        name: p.contact.name,
+        email: p.contact.email,
+        phone: p.contact.phone,
+      })),
+      lastActivity: alert?.lastActivity ?? null,
+      staleness: alert?.staleness ?? null,
+    };
+  });
 }
 
 interface LicenseAlert {
@@ -114,6 +127,12 @@ function briefingText(
       const contact = [p.email, p.phone].filter(Boolean).join(" · ");
       lines.push(`  ${p.role}: ${p.name}${contact ? ` — ${contact}` : ""}`);
     }
+    lines.push(
+      t.lastActivity
+        ? `  Last touched: ${fmtDate(t.lastActivity.at)} by ${t.lastActivity.actorName} — ${t.lastActivity.summary}`
+        : "  Last touched: no activity recorded yet",
+    );
+    if (t.staleness?.stale) lines.push(`  ** ${stalenessMessage(t.staleness)}`);
     lines.push("");
   }
   return lines.join("\n");
@@ -122,7 +141,16 @@ function briefingText(
 const esc = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
 
-/** Branded HTML so the summary is readable inline, not only in the attachment. */
+/**
+ * Branded HTML so the summary is readable inline, not only in the
+ * attachment. Matches the shared transactional-email look (`email-template.ts`
+ * → `renderEmailHtml`): the same brand green header band and Georgia
+ * wordmark, so this reads as the same product as every other Freehold email
+ * rather than a one-off. Carries its own explainer + footer, since — unlike
+ * a transaction email a TC chose to send — this one goes out automatically,
+ * so the recipient needs to know what it is and how to stop it without
+ * asking anyone.
+ */
 function briefingHtml(
   txns: BriefingTxn[],
   orgName: string,
@@ -130,7 +158,7 @@ function briefingHtml(
   alerts: LicenseAlert[] = [],
 ): string {
   const alertBlock = alerts.length
-    ? `<div style="border:1px solid #fcd34d;background:#fffbeb;border-radius:10px;padding:10px 14px;margin:0 0 12px;">
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 14px;"><tr><td style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;">
         <p style="margin:0;font-weight:600;font-size:13px;color:#92400e;">License alerts</p>
         ${alerts
           .map(
@@ -138,7 +166,7 @@ function briefingHtml(
               `<p style="margin:4px 0 0;font-size:13px;color:#78350f;">${esc(alertLine(a))}</p>`,
           )
           .join("")}
-      </div>`
+      </td></tr></table>`
     : "";
   const cards = txns.length
     ? txns
@@ -147,7 +175,7 @@ function briefingHtml(
             .filter(Boolean)
             .join(" &nbsp;·&nbsp; ");
           const next = t.nextDeadline
-            ? `<p style="margin:4px 0 0;color:#57534e;font-size:13px;">Next: ${esc(
+            ? `<p style="margin:3px 0 0;color:#57534e;font-size:13px;">Next: ${esc(
                 t.nextDeadline.title,
               )}${t.nextDeadline.due ? ` (due ${fmtDate(t.nextDeadline.due)})` : ""}</p>`
             : "";
@@ -157,33 +185,368 @@ function briefingHtml(
                 .filter((x): x is string => Boolean(x))
                 .map(esc)
                 .join(" &nbsp;·&nbsp; ");
-              return `<tr><td style="padding:2px 8px 2px 0;color:#78716c;font-size:12px;white-space:nowrap;">${esc(
+              return `<tr><td style="padding:1px 8px 1px 0;color:#78716c;font-size:11px;white-space:nowrap;">${esc(
                 p.role,
-              )}</td><td style="padding:2px 0;font-size:13px;">${esc(p.name)}${
+              )}</td><td style="padding:1px 0;font-size:12px;">${esc(p.name)}${
                 contact ? ` <span style="color:#78716c;">— ${contact}</span>` : ""
               }</td></tr>`;
             })
             .join("");
-          return `<div style="border:1px solid #e7e5e4;border-radius:10px;padding:14px 16px;margin:0 0 12px;">
-            <p style="margin:0;font-weight:600;font-size:15px;">${esc(t.address)}</p>
-            <p style="margin:2px 0 0;color:#57534e;font-size:13px;">${meta}</p>${next}
-            ${parties ? `<table style="margin-top:8px;border-collapse:collapse;">${parties}</table>` : ""}
-          </div>`;
+          // Shaded last-touched strip: amber when the file is flagged, plain
+          // stone otherwise. Table + inline styles so it survives every client.
+          const flagged = Boolean(t.staleness?.stale);
+          const touched = t.lastActivity
+            ? `<strong>${fmtDate(t.lastActivity.at)}</strong> by ${esc(
+                t.lastActivity.actorName,
+              )} — ${esc(t.lastActivity.summary)}`
+            : "No activity recorded yet";
+          const flagLine =
+            t.staleness && flagged
+              ? `<p style="margin:3px 0 0;font-size:11px;font-weight:600;color:#92400e;">⚠ ${esc(
+                  stalenessMessage(t.staleness),
+                )}</p>`
+              : "";
+          const activityStrip = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 0;"><tr><td style="background:${
+            flagged ? "#fffbeb" : "#fafaf9"
+          };border:1px solid ${
+            flagged ? "#fcd34d" : "#e7e5e4"
+          };border-radius:6px;padding:7px 10px;">
+            <p style="margin:0;font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:#a8a29e;">Last touched</p>
+            <p style="margin:1px 0 0;font-size:12px;color:#44403c;">${touched}</p>${flagLine}
+          </td></tr></table>`;
+          return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px;"><tr><td style="border:1px solid ${
+            flagged ? "#fcd34d" : "#e7e5e4"
+          };border-radius:8px;padding:12px 14px;">
+            <p style="margin:0;font-weight:600;font-size:14px;">${esc(t.address)}</p>
+            <p style="margin:2px 0 0;color:#57534e;font-size:12px;">${meta}</p>${next}
+            ${parties ? `<table style="margin-top:6px;border-collapse:collapse;">${parties}</table>` : ""}
+            ${activityStrip}
+          </td></tr></table>`;
         })
         .join("")
-    : `<p style="color:#57534e;">No active transactions today.</p>`;
+    : `<p style="color:#57534e;font-size:13px;">No active transactions today.</p>`;
 
-  return `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:640px;margin:0 auto;color:#1c1917;">
-    <div style="background:#15803d;color:#fff;padding:16px 20px;border-radius:12px 12px 0 0;">
-      <p style="margin:0;font-weight:700;">${esc(orgName)} — Daily briefing</p>
-      <p style="margin:2px 0 0;font-size:13px;opacity:.9;">Active transactions as of ${dateLabel}</p>
-    </div>
-    <div style="padding:18px 20px;background:#fafaf9;border:1px solid #e7e5e4;border-top:0;border-radius:0 0 12px 12px;">
+  return `<!doctype html>
+<html>
+<head><meta charset="utf-8"/></head>
+<body style="margin:0;padding:0;background:#f5f5f4;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f4;padding:24px 12px;">
+<tr><td align="center">
+<table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;">
+  <tr>
+    <td style="background:#0b6a40;border-radius:12px 12px 0 0;padding:18px 24px;">
+      <span style="font-size:17px;font-weight:700;color:#ffffff;font-family:Georgia,serif;letter-spacing:0.01em;">${esc(orgName)}</span>
+      <p style="margin:2px 0 0;font-size:12px;color:#d7ebe1;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;">Daily transaction briefing &nbsp;·&nbsp; ${dateLabel}</p>
+    </td>
+  </tr>
+  <tr>
+    <td style="background:#f0fdf6;padding:10px 24px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;">
+      <p style="margin:0;font-size:12px;line-height:1.5;color:#166534;">
+        Automatic morning summary of every active transaction in ${esc(orgName)}, sent to workspace
+        owners and admins so no file lives in only one inbox. A full copy is attached as a PDF —
+        keep it; it's readable offline no matter what happens to your connection or ours.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td style="background:#ffffff;padding:18px 24px 6px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1c1917;">
       ${alertBlock}
       ${cards}
-      <p style="margin:14px 0 0;color:#a8a29e;font-size:12px;">A full copy is attached as a PDF. Keep this email — it's readable offline, whatever happens to your connection or ours. Powered by Freehold.</p>
-    </div>
-  </div>`;
+    </td>
+  </tr>
+  <tr>
+    <td style="background:#ffffff;border-radius:0 0 12px 12px;padding:14px 24px 20px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;">
+      <p style="margin:0 0 4px;border-top:1px solid #e7e5e4;padding-top:12px;font-size:11px;line-height:1.6;color:#78716c;">
+        <strong>Why am I getting this?</strong> You're an owner or admin on ${esc(orgName)}'s Freehold
+        workspace. Concerns about a transaction on this list? Reply to this email, or reach a workspace
+        admin directly. To stop these emails, an admin can turn it off from
+        <strong>Settings → Daily briefing</strong>.
+      </p>
+      <p style="margin:8px 0 0;font-size:11px;color:#a8a29e;">
+        Powered by <a href="https://freeholdtc.dev" style="color:#78716c;text-decoration:none;font-weight:600;">Freehold</a>
+      </p>
+    </td>
+  </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
+const PAGE: [number, number] = [612, 792];
+const MARGIN = 50;
+const HEADER_H = 92;
+const CONT_HEADER_H = 34;
+const FOOTER_H = 46;
+const GREEN = rgb(0x0b / 255, 0x6a / 255, 0x40 / 255);
+const GREEN_TINT = rgb(0xd7 / 255, 0xeb / 255, 0xe1 / 255);
+const AMBER_BG = rgb(1, 0xfb / 255, 0xeb / 255);
+const AMBER_LINE = rgb(0xfc / 255, 0xd3 / 255, 0x4d / 255);
+const AMBER_TEXT = rgb(0x78 / 255, 0x35 / 255, 0x0f / 255);
+const STONE_900 = rgb(0x1c / 255, 0x19 / 255, 0x17 / 255);
+const STONE_600 = rgb(0x57 / 255, 0x53 / 255, 0x4e / 255);
+const STONE_400 = rgb(0xa8 / 255, 0xa2 / 255, 0x9e / 255);
+const STONE_BORDER = rgb(0xe7 / 255, 0xe5 / 255, 0xe4 / 255);
+const WHITE = rgb(1, 1, 1);
+
+/**
+ * The PDF attachment, purpose-built for the briefing rather than the plain
+ * merge-letter renderer (`templates.ts` → `renderTemplatePdf`) — this one
+ * gets a branded header, an explainer of what the document is and why the
+ * recipient has it, denser bordered transaction cards instead of a raw text
+ * dump, and a page footer with the same explanation, since the PDF is what
+ * survives once it's saved to disk long after the email is gone.
+ */
+async function renderBriefingPdf(
+  txns: BriefingTxn[],
+  orgName: string,
+  dateLabel: string,
+  alerts: LicenseAlert[],
+): Promise<Buffer> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const maxWidth = PAGE[0] - MARGIN * 2;
+
+  const wrap = (line: string, f: PDFFont, size: number, width = maxWidth): string[] => {
+    const words = line.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return [""];
+    const out: string[] = [];
+    let cur = "";
+    for (const w of words) {
+      const probe = cur ? `${cur} ${w}` : w;
+      if (f.widthOfTextAtSize(probe, size) > width && cur) {
+        out.push(cur);
+        cur = w;
+      } else {
+        cur = probe;
+      }
+    }
+    if (cur) out.push(cur);
+    return out;
+  };
+
+  let page: PDFPage = doc.addPage(PAGE);
+  let y = PAGE[1];
+
+  const drawFirstHeader = () => {
+    page.drawRectangle({
+      x: 0,
+      y: PAGE[1] - HEADER_H,
+      width: PAGE[0],
+      height: HEADER_H,
+      color: GREEN,
+    });
+    page.drawText(orgName.slice(0, 60), {
+      x: MARGIN,
+      y: PAGE[1] - 38,
+      size: 18,
+      font: bold,
+      color: WHITE,
+    });
+    page.drawText(`Daily transaction briefing  ·  ${dateLabel}`, {
+      x: MARGIN,
+      y: PAGE[1] - 58,
+      size: 11,
+      font,
+      color: GREEN_TINT,
+    });
+    y = PAGE[1] - HEADER_H - 20;
+
+    const explainer =
+      `Automatic morning summary of every active transaction in ${orgName}, sent to workspace ` +
+      "owners and admins so no file lives in only one inbox. Keep this PDF — it's a permanent, " +
+      "offline record no matter what happens to your connection, your storage, or Freehold.";
+    for (const seg of wrap(explainer, font, 9.5)) {
+      page.drawText(seg, { x: MARGIN, y, size: 9.5, font, color: STONE_600 });
+      y -= 13;
+    }
+    y -= 10;
+  };
+
+  const drawContinuationHeader = () => {
+    page.drawRectangle({
+      x: 0,
+      y: PAGE[1] - CONT_HEADER_H,
+      width: PAGE[0],
+      height: CONT_HEADER_H,
+      color: STONE_BORDER,
+    });
+    page.drawText(`${orgName} — Daily briefing (continued)`, {
+      x: MARGIN,
+      y: PAGE[1] - 22,
+      size: 9,
+      font: bold,
+      color: STONE_600,
+    });
+    y = PAGE[1] - CONT_HEADER_H - 20;
+  };
+
+  const newPage = () => {
+    page = doc.addPage(PAGE);
+    drawContinuationHeader();
+  };
+
+  const ensureRoom = (needed: number) => {
+    if (y < MARGIN + FOOTER_H + needed) newPage();
+  };
+
+  drawFirstHeader();
+
+  if (alerts.length > 0) {
+    ensureRoom(20 + alerts.length * 13);
+    const boxTop = y;
+    const lines: string[] = ["License alerts", ...alerts.map(alertLine)];
+    let by = y - 14;
+    for (let i = 1; i < lines.length; i++) by -= 13;
+    const boxHeight = boxTop - by + 10;
+    page.drawRectangle({
+      x: MARGIN,
+      y: boxTop - boxHeight + 4,
+      width: maxWidth,
+      height: boxHeight,
+      color: AMBER_BG,
+      borderColor: AMBER_LINE,
+      borderWidth: 1,
+    });
+    let ay = y - 4;
+    page.drawText(lines[0], { x: MARGIN + 10, y: ay, size: 10, font: bold, color: AMBER_TEXT });
+    ay -= 15;
+    for (const line of lines.slice(1)) {
+      page.drawText(line, { x: MARGIN + 10, y: ay, size: 9.5, font, color: AMBER_TEXT });
+      ay -= 13;
+    }
+    y = ay - 6;
+  }
+
+  if (txns.length === 0) {
+    page.drawText("No active transactions today.", {
+      x: MARGIN,
+      y,
+      size: 11,
+      font,
+      color: STONE_600,
+    });
+    y -= 16;
+  }
+
+  for (const t of txns) {
+    const partyLines = t.parties.map((p) => {
+      const contact = [p.email, p.phone].filter(Boolean).join("  ·  ");
+      return `${p.role}:  ${p.name}${contact ? `  —  ${contact}` : ""}`;
+    });
+    const metaLine = [t.status, t.closeDate ? `Closing ${fmtDate(t.closeDate)}` : null]
+      .filter(Boolean)
+      .join("   ·   ");
+    const nextLine = t.nextDeadline
+      ? `Next: ${t.nextDeadline.title}${t.nextDeadline.due ? ` (due ${fmtDate(t.nextDeadline.due)})` : ""}`
+      : null;
+
+    // Shaded last-touched strip at the foot of each card. Two lines when the
+    // file is flagged (the reason gets its own line), one when it isn't.
+    const flagged = Boolean(t.staleness?.stale);
+    const touchedLine = t.lastActivity
+      ? `${fmtDate(t.lastActivity.at)} by ${t.lastActivity.actorName} — ${t.lastActivity.summary}`
+      : "No activity recorded yet";
+    const flagLine = t.staleness && flagged ? stalenessMessage(t.staleness) : null;
+    const stripHeight = 16 + (flagLine ? 22 : 11);
+
+    const bodyLines = 1 + (nextLine ? 1 : 0) + partyLines.length;
+    const cardHeight = 26 + bodyLines * 13 + stripHeight + 6;
+    ensureRoom(cardHeight + 8);
+
+    const cardTop = y;
+    page.drawRectangle({
+      x: MARGIN,
+      y: cardTop - cardHeight,
+      width: maxWidth,
+      height: cardHeight,
+      color: WHITE,
+      borderColor: flagged ? AMBER_LINE : STONE_BORDER,
+      borderWidth: 1,
+    });
+
+    let cy = cardTop - 16;
+    page.drawText(t.address.slice(0, 90), {
+      x: MARGIN + 10,
+      y: cy,
+      size: 12,
+      font: bold,
+      color: STONE_900,
+    });
+    cy -= 15;
+    page.drawText(metaLine, { x: MARGIN + 10, y: cy, size: 9.5, font, color: STONE_600 });
+    cy -= 13;
+    if (nextLine) {
+      page.drawText(nextLine, { x: MARGIN + 10, y: cy, size: 9.5, font, color: STONE_600 });
+      cy -= 13;
+    }
+    for (const line of partyLines) {
+      page.drawText(line.slice(0, 100), { x: MARGIN + 10, y: cy, size: 9, font, color: STONE_600 });
+      cy -= 13;
+    }
+
+    const stripTop = cardTop - cardHeight + stripHeight + 4;
+    page.drawRectangle({
+      x: MARGIN + 6,
+      y: stripTop - stripHeight,
+      width: maxWidth - 12,
+      height: stripHeight,
+      color: flagged ? AMBER_BG : rgb(0xfa / 255, 0xfa / 255, 0xf9 / 255),
+      borderColor: flagged ? AMBER_LINE : STONE_BORDER,
+      borderWidth: 0.5,
+    });
+    let sy = stripTop - 10;
+    page.drawText("LAST TOUCHED", { x: MARGIN + 14, y: sy, size: 6.5, font, color: STONE_400 });
+    sy -= 10;
+    for (const seg of wrap(touchedLine, font, 8.5, maxWidth - 30).slice(0, 1)) {
+      page.drawText(seg, { x: MARGIN + 14, y: sy, size: 8.5, font, color: STONE_600 });
+    }
+    if (flagLine) {
+      sy -= 11;
+      page.drawText(flagLine.slice(0, 110), {
+        x: MARGIN + 14,
+        y: sy,
+        size: 8.5,
+        font: bold,
+        color: AMBER_TEXT,
+      });
+    }
+
+    y = cardTop - cardHeight - 8;
+  }
+
+  const pages = doc.getPages();
+  const footerLines = wrap(
+    "Sent automatically to workspace owners and admins. Concerns? Reply to the briefing email, " +
+      "or a workspace admin can turn this off from Settings -> Daily briefing.",
+    font,
+    7.5,
+  );
+  pages.forEach((p, i) => {
+    p.drawLine({
+      start: { x: MARGIN, y: FOOTER_H - 8 },
+      end: { x: PAGE[0] - MARGIN, y: FOOTER_H - 8 },
+      thickness: 0.5,
+      color: STONE_BORDER,
+    });
+    let fy = FOOTER_H - 20;
+    for (const line of footerLines) {
+      p.drawText(line, { x: MARGIN, y: fy, size: 7.5, font, color: STONE_400 });
+      fy -= 10;
+    }
+    const pageNum = `Freehold  ·  Page ${i + 1} of ${pages.length}`;
+    p.drawText(pageNum, {
+      x: PAGE[0] - MARGIN - font.widthOfTextAtSize(pageNum, 7.5),
+      y: 8,
+      size: 7.5,
+      font,
+      color: STONE_400,
+    });
+  });
+
+  return Buffer.from(await doc.save());
 }
 
 async function recipients(tenantId: string): Promise<string[]> {
@@ -225,7 +588,7 @@ export async function runDailyBriefings(): Promise<BriefingRunSummary> {
       const alerts = await briefingLicenseAlerts(org.id);
       const text = briefingText(txns, org.name, dateLabel, alerts);
       const html = briefingHtml(txns, org.name, dateLabel, alerts);
-      const pdf = await renderTemplatePdf(`${org.name} — Daily briefing (${dateLabel})`, text);
+      const pdf = await renderBriefingPdf(txns, org.name, dateLabel, alerts);
       const to = await recipients(org.id);
       for (const addr of to) {
         await sendTenantEmail({

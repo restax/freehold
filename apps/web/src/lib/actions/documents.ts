@@ -2,6 +2,7 @@
 
 import { withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
+import { logActivity } from "@/lib/activity";
 import { logAudit } from "@/lib/audit";
 import { confirmed, str } from "@/lib/forms";
 import { deleteObject, putObject } from "@/lib/storage";
@@ -44,6 +45,13 @@ export async function uploadDocument(formData: FormData) {
     filename,
     contentType,
     sizeBytes: file.size,
+  });
+  logActivity({
+    tenantId,
+    transactionId,
+    actor: session.user,
+    action: "document.uploaded",
+    summary: `Uploaded ${filename}`,
   });
   revalidatePath(`/dashboard/transactions/${transactionId}`);
 }
@@ -114,11 +122,18 @@ export async function replaceDocument(formData: FormData) {
     contentType,
     sizeBytes: file.size,
   });
+  logActivity({
+    tenantId,
+    transactionId: prior.transactionId,
+    actor: session.user,
+    action: "document.replaced",
+    summary: `Replaced ${filename} (now v${created.version})`,
+  });
   revalidatePath(`/dashboard/transactions/${prior.transactionId}`);
 }
 
 export async function deleteDocument(formData: FormData) {
-  const { tenantId } = await requireTenant();
+  const { tenantId, session } = await requireTenant();
   const id = str(formData, "id");
   const transactionId = str(formData, "transactionId");
   if (!id || !confirmed(formData)) return;
@@ -132,6 +147,7 @@ export async function deleteDocument(formData: FormData) {
         tenantId: true,
         isCurrent: true,
         replacesId: true,
+        filename: true,
       },
     });
     // Deleting a current version promotes the one it replaced back to current,
@@ -152,6 +168,13 @@ export async function deleteDocument(formData: FormData) {
     data: null,
     storageProvider: doc.storageProvider,
     tenantId: doc.tenantId,
+  });
+  logActivity({
+    tenantId,
+    transactionId,
+    actor: session.user,
+    action: "document.deleted",
+    summary: `Deleted ${doc.filename}`,
   });
   revalidatePath(`/dashboard/transactions/${transactionId}`);
 }

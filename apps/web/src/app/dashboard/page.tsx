@@ -6,6 +6,7 @@ import { DemoWelcome } from "@/components/demo-welcome";
 import { EmptyState } from "@/components/empty-state";
 import { HubNews } from "@/components/hub-news";
 import { toggleTask } from "@/lib/actions/tasks";
+import { rankAlerts, transactionAlerts } from "@/lib/alerts";
 import { fmtDate, STATUS_LABEL } from "@/lib/format";
 import {
   byPriorityThenDate,
@@ -15,7 +16,7 @@ import {
   rowHighlightStyle,
 } from "@/lib/priority";
 import { requireTenant } from "@/lib/tenant";
-import { card, td, th, trHover } from "@/lib/ui";
+import { card, tableWrap, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +72,7 @@ async function GuestDashboard({ tenantId, userId }: { tenantId: string; userId: 
   });
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <p className="text-sm text-stone-500">Covering files</p>
         <h1 className="font-display text-2xl font-bold tracking-tight">Your files</h1>
@@ -153,6 +154,10 @@ export default async function DashboardPage() {
   const soon = new Date(now);
   soon.setUTCDate(soon.getUTCDate() + 7);
   const weekAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+
+  // Files that have gone quiet, worst first — same verdict the transaction
+  // page and the daily briefing show.
+  const needsAttention = rankAlerts(await transactionAlerts(tenantId, now));
 
   const { counts, openTasks, closings, doneThisWeek, prospecting, recent, licenseAlerts, myFiles } =
     await withTenant(tenantId, async (tx) => ({
@@ -303,7 +308,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <DemoWelcome />
       <div>
         <p className="text-sm text-stone-500">{heading}</p>
@@ -324,6 +329,62 @@ export default async function DashboardPage() {
             Review on Team
           </Link>
         </p>
+      )}
+
+      {/* Quiet files, ahead of the day's panels: a file nobody has touched is
+          the thing most likely to go wrong, and it's invisible everywhere
+          else on this page. */}
+      {needsAttention.length > 0 && (
+        <section className={`${card} border-amber-300/70`}>
+          <h2 className="mb-1 flex items-center gap-2 font-medium">
+            <Warning size={18} weight="fill" className="text-amber-600" aria-hidden />
+            Needs attention
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+              {needsAttention.length}
+            </span>
+          </h2>
+          <p className="mb-3 text-sm text-stone-500">
+            Quiet files, and files with a critical date close enough that a quiet day matters.
+          </p>
+          <ul className="flex flex-col divide-y divide-stone-100">
+            {needsAttention.slice(0, 8).map((a) => (
+              <li key={a.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2">
+                <Link
+                  href={`/dashboard/transactions/${a.id}`}
+                  className="text-sm font-medium text-brand-700 hover:text-brand-600"
+                >
+                  {a.propertyAddress}
+                </Link>
+                {a.staleness.stale && (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
+                    {a.staleness.quietDays}d quiet
+                  </span>
+                )}
+                {a.staleness.escalatedBy && (
+                  <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-600">
+                    {a.staleness.escalatedBy.label}{" "}
+                    {a.staleness.escalatedBy.daysAway === 0
+                      ? "today"
+                      : `in ${a.staleness.escalatedBy.daysAway}d`}
+                  </span>
+                )}
+                <span className="ml-auto text-xs text-stone-400">
+                  {a.lastActivity
+                    ? `${a.lastActivity.actorName} · ${a.lastActivity.summary}`
+                    : "never touched"}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {needsAttention.length > 8 && (
+            <p className="mt-2 text-xs text-stone-400">
+              +{needsAttention.length - 8} more.{" "}
+              <Link href="/dashboard/transactions" className="text-brand-700 underline">
+                See all transactions
+              </Link>
+            </p>
+          )}
+        </section>
       )}
 
       {/* Panels flow into 2 columns on wide screens, 3 on ultrawide — a
@@ -668,35 +729,37 @@ export default async function DashboardPage() {
               </Link>
             </EmptyState>
           ) : (
-            <table className="w-full">
-              <thead>
-                <tr>
-                  <th className={th}>Property</th>
-                  <th className={th}>Client</th>
-                  <th className={th}>Status</th>
-                  <th className={th}>Close date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recent.map((t) => (
-                  <tr key={t.id} className={trHover}>
-                    <td className={td}>
-                      <Link
-                        href={`/dashboard/transactions/${t.id}`}
-                        className="font-medium text-brand-700 hover:text-brand-600"
-                      >
-                        {t.propertyAddress}
-                      </Link>
-                    </td>
-                    <td className={td}>{t.client?.name ?? "—"}</td>
-                    <td className={td}>
-                      <StatusBadge status={t.status} />
-                    </td>
-                    <td className={td}>{fmtDate(t.closeDate)}</td>
+            <div className={tableWrap}>
+              <table className="w-full">
+                <thead>
+                  <tr>
+                    <th className={th}>Property</th>
+                    <th className={th}>Client</th>
+                    <th className={th}>Status</th>
+                    <th className={th}>Close date</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {recent.map((t) => (
+                    <tr key={t.id} className={trHover}>
+                      <td className={td}>
+                        <Link
+                          href={`/dashboard/transactions/${t.id}`}
+                          className="font-medium text-brand-700 hover:text-brand-600"
+                        >
+                          {t.propertyAddress}
+                        </Link>
+                      </td>
+                      <td className={td}>{t.client?.name ?? "—"}</td>
+                      <td className={td}>
+                        <StatusBadge status={t.status} />
+                      </td>
+                      <td className={td}>{fmtDate(t.closeDate)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
 
