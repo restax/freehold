@@ -88,13 +88,23 @@ const GROUPS: NavGroup[] = [
   },
 ];
 
+/**
+ * One sidebar row. Below lg the sidebar is a 56px icon rail, so the label is
+ * hidden and the icon centres; the accessible name still reaches screen
+ * readers (and a tooltip reaches the mouse) via `title`.
+ */
+export const navRowCls =
+  "flex items-center justify-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors lg:justify-start";
+export const navLabelCls = "hidden lg:inline";
+
 function NavLink({ item, active, badge = 0 }: { item: NavItem; active: boolean; badge?: number }) {
   const IconComponent = item.icon;
   return (
     <Link
       href={item.href}
+      title={item.label}
       aria-current={active ? "page" : undefined}
-      className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors ${
+      className={`${navRowCls} ${
         active
           ? "bg-brand-50 font-medium text-brand-800"
           : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
@@ -103,15 +113,15 @@ function NavLink({ item, active, badge = 0 }: { item: NavItem; active: boolean; 
       <IconComponent
         size={16}
         weight={active ? "fill" : "regular"}
-        className={active ? "text-brand-700" : "text-stone-400"}
+        className={`shrink-0 ${active ? "text-brand-700" : "text-stone-400"}`}
         aria-hidden
       />
-      {item.label}
+      <span className={navLabelCls}>{item.label}</span>
       {badge > 0 && (
         <span
           role="status"
           aria-label={`${badge} new`}
-          className="ml-auto inline-flex min-w-4 animate-bounce items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-semibold leading-4 text-white"
+          className="inline-flex min-w-4 animate-bounce items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-semibold leading-4 text-white lg:ml-auto"
         >
           {badge > 9 ? "9+" : badge}
         </span>
@@ -192,7 +202,7 @@ export function DashboardNav({
       {groups.map((group) => (
         <div key={group.label ?? "top"} className="flex flex-col gap-0.5">
           {group.label && (
-            <p className="mb-1 mt-5 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-400">
+            <p className="mb-1 mt-5 hidden px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-400 lg:block">
               {group.label}
             </p>
           )}
@@ -209,11 +219,12 @@ export function DashboardNav({
           {group.label === "Work" && (
             <button
               type="button"
+              title="Voice search"
               onClick={() => window.dispatchEvent(new CustomEvent(VOICE_OPEN_EVENT))}
-              className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900"
+              className={`${navRowCls} text-left text-stone-600 hover:bg-stone-100 hover:text-stone-900`}
             >
-              <Microphone size={16} className="text-stone-400" aria-hidden />
-              Voice search
+              <Microphone size={16} className="shrink-0 text-stone-400" aria-hidden />
+              <span className={navLabelCls}>Voice search</span>
             </button>
           )}
         </div>
@@ -228,8 +239,9 @@ export function SettingsNavLink() {
   return (
     <Link
       href="/dashboard/settings"
+      title="Settings"
       aria-current={active ? "page" : undefined}
-      className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors ${
+      className={`${navRowCls} ${
         active
           ? "bg-brand-50 font-medium text-brand-800"
           : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
@@ -238,10 +250,10 @@ export function SettingsNavLink() {
       <GearSix
         size={16}
         weight={active ? "fill" : "regular"}
-        className={active ? "text-brand-700" : "text-stone-400"}
+        className={`shrink-0 ${active ? "text-brand-700" : "text-stone-400"}`}
         aria-hidden
       />
-      Settings
+      <span className={navLabelCls}>Settings</span>
     </Link>
   );
 }
@@ -252,8 +264,9 @@ export function ProfileNavLink() {
   return (
     <Link
       href="/dashboard/profile"
+      title="Profile"
       aria-current={active ? "page" : undefined}
-      className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors ${
+      className={`${navRowCls} ${
         active
           ? "bg-brand-50 font-medium text-brand-800"
           : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
@@ -262,10 +275,10 @@ export function ProfileNavLink() {
       <UserCircle
         size={16}
         weight={active ? "fill" : "regular"}
-        className={active ? "text-brand-700" : "text-stone-400"}
+        className={`shrink-0 ${active ? "text-brand-700" : "text-stone-400"}`}
         aria-hidden
       />
-      Profile
+      <span className={navLabelCls}>Profile</span>
     </Link>
   );
 }

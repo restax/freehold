@@ -4,7 +4,16 @@ import { StripeTrust } from "@/components/stripe-trust";
 
 /* Shared brand chrome: wordmark, nav, footer, and the extraction review card. */
 
-export function Wordmark({ href = "/", size = "md" }: { href?: string; size?: "sm" | "md" }) {
+export function Wordmark({
+  href = "/",
+  size = "md",
+  /** Drop the "Freehold" text below lg, for the dashboard's collapsed icon rail. */
+  collapsible = false,
+}: {
+  href?: string;
+  size?: "sm" | "md";
+  collapsible?: boolean;
+}) {
   const mark =
     size === "sm"
       ? "grid h-7 w-7 place-items-center rounded-lg bg-brand-700 font-display text-sm font-extrabold text-white"
@@ -16,7 +25,7 @@ export function Wordmark({ href = "/", size = "md" }: { href?: string; size?: "s
   return (
     <Link href={href} className="flex items-center gap-2.5">
       <span className={mark}>F</span>
-      <span className={text}>Freehold</span>
+      <span className={`${text}${collapsible ? " hidden lg:inline" : ""}`}>Freehold</span>
     </Link>
   );
 }
