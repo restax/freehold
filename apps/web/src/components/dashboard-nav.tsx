@@ -198,7 +198,7 @@ export function DashboardNav({
     : GROUPS;
 
   return (
-    <nav className="flex flex-col">
+    <nav className="flex shrink-0 flex-col">
       {groups.map((group) => (
         <div key={group.label ?? "top"} className="flex flex-col gap-0.5">
           {group.label && (

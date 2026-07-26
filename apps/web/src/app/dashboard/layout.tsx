@@ -97,19 +97,27 @@ export default async function DashboardLayout({ children }: { children: React.Re
           still legible (each item keeps a tooltip), and the content area gets
           its width back. */}
       <aside className="sticky top-0 flex h-screen w-14 shrink-0 flex-col overflow-y-auto overflow-x-hidden border-r border-stone-200 bg-white px-2 py-6 lg:w-56 lg:px-4">
-        <div className="mb-1 flex justify-center lg:justify-start">
+        <div className="mb-1 flex shrink-0 justify-center lg:justify-start">
           <Wordmark href="/dashboard" collapsible />
         </div>
-        <div className="mb-4 mt-1 hidden truncate rounded-lg bg-stone-100/80 px-2.5 py-1.5 text-xs font-medium text-stone-500 lg:block">
+        {/* shrink-0 matters here specifically: `truncate` sets overflow:hidden,
+            which per the flexbox spec gives this item an automatic minimum
+            size of 0 (instead of its content size). Once the sidebar's total
+            content outgrows h-screen, flexbox shrinks its children to fit —
+            and this item, uniquely allowed to shrink to nothing, was the one
+            that collapsed to a sliver while its siblings barely moved. The
+            fix is to opt every sidebar section out of shrinking, so
+            overflow-y-auto scrolls the sidebar instead of crushing a child. */}
+        <div className="mb-4 mt-1 hidden shrink-0 truncate rounded-lg bg-stone-100/80 px-2.5 py-1.5 text-xs font-medium text-stone-500 lg:block">
           {active?.name}
         </div>
         {isGuest && (
-          <p className="mb-3 hidden rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900 lg:block">
+          <p className="mb-3 hidden shrink-0 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900 lg:block">
             You're covering files for this workspace as a guest.
           </p>
         )}
         {!isGuest && (
-          <details className="group relative mb-3">
+          <details className="group relative mb-3 shrink-0">
             <summary
               title="Create"
               className="flex cursor-pointer select-none items-center justify-center gap-1 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
@@ -146,7 +154,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </details>
         )}
         <DashboardNav isGuest={isGuest} supportUnread={supportUnread} />
-        <div className="mt-auto flex flex-col gap-1 border-t border-stone-200 pt-3">
+        <div className="mt-auto flex shrink-0 flex-col gap-1 border-t border-stone-200 pt-3">
           {/* Text-only composer with no icon to collapse to — hidden on the
               rail, where Support is still one click away in the nav above. */}
           <div className="hidden lg:block">
