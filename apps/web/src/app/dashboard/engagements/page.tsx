@@ -49,7 +49,7 @@ export default async function EngagementsPage() {
   });
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">Engagements</h1>
         <p className="text-sm text-stone-500">
@@ -78,7 +78,7 @@ export default async function EngagementsPage() {
             {hiring.map((e) => (
               <li
                 key={e.id}
-                className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-3 text-sm last:border-0"
+                className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
               >
                 <Badge tone={TONE[e.status]}>{STATUS_TEXT[e.status]}</Badge>
                 <span className="font-medium">{e.vendorTenant.name}</span>
@@ -120,7 +120,7 @@ export default async function EngagementsPage() {
         ) : (
           <ul className="flex flex-col">
             {providing.map((e) => (
-              <li key={e.id} className="border-b border-stone-100 py-3 last:border-0">
+              <li key={e.id} className="border-b border-stone-100 py-2 last:border-0">
                 <div className="flex flex-wrap items-center gap-3 text-sm">
                   <Badge tone={TONE[e.status]}>{STATUS_TEXT[e.status]}</Badge>
                   <span className="font-medium">{e.tenant.name}</span>

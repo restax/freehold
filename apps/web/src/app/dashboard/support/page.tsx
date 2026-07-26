@@ -30,7 +30,7 @@ export default async function SupportPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <p className="text-sm text-stone-500">
           {isAdmin ? "Every ticket from your workspace" : "Tickets you've filed"}

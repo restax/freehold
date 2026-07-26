@@ -13,7 +13,7 @@ import { fmtDate } from "@/lib/format";
 import { licenseHealth } from "@/lib/licenses";
 import { seatState } from "@/lib/plans";
 import { requireAdminTenant } from "@/lib/tenant";
-import { btn, btnGhost, card, input, label, td, th, trHover } from "@/lib/ui";
+import { btn, btnGhost, card, input, label, tableWrap, td, th, trHover } from "@/lib/ui";
 
 /** Dot color for a license chip: current / expiring / expired. */
 const HEALTH_DOT = {
@@ -69,7 +69,7 @@ export default async function TeamPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">Team</h1>
         <p className="text-sm text-stone-500">
@@ -91,124 +91,126 @@ export default async function TeamPage() {
 
       <section className={card}>
         <h2 className="mb-3 font-medium">Members</h2>
-        <table className="w-full">
-          <thead>
-            <tr>
-              <th className={th}>Name</th>
-              <th className={th}>Email</th>
-              <th className={th}>Licenses</th>
-              <th className={th}>Role</th>
-              <th className={th}>Compliance review</th>
-              <th className={th} />
-            </tr>
-          </thead>
-          <tbody>
-            {members.map((m) => (
-              <tr key={m.id} className={trHover}>
-                <td className={`${td} font-medium`}>
-                  <span className="flex items-center gap-2">
-                    <Avatar user={m.user} size={28} />
-                    <span>
-                      {m.user.name}
-                      {m.userId === userId && (
-                        <span className="ml-1 text-xs text-stone-400">(you)</span>
-                      )}
-                    </span>
-                  </span>
-                </td>
-                <td className={td}>{m.user.email}</td>
-                <td className={td}>
-                  {(licensesByUser.get(m.userId) ?? []).length === 0 ? (
-                    <span className="text-stone-300">—</span>
-                  ) : (
-                    <span className="flex flex-wrap gap-1.5">
-                      {(licensesByUser.get(m.userId) ?? []).map((lic) => {
-                        const health = licenseHealth(lic.expiresAt);
-                        return (
-                          <span
-                            key={lic.id}
-                            title={
-                              lic.expiresAt
-                                ? `${health === "expired" ? "Expired" : "Expires"} ${fmtDate(lic.expiresAt)}`
-                                : "No expiry on record"
-                            }
-                            className="inline-flex items-center gap-1 rounded-md bg-stone-100 px-1.5 py-0.5 text-xs font-medium text-stone-700"
-                          >
-                            <span
-                              aria-hidden
-                              className={`h-1.5 w-1.5 rounded-full ${HEALTH_DOT[health]}`}
-                            />
-                            {lic.state}
-                          </span>
-                        );
-                      })}
-                    </span>
-                  )}
-                </td>
-                <td className={td}>
-                  {m.role === "owner" || !isAdmin ? (
-                    <span className="capitalize">{m.role}</span>
-                  ) : (
-                    <form action={updateMemberRole} className="flex items-center gap-1">
-                      <input type="hidden" name="memberId" value={m.id} />
-                      <select
-                        name="role"
-                        defaultValue={m.role}
-                        className={`${input} px-2 py-1 text-xs`}
-                      >
-                        {ROLES.map((r) => (
-                          <option key={r} value={r}>
-                            {r}
-                          </option>
-                        ))}
-                      </select>
-                      <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
-                        Save
-                      </button>
-                    </form>
-                  )}
-                </td>
-                <td className={td}>
-                  {m.role === "owner" ? (
-                    <span className="text-stone-500">Full authority</span>
-                  ) : !isAdmin ? (
-                    <span className="text-stone-500">{tierLabel(m.complianceTier, m.role)}</span>
-                  ) : (
-                    <form action={updateMemberComplianceTier} className="flex items-center gap-1">
-                      <input type="hidden" name="memberId" value={m.id} />
-                      <select
-                        name="complianceTier"
-                        defaultValue={
-                          m.complianceTier === null ? "default" : String(m.complianceTier)
-                        }
-                        className={`${input} px-2 py-1 text-xs`}
-                      >
-                        {TIER_OPTIONS.map(([value, text]) => (
-                          <option key={value} value={value}>
-                            {text}
-                          </option>
-                        ))}
-                      </select>
-                      <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
-                        Save
-                      </button>
-                    </form>
-                  )}
-                </td>
-                <td className={td}>
-                  {isAdmin && m.role !== "owner" && m.userId !== userId && (
-                    <form action={removeMember}>
-                      <input type="hidden" name="memberId" value={m.id} />
-                      <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
-                        remove
-                      </button>
-                    </form>
-                  )}
-                </td>
+        <div className={tableWrap}>
+          <table className="w-full">
+            <thead>
+              <tr>
+                <th className={th}>Name</th>
+                <th className={th}>Email</th>
+                <th className={th}>Licenses</th>
+                <th className={th}>Role</th>
+                <th className={th}>Compliance review</th>
+                <th className={th} />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {members.map((m) => (
+                <tr key={m.id} className={trHover}>
+                  <td className={`${td} font-medium`}>
+                    <span className="flex items-center gap-2">
+                      <Avatar user={m.user} size={28} />
+                      <span>
+                        {m.user.name}
+                        {m.userId === userId && (
+                          <span className="ml-1 text-xs text-stone-400">(you)</span>
+                        )}
+                      </span>
+                    </span>
+                  </td>
+                  <td className={td}>{m.user.email}</td>
+                  <td className={td}>
+                    {(licensesByUser.get(m.userId) ?? []).length === 0 ? (
+                      <span className="text-stone-300">—</span>
+                    ) : (
+                      <span className="flex flex-wrap gap-1.5">
+                        {(licensesByUser.get(m.userId) ?? []).map((lic) => {
+                          const health = licenseHealth(lic.expiresAt);
+                          return (
+                            <span
+                              key={lic.id}
+                              title={
+                                lic.expiresAt
+                                  ? `${health === "expired" ? "Expired" : "Expires"} ${fmtDate(lic.expiresAt)}`
+                                  : "No expiry on record"
+                              }
+                              className="inline-flex items-center gap-1 rounded-md bg-stone-100 px-1.5 py-0.5 text-xs font-medium text-stone-700"
+                            >
+                              <span
+                                aria-hidden
+                                className={`h-1.5 w-1.5 rounded-full ${HEALTH_DOT[health]}`}
+                              />
+                              {lic.state}
+                            </span>
+                          );
+                        })}
+                      </span>
+                    )}
+                  </td>
+                  <td className={td}>
+                    {m.role === "owner" || !isAdmin ? (
+                      <span className="capitalize">{m.role}</span>
+                    ) : (
+                      <form action={updateMemberRole} className="flex items-center gap-1">
+                        <input type="hidden" name="memberId" value={m.id} />
+                        <select
+                          name="role"
+                          defaultValue={m.role}
+                          className={`${input} px-2 py-1 text-xs`}
+                        >
+                          {ROLES.map((r) => (
+                            <option key={r} value={r}>
+                              {r}
+                            </option>
+                          ))}
+                        </select>
+                        <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                          Save
+                        </button>
+                      </form>
+                    )}
+                  </td>
+                  <td className={td}>
+                    {m.role === "owner" ? (
+                      <span className="text-stone-500">Full authority</span>
+                    ) : !isAdmin ? (
+                      <span className="text-stone-500">{tierLabel(m.complianceTier, m.role)}</span>
+                    ) : (
+                      <form action={updateMemberComplianceTier} className="flex items-center gap-1">
+                        <input type="hidden" name="memberId" value={m.id} />
+                        <select
+                          name="complianceTier"
+                          defaultValue={
+                            m.complianceTier === null ? "default" : String(m.complianceTier)
+                          }
+                          className={`${input} px-2 py-1 text-xs`}
+                        >
+                          {TIER_OPTIONS.map(([value, text]) => (
+                            <option key={value} value={value}>
+                              {text}
+                            </option>
+                          ))}
+                        </select>
+                        <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                          Save
+                        </button>
+                      </form>
+                    )}
+                  </td>
+                  <td className={td}>
+                    {isAdmin && m.role !== "owner" && m.userId !== userId && (
+                      <form action={removeMember}>
+                        <input type="hidden" name="memberId" value={m.id} />
+                        <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
+                          remove
+                        </button>
+                      </form>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {isAdmin && (

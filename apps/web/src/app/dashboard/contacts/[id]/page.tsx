@@ -20,7 +20,17 @@ import {
 } from "@/lib/crm";
 import { fmtDate, fmtMoney } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
-import { btn, btnGhost, card, input, label as labelCls, td, th, trHover } from "@/lib/ui";
+import {
+  btn,
+  btnGhost,
+  card,
+  input,
+  label as labelCls,
+  tableWrap,
+  td,
+  th,
+  trHover,
+} from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -136,7 +146,7 @@ export default async function ContactDetailPage({
     .slice(0, 20);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <Link href="/dashboard/contacts" className="text-sm text-stone-500 hover:underline">
           ← Contacts
@@ -302,35 +312,37 @@ export default async function ContactDetailPage({
                 Not on any transactions yet. Add them as a party from a transaction's page.
               </p>
             ) : (
-              <table className="w-full">
-                <thead>
-                  <tr>
-                    <th className={th}>Property</th>
-                    <th className={th}>Status</th>
-                    <th className={th}>Price</th>
-                    <th className={th}>Close</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.map((t) => (
-                    <tr key={t.id} className={trHover}>
-                      <td className={td}>
-                        <Link
-                          href={`/dashboard/transactions/${t.id}`}
-                          className="font-medium text-brand-700 hover:text-brand-600"
-                        >
-                          {t.propertyAddress}
-                        </Link>
-                      </td>
-                      <td className={td}>
-                        <StatusBadge status={t.status} />
-                      </td>
-                      <td className={td}>{fmtMoney(t.purchasePrice)}</td>
-                      <td className={td}>{fmtDate(t.closeDate)}</td>
+              <div className={tableWrap}>
+                <table className="w-full">
+                  <thead>
+                    <tr>
+                      <th className={th}>Property</th>
+                      <th className={th}>Status</th>
+                      <th className={th}>Price</th>
+                      <th className={th}>Close</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {transactions.map((t) => (
+                      <tr key={t.id} className={trHover}>
+                        <td className={td}>
+                          <Link
+                            href={`/dashboard/transactions/${t.id}`}
+                            className="font-medium text-brand-700 hover:text-brand-600"
+                          >
+                            {t.propertyAddress}
+                          </Link>
+                        </td>
+                        <td className={td}>
+                          <StatusBadge status={t.status} />
+                        </td>
+                        <td className={td}>{fmtMoney(t.purchasePrice)}</td>
+                        <td className={td}>{fmtDate(t.closeDate)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ))}
 
           {tab === "notes" &&
@@ -414,41 +426,43 @@ export default async function ContactDetailPage({
                   every reveal audited.
                 </p>
               ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr>
-                      <th className={th}>System</th>
-                      <th className={th}>Username</th>
-                      <th className={th}>Secret</th>
-                      <th className={th}>URL</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {contact.credentials.map((c) => (
-                      <tr key={c.id} className={trHover}>
-                        <td className={`${td} font-medium`}>{c.system}</td>
-                        <td className={td}>{c.username}</td>
-                        <td className={td}>
-                          <RevealCredential credentialId={c.id} />
-                        </td>
-                        <td className={td}>
-                          {c.url ? (
-                            <a
-                              href={c.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-brand-600 hover:underline"
-                            >
-                              open
-                            </a>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
+                <div className={tableWrap}>
+                  <table className="w-full">
+                    <thead>
+                      <tr>
+                        <th className={th}>System</th>
+                        <th className={th}>Username</th>
+                        <th className={th}>Secret</th>
+                        <th className={th}>URL</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {contact.credentials.map((c) => (
+                        <tr key={c.id} className={trHover}>
+                          <td className={`${td} font-medium`}>{c.system}</td>
+                          <td className={td}>{c.username}</td>
+                          <td className={td}>
+                            <RevealCredential credentialId={c.id} />
+                          </td>
+                          <td className={td}>
+                            {c.url ? (
+                              <a
+                                href={c.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-brand-600 hover:underline"
+                              >
+                                open
+                              </a>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
               <form
                 action={createCredential}

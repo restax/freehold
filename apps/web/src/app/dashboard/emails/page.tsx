@@ -47,7 +47,7 @@ export default async function EmailTemplatesPage({
   ).filter(([, list]) => list.length > 0);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">Email templates</h1>
         <p className="text-sm text-stone-500">
@@ -218,7 +218,7 @@ export default async function EmailTemplatesPage({
             {list.map((t) => (
               <li key={t.id} className="rounded-lg border border-stone-200/70">
                 <details>
-                  <summary className="flex cursor-pointer select-none flex-wrap items-baseline gap-x-3 px-4 py-2.5 text-sm hover:bg-stone-50">
+                  <summary className="flex cursor-pointer select-none flex-wrap items-baseline gap-x-3 px-4 py-2 text-sm hover:bg-stone-50">
                     <span className="font-medium">{t.name.replace(" (Sample)", "")}</span>
                     <span className="text-stone-400">{t.subject}</span>
                     <span className="ml-auto flex items-center gap-3 text-xs text-stone-400">
@@ -308,7 +308,7 @@ export default async function EmailTemplatesPage({
           Sent for you: the intro when a file opens and the congratulations after closing.
           Per-client on/off switches live on each client's page.
         </p>
-        <form action={saveEmailTemplates} className="flex flex-col gap-6">
+        <form action={saveEmailTemplates} className="flex flex-col gap-4">
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="flex flex-col gap-2">
               <h3 className="text-sm font-semibold text-stone-700">Intro email</h3>

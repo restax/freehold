@@ -531,7 +531,7 @@ export default async function SettingsPage() {
     : [];
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold">Settings</h1>
 
       {/* Independent setting cards sit two-up on wide screens (kept to two so

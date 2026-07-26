@@ -3,7 +3,18 @@ import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { createClient, updateClientEsign } from "@/lib/actions/clients";
 import { requireTenant } from "@/lib/tenant";
-import { btn, btnGhost, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
+import {
+  btn,
+  btnGhost,
+  card,
+  input,
+  label,
+  summaryLink,
+  tableWrap,
+  td,
+  th,
+  trHover,
+} from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +42,7 @@ export default async function ClientsPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">Clients</h1>
         <p className="text-sm text-stone-500">
@@ -90,65 +101,67 @@ export default async function ClientsPage() {
             hint='Clients are who you coordinate for — an agent, a brokerage, a title company. Each transaction belongs to one, and their preferences (like e-sign provider) follow automatically. Open "New client" above to add your first.'
           />
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr>
-                <th className={th}>Name</th>
-                <th className={th}>Type</th>
-                <th className={th}>Email</th>
-                <th className={th}>Phone</th>
-                <th className={th}>E-sign</th>
-                <th className={th}>Transactions</th>
-                <th className={th} />
-              </tr>
-            </thead>
-            <tbody>
-              {clients.map((c) => (
-                <tr key={c.id} className={trHover}>
-                  <td className={`${td} font-medium`}>
-                    <Link
-                      href={`/dashboard/clients/${c.id}`}
-                      className="text-brand-700 hover:text-brand-600 hover:underline"
-                    >
-                      {c.name}
-                    </Link>
-                  </td>
-                  <td className={td}>{TYPE_LABEL[c.type]}</td>
-                  <td className={td}>{c.email ?? "—"}</td>
-                  <td className={td}>{c.phone ?? "—"}</td>
-                  <td className={td}>
-                    <form action={updateClientEsign} className="flex items-center gap-1">
-                      <input type="hidden" name="id" value={c.id} />
-                      <select
-                        name="esignProvider"
-                        defaultValue={c.esignProvider ?? ""}
-                        className={`${input} px-2 py-1 text-xs`}
-                      >
-                        <option value="">Tenant default</option>
-                        {Object.values(EsignProvider).map((p) => (
-                          <option key={p} value={p}>
-                            {ESIGN_LABEL[p]}
-                          </option>
-                        ))}
-                      </select>
-                      <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
-                        Save
-                      </button>
-                    </form>
-                  </td>
-                  <td className={td}>{c._count.transactions}</td>
-                  <td className={td}>
-                    <Link
-                      href={`/dashboard/clients/${c.id}`}
-                      className="text-xs text-brand-700 hover:underline"
-                    >
-                      Open →
-                    </Link>
-                  </td>
+          <div className={tableWrap}>
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className={th}>Name</th>
+                  <th className={th}>Type</th>
+                  <th className={th}>Email</th>
+                  <th className={th}>Phone</th>
+                  <th className={th}>E-sign</th>
+                  <th className={th}>Transactions</th>
+                  <th className={th} />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {clients.map((c) => (
+                  <tr key={c.id} className={trHover}>
+                    <td className={`${td} font-medium`}>
+                      <Link
+                        href={`/dashboard/clients/${c.id}`}
+                        className="text-brand-700 hover:text-brand-600 hover:underline"
+                      >
+                        {c.name}
+                      </Link>
+                    </td>
+                    <td className={td}>{TYPE_LABEL[c.type]}</td>
+                    <td className={td}>{c.email ?? "—"}</td>
+                    <td className={td}>{c.phone ?? "—"}</td>
+                    <td className={td}>
+                      <form action={updateClientEsign} className="flex items-center gap-1">
+                        <input type="hidden" name="id" value={c.id} />
+                        <select
+                          name="esignProvider"
+                          defaultValue={c.esignProvider ?? ""}
+                          className={`${input} px-2 py-1 text-xs`}
+                        >
+                          <option value="">Tenant default</option>
+                          {Object.values(EsignProvider).map((p) => (
+                            <option key={p} value={p}>
+                              {ESIGN_LABEL[p]}
+                            </option>
+                          ))}
+                        </select>
+                        <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                          Save
+                        </button>
+                      </form>
+                    </td>
+                    <td className={td}>{c._count.transactions}</td>
+                    <td className={td}>
+                      <Link
+                        href={`/dashboard/clients/${c.id}`}
+                        className="text-xs text-brand-700 hover:underline"
+                      >
+                        Open →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

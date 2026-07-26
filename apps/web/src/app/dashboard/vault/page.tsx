@@ -5,7 +5,7 @@ import { RevealCredential } from "@/components/reveal-credential";
 import { createCredential, deleteCredential } from "@/lib/actions/vault";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
-import { btn, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
+import { btn, card, input, label, summaryLink, tableWrap, td, th, trHover } from "@/lib/ui";
 
 const LOG_TONE: Record<string, BadgeTone> = {
   REVEALED: "progress",
@@ -37,7 +37,7 @@ export default async function VaultPage() {
   }));
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">Credential vault</h1>
         <p className="text-sm text-stone-500">
@@ -114,63 +114,65 @@ export default async function VaultPage() {
             hint="Store a client's MLS or lender-portal login and it's encrypted before it touches the database — nobody sees it again without an audited reveal."
           />
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr>
-                <th className={th}>System</th>
-                <th className={th}>Belongs to</th>
-                <th className={th}>Username</th>
-                <th className={th}>Secret</th>
-                <th className={th}>URL</th>
-                <th className={th} />
-              </tr>
-            </thead>
-            <tbody>
-              {credentials.map((c) => (
-                <tr key={c.id} className={trHover}>
-                  <td className={`${td} font-medium`}>{c.system}</td>
-                  <td className={td}>
-                    {c.contact ? (
-                      <a
-                        href={`/dashboard/contacts/${c.contact.id}?tab=credentials`}
-                        className="text-brand-700 hover:underline"
-                      >
-                        {c.contact.name}
-                      </a>
-                    ) : (
-                      (c.client?.name ?? "—")
-                    )}
-                  </td>
-                  <td className={td}>{c.username}</td>
-                  <td className={td}>
-                    <RevealCredential credentialId={c.id} />
-                  </td>
-                  <td className={td}>
-                    {c.url ? (
-                      <a
-                        href={c.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-brand-600 hover:underline"
-                      >
-                        open
-                      </a>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className={td}>
-                    <form action={deleteCredential}>
-                      <input type="hidden" name="id" value={c.id} />
-                      <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
-                        delete
-                      </button>
-                    </form>
-                  </td>
+          <div className={tableWrap}>
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className={th}>System</th>
+                  <th className={th}>Belongs to</th>
+                  <th className={th}>Username</th>
+                  <th className={th}>Secret</th>
+                  <th className={th}>URL</th>
+                  <th className={th} />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {credentials.map((c) => (
+                  <tr key={c.id} className={trHover}>
+                    <td className={`${td} font-medium`}>{c.system}</td>
+                    <td className={td}>
+                      {c.contact ? (
+                        <a
+                          href={`/dashboard/contacts/${c.contact.id}?tab=credentials`}
+                          className="text-brand-700 hover:underline"
+                        >
+                          {c.contact.name}
+                        </a>
+                      ) : (
+                        (c.client?.name ?? "—")
+                      )}
+                    </td>
+                    <td className={td}>{c.username}</td>
+                    <td className={td}>
+                      <RevealCredential credentialId={c.id} />
+                    </td>
+                    <td className={td}>
+                      {c.url ? (
+                        <a
+                          href={c.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-brand-600 hover:underline"
+                        >
+                          open
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className={td}>
+                      <form action={deleteCredential}>
+                        <input type="hidden" name="id" value={c.id} />
+                        <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
+                          delete
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 

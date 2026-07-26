@@ -18,7 +18,18 @@ import { fmtDate } from "@/lib/format";
 import { agingBucket, daysOverdue, invoiceLabel, TERM_PRESETS } from "@/lib/invoicing";
 import { fmtCents } from "@/lib/pay";
 import { getMemberRole, requireTenant } from "@/lib/tenant";
-import { btn, btnGhost, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
+import {
+  btn,
+  btnGhost,
+  card,
+  input,
+  label,
+  summaryLink,
+  tableWrap,
+  td,
+  th,
+  trHover,
+} from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +96,7 @@ export default async function InvoicesPage({
   const overdueTotal = overdue.reduce((s, i) => s + i.amountCents, 0);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">Invoices</h1>
         <p className="text-sm text-stone-500">
@@ -143,7 +154,7 @@ export default async function InvoicesPage({
             {payRequests.map((r) => {
               const total = r.items.reduce((s, i) => s + i.feeCents, 0);
               return (
-                <li key={r.id} className="border-b border-stone-100 py-3 last:border-0">
+                <li key={r.id} className="border-b border-stone-100 py-2 last:border-0">
                   <div className="flex flex-wrap items-center gap-3 text-sm">
                     <Badge tone={r.status === "PAID" ? "success" : "progress"}>
                       {r.status === "PAID" ? "Paid" : "Awaiting payment"}
@@ -308,126 +319,128 @@ export default async function InvoicesPage({
             hint="Issue one above — Freehold generates the PDF, emails it to your client, and keeps a follow-up open until it's paid."
           />
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr>
-                <th className={th}>#</th>
-                <th className={th}>Client</th>
-                <th className={th}>Amount</th>
-                <th className={th}>Terms</th>
-                <th className={th}>Due</th>
-                <th className={th}>Status</th>
-                <th className={th} />
-              </tr>
-            </thead>
-            <tbody>
-              {invoices.map((inv) => {
-                const isOverdue = inv.status === "SENT" && agingBucket(inv.dueDate) === "overdue";
-                return (
-                  <tr key={inv.id} className={trHover}>
-                    <td className={`${td} font-medium`}>
-                      {invoiceLabel(inv.number)}
-                      {inv.transaction && (
-                        <Link
-                          href={`/dashboard/transactions/${inv.transaction.id}`}
-                          className="ml-2 text-xs text-brand-700 hover:underline"
-                        >
-                          {inv.transaction.propertyAddress}
-                        </Link>
-                      )}
-                    </td>
-                    <td className={td}>{inv.client?.name ?? "—"}</td>
-                    <td className={`${td} tabular-nums`}>{fmtCents(inv.amountCents)}</td>
-                    <td className={td}>{inv.paymentTerms ?? "—"}</td>
-                    <td className={td}>
-                      {inv.dueDate ? (
-                        <span className={isOverdue ? "font-medium text-red-700" : undefined}>
-                          {fmtDate(inv.dueDate)}
-                          {isOverdue && ` (${daysOverdue(inv.dueDate)}d)`}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className={td}>
-                      <span className="flex items-center gap-1.5">
-                        <Badge tone={STATUS_TONE[inv.status] ?? "neutral"}>
-                          {STATUS_TEXT[inv.status] ?? inv.status}
-                        </Badge>
-                        {inv.status === "SENT" && inv.sentAt && (
-                          <span className="text-xs text-stone-400">
-                            emailed {fmtDate(inv.sentAt)}
+          <div className={tableWrap}>
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className={th}>#</th>
+                  <th className={th}>Client</th>
+                  <th className={th}>Amount</th>
+                  <th className={th}>Terms</th>
+                  <th className={th}>Due</th>
+                  <th className={th}>Status</th>
+                  <th className={th} />
+                </tr>
+              </thead>
+              <tbody>
+                {invoices.map((inv) => {
+                  const isOverdue = inv.status === "SENT" && agingBucket(inv.dueDate) === "overdue";
+                  return (
+                    <tr key={inv.id} className={trHover}>
+                      <td className={`${td} font-medium`}>
+                        {invoiceLabel(inv.number)}
+                        {inv.transaction && (
+                          <Link
+                            href={`/dashboard/transactions/${inv.transaction.id}`}
+                            className="ml-2 text-xs text-brand-700 hover:underline"
+                          >
+                            {inv.transaction.propertyAddress}
+                          </Link>
+                        )}
+                      </td>
+                      <td className={td}>{inv.client?.name ?? "—"}</td>
+                      <td className={`${td} tabular-nums`}>{fmtCents(inv.amountCents)}</td>
+                      <td className={td}>{inv.paymentTerms ?? "—"}</td>
+                      <td className={td}>
+                        {inv.dueDate ? (
+                          <span className={isOverdue ? "font-medium text-red-700" : undefined}>
+                            {fmtDate(inv.dueDate)}
+                            {isOverdue && ` (${daysOverdue(inv.dueDate)}d)`}
                           </span>
-                        )}
-                        {inv.status === "PAID" && inv.paidNote && (
-                          <span className="text-xs text-stone-400">({inv.paidNote})</span>
-                        )}
-                      </span>
-                    </td>
-                    <td className={td}>
-                      <span className="flex flex-wrap items-center gap-3">
-                        {inv.provider === "erpnext" && inv.externalId && erpnextUrl ? (
-                          <a
-                            href={erpnextInvoiceUrl(erpnextUrl, inv.externalId)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-xs font-medium text-brand-700 hover:text-brand-600"
-                            title={inv.externalId}
-                          >
-                            open in ERPNext →
-                          </a>
                         ) : (
-                          <a
-                            href={`/api/invoices/${inv.id}/pdf`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-xs font-medium text-brand-700 hover:text-brand-600"
-                          >
-                            PDF
-                          </a>
+                          "—"
                         )}
-                        {isAdmin && inv.status === "SENT" && canEmail && inv.client?.email && (
-                          <form action={sendInvoice}>
-                            <input type="hidden" name="id" value={inv.id} />
-                            <button
-                              type="submit"
+                      </td>
+                      <td className={td}>
+                        <span className="flex items-center gap-1.5">
+                          <Badge tone={STATUS_TONE[inv.status] ?? "neutral"}>
+                            {STATUS_TEXT[inv.status] ?? inv.status}
+                          </Badge>
+                          {inv.status === "SENT" && inv.sentAt && (
+                            <span className="text-xs text-stone-400">
+                              emailed {fmtDate(inv.sentAt)}
+                            </span>
+                          )}
+                          {inv.status === "PAID" && inv.paidNote && (
+                            <span className="text-xs text-stone-400">({inv.paidNote})</span>
+                          )}
+                        </span>
+                      </td>
+                      <td className={td}>
+                        <span className="flex flex-wrap items-center gap-3">
+                          {inv.provider === "erpnext" && inv.externalId && erpnextUrl ? (
+                            <a
+                              href={erpnextInvoiceUrl(erpnextUrl, inv.externalId)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs font-medium text-brand-700 hover:text-brand-600"
+                              title={inv.externalId}
+                            >
+                              open in ERPNext →
+                            </a>
+                          ) : (
+                            <a
+                              href={`/api/invoices/${inv.id}/pdf`}
+                              target="_blank"
+                              rel="noreferrer"
                               className="text-xs font-medium text-brand-700 hover:text-brand-600"
                             >
-                              {inv.sentAt ? "re-send" : "send"}
-                            </button>
-                          </form>
-                        )}
-                        {isAdmin && inv.status === "SENT" && (
-                          <form action={markInvoicePaid} className="flex items-center gap-1">
-                            <input type="hidden" name="id" value={inv.id} />
-                            <input
-                              name="paidNote"
-                              placeholder="check #1042"
-                              className={`${input} w-28 px-2 py-1 text-xs`}
-                            />
-                            <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
-                              Mark paid
-                            </button>
-                          </form>
-                        )}
-                        {isAdmin && inv.status === "SENT" && (
-                          <form action={voidInvoice}>
-                            <input type="hidden" name="id" value={inv.id} />
-                            <button
-                              type="submit"
-                              className="text-xs text-stone-400 hover:text-red-600"
-                            >
-                              void
-                            </button>
-                          </form>
-                        )}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                              PDF
+                            </a>
+                          )}
+                          {isAdmin && inv.status === "SENT" && canEmail && inv.client?.email && (
+                            <form action={sendInvoice}>
+                              <input type="hidden" name="id" value={inv.id} />
+                              <button
+                                type="submit"
+                                className="text-xs font-medium text-brand-700 hover:text-brand-600"
+                              >
+                                {inv.sentAt ? "re-send" : "send"}
+                              </button>
+                            </form>
+                          )}
+                          {isAdmin && inv.status === "SENT" && (
+                            <form action={markInvoicePaid} className="flex items-center gap-1">
+                              <input type="hidden" name="id" value={inv.id} />
+                              <input
+                                name="paidNote"
+                                placeholder="check #1042"
+                                className={`${input} w-28 px-2 py-1 text-xs`}
+                              />
+                              <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                                Mark paid
+                              </button>
+                            </form>
+                          )}
+                          {isAdmin && inv.status === "SENT" && (
+                            <form action={voidInvoice}>
+                              <input type="hidden" name="id" value={inv.id} />
+                              <button
+                                type="submit"
+                                className="text-xs text-stone-400 hover:text-red-600"
+                              >
+                                void
+                              </button>
+                            </form>
+                          )}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

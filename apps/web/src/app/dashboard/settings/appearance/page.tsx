@@ -58,7 +58,7 @@ export default async function AppearancePage() {
   const a = await tenantAppearance(tenantId);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <Link href="/dashboard/settings" className="text-sm text-stone-500 hover:underline">
           ← Settings
@@ -70,7 +70,7 @@ export default async function AppearancePage() {
         </p>
       </div>
 
-      <form action={saveAppearance} className="flex flex-col gap-6">
+      <form action={saveAppearance} className="flex flex-col gap-4">
         {/* ---------------- Colour theme ---------------- */}
         <section className={card}>
           <h2 className="mb-1 font-medium">Colour theme</h2>

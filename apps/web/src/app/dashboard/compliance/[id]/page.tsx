@@ -37,7 +37,7 @@ export default async function ComplianceChecklistPage({
   const requiredCount = checklist.items.filter((i) => i.required).length;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <Link href="/dashboard/compliance" className="text-sm text-stone-500 hover:underline">
           ← Compliance

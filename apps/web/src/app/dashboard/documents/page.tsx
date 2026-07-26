@@ -4,7 +4,7 @@ import { Badge } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
-import { btnGhost, card, input, td, th, trHover } from "@/lib/ui";
+import { btnGhost, card, input, tableWrap, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -74,7 +74,7 @@ export default async function DocumentsPage({
   const filtered = Boolean(query || txFilter);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">Documents</h1>
         <p className="text-sm text-stone-500">Every file across all your transactions.</p>
@@ -117,47 +117,49 @@ export default async function DocumentsPage({
           />
         ) : (
           <>
-            <table className="w-full">
-              <thead>
-                <tr>
-                  <th className={th}>File</th>
-                  <th className={th}>Transaction</th>
-                  <th className={th}>Type</th>
-                  <th className={th}>Size</th>
-                  <th className={th}>Uploaded</th>
-                </tr>
-              </thead>
-              <tbody>
-                {documents.map((d) => (
-                  <tr key={d.id} className={trHover}>
-                    <td className={td}>
-                      <span className="flex flex-wrap items-center gap-2">
-                        <a
-                          href={`/api/documents/${d.id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-medium text-brand-700 hover:text-brand-600"
-                        >
-                          {d.filename}
-                        </a>
-                        {d._count.extractions > 0 && <Badge tone="success">extracted</Badge>}
-                      </span>
-                    </td>
-                    <td className={td}>
-                      <Link
-                        href={`/dashboard/transactions/${d.transaction.id}`}
-                        className="text-brand-700 hover:text-brand-600"
-                      >
-                        {d.transaction.propertyAddress}
-                      </Link>
-                    </td>
-                    <td className={td}>{typeLabel(d.contentType)}</td>
-                    <td className={td}>{fmtSize(d.sizeBytes)}</td>
-                    <td className={td}>{fmtDate(d.createdAt)}</td>
+            <div className={tableWrap}>
+              <table className="w-full">
+                <thead>
+                  <tr>
+                    <th className={th}>File</th>
+                    <th className={th}>Transaction</th>
+                    <th className={th}>Type</th>
+                    <th className={th}>Size</th>
+                    <th className={th}>Uploaded</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {documents.map((d) => (
+                    <tr key={d.id} className={trHover}>
+                      <td className={td}>
+                        <span className="flex flex-wrap items-center gap-2">
+                          <a
+                            href={`/api/documents/${d.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-medium text-brand-700 hover:text-brand-600"
+                          >
+                            {d.filename}
+                          </a>
+                          {d._count.extractions > 0 && <Badge tone="success">extracted</Badge>}
+                        </span>
+                      </td>
+                      <td className={td}>
+                        <Link
+                          href={`/dashboard/transactions/${d.transaction.id}`}
+                          className="text-brand-700 hover:text-brand-600"
+                        >
+                          {d.transaction.propertyAddress}
+                        </Link>
+                      </td>
+                      <td className={td}>{typeLabel(d.contentType)}</td>
+                      <td className={td}>{fmtSize(d.sizeBytes)}</td>
+                      <td className={td}>{fmtDate(d.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             {documents.length === LIMIT && (
               <p className="mt-3 text-xs text-stone-400">
                 Showing the most recent {LIMIT}. Narrow with search or a transaction filter to find

@@ -12,7 +12,7 @@ import {
 import { EMAIL_MERGE_CODES, parseEmailTemplates } from "@/lib/email-template";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
-import { btn, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
+import { btn, card, input, label, summaryLink, tableWrap, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,7 @@ export default async function TemplatesPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">Doc templates</h1>
         <p className="text-sm text-stone-500">
@@ -60,31 +60,33 @@ export default async function TemplatesPage() {
             hint="Write a letter or form once with merge fields, then generate a filled PDF from any transaction in one click."
           />
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr>
-                <th className={th}>Name</th>
-                <th className={th}>Description</th>
-                <th className={th}>Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {templates.map((t) => (
-                <tr key={t.id} className={trHover}>
-                  <td className={td}>
-                    <Link
-                      href={`/dashboard/templates/${t.id}`}
-                      className="font-medium text-brand-700 hover:text-brand-600"
-                    >
-                      {t.name}
-                    </Link>
-                  </td>
-                  <td className={td}>{t.description ?? "—"}</td>
-                  <td className={td}>{fmtDate(t.updatedAt)}</td>
+          <div className={tableWrap}>
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className={th}>Name</th>
+                  <th className={th}>Description</th>
+                  <th className={th}>Updated</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {templates.map((t) => (
+                  <tr key={t.id} className={trHover}>
+                    <td className={td}>
+                      <Link
+                        href={`/dashboard/templates/${t.id}`}
+                        className="font-medium text-brand-700 hover:text-brand-600"
+                      >
+                        {t.name}
+                      </Link>
+                    </td>
+                    <td className={td}>{t.description ?? "—"}</td>
+                    <td className={td}>{fmtDate(t.updatedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

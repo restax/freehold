@@ -4,7 +4,7 @@ import { EmptyState } from "@/components/empty-state";
 import { GRADE_CADENCE } from "@/lib/crm";
 import { fmtDate } from "@/lib/format";
 import { getMemberRole, requireTenant } from "@/lib/tenant";
-import { btn, card, input, td, th, trHover } from "@/lib/ui";
+import { btn, card, input, tableWrap, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +62,7 @@ export default async function ContactsPage({
   const todayKey = fmtDate(today);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">Contacts</h1>
@@ -132,72 +132,76 @@ export default async function ContactsPage({
             </Link>
           </EmptyState>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr>
-                <th className={th}>Name</th>
-                <th className={th}>Categories</th>
-                <th className={th}>Grade</th>
-                <th className={th}>Next touch</th>
-                <th className={th}>Owner</th>
-                <th className={th}>Deals</th>
-              </tr>
-            </thead>
-            <tbody>
-              {contacts.map((c) => {
-                const dueNow = c.nextTouchAt && fmtDate(c.nextTouchAt) <= todayKey;
-                return (
-                  <tr key={c.id} className={trHover}>
-                    <td className={td}>
-                      <Link
-                        href={`/dashboard/contacts/${c.id}`}
-                        className="font-medium text-brand-700 hover:text-brand-600"
-                      >
-                        {c.name}
-                      </Link>
-                      {c.company && (
-                        <span className="ml-2 text-xs text-stone-400">{c.company}</span>
-                      )}
-                    </td>
-                    <td className={td}>
-                      <span className="flex flex-wrap gap-1">
-                        {c.categories.slice(0, 3).map((cat) => (
-                          <span
-                            key={cat}
-                            className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-600"
-                          >
-                            {cat}
-                          </span>
-                        ))}
-                        {c.categories.length > 3 && (
-                          <span className="text-xs text-stone-400">+{c.categories.length - 3}</span>
-                        )}
-                      </span>
-                    </td>
-                    <td className={td}>
-                      {c.grade ? (
-                        <span
-                          className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-800"
-                          title={`Auto-prospect every ${GRADE_CADENCE[c.grade]} days`}
+          <div className={tableWrap}>
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className={th}>Name</th>
+                  <th className={th}>Categories</th>
+                  <th className={th}>Grade</th>
+                  <th className={th}>Next touch</th>
+                  <th className={th}>Owner</th>
+                  <th className={th}>Deals</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contacts.map((c) => {
+                  const dueNow = c.nextTouchAt && fmtDate(c.nextTouchAt) <= todayKey;
+                  return (
+                    <tr key={c.id} className={trHover}>
+                      <td className={td}>
+                        <Link
+                          href={`/dashboard/contacts/${c.id}`}
+                          className="font-medium text-brand-700 hover:text-brand-600"
                         >
-                          {c.grade}
+                          {c.name}
+                        </Link>
+                        {c.company && (
+                          <span className="ml-2 text-xs text-stone-400">{c.company}</span>
+                        )}
+                      </td>
+                      <td className={td}>
+                        <span className="flex flex-wrap gap-1">
+                          {c.categories.slice(0, 3).map((cat) => (
+                            <span
+                              key={cat}
+                              className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-600"
+                            >
+                              {cat}
+                            </span>
+                          ))}
+                          {c.categories.length > 3 && (
+                            <span className="text-xs text-stone-400">
+                              +{c.categories.length - 3}
+                            </span>
+                          )}
                         </span>
-                      ) : (
-                        <span className="text-stone-300">—</span>
-                      )}
-                    </td>
-                    <td className={td}>
-                      <span className={dueNow ? "font-medium text-amber-700" : ""}>
-                        {fmtDate(c.nextTouchAt)}
-                      </span>
-                    </td>
-                    <td className={td}>{c.owner?.name ?? "—"}</td>
-                    <td className={td}>{c._count.parties}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+                      <td className={td}>
+                        {c.grade ? (
+                          <span
+                            className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-800"
+                            title={`Auto-prospect every ${GRADE_CADENCE[c.grade]} days`}
+                          >
+                            {c.grade}
+                          </span>
+                        ) : (
+                          <span className="text-stone-300">—</span>
+                        )}
+                      </td>
+                      <td className={td}>
+                        <span className={dueNow ? "font-medium text-amber-700" : ""}>
+                          {fmtDate(c.nextTouchAt)}
+                        </span>
+                      </td>
+                      <td className={td}>{c.owner?.name ?? "—"}</td>
+                      <td className={td}>{c._count.parties}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

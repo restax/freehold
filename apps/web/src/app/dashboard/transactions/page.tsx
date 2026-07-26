@@ -10,7 +10,18 @@ import { licenseGap, requiredStates } from "@/lib/licensing";
 import { creditBalance, getTenantPlan, isCloud, transactionLimit } from "@/lib/plans";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
 import { requireTenant } from "@/lib/tenant";
-import { btn, btnGhost, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
+import {
+  btn,
+  btnGhost,
+  card,
+  input,
+  label,
+  summaryLink,
+  tableWrap,
+  td,
+  th,
+  trHover,
+} from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 // Contract extraction runs synchronously in the createFromContract server
@@ -98,7 +109,7 @@ export default async function TransactionsPage({
     });
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Transactions</h1>
         <form className="flex items-center gap-2">
@@ -324,62 +335,64 @@ export default async function TransactionsPage({
             />
           )
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr>
-                <th className={th}>Property</th>
-                <th className={th}>Side</th>
-                <th className={th}>Buyer / Seller</th>
-                <th className={th}>Status</th>
-                <th className={th}>Price</th>
-                <th className={th}>Closing</th>
-                <th className={th}>DOM</th>
-                <th className={th}>MLS ID</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.map((t) => (
-                <tr key={t.id} className={trHover}>
-                  <td className={td}>
-                    <Link
-                      href={`/dashboard/transactions/${t.id}`}
-                      className="font-medium text-brand-700 hover:text-brand-600"
-                    >
-                      {t.propertyAddress}
-                    </Link>
-                    {gapFor(t) && (
-                      <span
-                        title={`${t.state} requires a licensed coordinator on this file`}
-                        className="ml-2 inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-900"
-                      >
-                        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                        unlicensed
-                      </span>
-                    )}
-                  </td>
-                  <td className={td}>{sideLabel(t.side, labels)}</td>
-                  <td className={td}>{t.parties.map((p) => p.contact.name).join(", ") || "—"}</td>
-                  <td className={td}>
-                    <StatusBadge status={t.status} />
-                  </td>
-                  <td className={td}>{fmtMoney(t.purchasePrice ?? t.listPrice)}</td>
-                  <td className={td}>{fmtDate(t.closeDate)}</td>
-                  <td className={td}>
-                    {(() => {
-                      const start = t.onMarketDate ?? t.listDate;
-                      if (!start) return "—";
-                      const end =
-                        t.status === "CLOSED" || t.status === "CANCELLED"
-                          ? (t.closeDate?.getTime() ?? t.updatedAt.getTime())
-                          : todayMs;
-                      return Math.max(0, Math.round((end - start.getTime()) / 86400000));
-                    })()}
-                  </td>
-                  <td className={td}>{t.mlsId ?? "—"}</td>
+          <div className={tableWrap}>
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className={th}>Property</th>
+                  <th className={th}>Side</th>
+                  <th className={th}>Buyer / Seller</th>
+                  <th className={th}>Status</th>
+                  <th className={th}>Price</th>
+                  <th className={th}>Closing</th>
+                  <th className={th}>DOM</th>
+                  <th className={th}>MLS ID</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {transactions.map((t) => (
+                  <tr key={t.id} className={trHover}>
+                    <td className={td}>
+                      <Link
+                        href={`/dashboard/transactions/${t.id}`}
+                        className="font-medium text-brand-700 hover:text-brand-600"
+                      >
+                        {t.propertyAddress}
+                      </Link>
+                      {gapFor(t) && (
+                        <span
+                          title={`${t.state} requires a licensed coordinator on this file`}
+                          className="ml-2 inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-900"
+                        >
+                          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                          unlicensed
+                        </span>
+                      )}
+                    </td>
+                    <td className={td}>{sideLabel(t.side, labels)}</td>
+                    <td className={td}>{t.parties.map((p) => p.contact.name).join(", ") || "—"}</td>
+                    <td className={td}>
+                      <StatusBadge status={t.status} />
+                    </td>
+                    <td className={td}>{fmtMoney(t.purchasePrice ?? t.listPrice)}</td>
+                    <td className={td}>{fmtDate(t.closeDate)}</td>
+                    <td className={td}>
+                      {(() => {
+                        const start = t.onMarketDate ?? t.listDate;
+                        if (!start) return "—";
+                        const end =
+                          t.status === "CLOSED" || t.status === "CANCELLED"
+                            ? (t.closeDate?.getTime() ?? t.updatedAt.getTime())
+                            : todayMs;
+                        return Math.max(0, Math.round((end - start.getTime()) / 86400000));
+                      })()}
+                    </td>
+                    <td className={td}>{t.mlsId ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

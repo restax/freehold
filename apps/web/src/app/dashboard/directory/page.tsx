@@ -78,7 +78,7 @@ export default async function DirectoryPage({
   const publicCount = all.filter((l) => l.source === "public").length;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">Coordinator directory</h1>
         <p className="text-sm text-stone-500">

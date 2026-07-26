@@ -463,7 +463,7 @@ export default async function IntegrationsPage({
   ];
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">Integrations</h1>
         <p className="text-sm text-stone-500">

@@ -6,7 +6,7 @@ import { createChecklist } from "@/lib/actions/compliance";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/compliance";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
-import { btn, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
+import { btn, card, input, label, summaryLink, tableWrap, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +51,7 @@ export default async function CompliancePage() {
   }));
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">Compliance</h1>
         <p className="text-sm text-stone-500">
@@ -69,64 +69,66 @@ export default async function CompliancePage() {
         {queue.length === 0 ? (
           <p className="text-sm text-stone-400">Nothing waiting on review.</p>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr>
-                <th className={th}>File</th>
-                <th className={th}>Client</th>
-                <th className={th}>Status</th>
-                <th className={th}>Awaiting you</th>
-                <th className={th}>Required approved</th>
-                <th className={th}>Submitted</th>
-              </tr>
-            </thead>
-            <tbody>
-              {queue.map((r) => {
-                const awaiting = r.slots.filter(
-                  (s) => s.status === ComplianceSlotStatus.SUBMITTED,
-                ).length;
-                const required = r.slots.filter((s) => s.required);
-                const approved = required.filter(
-                  (s) => s.status === ComplianceSlotStatus.APPROVED,
-                ).length;
-                return (
-                  <tr key={r.id} className={trHover}>
-                    <td className={td}>
-                      <Link
-                        href={`/dashboard/transactions/${r.transaction.id}?tab=compliance`}
-                        className="font-medium text-brand-700 hover:text-brand-600"
-                      >
-                        {r.transaction.propertyAddress}
-                      </Link>
-                      <span className="ml-2 text-xs text-stone-400">
-                        {r.checklistName} · v{r.version}
-                        {r.approvalLevels > 1 && ` · ${r.approvalLevels}-level`}
-                      </span>
-                    </td>
-                    <td className={td}>
-                      {r.transaction.client?.name ?? <span className="text-stone-300">—</span>}
-                    </td>
-                    <td className={td}>
-                      <Badge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</Badge>
-                    </td>
-                    <td className={td}>
-                      {awaiting > 0 ? awaiting : <span className="text-stone-300">—</span>}
-                    </td>
-                    <td className={td}>
-                      {approved} / {required.length}
-                    </td>
-                    <td className={td}>
-                      {r.submittedAt ? (
-                        fmtDate(r.submittedAt)
-                      ) : (
-                        <span className="text-stone-300">—</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className={tableWrap}>
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className={th}>File</th>
+                  <th className={th}>Client</th>
+                  <th className={th}>Status</th>
+                  <th className={th}>Awaiting you</th>
+                  <th className={th}>Required approved</th>
+                  <th className={th}>Submitted</th>
+                </tr>
+              </thead>
+              <tbody>
+                {queue.map((r) => {
+                  const awaiting = r.slots.filter(
+                    (s) => s.status === ComplianceSlotStatus.SUBMITTED,
+                  ).length;
+                  const required = r.slots.filter((s) => s.required);
+                  const approved = required.filter(
+                    (s) => s.status === ComplianceSlotStatus.APPROVED,
+                  ).length;
+                  return (
+                    <tr key={r.id} className={trHover}>
+                      <td className={td}>
+                        <Link
+                          href={`/dashboard/transactions/${r.transaction.id}?tab=compliance`}
+                          className="font-medium text-brand-700 hover:text-brand-600"
+                        >
+                          {r.transaction.propertyAddress}
+                        </Link>
+                        <span className="ml-2 text-xs text-stone-400">
+                          {r.checklistName} · v{r.version}
+                          {r.approvalLevels > 1 && ` · ${r.approvalLevels}-level`}
+                        </span>
+                      </td>
+                      <td className={td}>
+                        {r.transaction.client?.name ?? <span className="text-stone-300">—</span>}
+                      </td>
+                      <td className={td}>
+                        <Badge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</Badge>
+                      </td>
+                      <td className={td}>
+                        {awaiting > 0 ? awaiting : <span className="text-stone-300">—</span>}
+                      </td>
+                      <td className={td}>
+                        {approved} / {required.length}
+                      </td>
+                      <td className={td}>
+                        {r.submittedAt ? (
+                          fmtDate(r.submittedAt)
+                        ) : (
+                          <span className="text-stone-300">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
@@ -155,34 +157,36 @@ export default async function CompliancePage() {
             hint="Create one above — list the documents every file needs, then assign it to the clients it applies to."
           />
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr>
-                <th className={th}>Name</th>
-                <th className={th}>Required documents</th>
-                <th className={th}>Clients using it</th>
-              </tr>
-            </thead>
-            <tbody>
-              {checklists.map((c) => (
-                <tr key={c.id} className={trHover}>
-                  <td className={td}>
-                    <Link
-                      href={`/dashboard/compliance/${c.id}`}
-                      className="font-medium text-brand-700 hover:text-brand-600"
-                    >
-                      {c.name}
-                    </Link>
-                    {c.description && (
-                      <span className="ml-2 text-xs text-stone-400">{c.description}</span>
-                    )}
-                  </td>
-                  <td className={td}>{c._count.items}</td>
-                  <td className={td}>{c._count.clients}</td>
+          <div className={tableWrap}>
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className={th}>Name</th>
+                  <th className={th}>Required documents</th>
+                  <th className={th}>Clients using it</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {checklists.map((c) => (
+                  <tr key={c.id} className={trHover}>
+                    <td className={td}>
+                      <Link
+                        href={`/dashboard/compliance/${c.id}`}
+                        className="font-medium text-brand-700 hover:text-brand-600"
+                      >
+                        {c.name}
+                      </Link>
+                      {c.description && (
+                        <span className="ml-2 text-xs text-stone-400">{c.description}</span>
+                      )}
+                    </td>
+                    <td className={td}>{c._count.items}</td>
+                    <td className={td}>{c._count.clients}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
@@ -195,39 +199,41 @@ export default async function CompliancePage() {
         {clients.length === 0 ? (
           <p className="text-sm text-stone-400">No clients yet.</p>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr>
-                <th className={th}>Client</th>
-                <th className={th}>Compliance</th>
-                <th className={th}>Checklist</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clients.map((cl) => (
-                <tr key={cl.id} className={trHover}>
-                  <td className={td}>
-                    <Link
-                      href={`/dashboard/clients/${cl.id}`}
-                      className="font-medium text-brand-700 hover:text-brand-600"
-                    >
-                      {cl.name}
-                    </Link>
-                  </td>
-                  <td className={td}>
-                    {cl.complianceEnabled ? (
-                      <span className="text-stone-700">On</span>
-                    ) : (
-                      <span className="text-stone-400">Off</span>
-                    )}
-                  </td>
-                  <td className={td}>
-                    {cl.complianceChecklist?.name ?? <span className="text-stone-300">—</span>}
-                  </td>
+          <div className={tableWrap}>
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className={th}>Client</th>
+                  <th className={th}>Compliance</th>
+                  <th className={th}>Checklist</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {clients.map((cl) => (
+                  <tr key={cl.id} className={trHover}>
+                    <td className={td}>
+                      <Link
+                        href={`/dashboard/clients/${cl.id}`}
+                        className="font-medium text-brand-700 hover:text-brand-600"
+                      >
+                        {cl.name}
+                      </Link>
+                    </td>
+                    <td className={td}>
+                      {cl.complianceEnabled ? (
+                        <span className="text-stone-700">On</span>
+                      ) : (
+                        <span className="text-stone-400">Off</span>
+                      )}
+                    </td>
+                    <td className={td}>
+                      {cl.complianceChecklist?.name ?? <span className="text-stone-300">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

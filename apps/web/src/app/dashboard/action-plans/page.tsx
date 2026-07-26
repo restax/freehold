@@ -3,7 +3,7 @@ import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { createPlan } from "@/lib/actions/action-plans";
 import { requireTenant } from "@/lib/tenant";
-import { btn, card, input, label, summaryLink, td, th, trHover } from "@/lib/ui";
+import { btn, card, input, label, summaryLink, tableWrap, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ export default async function ActionPlansPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">Action plans</h1>
         <p className="text-sm text-stone-500">
@@ -50,31 +50,33 @@ export default async function ActionPlansPage() {
             hint="Build your closing checklist once — each step anchored to the contract or close date — and apply it to every new deal for instant deadlines."
           />
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr>
-                <th className={th}>Name</th>
-                <th className={th}>Description</th>
-                <th className={th}>Tasks</th>
-              </tr>
-            </thead>
-            <tbody>
-              {plans.map((p) => (
-                <tr key={p.id} className={trHover}>
-                  <td className={td}>
-                    <Link
-                      href={`/dashboard/action-plans/${p.id}`}
-                      className="font-medium text-brand-700 hover:text-brand-600"
-                    >
-                      {p.name}
-                    </Link>
-                  </td>
-                  <td className={td}>{p.description ?? "—"}</td>
-                  <td className={td}>{p._count.tasks}</td>
+          <div className={tableWrap}>
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className={th}>Name</th>
+                  <th className={th}>Description</th>
+                  <th className={th}>Tasks</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {plans.map((p) => (
+                  <tr key={p.id} className={trHover}>
+                    <td className={td}>
+                      <Link
+                        href={`/dashboard/action-plans/${p.id}`}
+                        className="font-medium text-brand-700 hover:text-brand-600"
+                      >
+                        {p.name}
+                      </Link>
+                    </td>
+                    <td className={td}>{p.description ?? "—"}</td>
+                    <td className={td}>{p._count.tasks}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>
