@@ -683,6 +683,9 @@ model Organization {
   emails                  Email[]
   apiKeys                 ApiKey[]
   invoices                Invoice[]
+  invoiceLines            InvoiceLine[]
+  invoicePayments         InvoicePayment[]
+  clientCreditEntries     ClientCreditEntry[]
   webhookEndpoints        WebhookEndpoint[]
 
   @@map("organization")
@@ -782,6 +785,7 @@ model Client {
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
   invoices              Invoice[]
+  creditEntries         ClientCreditEntry[]
 
   @@index([tenantId])
   @@map("client")
@@ -1086,6 +1090,7 @@ model Transaction {
   createdAt         DateTime                @default(now())
   updatedAt         DateTime                @updatedAt
   invoices          Invoice[]
+  invoiceLines      InvoiceLine[]
   intakeSubmissions IntakeSubmission[]
   compliance        TransactionCompliance[]
   vendorOrders      VendorOrder[]
@@ -1206,6 +1211,9 @@ model WebhookEndpoint {
 }
 
 enum InvoiceStatus {
+  /// Being assembled (by hand or by scheduled billing); has no number hold on
+  /// the client's attention yet — not sent, not owed, not counted outstanding.
+  DRAFT
   SENT
   PAID
   VOID
@@ -1234,6 +1242,9 @@ model Invoice {
   /// The Sales Invoice name in their ERPNext, e.g. ACC-SINV-2026-00007.
   externalId    String?       @map("external_id")
   description   String
+  /// Denormalized total: always sum(lines.amountCents), recomputed by the one
+  /// writer in lib/actions whenever lines change. Kept as a column so list
+  /// queries, reports, and the ERPNext mirror never join lines for a total.
   amountCents   Int           @map("amount_cents")
   /// How it's to be paid — "Due at closing", "Net 30", or free text.
   paymentTerms  String?       @map("payment_terms")
@@ -1247,12 +1258,112 @@ model Invoice {
   /// The nag: an open task that closes only when the invoice is resolved.
   followUpTaskId String?      @map("follow_up_task_id")
   followUpTask   Task?        @relation(fields: [followUpTaskId], references: [id], onDelete: SetNull)
+  lines         InvoiceLine[]
+  payments      InvoicePayment[]
+  /// Client-credit entries applied against this invoice (kind "applied").
+  creditEntries ClientCreditEntry[]
   createdAt     DateTime      @default(now())
   paidAt        DateTime?     @map("paid_at")
 
   @@unique([tenantId, number])
   @@index([tenantId])
   @@map("invoice")
+}
+
+/// One charge on an invoice: the base fee, an up-charge for extra work, a
+/// late fee, a deposit toward a file, a discount (negative). Consolidated
+/// weekly/monthly invoices carry one line per file, so transactionId lives
+/// here as well as on the invoice — the invoice-level link means "this whole
+/// invoice is about that file"; the line-level link says which file each
+/// charge belongs to, which is what per-file revenue reporting reads.
+model InvoiceLine {
+  id            String       @id @default(uuid())
+  tenantId      String       @map("tenant_id")
+  tenant        Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoiceId     String       @map("invoice_id")
+  invoice       Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  transactionId String?      @map("transaction_id")
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  /// "service" | "upcharge" | "late_fee" | "deposit" | "adjustment" — a plain
+  /// string (like EmailTemplate.category) so new kinds never need a migration.
+  kind          String       @default("service")
+  description   String
+  /// Signed: discounts and credits on an invoice are negative lines.
+  amountCents   Int          @map("amount_cents")
+  sortOrder     Int          @default(0) @map("sort_order")
+  createdAt     DateTime     @default(now())
+
+  @@index([tenantId, invoiceId])
+  @@index([tenantId, transactionId])
+  @@map("invoice_line")
+}
+
+/// Money held on a client's account rather than against a specific invoice —
+/// retainers and pre-payments from long-standing clients. Append-only:
+/// balance = sum(amountCents), corrections are new entries, never edits.
+/// Applying credit to an invoice writes an "applied" entry here (negative)
+/// and a paired InvoicePayment (source "credit") in the same transaction, so
+/// both sides of the movement are on the books.
+model ClientCreditEntry {
+  id             String       @id @default(uuid())
+  tenantId       String       @map("tenant_id")
+  tenant         Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId       String       @map("client_id")
+  client         Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// Signed: deposits positive; "applied" / "refund" negative.
+  amountCents    Int          @map("amount_cents")
+  /// "deposit" | "applied" | "refund" | "adjustment".
+  kind           String
+  method         String?
+  reference      String?
+  note           String?
+  /// For "applied" entries: the invoice the credit went to.
+  invoiceId      String?      @map("invoice_id")
+  invoice        Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  payment        InvoicePayment?
+  /// Denormalized (auth-table boundary — same reasoning as TransactionActivity).
+  recordedByName String?      @map("recorded_by_name")
+  receivedAt     DateTime     @default(now()) @map("received_at")
+  createdAt      DateTime     @default(now())
+
+  @@index([tenantId, clientId])
+  @@map("client_credit_entry")
+}
+
+/// The incoming-money ledger for an invoice. Append-only: a bounced check is
+/// a reversal entry (negative amount pointing at the original), never an
+/// edit or delete — the books always show what happened, in order. Partial
+/// payments are just entries smaller than the balance. ERPNext-provider
+/// invoices don't use this ledger; their ERP is the record and Freehold only
+/// mirrors the status.
+model InvoicePayment {
+  id             String       @id @default(uuid())
+  tenantId       String       @map("tenant_id")
+  tenant         Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoiceId      String       @map("invoice_id")
+  invoice        Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  /// Signed: payments positive, reversals negative.
+  amountCents    Int          @map("amount_cents")
+  /// "Check", "Wire", "Zelle", "Closing proceeds", … free text.
+  method         String?
+  /// Check number, wire memo — whatever identifies it at the bank.
+  reference      String?
+  note           String?
+  /// "direct" | "credit" (paid from the client's on-account balance).
+  source         String       @default("direct")
+  creditEntryId  String?      @unique @map("credit_entry_id")
+  creditEntry    ClientCreditEntry? @relation(fields: [creditEntryId], references: [id], onDelete: SetNull)
+  /// A reversal points at the entry it reverses.
+  reversesId     String?      @map("reverses_id")
+  reverses       InvoicePayment?  @relation("PaymentReversal", fields: [reversesId], references: [id], onDelete: SetNull)
+  reversedBy     InvoicePayment[] @relation("PaymentReversal")
+  recordedByName String?      @map("recorded_by_name")
+  /// When the money actually arrived (editable), vs createdAt (when recorded).
+  receivedAt     DateTime     @default(now()) @map("received_at")
+  createdAt      DateTime     @default(now())
+
+  @@index([tenantId, invoiceId])
+  @@map("invoice_payment")
 }
 
 enum VaultAction {

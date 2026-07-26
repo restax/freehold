@@ -4,6 +4,7 @@ import { prisma, TaskStatus, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logAudit } from "@/lib/audit";
+import { paidCents } from "@/lib/billing";
 import { emailEnabled, sendTenantEmail } from "@/lib/email";
 import {
   createSalesInvoice,
@@ -150,6 +151,11 @@ export async function createInvoice(formData: FormData) {
         paymentTerms,
         dueDate,
         followUpTaskId: task.id,
+        // amountCents is the denormalized sum of lines; the simple one-field
+        // form is a one-line invoice. Up-charges and late fees add lines.
+        lines: {
+          create: { tenantId, transactionId, kind: "service", description, amountCents },
+        },
       },
     });
     return { invoice, clientName: client.name };
@@ -251,11 +257,31 @@ export async function markInvoicePaid(formData: FormData) {
         status: true,
         number: true,
         amountCents: true,
+        provider: true,
         followUpTaskId: true,
         transactionId: true,
+        payments: { select: { amountCents: true } },
       },
     });
     if (invoice?.status !== "SENT") return null;
+    // "Mark paid" settles the remainder in one entry, so the ledger and the
+    // status agree. ERPNext-provider invoices keep their ledger in the ERP;
+    // Freehold only mirrors the status for those.
+    if (invoice.provider === "freehold") {
+      const remaining = invoice.amountCents - paidCents(invoice.payments);
+      if (remaining > 0) {
+        await tx.invoicePayment.create({
+          data: {
+            tenantId,
+            invoiceId: id,
+            amountCents: remaining,
+            method: optStr(formData, "method"),
+            note: optStr(formData, "paidNote"),
+            recordedByName: session.user.name,
+          },
+        });
+      }
+    }
     await tx.invoice.update({
       where: { id },
       data: { status: "PAID", paidAt: new Date(), paidNote: optStr(formData, "paidNote") },
