@@ -12,6 +12,7 @@ import {
   voidInvoice,
 } from "@/lib/actions/invoices";
 import { markPaymentRequestPaid } from "@/lib/actions/pay";
+import { type AttributableInvoice, billingExceptions, transactionBilling } from "@/lib/billing";
 import { emailEnabled } from "@/lib/email";
 import { erpnextInvoiceUrl } from "@/lib/erpnext";
 import { fmtDate } from "@/lib/format";
@@ -34,12 +35,14 @@ import {
 export const dynamic = "force-dynamic";
 
 const STATUS_TONE: Record<string, BadgeTone> = {
+  DRAFT: "neutral",
   SENT: "progress",
   PAID: "success",
   VOID: "neutral",
 };
 
 const STATUS_TEXT: Record<string, string> = {
+  DRAFT: "Draft",
   SENT: "Outstanding",
   PAID: "Paid",
   VOID: "Void",
@@ -73,22 +76,42 @@ export default async function InvoicesPage({
         }),
       )
     : [];
-  const { invoices, clients, transactions } = await withTenant(tenantId, async (tx) => ({
-    invoices: await tx.invoice.findMany({
-      orderBy: { number: "desc" },
-      include: {
-        client: { select: { name: true, email: true } },
-        transaction: { select: { id: true, propertyAddress: true } },
-      },
+  const { invoices, clients, transactions, closedFiles, feeUnsetCount } = await withTenant(
+    tenantId,
+    async (tx) => ({
+      invoices: await tx.invoice.findMany({
+        orderBy: { number: "desc" },
+        include: {
+          client: { select: { name: true, email: true } },
+          transaction: { select: { id: true, propertyAddress: true } },
+          lines: { select: { transactionId: true, amountCents: true } },
+          payments: { select: { amountCents: true } },
+        },
+      }),
+      clients: await tx.client.findMany({ orderBy: { name: "asc" } }),
+      transactions: await tx.transaction.findMany({
+        where: { status: { notIn: ["CANCELLED"] } },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, propertyAddress: true },
+        take: 100,
+      }),
+      // The trust surface: every closed file, checked against what was billed.
+      closedFiles: await tx.transaction.findMany({
+        where: { status: "CLOSED" },
+        select: { id: true, propertyAddress: true, status: true, expectedFeeCents: true },
+      }),
+      feeUnsetCount: await tx.transaction.count({
+        where: { status: { notIn: ["CANCELLED"] }, expectedFeeCents: null },
+      }),
     }),
-    clients: await tx.client.findMany({ orderBy: { name: "asc" } }),
-    transactions: await tx.transaction.findMany({
-      where: { status: { notIn: ["CANCELLED"] } },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, propertyAddress: true },
-      take: 100,
-    }),
-  }));
+  );
+
+  // Closed files billed less than expected — the "am I paid on every file?"
+  // answer, computed by the same attribution math the file pages use.
+  const attributable: AttributableInvoice[] = invoices;
+  const exceptions = billingExceptions(closedFiles, (txnId) =>
+    transactionBilling(txnId, attributable),
+  );
 
   const outstanding = invoices.filter((i) => i.status === "SENT");
   const overdue = outstanding.filter((i) => agingBucket(i.dueDate) === "overdue");
@@ -140,6 +163,56 @@ export default async function InvoicesPage({
           <p className="mt-1 text-xs text-stone-400">
             Get this as an email every morning — switch it on under Settings → Invoice report.
           </p>
+        </section>
+      )}
+
+      {allowed && isAdmin && (exceptions.length > 0 || feeUnsetCount > 0) && (
+        <section className={`${card} ${exceptions.length > 0 ? "border-amber-300/70" : ""}`}>
+          <h2 className="mb-1 font-medium">Billing health</h2>
+          {exceptions.length > 0 ? (
+            <>
+              <p className="mb-2 text-sm text-stone-600">
+                {exceptions.length} closed file{exceptions.length === 1 ? "" : "s"} billed less than
+                expected — money on the table until these are invoiced.
+              </p>
+              <ul className="flex flex-col divide-y divide-stone-100">
+                {exceptions.slice(0, 8).map((e) => (
+                  <li key={e.id} className="flex flex-wrap items-baseline gap-x-3 py-1.5 text-sm">
+                    <Link
+                      href={`/dashboard/transactions/${e.id}`}
+                      className="font-medium text-brand-700 hover:text-brand-600"
+                    >
+                      {e.propertyAddress}
+                    </Link>
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
+                      {e.kind === "unbilled_closed" ? "nothing billed" : "underbilled"}
+                    </span>
+                    <span className="ml-auto tabular-nums text-stone-500">
+                      {fmtCents(e.billedCents)} of {fmtCents(e.expectedCents)} billed
+                      <span className="ml-2 font-medium text-amber-800">
+                        {fmtCents(e.shortfallCents)} short
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {exceptions.length > 8 && (
+                <p className="mt-1 text-xs text-stone-400">+{exceptions.length - 8} more.</p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-emerald-700">
+              Every closed file with an expected fee is fully billed.
+            </p>
+          )}
+          {feeUnsetCount > 0 && (
+            <p className="mt-2 text-xs text-stone-400">
+              {feeUnsetCount} file{feeUnsetCount === 1 ? "" : "s"}{" "}
+              {feeUnsetCount === 1 ? "has" : "have"} no expected fee set — set a
+              standard fee on the client (or workspace default in Settings) and new files fill in
+              automatically; existing files take a fee on their Dates &amp; details tab.
+            </p>
+          )}
         </section>
       )}
 

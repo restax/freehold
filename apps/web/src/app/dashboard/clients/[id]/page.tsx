@@ -1,4 +1,4 @@
-import { withTenant } from "@freehold/db";
+import { prisma, withTenant } from "@freehold/db";
 import { Buildings, LinkSimple } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -6,6 +6,7 @@ import { Badge, StatusBadge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
 import { RevealCredential } from "@/components/reveal-credential";
 import { RevealSkyslope } from "@/components/reveal-skyslope";
+import { saveClientBilling } from "@/lib/actions/billing-policy";
 import {
   addClientAgent,
   addClientNote,
@@ -18,6 +19,7 @@ import { setClientCompliance } from "@/lib/actions/compliance";
 import { createAgentPortalLink, setPortalLinkActive } from "@/lib/actions/portal";
 import { connectSkyslope, disconnectSkyslope } from "@/lib/actions/skyslope";
 import { parseEmailPrefs } from "@/lib/auto-emails";
+import { BILLING_MODE_LABEL, BILLING_MODES, tenantBillingPolicy } from "@/lib/billing-policy";
 import { fmtDate, fmtMoney } from "@/lib/format";
 import { portalOrigin } from "@/lib/portal";
 import { decodeSkyslopeConfig, maskKey, parseSkyslopeConfig, skyslopeState } from "@/lib/skyslope";
@@ -102,6 +104,32 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
     criticalWindowDays: number;
     criticalStaleDays: number;
   }>;
+  // Billing: stored overrides (not the resolved policy) so the form shows
+  // exactly what's overridden, with workspace defaults as placeholders.
+  const orgBilling = tenantBillingPolicy(
+    (
+      await prisma.organization.findUniqueOrThrow({
+        where: { id: tenantId },
+        select: { billingDefaults: true },
+      })
+    ).billingDefaults,
+  );
+  const billingCfg = (client.billingConfig ?? {}) as Partial<{
+    mode: string;
+    lateFee: {
+      enabled?: boolean;
+      type?: string;
+      flatCents?: number;
+      percent?: number;
+      graceDays?: number;
+    };
+  }>;
+  const lateFeeChoice =
+    billingCfg.lateFee?.enabled === true
+      ? "on"
+      : billingCfg.lateFee?.enabled === false
+        ? "off"
+        : "";
 
   // SkySlope: the stored key is only ever shown masked, so decrypt just enough
   // to render its last four. The full value needs the audited reveal.
@@ -644,6 +672,107 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
               .
             </span>
           )}
+        </form>
+      </section>
+
+      <section className={card}>
+        <h2 className="mb-1 font-medium">Billing</h2>
+        <p className="mb-3 text-sm text-stone-500">
+          How {client.name} is billed. Anything left on “workspace default” follows Settings →
+          Client billing defaults; overrides here win for this client only.
+        </p>
+        <form action={saveClientBilling} className="flex flex-col gap-3">
+          <input type="hidden" name="id" value={client.id} />
+          <div className="flex flex-wrap items-end gap-3">
+            <label className={labelCls}>
+              Billing rhythm
+              <select name="mode" defaultValue={billingCfg.mode ?? ""} className={input}>
+                <option value="">Workspace default — {BILLING_MODE_LABEL[orgBilling.mode]}</option>
+                {BILLING_MODES.map((m) => (
+                  <option key={m.key} value={m.key}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={labelCls}>
+              Standard fee ($ per file)
+              <input
+                name="defaultFee"
+                inputMode="decimal"
+                defaultValue={
+                  client.defaultFeeCents == null ? "" : (client.defaultFeeCents / 100).toFixed(2)
+                }
+                placeholder={
+                  orgBilling.defaultFeeCents == null
+                    ? "350.00"
+                    : (orgBilling.defaultFeeCents / 100).toFixed(2)
+                }
+                className={`${input} w-32`}
+              />
+              <span className="text-xs font-normal text-stone-400">
+                auto-fills each new file's expected fee
+              </span>
+            </label>
+            <label className={labelCls}>
+              Late fees
+              <select name="lateFeeChoice" defaultValue={lateFeeChoice} className={input}>
+                <option value="">
+                  Workspace default — {orgBilling.lateFee.enabled ? "on" : "off"}
+                </option>
+                <option value="on">On for this client</option>
+                <option value="off">Off for this client</option>
+              </select>
+            </label>
+            <label className={labelCls}>
+              Type
+              <select
+                name="lateFeeType"
+                defaultValue={billingCfg.lateFee?.type ?? orgBilling.lateFee.type}
+                className={input}
+              >
+                <option value="flat">Flat amount</option>
+                <option value="percent">% of invoice</option>
+              </select>
+            </label>
+            <label className={labelCls}>
+              Flat ($)
+              <input
+                name="lateFeeFlat"
+                inputMode="decimal"
+                defaultValue={(
+                  (billingCfg.lateFee?.flatCents ?? orgBilling.lateFee.flatCents) / 100
+                ).toFixed(2)}
+                className={`${input} w-24`}
+              />
+            </label>
+            <label className={labelCls}>
+              Percent
+              <input
+                name="lateFeePercent"
+                type="number"
+                step="0.1"
+                min={0}
+                max={100}
+                defaultValue={billingCfg.lateFee?.percent ?? orgBilling.lateFee.percent}
+                className={`${input} w-24`}
+              />
+            </label>
+            <label className={labelCls}>
+              Grace (days)
+              <input
+                name="lateFeeGrace"
+                type="number"
+                min={0}
+                max={365}
+                defaultValue={billingCfg.lateFee?.graceDays ?? orgBilling.lateFee.graceDays}
+                className={`${input} w-24`}
+              />
+            </label>
+          </div>
+          <button type="submit" className={btnGhost}>
+            Save billing
+          </button>
         </form>
       </section>
 

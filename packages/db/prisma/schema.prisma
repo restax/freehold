@@ -665,6 +665,10 @@ model Organization {
   /// secretEnc:{...}}. API key + secret encrypted with VAULT_MASTER_KEY.
   /// Null = client invoices are kept in Freehold only.
   erpnextConfig           Json?                   @map("erpnext_config")
+  /// Workspace billing policy: {mode, depositPercent, lateFee:{...},
+  /// defaultFeeCents}. Every key overridable per client (Client.billingConfig).
+  /// Parsed/validated by lib/billing-policy.ts; unset keys fall back there.
+  billingDefaults         Json?                   @map("billing_defaults")
   documents               Document[]
   extractions             ContractExtraction[]
   extractionFields        ExtractionField[]
@@ -770,6 +774,12 @@ model Client {
   /// to hear about a quiet file sooner than others. Unset keys fall back to
   /// the defaults in lib/transaction-alerts.ts.
   alertConfig           Json?                @map("alert_config")
+  /// What this client is normally charged per file; auto-fills each new
+  /// transaction's expectedFeeCents. Null = the workspace default fee.
+  defaultFeeCents       Int?                 @map("default_fee_cents")
+  /// Per-client billing-policy overrides ({mode, lateFee, ...}); unset keys
+  /// fall back to Organization.billingDefaults via lib/billing-policy.ts.
+  billingConfig         Json?                @map("billing_config")
   /// Compliance: every transaction for this client follows the assigned
   /// checklist. Switch complianceEnabled off to exempt the client entirely
   /// (leaving no checklist assigned is also inert).
@@ -1065,6 +1075,11 @@ model Transaction {
   /// the alert query never depends on task titles matching a phrase.
   mortgageCommitmentDate DateTime?          @map("mortgage_commitment_date") @db.Date
   inspectionDeadlineDate DateTime?          @map("inspection_deadline_date") @db.Date
+  /// What the tenant expects to charge for this file — the anchor the trust
+  /// surface compares actual billing against. Auto-filled from the client's
+  /// default fee (else the workspace default) when the file is created;
+  /// editable per file. 0 = deliberately no charge; null = never set.
+  expectedFeeCents  Int?                    @map("expected_fee_cents")
   notes             String?
   customFields      Json?                   @map("custom_fields")
   /// Parties pulled from the contract (buyer, seller, attorneys, title, agents)

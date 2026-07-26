@@ -1476,6 +1476,21 @@ export default async function TransactionDetailPage({
                     />
                   </label>
                   <label className={label}>
+                    Expected fee ($)
+                    <input
+                      name="expectedFee"
+                      inputMode="decimal"
+                      defaultValue={
+                        txn.expectedFeeCents == null ? "" : (txn.expectedFeeCents / 100).toFixed(2)
+                      }
+                      placeholder="350.00"
+                      className={input}
+                    />
+                    <span className="text-xs font-normal text-stone-400">
+                      What you'll bill for this file. Blank = client default · 0 = no charge.
+                    </span>
+                  </label>
+                  <label className={label}>
                     Contract date
                     <input
                       name="contractDate"

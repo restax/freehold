@@ -10,12 +10,14 @@ import {
   readNewApiKey,
   revokeApiKey,
 } from "@/lib/actions/api-keys";
+import { saveBillingDefaults } from "@/lib/actions/billing-policy";
 import { setContactVisibilityRestriction } from "@/lib/actions/contacts";
 import { saveDirectoryListing } from "@/lib/actions/directory";
 import { removeSampleData } from "@/lib/actions/sample-data";
 import { addState, removeState, setLicenseEnforcement } from "@/lib/actions/states";
 import { setDailyBriefing, setInvoiceReport } from "@/lib/actions/templates";
 import { saveSideLabels } from "@/lib/actions/website";
+import { BILLING_MODES, tenantBillingPolicy } from "@/lib/billing-policy";
 import {
   AVAILABILITY,
   PRICING_MODELS,
@@ -516,8 +518,9 @@ export default async function SettingsPage() {
   const isAdmin = role === "owner" || role === "admin";
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: tenantId },
-    select: { emailSettings: true },
+    select: { emailSettings: true, billingDefaults: true },
   });
+  const billing = tenantBillingPolicy(org.billingDefaults);
   const briefingOn =
     (org.emailSettings as { dailyBriefing?: boolean } | null)?.dailyBriefing === true;
   const invoiceReportUserId =
@@ -593,6 +596,116 @@ export default async function SettingsPage() {
             </p>
           )}
         </section>
+
+        {isAdmin && (
+          <section className={card}>
+            <h2 className="mb-1 font-medium">Client billing defaults</h2>
+            <p className="mb-3 text-sm text-stone-500">
+              How this workspace bills by default. Any client can override any of this on their
+              profile — these are the settings a client gets when you haven't said otherwise.
+            </p>
+            <form action={saveBillingDefaults} className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <label className={label}>
+                  Billing rhythm
+                  <select name="mode" defaultValue={billing.mode} className={input}>
+                    {BILLING_MODES.map((m) => (
+                      <option key={m.key} value={m.key}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={label}>
+                  Standard fee ($ per file)
+                  <input
+                    name="defaultFee"
+                    inputMode="decimal"
+                    defaultValue={
+                      billing.defaultFeeCents == null
+                        ? ""
+                        : (billing.defaultFeeCents / 100).toFixed(2)
+                    }
+                    placeholder="350.00"
+                    className={`${input} w-32`}
+                  />
+                </label>
+                <label className={label}>
+                  Deposit %
+                  <input
+                    name="depositPercent"
+                    type="number"
+                    min={1}
+                    max={100}
+                    defaultValue={billing.depositPercent}
+                    className={`${input} w-24`}
+                  />
+                  <span className="text-xs font-normal text-stone-400">
+                    for “deposit up front” clients
+                  </span>
+                </label>
+              </div>
+              <div className="flex flex-wrap items-end gap-3 rounded-lg bg-stone-50 p-3">
+                <label className="flex items-center gap-2 pb-2 text-sm font-medium text-stone-700">
+                  <input
+                    type="checkbox"
+                    name="lateFeeEnabled"
+                    value="1"
+                    defaultChecked={billing.lateFee.enabled}
+                    className="accent-brand-600"
+                  />
+                  Charge late fees
+                </label>
+                <label className={label}>
+                  Type
+                  <select name="lateFeeType" defaultValue={billing.lateFee.type} className={input}>
+                    <option value="flat">Flat amount</option>
+                    <option value="percent">% of invoice</option>
+                  </select>
+                </label>
+                <label className={label}>
+                  Flat ($)
+                  <input
+                    name="lateFeeFlat"
+                    inputMode="decimal"
+                    defaultValue={(billing.lateFee.flatCents / 100).toFixed(2)}
+                    className={`${input} w-24`}
+                  />
+                </label>
+                <label className={label}>
+                  Percent
+                  <input
+                    name="lateFeePercent"
+                    type="number"
+                    step="0.1"
+                    min={0}
+                    max={100}
+                    defaultValue={billing.lateFee.percent}
+                    className={`${input} w-24`}
+                  />
+                </label>
+                <label className={label}>
+                  Grace (days)
+                  <input
+                    name="lateFeeGrace"
+                    type="number"
+                    min={0}
+                    max={365}
+                    defaultValue={billing.lateFee.graceDays}
+                    className={`${input} w-24`}
+                  />
+                </label>
+                <p className="w-full text-xs text-stone-400">
+                  Late fees are never added silently — an overdue invoice offers a one-click
+                  suggested line you approve.
+                </p>
+              </div>
+              <button type="submit" className={`${btnGhost} self-start`}>
+                Save billing defaults
+              </button>
+            </form>
+          </section>
+        )}
 
         {emailEnabled() && isAdmin && (
           <section className={card}>

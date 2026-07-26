@@ -82,6 +82,111 @@ export function maxCreditApplication(creditBalance: number, invoiceBalance: numb
   return Math.max(0, Math.min(creditBalance, invoiceBalance));
 }
 
+// ---------- per-file attribution ----------
+
+export interface AttributableInvoice {
+  status: "DRAFT" | "SENT" | "PAID" | "VOID";
+  provider: string;
+  transactionId: string | null;
+  /** Denormalized total — the fallback when a legacy invoice has no lines. */
+  amountCents: number;
+  lines: Array<{ transactionId: string | null; amountCents: number }>;
+  payments: MoneyLine[];
+}
+
+export interface TransactionBillingSummary {
+  /** Issued (SENT or PAID) charges attributed to the file. DRAFT and VOID don't count. */
+  billedCents: number;
+  /** Money received, allocated to the file — pro-rata on consolidated invoices. */
+  paidCents: number;
+}
+
+/** Lines belonging to a file: line-level link wins; lines without one inherit the invoice's. */
+function attributedCents(inv: AttributableInvoice, transactionId: string): number {
+  return inv.lines.reduce(
+    (s, l) => s + ((l.transactionId ?? inv.transactionId) === transactionId ? l.amountCents : 0),
+    0,
+  );
+}
+
+/**
+ * What one transaction has been billed and paid, across every invoice that
+ * touches it. On a consolidated invoice, payments are allocated pro-rata by
+ * the file's share of the total — a $700 invoice half about this file that's
+ * half paid credits the file $175. ERPNext-provider PAID invoices count as
+ * fully collected (their ledger lives in the ERP).
+ */
+export function transactionBilling(
+  transactionId: string,
+  invoices: AttributableInvoice[],
+): TransactionBillingSummary {
+  let billedCents = 0;
+  let paid = 0;
+  for (const inv of invoices) {
+    if (inv.status === "DRAFT" || inv.status === "VOID") continue;
+    const attributed = attributedCents(inv, transactionId);
+    if (attributed === 0) continue;
+    billedCents += attributed;
+    const total = inv.lines.length > 0 ? invoiceTotalCents(inv.lines) : inv.amountCents;
+    const collected =
+      inv.provider !== "freehold" && inv.status === "PAID" ? total : paidCents(inv.payments);
+    paid += total > 0 ? Math.round((collected * attributed) / total) : 0;
+  }
+  return { billedCents, paidCents: paid };
+}
+
+// ---------- the trust surface ----------
+
+export interface BillingExceptionInput {
+  id: string;
+  propertyAddress: string;
+  status: string;
+  expectedFeeCents: number | null;
+}
+
+export interface BillingException {
+  id: string;
+  propertyAddress: string;
+  kind: "unbilled_closed" | "underbilled_closed";
+  expectedCents: number;
+  billedCents: number;
+  shortfallCents: number;
+}
+
+/**
+ * Files the TC should not trust yet: closed with nothing billed, or closed
+ * with less billed than expected. expectedFeeCents 0 means "deliberately no
+ * charge" and never flags; null means "fee never set" and is reported as a
+ * count by the caller rather than a per-file exception, so a workspace that
+ * hasn't adopted expected fees isn't drowned in flags.
+ */
+export function billingExceptions(
+  txns: BillingExceptionInput[],
+  billedFor: (id: string) => TransactionBillingSummary,
+): BillingException[] {
+  const out: BillingException[] = [];
+  for (const t of txns) {
+    if (t.status !== "CLOSED") continue;
+    if (t.expectedFeeCents == null || t.expectedFeeCents <= 0) continue;
+    const { billedCents } = billedFor(t.id);
+    if (billedCents >= t.expectedFeeCents) continue;
+    out.push({
+      id: t.id,
+      propertyAddress: t.propertyAddress,
+      kind: billedCents === 0 ? "unbilled_closed" : "underbilled_closed",
+      expectedCents: t.expectedFeeCents,
+      billedCents,
+      shortfallCents: t.expectedFeeCents - billedCents,
+    });
+  }
+  // Worst first: never-billed ahead of underbilled, then by dollars missing.
+  return out.sort(
+    (a, b) =>
+      (a.kind === b.kind ? 0 : a.kind === "unbilled_closed" ? -1 : 1) ||
+      b.shortfallCents - a.shortfallCents,
+  );
+}
+
 /** Suggested methods for payment entry; the field also takes free text. */
 export const PAYMENT_METHODS = [
   "Check",

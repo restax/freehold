@@ -1,14 +1,22 @@
 "use server";
 
-import { type TenantTx, TransactionSide, TransactionStatus, withTenant } from "@freehold/db";
+import {
+  prisma,
+  type TenantTx,
+  TransactionSide,
+  TransactionStatus,
+  withTenant,
+} from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logActivity } from "@/lib/activity";
 import type { ContractParty } from "@/lib/ai/contract-schema";
 import { logAudit } from "@/lib/audit";
 import { fireIntroEmail, firePostCloseEmail } from "@/lib/auto-emails";
+import { resolveDefaultFee, tenantBillingPolicy } from "@/lib/billing-policy";
 import { confirmed, dateOnly, intOr, oneOf, optStr, str } from "@/lib/forms";
 import { gapForPending, gapMessage, licenseEnforcement } from "@/lib/licensing";
+import { parseFeeCents } from "@/lib/pay";
 import { transactionLimit } from "@/lib/plans";
 import { requireAdminTenant, requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
@@ -38,7 +46,33 @@ function commonFields(formData: FormData) {
     mlsId: optStr(formData, "mlsId"),
     coAgentClientId: optStr(formData, "coAgentClientId"),
     notes: optStr(formData, "notes"),
+    // Expected fee: only forms that carry the field can change it. Blank means
+    // "fall back to the client/workspace default" (re-resolved below); an
+    // explicit 0 means this file is deliberately not billed.
+    ...(formData.has("expectedFee")
+      ? { expectedFeeCents: parseFeeCents(str(formData, "expectedFee")) }
+      : {}),
   };
+}
+
+/**
+ * A file with no expected fee inherits the client's default (else the
+ * workspace's). Runs after create/update so "blank" always means "default",
+ * never silently zero — the trust surface depends on this number existing.
+ */
+async function resolvedExpectedFee(
+  tx: TenantTx,
+  tenantId: string,
+  clientId: string | null | undefined,
+  current: number | null | undefined,
+): Promise<number | null> {
+  if (current != null) return current;
+  if (!clientId) return null;
+  const [client, org] = await Promise.all([
+    tx.client.findUnique({ where: { id: clientId }, select: { defaultFeeCents: true } }),
+    prisma.organization.findUnique({ where: { id: tenantId }, select: { billingDefaults: true } }),
+  ]);
+  return resolveDefaultFee(client?.defaultFeeCents, tenantBillingPolicy(org?.billingDefaults));
 }
 
 /** Payout tab: commission percentages; gross computes from contract price. */
@@ -88,8 +122,14 @@ export async function createTransaction(formData: FormData) {
   }
 
   const created = await withTenant(tenantId, async (tx) => {
+    const expectedFeeCents = await resolvedExpectedFee(
+      tx,
+      tenantId,
+      fields.clientId,
+      fields.expectedFeeCents,
+    );
     const txn = await tx.transaction.create({
-      data: { tenantId, propertyAddress, ...fields },
+      data: { tenantId, propertyAddress, ...fields, expectedFeeCents },
     });
     // Optional create-time assignment; more people can be added on the file.
     if (assigneeId) {
@@ -156,6 +196,9 @@ export async function updateTransaction(formData: FormData) {
       ...(propertyAddress ? { propertyAddress } : {}),
       ...fields,
     };
+    if ("expectedFeeCents" in fields && fields.expectedFeeCents == null) {
+      data.expectedFeeCents = await resolvedExpectedFee(tx, tenantId, fields.clientId, null);
+    }
     const proposed = { ...((existing.proposedDates as Record<string, string> | null) ?? {}) };
     for (const field of ["contractDate", "closeDate"] as const) {
       const next = fields[field];
