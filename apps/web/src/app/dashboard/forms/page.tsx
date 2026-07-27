@@ -20,7 +20,7 @@ import {
 } from "@/lib/form-schema";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
-import { btn, card, input, label, tableWrap, td, th, trHover } from "@/lib/ui";
+import { btn, btnGhost, card, input, label, tableWrap, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -31,24 +31,38 @@ const KIND_ICON: Record<string, typeof Buildings> = {
 
 export default async function FormsPage() {
   const { tenantId } = await requireTenant();
-  const forms = await withTenant(tenantId, (tx) =>
-    tx.form.findMany({
+  const [forms, pending] = await withTenant(tenantId, async (tx) => [
+    await tx.form.findMany({
       orderBy: [{ kind: "asc" }, { name: "asc" }],
       include: {
         client: { select: { id: true, name: true } },
         _count: { select: { submissions: true } },
       },
     }),
-  );
+    await tx.formSubmission.count({ where: { status: "new" } }),
+  ]);
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-semibold">Forms</h1>
-        <p className="text-sm text-stone-500">
-          Intake forms you design and place. A published form appears wherever you've pointed it —
-          your public website, your clients' portals, or both.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold">Forms</h1>
+          <p className="text-sm text-stone-500">
+            Intake forms you design and place. A published form appears wherever you've pointed it —
+            your public website, your clients' portals, or both.
+          </p>
+        </div>
+        <Link
+          href="/dashboard/forms/submissions"
+          className={`${btnGhost} flex items-center gap-2 whitespace-nowrap`}
+        >
+          Submissions
+          {pending > 0 && (
+            <span className="rounded-full bg-amber-100 px-1.5 text-xs font-semibold text-amber-900">
+              {pending}
+            </span>
+          )}
+        </Link>
       </div>
 
       <section className={card}>
