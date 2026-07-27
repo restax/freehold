@@ -187,6 +187,29 @@ export function billingExceptions(
   );
 }
 
+/**
+ * Money already spoken for on a file: issued charges (SENT/PAID) plus what's
+ * sitting on unissued drafts. This is the figure new drafting clamps against
+ * — both the event-driven drafts and the scheduled consolidated ones — so no
+ * two paths can ever draft the same dollars twice.
+ */
+export function committedCents(transactionId: string, invoices: AttributableInvoice[]): number {
+  const issued = transactionBilling(transactionId, invoices).billedCents;
+  const drafted = invoices
+    .filter((i) => i.status === "DRAFT")
+    .reduce(
+      (s, i) =>
+        s +
+        i.lines.reduce(
+          (t, l) =>
+            t + ((l.transactionId ?? i.transactionId) === transactionId ? l.amountCents : 0),
+          0,
+        ),
+      0,
+    );
+  return issued + drafted;
+}
+
 // ---------- event-driven drafts ----------
 
 /**

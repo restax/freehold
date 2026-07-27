@@ -1,5 +1,5 @@
 import { prisma, withTenant } from "@freehold/db";
-import { autoDraftTarget, transactionBilling } from "@/lib/billing";
+import { autoDraftTarget, committedCents } from "@/lib/billing";
 import { clientBillingPolicy } from "@/lib/billing-policy";
 import { nextInvoiceNumber } from "@/lib/invoicing";
 import { getTenantPlan, isCloud } from "@/lib/plans";
@@ -56,26 +56,12 @@ export async function ensureAutoDraft(
           payments: { select: { amountCents: true } },
         },
       });
-      const issued = transactionBilling(transactionId, invoices).billedCents;
-      const drafted = invoices
-        .filter((i) => i.status === "DRAFT")
-        .reduce(
-          (s, i) =>
-            s +
-            i.lines.reduce(
-              (t, l) =>
-                t + ((l.transactionId ?? i.transactionId) === transactionId ? l.amountCents : 0),
-              0,
-            ),
-          0,
-        );
-
       const target = autoDraftTarget(
         policy.mode,
         phase,
         txn.expectedFeeCents,
         policy.depositPercent,
-        issued + drafted,
+        committedCents(transactionId, invoices),
       );
       if (target <= 0) return;
 

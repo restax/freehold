@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { runScheduledBilling } from "@/lib/billing-schedule";
 import { runDailyBriefings } from "@/lib/daily-briefing";
 import { runOwnerExports } from "@/lib/export-run";
 import { runInvoiceReports } from "@/lib/invoice-report";
@@ -28,6 +29,9 @@ export async function GET(req: Request) {
   const invoiceReports = await runInvoiceReports();
   const exportSweep = await sweepExpiredExports();
   const adRenewals = await runVendorAdRenewals();
+  // Consolidated drafts before the invoice report, so a month-boundary run
+  // reports the drafts it just created.
+  const scheduledBilling = await runScheduledBilling();
   return NextResponse.json({
     outbox,
     exports,
@@ -35,5 +39,6 @@ export async function GET(req: Request) {
     invoiceReports,
     exportSweep,
     adRenewals,
+    scheduledBilling,
   });
 }
