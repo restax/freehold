@@ -19,6 +19,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           orderBy: { sortOrder: "asc" },
           select: { description: true, amountCents: true },
         },
+        payments: { select: { amountCents: true } },
       },
     }),
   );
@@ -42,6 +43,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       transactionAddress: invoice.transaction?.propertyAddress ?? null,
       lines: invoice.lines,
       isDraft: invoice.status === "DRAFT",
+      paidCents:
+        invoice.provider === "freehold"
+          ? invoice.payments.reduce((s, p) => s + p.amountCents, 0)
+          : undefined,
     }),
   );
   return new Response(new Uint8Array(pdf), {

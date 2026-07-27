@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   clientBillingPolicy,
   DEFAULT_BILLING_POLICY,
+  lateFeeCents,
+  lateFeeEligible,
   resolveDefaultFee,
   tenantBillingPolicy,
 } from "./billing-policy";
@@ -55,6 +57,32 @@ describe("clientBillingPolicy", () => {
 
   it("no client config means exactly the tenant policy", () => {
     expect(clientBillingPolicy(tenant, null)).toEqual(tenantBillingPolicy(tenant));
+  });
+});
+
+describe("late fees", () => {
+  const flat = {
+    enabled: true,
+    type: "flat" as const,
+    flatCents: 2500,
+    percent: 1.5,
+    graceDays: 5,
+  };
+  const pct = { ...flat, type: "percent" as const, percent: 2 };
+  const due = new Date("2026-07-01");
+
+  it("computes flat and percent fees", () => {
+    expect(lateFeeCents(flat, 35000)).toBe(2500);
+    expect(lateFeeCents(pct, 35000)).toBe(700);
+    expect(lateFeeCents({ ...flat, enabled: false }, 35000)).toBe(0);
+  });
+
+  it("suggests only past the grace period, once, on dated invoices", () => {
+    expect(lateFeeEligible(flat, due, 6, false)).toBe(true);
+    expect(lateFeeEligible(flat, due, 5, false)).toBe(false); // still in grace
+    expect(lateFeeEligible(flat, due, 6, true)).toBe(false); // already has one
+    expect(lateFeeEligible(flat, null, 6, false)).toBe(false); // no due date
+    expect(lateFeeEligible({ ...flat, enabled: false }, due, 30, false)).toBe(false);
   });
 });
 

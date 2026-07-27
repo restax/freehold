@@ -128,6 +128,29 @@ export function clientBillingPolicy(tenantRaw: unknown, clientRaw: unknown): Bil
   return mergePolicy(tenantBillingPolicy(tenantRaw), clientRaw);
 }
 
+/** The late fee a policy would add to an invoice of this size, in cents. */
+export function lateFeeCents(lf: LateFeePolicy, invoiceTotalCents: number): number {
+  if (!lf.enabled) return 0;
+  return lf.type === "flat"
+    ? lf.flatCents
+    : Math.max(0, Math.round((invoiceTotalCents * lf.percent) / 100));
+}
+
+/**
+ * Whether to *suggest* a late fee: policy on, invoice overdue past the grace
+ * period, and no late fee already on it (one per invoice — predictable beats
+ * compounding). Suggestion only; a person clicks to add it, always.
+ */
+export function lateFeeEligible(
+  lf: LateFeePolicy,
+  dueDate: Date | null,
+  daysPastDue: number,
+  hasLateFeeLine: boolean,
+): boolean {
+  if (!lf.enabled || !dueDate || hasLateFeeLine) return false;
+  return daysPastDue > lf.graceDays;
+}
+
 /**
  * The fee a new file should expect: the client's own default, else the
  * workspace default, else nothing (the file shows "fee not set" until the TC

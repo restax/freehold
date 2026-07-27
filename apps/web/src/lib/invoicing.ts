@@ -61,6 +61,8 @@ export interface InvoicePdfInput {
   lines?: Array<{ description: string; amountCents: number }>;
   /** Drafts are watermarked so a not-yet-issued PDF can't pass as a bill. */
   isDraft?: boolean;
+  /** Ledger total received; when set, the document shows paid/balance lines. */
+  paidCents?: number;
 }
 
 const dateOnly = (d: Date) => d.toISOString().slice(0, 10);
@@ -83,7 +85,13 @@ export function invoiceText(inv: InvoicePdfInput): string {
     lines.push(inv.description);
   }
   lines.push("");
-  lines.push(`Amount due: ${fmtCents(inv.amountCents)}`);
+  if (inv.paidCents != null && inv.paidCents !== 0) {
+    lines.push(`Total: ${fmtCents(inv.amountCents)}`);
+    lines.push(`Paid to date: ${fmtCents(inv.paidCents)}`);
+    lines.push(`Balance due: ${fmtCents(inv.amountCents - inv.paidCents)}`);
+  } else {
+    lines.push(`Amount due: ${fmtCents(inv.amountCents)}`);
+  }
   if (inv.paymentTerms) lines.push(`Terms: ${inv.paymentTerms}`);
   if (inv.dueDate) lines.push(`Due: ${dateOnly(inv.dueDate)}`);
   return lines.join("\n");
