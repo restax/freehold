@@ -14,6 +14,7 @@ import {
   btn,
   btnGhost,
   card,
+  fieldGroupLabel,
   input,
   label,
   summaryLink,
@@ -195,114 +196,144 @@ export default async function TransactionsPage({
         <summary className={summaryLink}>
           {aiAvailable ? "Or enter details manually" : "New transaction"}
         </summary>
-        <form action={createTransaction} className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <label className={`${label} sm:col-span-2`}>
-            Property address *
-            <input
-              name="propertyAddress"
-              required
-              className={input}
-              placeholder="412 Maple Avenue"
-            />
-          </label>
-          <label className={label}>
-            Client
-            <select name="clientId" className={input} defaultValue="">
-              <option value="">—</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={label}>
-            City
-            <input name="city" className={input} />
-          </label>
-          <label className={label}>
-            State
-            <input name="state" className={input} maxLength={2} />
-          </label>
-          <label className={label}>
-            ZIP
-            <input name="zip" className={input} />
-          </label>
-          <label className={label}>
-            Status
-            <select name="status" className={input} defaultValue="UNDER_CONTRACT">
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {STATUS_LABEL[s]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={label}>
-            Side
-            <select name="side" className={input} defaultValue="BUY_SIDE">
-              {SIDES.map((s) => (
-                <option key={s} value={s}>
-                  {sideLabel(s, labels)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={label}>
-            Purchase price ($)
-            <input name="purchasePrice" inputMode="numeric" className={input} />
-          </label>
-          <label className={label}>
-            Contract date
-            <input name="contractDate" type="date" className={input} />
-          </label>
-          <label className={label}>
-            Close date
-            <input name="closeDate" type="date" className={input} />
-          </label>
-          <label className={label}>
-            List price ($)
-            <input name="listPrice" inputMode="numeric" className={input} />
-          </label>
-          <label className={label}>
-            List date
-            <input name="listDate" type="date" className={input} />
-          </label>
-          <label className={label}>
-            On-market date
-            <input name="onMarketDate" type="date" className={input} />
-          </label>
-          <label className={label}>
-            Expire date
-            <input name="expireDate" type="date" className={input} />
-          </label>
-          <label className={label}>
-            MLS ID
-            <input name="mlsId" className={input} />
-          </label>
-          <label className={label}>
-            Co-agent (managed agent)
-            <select name="coAgentClientId" className={input} defaultValue="">
-              <option value="">—</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={label}>
-            Assign to
-            <select name="assigneeId" className={input} defaultValue="">
-              <option value="">—</option>
-              {members.map((m) => (
-                <option key={m.user.id} value={m.user.id}>
-                  {m.user.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="flex items-end">
+        <form action={createTransaction} className="mt-4 flex flex-col gap-4">
+          <div>
+            <p className={fieldGroupLabel}>Property</p>
+            <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-[2fr_1fr_1fr_1fr]">
+              <label className={label}>
+                Address *
+                <input
+                  name="propertyAddress"
+                  required
+                  className={input}
+                  placeholder="412 Maple Avenue"
+                />
+              </label>
+              <label className={label}>
+                City
+                <input name="city" className={input} />
+              </label>
+              <label className={label}>
+                State
+                <input name="state" className={input} maxLength={2} />
+              </label>
+              <label className={label}>
+                ZIP
+                <input name="zip" className={input} />
+              </label>
+            </div>
+          </div>
+
+          <div className="border-t border-stone-100 pt-3">
+            <p className={fieldGroupLabel}>Deal</p>
+            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-3">
+              <label className={label}>
+                Status
+                <select name="status" className={input} defaultValue="UNDER_CONTRACT">
+                  {STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {STATUS_LABEL[s]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={label}>
+                Side
+                <select name="side" className={input} defaultValue="BUY_SIDE">
+                  {SIDES.map((s) => (
+                    <option key={s} value={s}>
+                      {sideLabel(s, labels)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={label}>
+                Purchase price ($)
+                <input name="purchasePrice" inputMode="numeric" className={input} />
+              </label>
+            </div>
+          </div>
+
+          <div className="border-t border-stone-100 pt-3">
+            <p className={fieldGroupLabel}>Key dates</p>
+            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+              <label className={label}>
+                Contract date
+                <input name="contractDate" type="date" className={input} />
+              </label>
+              <label className={label}>
+                Close date
+                <input name="closeDate" type="date" className={input} />
+              </label>
+            </div>
+          </div>
+
+          <div className="border-t border-stone-100 pt-3">
+            <p className={fieldGroupLabel}>Client &amp; team</p>
+            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-3">
+              <label className={label}>
+                Client
+                <select name="clientId" className={input} defaultValue="">
+                  <option value="">—</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={label}>
+                Co-agent (managed agent)
+                <select name="coAgentClientId" className={input} defaultValue="">
+                  <option value="">—</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={label}>
+                Assign to
+                <select name="assigneeId" className={input} defaultValue="">
+                  <option value="">—</option>
+                  {members.map((m) => (
+                    <option key={m.user.id} value={m.user.id}>
+                      {m.user.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <details className="border-t border-stone-100 pt-3">
+            <summary className={`${summaryLink} text-xs`}>Listing details (optional)</summary>
+            <div className="mt-3 grid gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+              <label className={label}>
+                List price ($)
+                <input name="listPrice" inputMode="numeric" className={input} />
+              </label>
+              <label className={label}>
+                List date
+                <input name="listDate" type="date" className={input} />
+              </label>
+              <label className={label}>
+                On-market date
+                <input name="onMarketDate" type="date" className={input} />
+              </label>
+              <label className={label}>
+                Expire date
+                <input name="expireDate" type="date" className={input} />
+              </label>
+              <label className={label}>
+                MLS ID
+                <input name="mlsId" className={input} />
+              </label>
+            </div>
+          </details>
+
+          <div className="border-t border-stone-100 pt-3">
             <button type="submit" className={btn}>
               Create transaction
             </button>

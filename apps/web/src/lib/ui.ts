@@ -27,3 +27,6 @@ export const trHover = "transition-colors hover:bg-stone-50";
 export const label = "flex flex-col gap-1 text-sm font-medium text-stone-700";
 export const summaryLink =
   "cursor-pointer select-none font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600";
+/** Small caps section heading inside a card or long form — groups related fields without a nested card. */
+export const fieldGroupLabel =
+  "mb-1.5 text-[10px] font-medium uppercase tracking-wide text-stone-400";

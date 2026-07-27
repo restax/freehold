@@ -1341,34 +1341,47 @@ export default async function TransactionDetailPage({
                         void: ["neutral", "Void"],
                       };
                       const [tone, stateText] = stateBadge[state];
+                      const dueShown = money.totalCents - paidShown;
                       return (
                         <li key={inv.id} className="py-2">
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                            <span className="font-medium">{invoiceLabel(inv.number)}</span>
-                            <Badge tone={tone}>{stateText}</Badge>
-                            {inv.client && (
-                              <span className="text-xs text-stone-400">{inv.client.name}</span>
-                            )}
-                            {attributed !== money.totalCents && (
-                              <span className="text-xs text-stone-400">
-                                this file's share {fmtCents(attributed)}
-                              </span>
-                            )}
-                            <span className="ml-auto flex items-baseline gap-3 tabular-nums">
-                              <span className="font-medium">{fmtCents(money.totalCents)}</span>
-                              {paidShown > 0 && (
-                                <span className="text-xs text-brand-700">
-                                  {fmtCents(paidShown)} paid
+                          <div className="flex flex-col gap-1 text-sm">
+                            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                              <span className="font-medium">{invoiceLabel(inv.number)}</span>
+                              <Badge tone={tone}>{stateText}</Badge>
+                              {inv.client && (
+                                <span className="text-xs text-stone-400">{inv.client.name}</span>
+                              )}
+                              {attributed !== money.totalCents && (
+                                <span className="text-xs text-stone-400">
+                                  this file's share {fmtCents(attributed)}
                                 </span>
                               )}
-                              {state !== "void" &&
-                                state !== "draft" &&
-                                money.totalCents - paidShown > 0 && (
-                                  <span className="text-xs text-amber-700">
-                                    {fmtCents(money.totalCents - paidShown)} due
-                                  </span>
-                                )}
-                            </span>
+                            </div>
+                            <div className="grid grid-cols-[5.5rem_5.5rem_5.5rem] items-baseline gap-x-4 text-xs tabular-nums">
+                              <span className="text-right font-medium text-stone-800">
+                                {fmtCents(money.totalCents)}
+                              </span>
+                              <span
+                                className={
+                                  paidShown > 0
+                                    ? "text-right text-brand-700"
+                                    : "text-right text-stone-300"
+                                }
+                              >
+                                {paidShown > 0 ? `${fmtCents(paidShown)} paid` : "—"}
+                              </span>
+                              <span
+                                className={
+                                  state !== "void" && state !== "draft" && dueShown > 0
+                                    ? "text-right text-amber-700"
+                                    : "text-right text-stone-300"
+                                }
+                              >
+                                {state !== "void" && state !== "draft" && dueShown > 0
+                                  ? `${fmtCents(dueShown)} due`
+                                  : "—"}
+                              </span>
+                            </div>
                           </div>
                           {inv.lines.length > 1 && (
                             <ul className="mt-1 flex flex-col gap-0.5 border-l-2 border-stone-100 pl-3">
@@ -1499,30 +1512,31 @@ export default async function TransactionDetailPage({
                                 fileMoney.paidCents,
                               );
                               return (
-                                <li
-                                  key={a.id}
-                                  className="flex flex-wrap items-baseline gap-x-3 py-1.5 text-sm"
-                                >
-                                  <span className="font-medium">{a.user.name}</span>
-                                  <span className="text-xs text-stone-400">
-                                    {a.feePercentBp != null
-                                      ? `${formatPercentBp(a.feePercentBp)} of fee revenue`
-                                      : "flat"}
-                                  </span>
-                                  {a.paymentItem && (
+                                <li key={a.id} className="flex flex-col gap-1 py-1.5 text-sm">
+                                  <span className="flex flex-wrap items-baseline gap-x-3">
+                                    <span className="font-medium">{a.user.name}</span>
                                     <span className="text-xs text-stone-400">
-                                      {a.paymentItem.request.status === "PAID"
-                                        ? `paid ${fmtCents(a.paymentItem.feeCents)}`
-                                        : `requested ${fmtCents(a.paymentItem.feeCents)}`}
+                                      {a.feePercentBp != null
+                                        ? `${formatPercentBp(a.feePercentBp)} of fee revenue`
+                                        : "flat"}
                                     </span>
-                                  )}
-                                  <span className="ml-auto flex gap-4 tabular-nums text-xs">
-                                    <span className="text-stone-600">
+                                    {a.paymentItem && (
+                                      <span className="text-xs text-stone-400">
+                                        {a.paymentItem.request.status === "PAID"
+                                          ? `paid ${fmtCents(a.paymentItem.feeCents)}`
+                                          : `requested ${fmtCents(a.paymentItem.feeCents)}`}
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="grid grid-cols-[7rem_7rem] gap-x-4 text-xs tabular-nums">
+                                    <span className="text-right text-stone-600">
                                       earned {fmtCents(p.earnedCents)}
                                     </span>
                                     <span
                                       className={
-                                        p.payableCents > 0 ? "text-brand-700" : "text-stone-400"
+                                        p.payableCents > 0
+                                          ? "text-right text-brand-700"
+                                          : "text-right text-stone-400"
                                       }
                                     >
                                       payable {fmtCents(p.payableCents)}
