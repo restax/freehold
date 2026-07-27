@@ -1,8 +1,16 @@
 import { ClientType, EsignProvider, withTenant } from "@freehold/db";
 import { Buildings, Storefront, User, UsersThree } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { Fragment } from "react";
+import { Badge } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
 import { createClient, updateClientEsign } from "@/lib/actions/clients";
+import {
+  brokerageInfoFrom,
+  CLIENT_TYPE_LABEL,
+  type ClientKind,
+  clientKind,
+} from "@/lib/client-profile";
 import { requireTenant } from "@/lib/tenant";
 import {
   btn,
@@ -19,14 +27,24 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const TYPE_LABEL: Record<string, string> = {
-  AGENT: "Agent",
-  BROKERAGE: "Brokerage",
-  TEAM: "Team",
-  TITLE: "Title company",
-  LENDER: "Lender",
-  OTHER: "Other",
+const TYPE_ICON: Record<string, typeof Buildings> = {
+  AGENT: User,
+  BROKERAGE: Buildings,
+  TEAM: UsersThree,
+  TITLE: Storefront,
+  LENDER: Storefront,
+  OTHER: Storefront,
 };
+
+/**
+ * The list reads in the same split the create flow asks about: offices with
+ * rosters, individual agents, then everyone else.
+ */
+const GROUPS: Array<{ kind: ClientKind; label: string; icon: typeof Buildings }> = [
+  { kind: "office", label: "Brokerages & teams", icon: Buildings },
+  { kind: "individual", label: "Individual agents", icon: User },
+  { kind: "company", label: "Companies", icon: Storefront },
+];
 
 const ESIGN_LABEL: Record<string, string> = {
   MANUAL: "Manual / outside Freehold",
@@ -322,58 +340,128 @@ export default async function ClientsPage({
                 <tr>
                   <th className={th}>Name</th>
                   <th className={th}>Type</th>
-                  <th className={th}>Email</th>
-                  <th className={th}>Phone</th>
-                  <th className={th}>E-sign</th>
+                  <th className={th}>Contact</th>
+                  <th className={th}>Agents</th>
                   <th className={th}>Transactions</th>
+                  <th className={th}>E-sign</th>
                   <th className={th} />
                 </tr>
               </thead>
               <tbody>
-                {clients.map((c) => (
-                  <tr key={c.id} className={trHover}>
-                    <td className={`${td} font-medium`}>
-                      <Link
-                        href={`/dashboard/clients/${c.id}`}
-                        className="text-brand-700 hover:text-brand-600 hover:underline"
-                      >
-                        {c.name}
-                      </Link>
-                    </td>
-                    <td className={td}>{TYPE_LABEL[c.type]}</td>
-                    <td className={td}>{c.email ?? "—"}</td>
-                    <td className={td}>{c.phone ?? "—"}</td>
-                    <td className={td}>
-                      <form action={updateClientEsign} className="flex items-center gap-1">
-                        <input type="hidden" name="id" value={c.id} />
-                        <select
-                          name="esignProvider"
-                          defaultValue={c.esignProvider ?? ""}
-                          className={`${input} px-2 py-1 text-xs`}
+                {GROUPS.map((g) => {
+                  const members = clients.filter((c) => clientKind(c.type) === g.kind);
+                  if (members.length === 0) return null;
+                  const GroupIcon = g.icon;
+                  return (
+                    <Fragment key={g.kind}>
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="border-b border-stone-200 bg-stone-50 px-2.5 py-1.5"
                         >
-                          <option value="">Tenant default</option>
-                          {Object.values(EsignProvider).map((p) => (
-                            <option key={p} value={p}>
-                              {ESIGN_LABEL[p]}
-                            </option>
-                          ))}
-                        </select>
-                        <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
-                          Save
-                        </button>
-                      </form>
-                    </td>
-                    <td className={td}>{c._count.transactions}</td>
-                    <td className={td}>
-                      <Link
-                        href={`/dashboard/clients/${c.id}`}
-                        className="text-xs text-brand-700 hover:underline"
-                      >
-                        Open →
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                          <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-stone-500">
+                            <GroupIcon size={13} className="text-stone-400" aria-hidden />
+                            {g.label}
+                            <span className="font-normal text-stone-400">{members.length}</span>
+                          </span>
+                        </td>
+                      </tr>
+                      {members.map((c) => {
+                        const kind = clientKind(c.type);
+                        const RowIcon = TYPE_ICON[c.type] ?? Storefront;
+                        const subline =
+                          kind === "office"
+                            ? c.address
+                            : kind === "individual"
+                              ? brokerageInfoFrom(c.brokerageInfo)?.name
+                              : null;
+                        return (
+                          <tr key={c.id} className={trHover}>
+                            <td className={`${td} font-medium`}>
+                              <span className="flex items-center gap-2">
+                                <RowIcon
+                                  size={15}
+                                  weight="duotone"
+                                  className="shrink-0 text-brand-600/70"
+                                  aria-hidden
+                                />
+                                <span className="flex flex-col">
+                                  <Link
+                                    href={`/dashboard/clients/${c.id}`}
+                                    className="text-brand-700 hover:text-brand-600 hover:underline"
+                                  >
+                                    {c.name}
+                                  </Link>
+                                  {subline && (
+                                    <span className="text-xs font-normal text-stone-400">
+                                      {subline}
+                                    </span>
+                                  )}
+                                </span>
+                              </span>
+                            </td>
+                            <td className={td}>
+                              <Badge tone={kind === "office" ? "attention" : "neutral"}>
+                                {CLIENT_TYPE_LABEL[c.type]}
+                              </Badge>
+                            </td>
+                            <td className={td}>
+                              {[c.email, c.phone].filter(Boolean).join(" · ") || "—"}
+                            </td>
+                            <td className={td}>
+                              {kind === "office" ? (
+                                c._count.agents > 0 ? (
+                                  <span className="flex items-center gap-1.5">
+                                    <UsersThree size={14} className="text-stone-400" aria-hidden />
+                                    {c._count.agents}
+                                  </span>
+                                ) : (
+                                  <Link
+                                    href={`/dashboard/clients/${c.id}`}
+                                    className="whitespace-nowrap text-xs text-brand-700 hover:underline"
+                                  >
+                                    add agents →
+                                  </Link>
+                                )
+                              ) : (
+                                <span className="text-stone-300">—</span>
+                              )}
+                            </td>
+                            <td className={td}>{c._count.transactions}</td>
+                            <td className={td}>
+                              <form action={updateClientEsign} className="flex items-center gap-1">
+                                <input type="hidden" name="id" value={c.id} />
+                                <select
+                                  name="esignProvider"
+                                  defaultValue={c.esignProvider ?? ""}
+                                  className={`${input} px-2 py-1 text-xs`}
+                                >
+                                  <option value="">Tenant default</option>
+                                  {Object.values(EsignProvider).map((p) => (
+                                    <option key={p} value={p}>
+                                      {ESIGN_LABEL[p]}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                                  Save
+                                </button>
+                              </form>
+                            </td>
+                            <td className={td}>
+                              <Link
+                                href={`/dashboard/clients/${c.id}`}
+                                className="whitespace-nowrap text-xs text-brand-700 hover:underline"
+                              >
+                                Open →
+                              </Link>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
