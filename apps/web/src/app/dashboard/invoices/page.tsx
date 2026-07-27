@@ -29,6 +29,7 @@ import {
   PAYMENT_METHODS,
   transactionBilling,
 } from "@/lib/billing";
+import { filePayoutTotals } from "@/lib/billing-payouts";
 import { clientBillingPolicy, lateFeeCents, lateFeeEligible } from "@/lib/billing-policy";
 import { agingReport, monthlyCollected } from "@/lib/billing-reports";
 import { emailEnabled } from "@/lib/email";
@@ -103,60 +104,73 @@ export default async function InvoicesPage({
       )
     : [];
 
-  const { invoices, clients, transactions, closedFiles, feeUnsetCount, creditEntries } =
-    await withTenant(tenantId, async (tx) => ({
-      invoices: await tx.invoice.findMany({
-        orderBy: { number: "desc" },
-        include: {
-          client: { select: { id: true, name: true, email: true, billingConfig: true } },
-          transaction: { select: { id: true, propertyAddress: true } },
-          lines: {
-            orderBy: { sortOrder: "asc" },
-            select: {
-              id: true,
-              kind: true,
-              description: true,
-              amountCents: true,
-              transactionId: true,
-            },
-          },
-          payments: {
-            orderBy: { receivedAt: "asc" },
-            select: {
-              id: true,
-              amountCents: true,
-              method: true,
-              reference: true,
-              note: true,
-              source: true,
-              reversesId: true,
-              receivedAt: true,
-              recordedByName: true,
-              reversedBy: { select: { amountCents: true } },
-            },
+  const {
+    invoices,
+    clients,
+    transactions,
+    closedFiles,
+    feeUnsetCount,
+    creditEntries,
+    payoutBases,
+  } = await withTenant(tenantId, async (tx) => ({
+    invoices: await tx.invoice.findMany({
+      orderBy: { number: "desc" },
+      include: {
+        client: { select: { id: true, name: true, email: true, billingConfig: true } },
+        transaction: { select: { id: true, propertyAddress: true } },
+        lines: {
+          orderBy: { sortOrder: "asc" },
+          select: {
+            id: true,
+            kind: true,
+            description: true,
+            amountCents: true,
+            transactionId: true,
           },
         },
-      }),
-      clients: await tx.client.findMany({ orderBy: { name: "asc" } }),
-      transactions: await tx.transaction.findMany({
-        where: { status: { notIn: ["CANCELLED"] } },
-        orderBy: { createdAt: "desc" },
-        select: { id: true, propertyAddress: true },
-        take: 100,
-      }),
-      // The trust surface: every closed file, checked against what was billed.
-      closedFiles: await tx.transaction.findMany({
-        where: { status: "CLOSED" },
-        select: { id: true, propertyAddress: true, status: true, expectedFeeCents: true },
-      }),
-      feeUnsetCount: await tx.transaction.count({
-        where: { status: { notIn: ["CANCELLED"] }, expectedFeeCents: null },
-      }),
-      creditEntries: await tx.clientCreditEntry.findMany({
-        orderBy: { createdAt: "desc" },
-        include: { client: { select: { id: true, name: true } } },
-      }),
-    }));
+        payments: {
+          orderBy: { receivedAt: "asc" },
+          select: {
+            id: true,
+            amountCents: true,
+            method: true,
+            reference: true,
+            note: true,
+            source: true,
+            reversesId: true,
+            receivedAt: true,
+            recordedByName: true,
+            reversedBy: { select: { amountCents: true } },
+          },
+        },
+      },
+    }),
+    clients: await tx.client.findMany({ orderBy: { name: "asc" } }),
+    transactions: await tx.transaction.findMany({
+      where: { status: { notIn: ["CANCELLED"] } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, propertyAddress: true },
+      take: 100,
+    }),
+    // The trust surface: every closed file, checked against what was billed.
+    closedFiles: await tx.transaction.findMany({
+      where: { status: "CLOSED" },
+      select: { id: true, propertyAddress: true, status: true, expectedFeeCents: true },
+    }),
+    feeUnsetCount: await tx.transaction.count({
+      where: { status: { notIn: ["CANCELLED"] }, expectedFeeCents: null },
+    }),
+    creditEntries: await tx.clientCreditEntry.findMany({
+      orderBy: { createdAt: "desc" },
+      include: { client: { select: { id: true, name: true } } },
+    }),
+    payoutBases: access.comp
+      ? await tx.transactionAssignee.findMany({
+          where: { OR: [{ feeCents: { not: null } }, { feePercentBp: { not: null } }] },
+          select: { feeCents: true, feePercentBp: true, transactionId: true },
+        })
+      : [],
+  }));
 
   // Closed files billed less than expected — computed by the same attribution
   // math the file pages use.
@@ -202,6 +216,35 @@ export default async function InvoicesPage({
     6,
   );
   const monthMax = Math.max(1, ...collected.map((m) => m.cents));
+
+  // Gross / payouts / net across the book — comp-visibility only, since it
+  // reveals what teammates are paid. Per-file attribution keeps consolidated
+  // invoices honest here too.
+  const grossNet = access.comp
+    ? (() => {
+        const gross = invoices
+          .filter((i) => i.status === "SENT" || i.status === "PAID")
+          .reduce((s, i) => s + i.amountCents, 0);
+        const byFile = new Map<string, { billed: number; paid: number }>();
+        const fileBilling = (id: string) => {
+          const hit = byFile.get(id);
+          if (hit) return hit;
+          const b = transactionBilling(id, invoices);
+          const v = { billed: b.billedCents, paid: b.paidCents };
+          byFile.set(id, v);
+          return v;
+        };
+        let earned = 0;
+        let payable = 0;
+        for (const a of payoutBases) {
+          const f = fileBilling(a.transactionId);
+          const t = filePayoutTotals([a], f.billed, f.paid);
+          earned += t.earnedCents;
+          payable += t.payableCents;
+        }
+        return { gross, earned, payable, net: gross - earned };
+      })()
+    : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -298,6 +341,32 @@ export default async function InvoicesPage({
                 </ul>
               </div>
             </div>
+            {grossNet && (
+              <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 border-t border-stone-100 pt-3">
+                {(
+                  [
+                    ["Gross billed", fmtCents(grossNet.gross), "text-stone-800"],
+                    ["Payouts earned", fmtCents(grossNet.earned), "text-stone-800"],
+                    ["Payable now", fmtCents(grossNet.payable), "text-stone-800"],
+                    [
+                      "Net revenue",
+                      fmtCents(grossNet.net),
+                      grossNet.net >= 0 ? "text-brand-700" : "text-red-700",
+                    ],
+                  ] as const
+                ).map(([labelText, value, tone], i) => (
+                  <div
+                    key={labelText}
+                    className={`flex flex-col ${i === 0 ? "" : "border-l border-stone-200 pl-6"}`}
+                  >
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
+                      {labelText}
+                    </span>
+                    <span className={`tabular-nums text-sm font-semibold ${tone}`}>{value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <p className="mt-3 border-t border-stone-100 pt-2 text-xs text-stone-400">
               Export for your accountant:{" "}
               <a

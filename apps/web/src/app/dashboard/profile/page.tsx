@@ -5,6 +5,8 @@ import { Badge } from "@/components/badges";
 import { addLicense, deleteLicense } from "@/lib/actions/licenses";
 import { requestPayment, withdrawPaymentRequest } from "@/lib/actions/pay";
 import { removeAvatar, updateProfile, uploadAvatar } from "@/lib/actions/profile";
+import { type AttributableInvoice, transactionBilling } from "@/lib/billing";
+import { formatPercentBp, payoutCents } from "@/lib/billing-payouts";
 import { fmtDate, STATUS_LABEL } from "@/lib/format";
 import { HEALTH_LABEL, licenseHealth } from "@/lib/licenses";
 import { fmtCents } from "@/lib/pay";
@@ -27,18 +29,57 @@ export default async function ProfilePage() {
         orderBy: [{ state: "asc" }, { createdAt: "asc" }],
       }),
     ),
-    // Assignments carrying a fee that haven't been submitted for payment yet.
-    withTenant(tenantId, (tx) =>
-      tx.transactionAssignee.findMany({
-        where: { userId, feeCents: { not: null }, paymentItem: { is: null } },
+    // Assignments carrying a payout basis (flat or % of the file's fee
+    // revenue) that haven't been submitted for payment yet.
+    withTenant(tenantId, async (tx) => {
+      const rows = await tx.transactionAssignee.findMany({
+        where: {
+          userId,
+          OR: [{ feeCents: { not: null } }, { feePercentBp: { not: null } }],
+          paymentItem: { is: null },
+        },
         orderBy: { createdAt: "asc" },
         select: {
           id: true,
           feeCents: true,
+          feePercentBp: true,
+          transactionId: true,
           transaction: { select: { id: true, propertyAddress: true, status: true } },
         },
-      }),
-    ),
+      });
+      // Percent payouts read against what's collected on the file today.
+      const pctFiles = [
+        ...new Set(rows.filter((r) => r.feePercentBp != null).map((r) => r.transactionId)),
+      ];
+      const invoices: AttributableInvoice[] =
+        pctFiles.length > 0
+          ? await tx.invoice.findMany({
+              where: {
+                OR: [
+                  { transactionId: { in: pctFiles } },
+                  { lines: { some: { transactionId: { in: pctFiles } } } },
+                ],
+              },
+              select: {
+                status: true,
+                provider: true,
+                transactionId: true,
+                amountCents: true,
+                lines: { select: { transactionId: true, amountCents: true } },
+                payments: { select: { amountCents: true } },
+              },
+            })
+          : [];
+      return rows.map((r) => ({
+        ...r,
+        payableCents:
+          r.feeCents ??
+          payoutCents(
+            { feeCents: null, feePercentBp: r.feePercentBp },
+            transactionBilling(r.transactionId, invoices).paidCents,
+          ),
+      }));
+    }),
     withTenant(tenantId, (tx) =>
       tx.paymentRequest.findMany({
         where: { userId },
@@ -47,7 +88,7 @@ export default async function ProfilePage() {
       }),
     ),
   ]);
-  const unbilledTotal = unbilled.reduce((sum, a) => sum + (a.feeCents ?? 0), 0);
+  const unbilledTotal = unbilled.reduce((sum, a) => sum + a.payableCents, 0);
 
   return (
     <div className="flex flex-col gap-4">
@@ -128,7 +169,13 @@ export default async function ProfilePage() {
                     <span className="text-xs text-stone-400">
                       {STATUS_LABEL[a.transaction.status]}
                     </span>
-                    <span className="ml-auto tabular-nums">{fmtCents(a.feeCents ?? 0)}</span>
+                    {a.feePercentBp != null && (
+                      <span className="text-xs text-stone-400">
+                        {formatPercentBp(a.feePercentBp)} of collected
+                        {a.payableCents === 0 && " — nothing collected yet"}
+                      </span>
+                    )}
+                    <span className="ml-auto tabular-nums">{fmtCents(a.payableCents)}</span>
                   </li>
                 ))}
               </ul>

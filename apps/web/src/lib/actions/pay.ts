@@ -3,6 +3,8 @@
 import { PaymentRequestStatus, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
+import { type AttributableInvoice, transactionBilling } from "@/lib/billing";
+import { formatPercentBp, parsePercentToBp, payoutCents } from "@/lib/billing-payouts";
 import { optStr, str } from "@/lib/forms";
 import { fmtCents, parseFeeCents, totalCents } from "@/lib/pay";
 import { requireAdminTenant, requireTenant } from "@/lib/tenant";
@@ -13,16 +15,31 @@ import { requireAdminTenant, requireTenant } from "@/lib/tenant";
  * through Freehold — this is the record and the statement.
  */
 
-/** Admin: what this user is paid for this file. Blank clears it. */
+/**
+ * Admin: what this user is paid for this file — a flat amount, or a
+ * percentage of the file's fee revenue (outsourced files). Blank clears it;
+ * setting one basis clears the other so there's never ambiguity about what a
+ * person is owed.
+ */
 export async function setAssigneeFee(formData: FormData) {
   const { tenantId, isAdmin, session } = await requireAdminTenant();
   if (!isAdmin) return;
   const id = str(formData, "id");
   const transactionId = str(formData, "transactionId");
   if (!id) return;
-  const raw = str(formData, "feeCents");
-  const feeCents = raw === "" ? null : parseFeeCents(raw);
-  if (raw !== "" && feeCents === null) return; // unparseable — leave it alone
+  const mode = str(formData, "feeMode") === "percent" ? "percent" : "flat";
+  const raw = mode === "percent" ? str(formData, "feePercent") : str(formData, "feeCents");
+  let feeCents: number | null = null;
+  let feePercentBp: number | null = null;
+  if (raw !== "") {
+    if (mode === "percent") {
+      feePercentBp = parsePercentToBp(raw);
+      if (feePercentBp === null) return; // unparseable — leave it alone
+    } else {
+      feeCents = parseFeeCents(raw);
+      if (feeCents === null) return;
+    }
+  }
 
   const updated = await withTenant(tenantId, async (tx) => {
     // A fee already submitted for payment is part of a statement; changing it
@@ -34,7 +51,7 @@ export async function setAssigneeFee(formData: FormData) {
     if (existing) return null;
     return tx.transactionAssignee.update({
       where: { id },
-      data: { feeCents },
+      data: { feeCents, feePercentBp },
       select: {
         user: { select: { name: true } },
         transaction: { select: { propertyAddress: true } },
@@ -49,9 +66,11 @@ export async function setAssigneeFee(formData: FormData) {
     actorEmail: session.user.email,
     action: "pay.fee_set",
     summary:
-      feeCents === null
+      feeCents === null && feePercentBp === null
         ? `Cleared ${updated.user.name}'s fee on ${updated.transaction.propertyAddress}`
-        : `Set ${updated.user.name}'s fee on ${updated.transaction.propertyAddress} to ${fmtCents(feeCents)}`,
+        : feePercentBp !== null
+          ? `Set ${updated.user.name}'s fee on ${updated.transaction.propertyAddress} to ${formatPercentBp(feePercentBp)} of fee revenue`
+          : `Set ${updated.user.name}'s fee on ${updated.transaction.propertyAddress} to ${fmtCents(feeCents ?? 0)}`,
   });
   revalidatePath(`/dashboard/transactions/${transactionId}`);
   revalidatePath("/dashboard/profile");
@@ -68,23 +87,61 @@ export async function requestPayment(formData: FormData) {
   if (assigneeIds.length === 0) return;
 
   const created = await withTenant(tenantId, async (tx) => {
-    // Only this user's own assignments, only ones with a fee, and only ones
-    // never billed before (the unique assignee_id also enforces this).
+    // Only this user's own assignments, only ones with a basis set, and only
+    // ones never billed before (the unique assignee_id also enforces this).
     const rows = await tx.transactionAssignee.findMany({
       where: {
         id: { in: assigneeIds },
         userId,
-        feeCents: { not: null },
+        OR: [{ feeCents: { not: null } }, { feePercentBp: { not: null } }],
         paymentItem: { is: null },
       },
       select: {
         id: true,
         feeCents: true,
+        feePercentBp: true,
         transactionId: true,
         transaction: { select: { propertyAddress: true } },
       },
     });
     if (rows.length === 0) return null;
+
+    // Percentage payouts freeze at today's collected figure — the share of
+    // money actually in the door, per the workspace's payout policy.
+    const pctFiles = [
+      ...new Set(rows.filter((r) => r.feePercentBp != null).map((r) => r.transactionId)),
+    ];
+    const invoices: AttributableInvoice[] =
+      pctFiles.length > 0
+        ? await tx.invoice.findMany({
+            where: {
+              OR: [
+                { transactionId: { in: pctFiles } },
+                { lines: { some: { transactionId: { in: pctFiles } } } },
+              ],
+            },
+            select: {
+              status: true,
+              provider: true,
+              transactionId: true,
+              amountCents: true,
+              lines: { select: { transactionId: true, amountCents: true } },
+              payments: { select: { amountCents: true } },
+            },
+          })
+        : [];
+    const frozen = rows.map((r) => ({
+      row: r,
+      cents:
+        r.feeCents ??
+        payoutCents(
+          { feeCents: null, feePercentBp: r.feePercentBp },
+          transactionBilling(r.transactionId, invoices).paidCents,
+        ),
+    }));
+    // A percent share of nothing-collected is not requestable yet.
+    const payable = frozen.filter((f) => f.cents > 0);
+    if (payable.length === 0) return null;
 
     return tx.paymentRequest.create({
       data: {
@@ -92,12 +149,12 @@ export async function requestPayment(formData: FormData) {
         userId,
         note: optStr(formData, "note"),
         items: {
-          create: rows.map((r) => ({
+          create: payable.map(({ row, cents }) => ({
             tenantId,
-            assigneeId: r.id,
-            transactionId: r.transactionId,
-            address: r.transaction.propertyAddress,
-            feeCents: r.feeCents ?? 0,
+            assigneeId: row.id,
+            transactionId: row.transactionId,
+            address: row.transaction.propertyAddress,
+            feeCents: cents,
           })),
         },
       },

@@ -77,6 +77,7 @@ import {
   paidCents,
   transactionBilling,
 } from "@/lib/billing";
+import { assigneePayout, filePayoutTotals, formatPercentBp } from "@/lib/billing-payouts";
 import {
   SLOT_LABEL as COMPLIANCE_SLOT_LABEL,
   STATUS_LABEL as COMPLIANCE_STATUS_LABEL,
@@ -1462,6 +1463,115 @@ export default async function TransactionDetailPage({
                 </p>
               </section>
 
+              {billing.comp && (
+                <section className={card}>
+                  <h2 className="mb-1 font-medium">Payout &amp; net</h2>
+                  {txn.assignees.filter((a) => a.feeCents != null || a.feePercentBp != null)
+                    .length === 0 ? (
+                    <p className="text-sm text-stone-500">
+                      Nobody has a payout on this file yet — set a flat fee or a % share per person
+                      under{" "}
+                      <Link
+                        href={`/dashboard/transactions/${txn.id}?tab=participants`}
+                        className="text-brand-700 hover:underline"
+                      >
+                        Participants
+                      </Link>
+                      .
+                    </p>
+                  ) : (
+                    (() => {
+                      const withBasis = txn.assignees.filter(
+                        (a) => a.feeCents != null || a.feePercentBp != null,
+                      );
+                      const totals = filePayoutTotals(
+                        withBasis,
+                        fileMoney.billedCents,
+                        fileMoney.paidCents,
+                      );
+                      return (
+                        <>
+                          <ul className="mb-3 flex flex-col divide-y divide-stone-100">
+                            {withBasis.map((a) => {
+                              const p = assigneePayout(
+                                a,
+                                fileMoney.billedCents,
+                                fileMoney.paidCents,
+                              );
+                              return (
+                                <li
+                                  key={a.id}
+                                  className="flex flex-wrap items-baseline gap-x-3 py-1.5 text-sm"
+                                >
+                                  <span className="font-medium">{a.user.name}</span>
+                                  <span className="text-xs text-stone-400">
+                                    {a.feePercentBp != null
+                                      ? `${formatPercentBp(a.feePercentBp)} of fee revenue`
+                                      : "flat"}
+                                  </span>
+                                  {a.paymentItem && (
+                                    <span className="text-xs text-stone-400">
+                                      {a.paymentItem.request.status === "PAID"
+                                        ? `paid ${fmtCents(a.paymentItem.feeCents)}`
+                                        : `requested ${fmtCents(a.paymentItem.feeCents)}`}
+                                    </span>
+                                  )}
+                                  <span className="ml-auto flex gap-4 tabular-nums text-xs">
+                                    <span className="text-stone-600">
+                                      earned {fmtCents(p.earnedCents)}
+                                    </span>
+                                    <span
+                                      className={
+                                        p.payableCents > 0 ? "text-brand-700" : "text-stone-400"
+                                      }
+                                    >
+                                      payable {fmtCents(p.payableCents)}
+                                    </span>
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                          <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-stone-100 pt-2">
+                            {(
+                              [
+                                ["Payouts earned", fmtCents(totals.earnedCents), "text-stone-800"],
+                                ["Payable now", fmtCents(totals.payableCents), "text-stone-800"],
+                                [
+                                  "Net (billed − earned)",
+                                  fmtCents(totals.netBilledCents),
+                                  totals.netBilledCents >= 0 ? "text-brand-700" : "text-red-700",
+                                ],
+                                [
+                                  "Net collected",
+                                  fmtCents(totals.netCollectedCents),
+                                  totals.netCollectedCents >= 0 ? "text-brand-700" : "text-red-700",
+                                ],
+                              ] as const
+                            ).map(([labelText, value, tone], i) => (
+                              <div
+                                key={labelText}
+                                className={`flex flex-col ${i === 0 ? "" : "border-l border-stone-200 pl-6"}`}
+                              >
+                                <span className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
+                                  {labelText}
+                                </span>
+                                <span className={`tabular-nums text-sm font-semibold ${tone}`}>
+                                  {value}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="mt-2 text-xs text-stone-400">
+                            {`Percent payouts are earned against what's billed and payable against what's collected; a pay request freezes the payable figure of the day.`}
+                          </p>
+                        </>
+                      );
+                    })()
+                  )}
+                </section>
+              )}
+
               {billing.manage && (
                 <section className={card}>
                   <h2 className="mb-1 font-medium">Add a charge</h2>
@@ -1523,16 +1633,6 @@ export default async function TransactionDetailPage({
                       Add charge
                     </button>
                   </form>
-                  <p className="mt-3 border-t border-stone-100 pt-2 text-xs text-stone-400">
-                    Team payout for this file is set per person under{" "}
-                    <Link
-                      href={`/dashboard/transactions/${txn.id}?tab=participants`}
-                      className="text-brand-700 hover:underline"
-                    >
-                      Participants
-                    </Link>
-                    ; per-file gross/net arrives with the payouts stage.
-                  </p>
                 </section>
               )}
             </div>
@@ -1979,17 +2079,47 @@ export default async function TransactionDetailPage({
                           <form action={setAssigneeFee} className="flex items-center gap-1">
                             <input type="hidden" name="id" value={a.id} />
                             <input type="hidden" name="transactionId" value={txn.id} />
-                            <span className="text-xs text-stone-400">fee $</span>
+                            <select
+                              name="feeMode"
+                              defaultValue={a.feePercentBp != null ? "percent" : "flat"}
+                              className={`${input} px-1.5 py-1 text-xs`}
+                              title="Flat amount, or a share of this file's fee revenue"
+                            >
+                              <option value="flat">fee $</option>
+                              <option value="percent">% of fee</option>
+                            </select>
                             <input
                               name="feeCents"
                               defaultValue={a.feeCents == null ? "" : (a.feeCents / 100).toFixed(2)}
                               placeholder="350.00"
-                              className={`${input} w-24 px-2 py-1 text-xs`}
+                              className={`${input} w-20 px-2 py-1 text-xs`}
+                            />
+                            <input
+                              name="feePercent"
+                              defaultValue={
+                                a.feePercentBp == null ? "" : String(a.feePercentBp / 100)
+                              }
+                              placeholder="70%"
+                              className={`${input} w-14 px-2 py-1 text-xs`}
                             />
                             <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
                               Save
                             </button>
                           </form>
+                        )}
+                        {!a.paymentItem && a.feePercentBp != null && (
+                          <span className="text-xs text-stone-500">
+                            {formatPercentBp(a.feePercentBp)} · earned{" "}
+                            {fmtCents(
+                              assigneePayout(a, fileMoney.billedCents, fileMoney.paidCents)
+                                .earnedCents,
+                            )}{" "}
+                            · payable{" "}
+                            {fmtCents(
+                              assigneePayout(a, fileMoney.billedCents, fileMoney.paidCents)
+                                .payableCents,
+                            )}
+                          </span>
                         )}
                         {a.paymentItem && (
                           <span className="text-xs text-stone-500">

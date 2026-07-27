@@ -1902,8 +1902,14 @@ model TransactionAssignee {
   user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   roleLabel     String?      @map("role_label")
   /// What the tenant pays this user for this file, in cents. Admin-set; the
-  /// user submits it through a PaymentRequest when it's due.
+  /// user submits it through a PaymentRequest when it's due. Exactly one of
+  /// feeCents / feePercentBp is set (the action clears the other).
   feeCents      Int?         @map("fee_cents")
+  /// Percentage payout in basis points (7000 = 70%) of the file's fee
+  /// revenue: "earned" reads against billed, "payable" against collected,
+  /// and a pay request freezes the collected figure of the day. Basis
+  /// points, not a float — money math stays integral.
+  feePercentBp  Int?         @map("fee_percent_bp")
   /// Set once this assignment has been put on a pay request.
   paymentItem   PaymentRequestItem?
   createdAt     DateTime     @default(now())
