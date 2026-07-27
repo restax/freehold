@@ -3,6 +3,7 @@
 import { prisma, type TenantTx, withTenant } from "@freehold/db";
 import { redirect } from "next/navigation";
 import { linkUsable } from "@/lib/form-access";
+import { trimKnownClientFields } from "@/lib/form-resolve";
 import {
   type FormLayout,
   isFormKind,
@@ -226,6 +227,63 @@ export async function submitPublicForm(formData: FormData) {
     }),
   );
   redirect(`/t/${orgSlug}/f/${formSlug}?sent=1`);
+}
+
+/**
+ * Submission from inside a client portal. The portal token is the
+ * authorization, exactly as it is for the rest of that page; the form must
+ * still be one actually placed in portals, and the client the submission is
+ * filed under comes from the link, never the request.
+ */
+export async function submitPortalForm(formData: FormData) {
+  const token = String(formData.get("token") ?? "");
+  const formId = String(formData.get("formId") ?? "");
+  if (!token || !formId) return;
+
+  const link = await prisma.portalLink.findUnique({ where: { token } });
+  if (!link || link.revokedAt || link.audience !== "CLIENT" || !link.transactionId) return;
+  const tenantId = link.tenantId;
+
+  const loaded = await withTenant(tenantId, async (tx) => {
+    const form = await tx.form.findUnique({ where: { id: formId } });
+    if (form?.status !== "published" || !form.showPortal) return null;
+    const txn = await tx.transaction.findUnique({
+      where: { id: link.transactionId as string },
+      select: { clientId: true },
+    });
+    if (!txn) return null;
+    // A private variant belongs to exactly one client; nobody else may post
+    // to it even holding a valid portal link of their own.
+    if (form.clientId && form.clientId !== txn.clientId) return null;
+    return { form, clientId: txn.clientId };
+  });
+  if (!loaded || !isFormKind(loaded.form.kind)) return;
+
+  // Validate against what the portal actually showed: the identity questions
+  // are stripped there, and a required one left in would bounce the client
+  // with an error about a field they were never given.
+  const layout = trimKnownClientFields(parseLayout(loaded.form.layout));
+  if (!layout) return;
+  const values = readAnswers(layout, formData);
+  const errors = validateSubmission(layout, values);
+  if (Object.keys(errors).length > 0) {
+    redirect(`/portal/${token}?formInvalid=${encodeURIComponent(Object.keys(errors)[0])}`);
+  }
+
+  const uploads = await readUploads(layout, formData, tenantId);
+  await withTenant(tenantId, (tx) =>
+    persist(tx, {
+      tenantId,
+      form: loaded.form,
+      layout,
+      values,
+      uploads,
+      clientId: loaded.clientId,
+      submitterEmailOverride: null,
+      ipHash: null,
+    }),
+  );
+  redirect(`/portal/${token}?formSent=1`);
 }
 
 /**

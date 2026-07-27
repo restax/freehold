@@ -63,6 +63,55 @@ export async function createForm(formData: FormData) {
 }
 
 /**
+ * Give one client their own version of a form. It starts as a copy of the
+ * shared one so the TC edits differences rather than rebuilding, and starts
+ * as a draft so a half-adjusted variant never reaches the client — until
+ * it's published they keep seeing the shared form.
+ */
+export async function createClientFormVariant(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const clientId = str(formData, "clientId");
+  const sourceId = str(formData, "sourceFormId");
+  if (!clientId || !sourceId) return;
+
+  const created = await withTenant(tenantId, async (tx) => {
+    const [source, client] = await Promise.all([
+      tx.form.findUnique({ where: { id: sourceId } }),
+      tx.client.findUnique({ where: { id: clientId }, select: { name: true } }),
+    ]);
+    if (!source || !client) return null;
+    // One private variant per client per kind — the DB enforces it too.
+    const existing = await tx.form.findFirst({
+      where: { kind: source.kind, clientId },
+      select: { id: true },
+    });
+    if (existing) return existing;
+
+    const slug = await uniqueSlug(tx as never, slugifyFormName(`${source.name} ${client.name}`));
+    return tx.form.create({
+      data: {
+        tenantId,
+        kind: source.kind,
+        clientId,
+        name: `${source.name} — ${client.name}`,
+        slug,
+        title: source.title,
+        description: source.description,
+        layout: source.layout as never,
+        status: "draft",
+        // A private variant is for this client's portal, never the website.
+        showPublic: false,
+        showPortal: source.showPortal,
+      },
+    });
+  });
+  if (!created) return;
+  revalidatePath(`/dashboard/clients/${clientId}`);
+  revalidatePath("/dashboard/forms");
+  redirect(`/dashboard/forms/${created.id}`);
+}
+
+/**
  * Save the arrangement from the designer. Takes the layout as JSON rather
  * than FormData because the designer holds it as a document, and re-runs it
  * through normalizeLayout server-side: the client is not trusted to have

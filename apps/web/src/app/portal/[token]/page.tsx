@@ -1,3 +1,4 @@
+import { withTenant } from "@freehold/db";
 import {
   Archive,
   CalendarCheck,
@@ -12,9 +13,13 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/badges";
+import { FormBody } from "@/components/form-render";
 import { submitIntake } from "@/lib/actions/intake";
 import { placeClientOrder } from "@/lib/actions/portal-orders";
+import { submitPortalForm } from "@/lib/actions/public-forms";
 import { type Appearance, portalVars, tenantAppearance } from "@/lib/appearance";
+import { portalFormsFor, trimKnownClientFields } from "@/lib/form-resolve";
+import { parseLayout } from "@/lib/form-schema";
 import { fmtDate, fmtMoney, ROLE_LABEL, STATUS_LABEL } from "@/lib/format";
 import { INTAKE_UPLOAD_HINT, intakeFields } from "@/lib/intake";
 import { resolveAgentPortal, resolvePortal } from "@/lib/portal";
@@ -160,12 +165,76 @@ function fmtApptDate(d: Date): string {
   });
 }
 
+/** A designed form placed in portals, as the portal needs it. */
+type PortalForm = {
+  id: string;
+  title: string;
+  description: string | null;
+  layout: unknown;
+  clientId: string | null;
+};
+
+/**
+ * Designed intake forms in the portal. The client is already known here, so
+ * the questions that only establish who they are get dropped — they are not
+ * asked to retype their own name. Everything about the deal is still asked.
+ */
+function PortalForms({
+  forms,
+  token,
+  sent,
+  cardCls,
+}: {
+  forms: PortalForm[];
+  token: string;
+  sent: boolean;
+  cardCls: string;
+}) {
+  if (forms.length === 0) return null;
+  return (
+    <>
+      {forms.map((f) => {
+        // A form that only ever asked who they are has nothing left to ask.
+        const trimmed = trimKnownClientFields(parseLayout(f.layout));
+        if (!trimmed) return null;
+        return (
+          <section key={f.id} className={cardCls}>
+            <h2 className="mb-1 font-medium">{f.title}</h2>
+            {f.description && <p className="mb-3 text-sm text-stone-500">{f.description}</p>}
+            {sent ? (
+              <p className="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-900">
+                Thank you — that's with your coordinator now.
+              </p>
+            ) : (
+              <form action={submitPortalForm} className="flex flex-col gap-4">
+                <input type="hidden" name="token" value={token} />
+                <input type="hidden" name="formId" value={f.id} />
+                <FormBody layout={trimmed} />
+                <div>
+                  <button
+                    type="submit"
+                    className="rounded-md bg-brand-700 px-4 py-2 text-sm font-medium text-white shadow-xs transition hover:bg-brand-600 active:scale-[0.99]"
+                  >
+                    Send
+                  </button>
+                </div>
+              </form>
+            )}
+          </section>
+        );
+      })}
+    </>
+  );
+}
+
 function ClientPortal(
   portal: NonNullable<Awaited<ReturnType<typeof resolvePortal>>>,
   labels: SideLabels,
   intakeDone: boolean,
   vendorData: PortalVendorData | null,
   appearance: Appearance,
+  portalForms: PortalForm[],
+  formSent: boolean,
 ) {
   const { link, txn, tenantName } = portal;
   const today = fmtDate(new Date());
@@ -443,6 +512,8 @@ function ClientPortal(
             )}
           </section>
         )}
+
+        <PortalForms forms={portalForms} token={link.token} sent={formSent} cardCls={cardCls} />
 
         {link.showIntake && (
           <section className={cardCls}>
@@ -732,21 +803,37 @@ export default async function PortalPage({
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ q?: string; intake?: string }>;
+  searchParams: Promise<{ q?: string; intake?: string; formSent?: string; formInvalid?: string }>;
 }) {
   const { token } = await params;
-  const { q, intake } = await searchParams;
+  const { q, intake, formSent } = await searchParams;
 
   const clientPortal = await resolvePortal(token);
   if (clientPortal) {
-    const [labels, appearance, vendorData] = await Promise.all([
+    const [labels, appearance, vendorData, portalForms] = await Promise.all([
       tenantSideLabels(clientPortal.link.tenantId),
       tenantAppearance(clientPortal.link.tenantId),
       clientPortal.link.showVendorOrders
         ? portalVendorData(clientPortal.link.tenantId, clientPortal.txn.id)
         : Promise.resolve(null),
+      // Forms the workspace placed in portals — the client's own version of
+      // one wins over the shared version (lib/form-resolve.ts).
+      withTenant(clientPortal.link.tenantId, async (tx) =>
+        portalFormsFor(
+          await tx.form.findMany({ where: { status: "published", showPortal: true } }),
+          clientPortal.txn.clientId,
+        ),
+      ),
     ]);
-    return ClientPortal(clientPortal, labels, intake === "done", vendorData, appearance);
+    return ClientPortal(
+      clientPortal,
+      labels,
+      intake === "done",
+      vendorData,
+      appearance,
+      portalForms,
+      Boolean(formSent),
+    );
   }
 
   const agentPortal = await resolveAgentPortal(token);

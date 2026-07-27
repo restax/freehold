@@ -27,6 +27,7 @@ import {
   updateClientType,
 } from "@/lib/actions/clients";
 import { setClientCompliance } from "@/lib/actions/compliance";
+import { createClientFormVariant } from "@/lib/actions/forms";
 import { createAgentPortalLink, setPortalLinkActive } from "@/lib/actions/portal";
 import { connectSkyslope, disconnectSkyslope } from "@/lib/actions/skyslope";
 import { createCredential } from "@/lib/actions/vault";
@@ -38,6 +39,7 @@ import {
   CLIENT_TYPE_LABEL,
   clientKind,
 } from "@/lib/client-profile";
+import { FORM_KIND_LABEL } from "@/lib/form-schema";
 import { fmtDate, fmtMoney } from "@/lib/format";
 import { portalOrigin } from "@/lib/portal";
 import { decodeSkyslopeConfig, maskKey, parseSkyslopeConfig, skyslopeState } from "@/lib/skyslope";
@@ -113,6 +115,20 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const checklists = await withTenant(tenantId, (tx) =>
     tx.complianceChecklist.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
   );
+  // Forms this client could be given their own version of, and any they
+  // already have. A private variant wins over the shared form for them.
+  const [sharedForms, ownForms] = await withTenant(tenantId, async (tx) => [
+    await tx.form.findMany({
+      where: { clientId: null, showPortal: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, kind: true },
+    }),
+    await tx.form.findMany({
+      where: { clientId: id },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, kind: true, status: true },
+    }),
+  ]);
   if (!client) notFound();
   const portalBase = await portalOrigin(tenantId);
   const agentIds = new Set(client.agents.map((a) => a.contact.id));
@@ -875,6 +891,65 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
               );
             })}
           </ul>
+        )}
+      </section>
+
+      <section className={card}>
+        <h2 className="mb-1 font-medium">Their forms</h2>
+        <p className="mb-3 text-sm text-stone-500">
+          {client.name} sees your shared portal forms unless you give them their own version. A
+          private version starts as a copy and stays a draft until you publish it — until then they
+          keep seeing the shared one.
+        </p>
+        {ownForms.length > 0 && (
+          <ul className="mb-3 flex flex-col">
+            {ownForms.map((f) => (
+              <li
+                key={f.id}
+                className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
+              >
+                <Link
+                  href={`/dashboard/forms/${f.id}`}
+                  className="font-medium text-brand-700 hover:text-brand-600"
+                >
+                  {f.name}
+                </Link>
+                <Badge tone={f.status === "published" ? "success" : "neutral"}>
+                  {f.status === "published" ? "Published" : "Draft"}
+                </Badge>
+                <span className="text-xs text-stone-400">{FORM_KIND_LABEL[f.kind] ?? f.kind}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {sharedForms.filter((sf) => !ownForms.some((of) => of.kind === sf.kind)).length > 0 ? (
+          <form action={createClientFormVariant} className="flex flex-wrap items-end gap-2">
+            <input type="hidden" name="clientId" value={client.id} />
+            <label className={labelCls}>
+              Give them their own version of
+              <select name="sourceFormId" required className={`${input} w-72`} defaultValue="">
+                <option value="" disabled>
+                  Pick a form…
+                </option>
+                {sharedForms
+                  .filter((sf) => !ownForms.some((of) => of.kind === sf.kind))
+                  .map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <button type="submit" className={btn}>
+              Create their version
+            </button>
+          </form>
+        ) : (
+          <p className="text-sm text-stone-400">
+            {sharedForms.length === 0
+              ? "No portal forms yet — design one under Forms and place it in client portals."
+              : "They already have their own version of every portal form."}
+          </p>
         )}
       </section>
 
