@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { activityTitle, logActivity } from "@/lib/activity";
 import { logAudit } from "@/lib/audit";
 import { LINE_KINDS, paidCents } from "@/lib/billing";
+import { invoiceRecipient } from "@/lib/client-profile";
 import { emailEnabled, sendTenantEmail } from "@/lib/email";
 import {
   createSalesInvoice,
@@ -193,7 +194,7 @@ export async function sendInvoice(formData: FormData) {
     tx.invoice.findUnique({
       where: { id },
       include: {
-        client: { select: { name: true, email: true } },
+        client: { select: { name: true, email: true, billingContact: true } },
         transaction: { select: { propertyAddress: true } },
         lines: {
           orderBy: { sortOrder: "asc" },
@@ -202,7 +203,11 @@ export async function sendInvoice(formData: FormData) {
       },
     }),
   );
-  if (invoice?.status !== "SENT" || !invoice.client?.email) return;
+  if (invoice?.status !== "SENT" || !invoice.client) return;
+  // The billing contact pays the bills when the office has one; the client's
+  // own email otherwise.
+  const recipient = invoiceRecipient(invoice.client);
+  if (!recipient) return;
 
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: tenantId },
@@ -225,7 +230,7 @@ export async function sendInvoice(formData: FormData) {
   await sendTenantEmail({
     tenantId,
     transactionId: invoice.transactionId,
-    to: invoice.client.email,
+    to: recipient,
     subject: `Invoice ${invoiceLabel(invoice.number)} from ${org.name} — ${fmtCents(invoice.amountCents)}`,
     body: text,
     attachments: [
@@ -241,7 +246,7 @@ export async function sendInvoice(formData: FormData) {
     actorId: session.user.id,
     actorEmail: session.user.email,
     action: "invoice.sent",
-    summary: `Emailed ${invoiceLabel(invoice.number)} to ${invoice.client.email}`,
+    summary: `Emailed ${invoiceLabel(invoice.number)} to ${recipient}`,
   });
   revalidatePath("/dashboard/invoices");
   if (invoice.transactionId) revalidatePath(`/dashboard/transactions/${invoice.transactionId}`);

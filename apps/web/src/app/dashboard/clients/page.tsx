@@ -1,4 +1,5 @@
 import { ClientType, EsignProvider, withTenant } from "@freehold/db";
+import { Buildings, Storefront, User, UsersThree } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { createClient, updateClientEsign } from "@/lib/actions/clients";
@@ -7,9 +8,9 @@ import {
   btn,
   btnGhost,
   card,
+  fieldGroupLabel,
   input,
   label,
-  summaryLink,
   tableWrap,
   td,
   th,
@@ -21,6 +22,7 @@ export const dynamic = "force-dynamic";
 const TYPE_LABEL: Record<string, string> = {
   AGENT: "Agent",
   BROKERAGE: "Brokerage",
+  TEAM: "Team",
   TITLE: "Title company",
   LENDER: "Lender",
   OTHER: "Other",
@@ -32,73 +34,286 @@ const ESIGN_LABEL: Record<string, string> = {
   DOCUSIGN: "DocuSign",
 };
 
-export default async function ClientsPage() {
+/**
+ * The three creation paths. "Who is this client?" comes first because the
+ * answer changes every question after it: an individual agent needs their
+ * broker on file; an office needs a billing contact and a roster of agents.
+ */
+const PATHS = [
+  {
+    key: "agent",
+    icon: User,
+    title: "Individual agent",
+    blurb: "One agent — you'll keep their broker's details on file.",
+  },
+  {
+    key: "office",
+    icon: Buildings,
+    title: "Brokerage or team",
+    blurb: "An office with its own agents and a billing contact.",
+  },
+  {
+    key: "company",
+    icon: Storefront,
+    title: "Other company",
+    blurb: "Title company, lender, or anyone else you coordinate for.",
+  },
+] as const;
+
+type PathKey = (typeof PATHS)[number]["key"];
+
+function EsignField() {
+  return (
+    <label className={label}>
+      E-sign provider
+      <select name="esignProvider" className={input} defaultValue="">
+        <option value="">Tenant default</option>
+        {Object.values(EsignProvider).map((p) => (
+          <option key={p} value={p}>
+            {ESIGN_LABEL[p]}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+export default async function ClientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ new?: string }>;
+}) {
   const { tenantId } = await requireTenant();
+  const { new: newParam } = await searchParams;
+  const path: PathKey | null = PATHS.some((p) => p.key === newParam) ? (newParam as PathKey) : null;
+
   const clients = await withTenant(tenantId, (tx) =>
     tx.client.findMany({
       orderBy: { name: "asc" },
-      include: { _count: { select: { transactions: true } } },
+      include: { _count: { select: { transactions: true, agents: true } } },
     }),
   );
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-semibold">Clients</h1>
-        <p className="text-sm text-stone-500">
-          The agents, brokerages, and companies you coordinate transactions for.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold">Clients</h1>
+          <p className="text-sm text-stone-500">
+            The agents, brokerages, and companies you coordinate transactions for.
+          </p>
+        </div>
+        {!path && (
+          <Link href="/dashboard/clients?new=agent" className={btn}>
+            + New client
+          </Link>
+        )}
       </div>
 
-      <details className={card}>
-        <summary className={summaryLink}>New client</summary>
-        <form action={createClient} className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <label className={label}>
-            Name *
-            <input name="name" required className={input} placeholder="Sunrise Realty" />
-          </label>
-          <label className={label}>
-            Type
-            <select name="type" className={input} defaultValue="AGENT">
-              {Object.values(ClientType).map((t) => (
-                <option key={t} value={t}>
-                  {TYPE_LABEL[t]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={label}>
-            Email
-            <input name="email" type="email" className={input} />
-          </label>
-          <label className={label}>
-            Phone
-            <input name="phone" className={input} />
-          </label>
-          <label className={label}>
-            E-sign provider
-            <select name="esignProvider" className={input} defaultValue="">
-              <option value="">Tenant default</option>
-              {Object.values(EsignProvider).map((p) => (
-                <option key={p} value={p}>
-                  {ESIGN_LABEL[p]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="flex items-end">
-            <button type="submit" className={btn}>
-              Add client
-            </button>
+      {path && (
+        <section className={card}>
+          <div className="flex items-baseline justify-between">
+            <h2 className="font-medium text-stone-900">New client</h2>
+            <Link href="/dashboard/clients" className="text-xs text-stone-400 hover:text-stone-600">
+              Cancel
+            </Link>
           </div>
-        </form>
-      </details>
+          <p className="mb-3 mt-0.5 text-sm text-stone-500">Who is this client?</p>
+
+          <div className="grid gap-2 sm:grid-cols-3">
+            {PATHS.map((p) => {
+              const active = p.key === path;
+              const Icon = p.icon;
+              return (
+                <Link
+                  key={p.key}
+                  href={`/dashboard/clients?new=${p.key}`}
+                  aria-current={active ? "true" : undefined}
+                  className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
+                    active
+                      ? "border-brand-600 bg-brand-50/60"
+                      : "border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50"
+                  }`}
+                >
+                  <Icon
+                    size={20}
+                    weight={active ? "fill" : "regular"}
+                    className={`mt-0.5 shrink-0 ${active ? "text-brand-700" : "text-stone-400"}`}
+                  />
+                  <span className="flex flex-col">
+                    <span
+                      className={`text-sm font-medium ${active ? "text-brand-900" : "text-stone-700"}`}
+                    >
+                      {p.title}
+                    </span>
+                    <span className="text-xs text-stone-500">{p.blurb}</span>
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+
+          {path === "agent" && (
+            <form action={createClient} className="mt-4 flex flex-col gap-4">
+              <input type="hidden" name="type" value={ClientType.AGENT} />
+              <div>
+                <p className={fieldGroupLabel}>The agent</p>
+                <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <label className={label}>
+                    Name *
+                    <input name="name" required className={input} placeholder="Priya Raman" />
+                  </label>
+                  <label className={label}>
+                    Email
+                    <input name="email" type="email" className={input} />
+                  </label>
+                  <label className={label}>
+                    Phone
+                    <input name="phone" className={input} />
+                  </label>
+                  <EsignField />
+                </div>
+              </div>
+              <div className="border-t border-stone-100 pt-3">
+                <p className={fieldGroupLabel}>Their brokerage</p>
+                <p className="mb-2 text-xs text-stone-400">
+                  Where they hang their license — reference info for your file, not a client record.
+                </p>
+                <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_2fr]">
+                  <label className={label}>
+                    Brokerage name
+                    <input name="brokerageName" className={input} placeholder="Harborline Realty" />
+                  </label>
+                  <label className={label}>
+                    Brokerage phone
+                    <input name="brokeragePhone" className={input} />
+                  </label>
+                  <label className={label}>
+                    Brokerage address
+                    <input
+                      name="brokerageAddress"
+                      className={input}
+                      placeholder="200 Main St, Suite 4, Springfield IL"
+                    />
+                  </label>
+                </div>
+              </div>
+              <div className="border-t border-stone-100 pt-3">
+                <button type="submit" className={btn}>
+                  Add agent client
+                </button>
+              </div>
+            </form>
+          )}
+
+          {path === "office" && (
+            <form action={createClient} className="mt-4 flex flex-col gap-4">
+              <div>
+                <p className={fieldGroupLabel}>The office</p>
+                <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <label className={label}>
+                    Office name *
+                    <input name="name" required className={input} placeholder="Harborline Realty" />
+                  </label>
+                  <label className={label}>
+                    Type
+                    <select name="type" className={input} defaultValue={ClientType.BROKERAGE}>
+                      <option value={ClientType.BROKERAGE}>Brokerage</option>
+                      <option value={ClientType.TEAM}>Team</option>
+                    </select>
+                  </label>
+                  <label className={label}>
+                    Office phone
+                    <input name="phone" className={input} />
+                  </label>
+                  <label className={label}>
+                    Office email
+                    <input name="email" type="email" className={input} />
+                  </label>
+                  <label className={`${label} sm:col-span-2`}>
+                    Office address
+                    <input
+                      name="address"
+                      className={input}
+                      placeholder="200 Main St, Suite 4, Springfield IL"
+                    />
+                  </label>
+                  <EsignField />
+                </div>
+              </div>
+              <div className="border-t border-stone-100 pt-3">
+                <p className={fieldGroupLabel}>Billing contact</p>
+                <p className="mb-2 text-xs text-stone-400">
+                  Who pays the bills. Invoices email the billing contact when one is set, the office
+                  email otherwise.
+                </p>
+                <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <label className={label}>
+                    Name
+                    <input name="billingName" className={input} placeholder="Dana Whitfield" />
+                  </label>
+                  <label className={label}>
+                    Email
+                    <input name="billingEmail" type="email" className={input} />
+                  </label>
+                  <label className={label}>
+                    Phone
+                    <input name="billingPhone" className={input} />
+                  </label>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 border-t border-stone-100 pt-3">
+                <button type="submit" className={btn}>
+                  Add office
+                </button>
+                <span className="flex items-center gap-1.5 text-xs text-stone-400">
+                  <UsersThree size={14} />
+                  You'll add the individual agents on the office's page next.
+                </span>
+              </div>
+            </form>
+          )}
+
+          {path === "company" && (
+            <form action={createClient} className="mt-4 flex flex-col gap-4">
+              <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-5">
+                <label className={label}>
+                  Name *
+                  <input name="name" required className={input} placeholder="Lakeview Title Co." />
+                </label>
+                <label className={label}>
+                  Type
+                  <select name="type" className={input} defaultValue={ClientType.TITLE}>
+                    <option value={ClientType.TITLE}>Title company</option>
+                    <option value={ClientType.LENDER}>Lender</option>
+                    <option value={ClientType.OTHER}>Other</option>
+                  </select>
+                </label>
+                <label className={label}>
+                  Email
+                  <input name="email" type="email" className={input} />
+                </label>
+                <label className={label}>
+                  Phone
+                  <input name="phone" className={input} />
+                </label>
+                <EsignField />
+              </div>
+              <div className="border-t border-stone-100 pt-3">
+                <button type="submit" className={btn}>
+                  Add client
+                </button>
+              </div>
+            </form>
+          )}
+        </section>
+      )}
 
       <section className={card}>
         {clients.length === 0 ? (
           <EmptyState
             title="No clients yet"
-            hint='Clients are who you coordinate for — an agent, a brokerage, a title company. Each transaction belongs to one, and their preferences (like e-sign provider) follow automatically. Open "New client" above to add your first.'
+            hint='Clients are who you coordinate for — an agent, a brokerage, a title company. Each transaction belongs to one, and their preferences (like e-sign provider) follow automatically. Hit "+ New client" above to add your first.'
           />
         ) : (
           <div className={tableWrap}>

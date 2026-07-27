@@ -748,6 +748,9 @@ model Invitation {
 enum ClientType {
   AGENT
   BROKERAGE
+  /// A team inside a brokerage — behaves exactly like BROKERAGE (office info,
+  /// billing contact, roster of agents); it exists so the list can say "Team".
+  TEAM
   TITLE
   LENDER
   OTHER
@@ -764,6 +767,16 @@ model Client {
   name                  String
   email                 String?
   phone                 String?
+  /// Office / mailing address, free text — suite lines and all.
+  address               String?
+  /// Who pays the bills at a brokerage or team: {name?, email?, phone?}.
+  /// When the email is set, invoice emails go there instead of Client.email
+  /// (lib/client-profile.ts resolves the recipient).
+  billingContact        Json?                @map("billing_contact")
+  /// For AGENT clients: the brokerage they hang their license with — plain
+  /// reference info ({name?, phone?, address?}), not a relation, because the
+  /// agent's broker usually isn't a client of this workspace.
+  brokerageInfo         Json?                @map("brokerage_info")
   notes                 String?
   /// Per-client e-signature provider; null = tenant default (FREEHOLD_ESIGN_DEFAULT env, else MANUAL).
   esignProvider         EsignProvider?       @map("esign_provider")

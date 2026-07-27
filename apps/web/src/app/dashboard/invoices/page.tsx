@@ -32,6 +32,7 @@ import {
 import { filePayoutTotals } from "@/lib/billing-payouts";
 import { clientBillingPolicy, lateFeeCents, lateFeeEligible } from "@/lib/billing-policy";
 import { agingReport, monthlyCollected } from "@/lib/billing-reports";
+import { invoiceRecipient } from "@/lib/client-profile";
 import { emailEnabled } from "@/lib/email";
 import { erpnextInvoiceUrl } from "@/lib/erpnext";
 import { fmtDate } from "@/lib/format";
@@ -116,7 +117,9 @@ export default async function InvoicesPage({
     invoices: await tx.invoice.findMany({
       orderBy: { number: "desc" },
       include: {
-        client: { select: { id: true, name: true, email: true, billingConfig: true } },
+        client: {
+          select: { id: true, name: true, email: true, billingConfig: true, billingContact: true },
+        },
         transaction: { select: { id: true, propertyAddress: true } },
         lines: {
           orderBy: { sortOrder: "asc" },
@@ -921,17 +924,24 @@ export default async function InvoicesPage({
                                 PDF
                               </a>
                             )}
-                            {isAdmin && inv.status === "SENT" && canEmail && inv.client?.email && (
-                              <form action={sendInvoice}>
-                                <input type="hidden" name="id" value={inv.id} />
-                                <button
-                                  type="submit"
-                                  className="font-medium text-brand-700 hover:text-brand-600"
-                                >
-                                  {inv.sentAt ? `re-send (emailed ${fmtDate(inv.sentAt)})` : "send"}
-                                </button>
-                              </form>
-                            )}
+                            {isAdmin &&
+                              inv.status === "SENT" &&
+                              canEmail &&
+                              inv.client &&
+                              invoiceRecipient(inv.client) && (
+                                <form action={sendInvoice}>
+                                  <input type="hidden" name="id" value={inv.id} />
+                                  <button
+                                    type="submit"
+                                    className="font-medium text-brand-700 hover:text-brand-600"
+                                    title={`Emails ${invoiceRecipient(inv.client)}`}
+                                  >
+                                    {inv.sentAt
+                                      ? `re-send (emailed ${fmtDate(inv.sentAt)})`
+                                      : "send"}
+                                  </button>
+                                </form>
+                              )}
                             {inv.paymentTerms && (
                               <span className="text-stone-400">{inv.paymentTerms}</span>
                             )}

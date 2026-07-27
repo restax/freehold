@@ -15,23 +15,64 @@ function esignFrom(formData: FormData): EsignProvider | null {
   return ESIGN_PROVIDERS.includes(v) ? v : null;
 }
 
+/** {name?, email?, phone?} → JSON, or undefined when every field is blank. */
+function contactJson(
+  formData: FormData,
+  keys: [name: string, email: string, phone: string],
+): Record<string, string> | undefined {
+  const name = optStr(formData, keys[0]);
+  const email = optStr(formData, keys[1]);
+  const phone = optStr(formData, keys[2]);
+  if (!name && !email && !phone) return undefined;
+  return { ...(name && { name }), ...(email && { email }), ...(phone && { phone }) };
+}
+
 export async function createClient(formData: FormData) {
   const { tenantId } = await requireTenant();
   const name = str(formData, "name");
   if (!name) return;
-  await withTenant(tenantId, (tx) =>
+  const type = oneOf(formData, "type", CLIENT_TYPES, ClientType.AGENT);
+
+  // The office's billing contact, or the agent's brokerage — only the fields
+  // that match the type are read, so a stray hidden input can't cross-wire an
+  // agent with a billing contact.
+  const billingContact =
+    type === ClientType.BROKERAGE || type === ClientType.TEAM
+      ? contactJson(formData, ["billingName", "billingEmail", "billingPhone"])
+      : undefined;
+  const brokerageInfo =
+    type === ClientType.AGENT
+      ? (() => {
+          const bName = optStr(formData, "brokerageName");
+          const bPhone = optStr(formData, "brokeragePhone");
+          const bAddress = optStr(formData, "brokerageAddress");
+          if (!bName && !bPhone && !bAddress) return undefined;
+          return {
+            ...(bName && { name: bName }),
+            ...(bPhone && { phone: bPhone }),
+            ...(bAddress && { address: bAddress }),
+          };
+        })()
+      : undefined;
+
+  const client = await withTenant(tenantId, (tx) =>
     tx.client.create({
       data: {
         tenantId,
         name,
-        type: oneOf(formData, "type", CLIENT_TYPES, ClientType.AGENT),
+        type,
         email: optStr(formData, "email"),
         phone: optStr(formData, "phone"),
+        address: optStr(formData, "address"),
+        billingContact,
+        brokerageInfo,
         esignProvider: esignFrom(formData),
       },
     }),
   );
   revalidatePath("/dashboard/clients");
+  // Land on the new client's page — for offices that's where agents get added.
+  redirect(`/dashboard/clients/${client.id}`);
 }
 
 export async function updateClientEsign(formData: FormData) {
