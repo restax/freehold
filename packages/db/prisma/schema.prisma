@@ -804,6 +804,12 @@ model Client {
   /// Per-client billing-policy overrides ({mode, lateFee, ...}); unset keys
   /// fall back to Organization.billingDefaults via lib/billing-policy.ts.
   billingConfig         Json?                @map("billing_config")
+  /// Read contracts that arrive through an intake form with AI, for this
+  /// client only. Off by default and deliberately per-client: a stranger's
+  /// upload is not something to spend a workspace's AI on by default, and
+  /// some clients don't want their contracts machine-read at all. Pro
+  /// feature — lib/intake-ai.ts is the gate.
+  intakeAiExtraction    Boolean              @default(false) @map("intake_ai_extraction")
   /// Compliance: every transaction for this client follows the assigned
   /// checklist. Switch complianceEnabled off to exempt the client entirely
   /// (leaving no checklist assigned is also inert).

@@ -1,5 +1,6 @@
 import { CheckCircle, EnvelopeSimple, Phone } from "@phosphor-icons/react/dist/ssr";
 import type { TenantSiteConfig } from "@/lib/site-config";
+import { siteMenu } from "@/lib/site-menu";
 
 /**
  * The published tenant mini-site, shared by /t/[slug] (real workspaces) and
@@ -22,6 +23,7 @@ export function TenantSiteView({
   heroImageSrc = "/site/site-hero.jpg",
   about,
   publicForms = [],
+  formBase = "/f",
 }: {
   name: string;
   logoUrl?: string | null;
@@ -39,16 +41,28 @@ export function TenantSiteView({
    * never links anything by hand.
    */
   publicForms?: Array<{ slug: string; title: string; description: string | null }>;
+  /**
+   * Prefix for form links. The tenant's own host serves them at /f/<slug>;
+   * the same page reached at the apex as /t/<slug> needs the full path, or
+   * every form link here is a 404.
+   */
+  formBase?: string;
 }) {
   const services = (site.services ?? "")
     .split("\n")
     .map((s) => s.trim())
     .filter(Boolean);
+  const menu = siteMenu({
+    hasServices: services.length > 0,
+    forms: publicForms,
+    showRegistration: Boolean(site.showRegistration),
+    formBase,
+  });
 
   return (
     <main className="min-h-screen bg-white text-stone-900">
       {/* Top bar */}
-      <header className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
+      <header className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-3 px-5 py-5 sm:px-8">
         <div className="flex items-center gap-3">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -61,6 +75,23 @@ export function TenantSiteView({
             <span className="font-display text-lg font-bold tracking-tight">{name}</span>
           )}
         </div>
+        {/* The menu writes itself from what's published — see lib/site-menu.ts. */}
+        {menu.length > 0 && (
+          <nav
+            aria-label="Site"
+            className="order-3 flex flex-wrap items-center gap-x-5 gap-y-2 sm:order-none"
+          >
+            {menu.map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                className="text-sm text-stone-600 transition-colors hover:text-brand-700"
+              >
+                {item.label}
+              </a>
+            ))}
+          </nav>
+        )}
         <div className="flex items-center gap-5 text-sm text-stone-600">
           {site.phone && (
             <a
@@ -120,7 +151,7 @@ export function TenantSiteView({
 
       {/* Services */}
       {services.length > 0 && (
-        <section className="border-y border-stone-100 bg-stone-50">
+        <section id="services" className="border-y border-stone-100 bg-stone-50">
           <div className="mx-auto max-w-6xl px-5 py-14 sm:px-8">
             <h2 className="font-display text-2xl font-bold tracking-tight">What we handle</h2>
             <ul className="mt-6 grid gap-x-10 gap-y-4 sm:grid-cols-2">
@@ -148,7 +179,7 @@ export function TenantSiteView({
             {publicForms.map((f) => (
               <a
                 key={f.slug}
-                href={`/f/${f.slug}`}
+                href={`${formBase}/${f.slug}`}
                 className="group flex flex-col rounded-2xl border border-stone-200 bg-white p-5 transition-colors hover:border-brand-600/40 hover:bg-brand-50/30"
               >
                 <span className="font-display text-lg font-bold tracking-tight text-stone-900">

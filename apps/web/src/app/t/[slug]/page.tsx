@@ -1,5 +1,6 @@
 import { prisma, withTenant } from "@freehold/db";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { TenantSiteView } from "@/components/tenant-site";
 import { submitTenantLead } from "@/lib/actions/website";
@@ -84,12 +85,19 @@ export default async function TenantSite({ params, searchParams }: Props) {
     );
   }
 
+  // On the workspace's own host, middleware rewrote acme.<root>/ to here and
+  // the browser's URL is still the subdomain, so /f/<form> resolves. Reached
+  // at the apex as /t/<slug>, it doesn't — the links need the prefix.
+  const host = (await headers()).get("host") ?? "";
+  const onOwnHost = host.startsWith(`${slug}.`);
+
   return (
     <TenantSiteView
       name={org.name}
       logoUrl={org.logo}
       site={site}
       publicForms={publicForms}
+      formBase={onOwnHost ? "/f" : `/t/${slug}/f`}
       thanks={Boolean(thanks)}
       leadAction={submitTenantLead}
       hiddenFields={{ slug }}

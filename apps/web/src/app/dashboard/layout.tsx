@@ -1,3 +1,4 @@
+import { withTenant } from "@freehold/db";
 import { redirect } from "next/navigation";
 import { DashboardNav, ProfileNavLink, SettingsNavLink } from "@/components/dashboard-nav";
 import { DemoWatermark } from "@/components/demo-watermark";
@@ -26,6 +27,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // the sidebar just stops offering doors that won't open.
   const isGuest = (await getMemberRole(active.id, session.user.id)) === GUEST_ROLE;
   const supportUnread = await supportUnreadCount(active.id, session.user.id);
+  // What's sitting in the intake queue, on the menu entry that leads to it.
+  const formsPending = isGuest
+    ? 0
+    : await withTenant(active.id, (tx) => tx.formSubmission.count({ where: { status: "new" } }));
   const appearance = await tenantAppearance(active.id);
 
   // Failed-renewal lock: access is paused until payment is fixed, but nothing
@@ -153,7 +158,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </div>
           </details>
         )}
-        <DashboardNav isGuest={isGuest} supportUnread={supportUnread} />
+        <DashboardNav isGuest={isGuest} supportUnread={supportUnread} formsPending={formsPending} />
         <div className="mt-auto flex shrink-0 flex-col gap-1 border-t border-stone-200 pt-3">
           {/* Text-only composer with no icon to collapse to — hidden on the
               rail, where Support is still one click away in the nav above. */}

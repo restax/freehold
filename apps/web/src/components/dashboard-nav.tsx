@@ -34,6 +34,7 @@ import { useEffect, useState } from "react";
 import { VOICE_OPEN_EVENT } from "@/components/voice-widget";
 
 const SUPPORT_HREF = "/dashboard/support";
+const FORMS_HREF = "/dashboard/forms";
 const UNREAD_POLL_MS = 15000;
 
 interface NavItem {
@@ -99,7 +100,18 @@ export const navRowCls =
   "flex items-center justify-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors lg:justify-start";
 export const navLabelCls = "hidden lg:inline";
 
-function NavLink({ item, active, badge = 0 }: { item: NavItem; active: boolean; badge?: number }) {
+function NavLink({
+  item,
+  active,
+  badge = 0,
+  urgent = true,
+}: {
+  item: NavItem;
+  active: boolean;
+  badge?: number;
+  /** A support reply is waiting on a person; a queue of intake forms isn't. */
+  urgent?: boolean;
+}) {
   const IconComponent = item.icon;
   return (
     <Link
@@ -123,7 +135,9 @@ function NavLink({ item, active, badge = 0 }: { item: NavItem; active: boolean; 
         <span
           role="status"
           aria-label={`${badge} new`}
-          className="inline-flex min-w-4 animate-bounce items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-semibold leading-4 text-white lg:ml-auto"
+          className={`inline-flex min-w-4 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold leading-4 lg:ml-auto ${
+            urgent ? "animate-bounce bg-red-500 text-white" : "bg-stone-200 text-stone-600"
+          }`}
         >
           {badge > 9 ? "9+" : badge}
         </span>
@@ -143,9 +157,12 @@ const GUEST_HREFS = new Set([
 export function DashboardNav({
   isGuest = false,
   supportUnread = 0,
+  formsPending = 0,
 }: {
   isGuest?: boolean;
   supportUnread?: number;
+  /** Form submissions nobody has reviewed yet — a count, not an alarm. */
+  formsPending?: number;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -189,7 +206,13 @@ export function DashboardNav({
     };
   }, [pathname, router]);
 
-  const badgeFor = (href: string) => (href === SUPPORT_HREF && !onSupport ? unread : 0);
+  const badgeFor = (href: string) => {
+    if (href === SUPPORT_HREF) return onSupport ? 0 : unread;
+    // Forms place themselves on this menu too: what's waiting is on the entry
+    // that leads to it, rather than only inside the page nobody opened.
+    if (href === FORMS_HREF) return formsPending;
+    return 0;
+  };
 
   // Hiding these is courtesy, not security — every page refuses guests
   // server-side regardless of what the sidebar shows.
@@ -214,6 +237,7 @@ export function DashboardNav({
               item={item}
               active={isActive(item.href)}
               badge={badgeFor(item.href)}
+              urgent={item.href !== FORMS_HREF}
             />
           ))}
           {/* Voice search isn't a page — it's the panel that lives on every

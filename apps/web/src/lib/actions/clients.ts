@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logAudit } from "@/lib/audit";
 import { confirmed, oneOf, optStr, str } from "@/lib/forms";
+import { transactionHasPro } from "@/lib/plans";
 import { requireAdminTenant, requireTenant } from "@/lib/tenant";
 
 const CLIENT_TYPES = Object.values(ClientType);
@@ -303,6 +304,43 @@ export async function saveClientAlertConfig(formData: FormData) {
   );
   revalidatePath(`/dashboard/clients/${id}`);
   revalidatePath("/dashboard");
+}
+
+/**
+ * Turn AI reading of this client's intake contracts on or off. Gated on the
+ * plan server-side as well as in the page: the switch is the workspace
+ * spending its AI on an upload from outside, so a Free workspace cannot flip
+ * it by posting the form. Audited — someone should be able to see when a
+ * client's contracts started being machine-read, and who decided that.
+ */
+export async function setClientIntakeAi(formData: FormData) {
+  const { tenantId, session } = await requireTenant();
+  const id = str(formData, "id");
+  if (!id) return;
+  const on = formData.get("intakeAi") === "on";
+  if (on && !(await transactionHasPro(tenantId, false))) return;
+
+  const client = await withTenant(tenantId, async (tx) => {
+    const existing = await tx.client.findUnique({
+      where: { id },
+      select: { name: true, intakeAiExtraction: true },
+    });
+    if (!existing || existing.intakeAiExtraction === on) return null;
+    await tx.client.update({ where: { id }, data: { intakeAiExtraction: on } });
+    return existing;
+  });
+  if (client) {
+    logAudit({
+      tenantId,
+      actorId: session.user.id,
+      actorEmail: session.user.email,
+      action: "client.intake_ai_changed",
+      summary: `Intake contracts for "${client.name}" are ${on ? "now read by AI" : "no longer read by AI"}`,
+      subjectType: "client",
+      subjectId: id,
+    });
+  }
+  revalidatePath(`/dashboard/clients/${id}`);
 }
 
 export async function saveClientEmailPrefs(formData: FormData) {

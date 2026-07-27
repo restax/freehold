@@ -1,15 +1,10 @@
 "use server";
 
-import { ExtractionStatus, FieldTarget, prisma, TransactionStatus, withTenant } from "@freehold/db";
+import { ExtractionStatus, FieldTarget, TransactionStatus, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import {
-  type ContractParty,
-  flattenExtraction,
-  transactionUpdateFor,
-} from "@/lib/ai/contract-schema";
-import { EXTRACTION_MODEL, extractContract } from "@/lib/ai/extract";
-import { logAiUsage, resolveModel } from "@/lib/ai/usage";
+import { type ContractParty, transactionUpdateFor } from "@/lib/ai/contract-schema";
+import { completeExtraction, extractionModel } from "@/lib/ai/extraction-run";
 import { str } from "@/lib/forms";
 import {
   creditBalance,
@@ -19,7 +14,7 @@ import {
   transactionHasPro,
   transactionLimit,
 } from "@/lib/plans";
-import { getObjectBytes, putObject, type StoredBytes } from "@/lib/storage";
+import { putObject } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
 
@@ -32,66 +27,6 @@ function provisionalAddress(filename: string): string {
     .replace(/[-_]+/g, " ")
     .trim();
   return base ? base.slice(0, 120) : "Uploaded contract";
-}
-
-/**
- * Run Claude over a RUNNING extraction's document, write the field rows, and
- * flip the row READY (or FAILED). Shared by the transaction-first path
- * (runExtraction) and the upload-first path (createFromContract). Synchronous
- * for now (the browser waits on the POST; ~30–90s) — moves to a BullMQ job
- * when the queue layer lands. Never throws: failures land on the row.
- */
-/** The contract-extraction model for a tenant: an operator override, else default. */
-async function extractionModel(tenantId: string): Promise<string> {
-  const org = await prisma.organization.findUnique({
-    where: { id: tenantId },
-    select: { aiModelOverride: true },
-  });
-  return resolveModel(org?.aiModelOverride, EXTRACTION_MODEL);
-}
-
-async function completeExtraction(
-  tenantId: string,
-  extractionId: string,
-  doc: StoredBytes,
-  model: string,
-  transactionId: string,
-): Promise<void> {
-  try {
-    const { result, usage } = await extractContract(await getObjectBytes(doc), model);
-    const rows = flattenExtraction(result);
-    await withTenant(tenantId, async (tx) => {
-      await tx.extractionField.createMany({
-        data: rows.map((r) => ({
-          tenantId,
-          extractionId,
-          key: r.key,
-          label: r.label,
-          value: r.value,
-          valueType: r.valueType,
-          page: r.page,
-          quote: r.quote,
-          confidence: r.confidence,
-          target: r.target,
-          sortOrder: r.sortOrder,
-        })),
-      });
-      await tx.contractExtraction.update({
-        where: { id: extractionId },
-        data: { status: ExtractionStatus.READY },
-      });
-    });
-    // Record token usage for operator cost visibility (best-effort).
-    await logAiUsage(tenantId, "extract", usage, transactionId);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    await withTenant(tenantId, (tx) =>
-      tx.contractExtraction.update({
-        where: { id: extractionId },
-        data: { status: ExtractionStatus.FAILED, error: message.slice(0, 1000) },
-      }),
-    );
-  }
 }
 
 /** Run extraction over a contract already attached to a transaction. */

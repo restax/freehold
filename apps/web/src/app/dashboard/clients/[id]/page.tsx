@@ -4,6 +4,7 @@ import {
   LinkSimple,
   MapPin,
   Receipt,
+  Sparkle,
   Storefront,
   User,
   UsersThree,
@@ -23,6 +24,7 @@ import {
   removeClientAgent,
   saveClientAlertConfig,
   saveClientEmailPrefs,
+  setClientIntakeAi,
   updateClientProfile,
   updateClientType,
 } from "@/lib/actions/clients";
@@ -41,6 +43,7 @@ import {
 } from "@/lib/client-profile";
 import { FORM_KIND_LABEL } from "@/lib/form-schema";
 import { fmtDate, fmtMoney } from "@/lib/format";
+import { transactionHasPro } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
 import { decodeSkyslopeConfig, maskKey, parseSkyslopeConfig, skyslopeState } from "@/lib/skyslope";
 import { requireAdminTenant } from "@/lib/tenant";
@@ -130,6 +133,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
     }),
   ]);
   if (!client) notFound();
+  // Reading intake contracts is a paid-plan feature; the switch says so
+  // rather than accepting a setting that would never fire.
+  const planHasPro = await transactionHasPro(tenantId, false);
   const portalBase = await portalOrigin(tenantId);
   const agentIds = new Set(client.agents.map((a) => a.contact.id));
   const addableContacts = contacts.filter((c) => !agentIds.has(c.id));
@@ -951,6 +957,45 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
               : "They already have their own version of every portal form."}
           </p>
         )}
+
+        <form
+          action={setClientIntakeAi}
+          className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-stone-100 pt-4"
+        >
+          <input type="hidden" name="id" value={client.id} />
+          <Sparkle size={16} weight="duotone" className="shrink-0 text-brand-600" aria-hidden />
+          <label className="flex items-center gap-2 text-sm font-medium text-stone-700">
+            <input
+              type="checkbox"
+              name="intakeAi"
+              defaultChecked={client.intakeAiExtraction}
+              disabled={!planHasPro}
+              className="accent-brand-600 disabled:opacity-40"
+            />
+            Read their intake contracts with AI
+          </label>
+          <button type="submit" className={btnGhost} disabled={!planHasPro}>
+            Save
+          </button>
+          <p className="w-full text-xs leading-relaxed text-stone-500">
+            {planHasPro ? (
+              <>
+                Off by default. When it's on, a contract attached to one of {client.name}'s intake
+                forms is read as soon as you convert the submission, and the file opens with the
+                dates and figures waiting for your approval — nothing is applied until you accept
+                it.
+              </>
+            ) : (
+              <>
+                Reading contracts is a paid-plan feature.{" "}
+                <Link href="/dashboard/billing" className="text-brand-700 hover:underline">
+                  See plans
+                </Link>{" "}
+                — a contract that arrives on this client's forms is stored either way.
+              </>
+            )}
+          </p>
+        </form>
       </section>
 
       <section className={card}>
