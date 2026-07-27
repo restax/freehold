@@ -3,8 +3,9 @@
 import { prisma, TaskStatus, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { activityTitle, logActivity } from "@/lib/activity";
 import { logAudit } from "@/lib/audit";
-import { paidCents } from "@/lib/billing";
+import { LINE_KINDS, paidCents } from "@/lib/billing";
 import { emailEnabled, sendTenantEmail } from "@/lib/email";
 import {
   createSalesInvoice,
@@ -193,6 +194,10 @@ export async function sendInvoice(formData: FormData) {
       include: {
         client: { select: { name: true, email: true } },
         transaction: { select: { propertyAddress: true } },
+        lines: {
+          orderBy: { sortOrder: "asc" },
+          select: { description: true, amountCents: true },
+        },
       },
     }),
   );
@@ -212,6 +217,7 @@ export async function sendInvoice(formData: FormData) {
     dueDate: invoice.dueDate,
     issuedOn: invoice.createdAt,
     transactionAddress: invoice.transaction?.propertyAddress ?? null,
+    lines: invoice.lines,
   });
   const pdf = await renderTemplatePdf(`${org.name} — ${invoiceLabel(invoice.number)}`, text);
 
@@ -340,6 +346,167 @@ export async function voidInvoice(formData: FormData) {
   });
   revalidatePath("/dashboard/invoices");
   if (voided.transactionId) revalidatePath(`/dashboard/transactions/${voided.transactionId}`);
+}
+
+/**
+ * Add a charge to a file: lands on the file's open draft invoice, creating
+ * one if none exists. This is how up-charges for extra work, deposits, and
+ * ad-hoc fees get on the books without leaving the transaction page.
+ */
+export async function addTransactionCharge(formData: FormData) {
+  const { tenantId, isAdmin, session } = await requireAdminTenant();
+  if (!isAdmin || !(await invoicingAllowed(tenantId))) return;
+  const transactionId = str(formData, "transactionId");
+  const description = str(formData, "description");
+  const amountCents = parseFeeCents(str(formData, "amount"));
+  const kindRaw = str(formData, "kind");
+  const kind = LINE_KINDS.some(([k]) => k === kindRaw) ? kindRaw : "upcharge";
+  if (!transactionId || !description || amountCents === null || amountCents === 0) return;
+
+  const result = await withTenant(tenantId, async (tx) => {
+    const txn = await tx.transaction.findUnique({
+      where: { id: transactionId },
+      select: { clientId: true, propertyAddress: true },
+    });
+    if (!txn) return null;
+    const draft = await tx.invoice.findFirst({
+      where: { transactionId, status: "DRAFT", provider: "freehold" },
+      orderBy: { number: "desc" },
+      select: { id: true, number: true },
+    });
+    if (draft) {
+      await tx.invoiceLine.create({
+        data: { tenantId, invoiceId: draft.id, transactionId, kind, description, amountCents },
+      });
+      await tx.invoice.update({
+        where: { id: draft.id },
+        data: { amountCents: { increment: amountCents } },
+      });
+      return { number: draft.number, created: false };
+    }
+    const number = await nextInvoiceNumber(tx, tenantId);
+    await tx.invoice.create({
+      data: {
+        tenantId,
+        clientId: txn.clientId,
+        transactionId,
+        number,
+        status: "DRAFT",
+        description: `Transaction coordination: ${txn.propertyAddress}`,
+        amountCents,
+        lines: { create: { tenantId, transactionId, kind, description, amountCents } },
+      },
+    });
+    return { number, created: true };
+  });
+  if (!result) return;
+
+  logActivity({
+    tenantId,
+    transactionId,
+    actor: session.user,
+    action: "billing.charge_added",
+    summary: `Added ${fmtCents(amountCents)} charge — “${activityTitle(description)}”`,
+  });
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "invoice.charge_added",
+    summary: `${fmtCents(amountCents)} (${kind}) onto ${invoiceLabel(result.number)}${result.created ? " (new draft)" : ""}`,
+  });
+  revalidatePath(`/dashboard/transactions/${transactionId}`);
+  revalidatePath("/dashboard/invoices");
+}
+
+/**
+ * Issue a draft: the moment it becomes real — numbered paper the client owes,
+ * with the follow-up nag opened. "Due at closing" wires the due date to the
+ * file's closing date, for invoices sent ahead to be paid at the table.
+ */
+export async function issueDraftInvoice(formData: FormData) {
+  const { tenantId, isAdmin, session } = await requireAdminTenant();
+  if (!isAdmin) return;
+  const id = str(formData, "id");
+  if (!id) return;
+  const dueAtClosing = str(formData, "dueAtClosing") === "1";
+  const formDue = dateOnly(formData, "dueDate");
+
+  const issued = await withTenant(tenantId, async (tx) => {
+    const inv = await tx.invoice.findUnique({
+      where: { id },
+      include: {
+        client: { select: { name: true } },
+        transaction: { select: { id: true, closeDate: true } },
+      },
+    });
+    if (inv?.status !== "DRAFT") return null;
+    const dueDate = dueAtClosing
+      ? (inv.transaction?.closeDate ?? formDue)
+      : (formDue ?? inv.dueDate);
+    const paymentTerms = dueAtClosing
+      ? "Due at closing"
+      : (optStr(formData, "paymentTerms") ?? inv.paymentTerms);
+    const task = await tx.task.create({
+      data: {
+        tenantId,
+        transactionId: inv.transactionId,
+        title: `Follow up: ${invoiceLabel(inv.number)} — ${inv.client?.name ?? "client"} (${fmtCents(inv.amountCents)})`,
+        dueDate: dueDate ?? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        assigneeId: session.user.id,
+      },
+    });
+    await tx.invoice.update({
+      where: { id },
+      data: { status: "SENT", dueDate, paymentTerms, followUpTaskId: task.id },
+    });
+    return inv;
+  });
+  if (!issued) return;
+
+  logActivity({
+    tenantId,
+    transactionId: issued.transactionId,
+    actor: session.user,
+    action: "invoice.issued",
+    summary: `Issued ${invoiceLabel(issued.number)} — ${fmtCents(issued.amountCents)}${dueAtClosing ? " (due at closing)" : ""}`,
+  });
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "invoice.issued",
+    summary: `Issued ${invoiceLabel(issued.number)} to ${issued.client?.name ?? "—"} — ${fmtCents(issued.amountCents)}`,
+  });
+  revalidatePath("/dashboard/invoices");
+  if (issued.transactionId) revalidatePath(`/dashboard/transactions/${issued.transactionId}`);
+}
+
+/** Discard a draft. Only drafts — issued invoices are VOIDed, never deleted. */
+export async function deleteDraftInvoice(formData: FormData) {
+  const { tenantId, isAdmin, session } = await requireAdminTenant();
+  if (!isAdmin) return;
+  const id = str(formData, "id");
+  if (!id) return;
+  const removed = await withTenant(tenantId, async (tx) => {
+    const inv = await tx.invoice.findUnique({
+      where: { id },
+      select: { status: true, number: true, amountCents: true, transactionId: true },
+    });
+    if (inv?.status !== "DRAFT") return null;
+    await tx.invoice.delete({ where: { id } });
+    return inv;
+  });
+  if (!removed) return;
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "invoice.draft_deleted",
+    summary: `Discarded draft ${invoiceLabel(removed.number)} (${fmtCents(removed.amountCents)})`,
+  });
+  revalidatePath("/dashboard/invoices");
+  if (removed.transactionId) revalidatePath(`/dashboard/transactions/${removed.transactionId}`);
 }
 
 /** The connected instance's base URL, for deep-linking invoice rows. */

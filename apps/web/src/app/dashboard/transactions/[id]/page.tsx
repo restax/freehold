@@ -33,7 +33,13 @@ import {
   sendForSignature,
 } from "@/lib/actions/esign";
 import { runExtraction } from "@/lib/actions/extractions";
-import { createInvoice } from "@/lib/actions/invoices";
+import {
+  addTransactionCharge,
+  createInvoice,
+  deleteDraftInvoice,
+  issueDraftInvoice,
+  markInvoicePaid,
+} from "@/lib/actions/invoices";
 import { addParty, removeParty } from "@/lib/actions/parties";
 import { setAssigneeFee } from "@/lib/actions/pay";
 import { createPortalLink, deletePortalLink, setPortalLinkActive } from "@/lib/actions/portal";
@@ -64,6 +70,14 @@ import { type ContractParty, PARTY_LABEL, partyLabel } from "@/lib/ai/contract-s
 import { transactionAlert } from "@/lib/alerts";
 import { emailContextForTransaction, transactionMergeContext } from "@/lib/auto-emails";
 import {
+  displayState,
+  type InvoiceDisplayState,
+  invoiceMoney,
+  LINE_KINDS,
+  paidCents,
+  transactionBilling,
+} from "@/lib/billing";
+import {
   SLOT_LABEL as COMPLIANCE_SLOT_LABEL,
   STATUS_LABEL as COMPLIANCE_STATUS_LABEL,
   STATUS_TONE as COMPLIANCE_STATUS_TONE,
@@ -86,6 +100,7 @@ import {
 } from "@/lib/priority";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
 import {
+  GUEST_ROLE,
   getMemberCompliance,
   getMemberRole,
   guestMaySeeTransaction,
@@ -103,6 +118,7 @@ const TXN_TABS = [
   ["tasks", "Tasks"],
   ["documents", "Documents"],
   ["vendors", "Vendors"],
+  ["billing", "Billing"],
   ["compliance", "Compliance"],
   ["dates", "Dates & details"],
   ["participants", "Participants"],
@@ -128,6 +144,7 @@ export default async function TransactionDetailPage({
   const { tenantId, session } = await requireTenant({ allowGuest: true });
   const role = await getMemberRole(tenantId, session.user.id);
   const isAdmin = role === "owner" || role === "admin";
+  const isGuest = role === GUEST_ROLE;
   const labels = await tenantSideLabels(tenantId);
   const { id } = await params;
   // A guest reaches only the files they were handed; anything else doesn't
@@ -248,6 +265,51 @@ export default async function TransactionDetailPage({
   // dashboard and the daily briefing use.
   const alert = await transactionAlert(tenantId, txn.id);
 
+  // Money on this file: every invoice touching it (directly or via a line on
+  // a consolidated invoice), and the attributed billed/paid totals. Hidden
+  // from guests — outside coverage staff work the file, not the money.
+  const billingInvoices = isGuest
+    ? []
+    : await withTenant(tenantId, (tx) =>
+        tx.invoice.findMany({
+          where: { OR: [{ transactionId: id }, { lines: { some: { transactionId: id } } }] },
+          orderBy: { number: "desc" },
+          include: {
+            client: { select: { name: true } },
+            lines: {
+              orderBy: { sortOrder: "asc" },
+              select: {
+                id: true,
+                transactionId: true,
+                kind: true,
+                description: true,
+                amountCents: true,
+              },
+            },
+            payments: { select: { amountCents: true } },
+          },
+        }),
+      );
+  const fileMoney = transactionBilling(txn.id, billingInvoices);
+  const stillDueCents = fileMoney.billedCents - fileMoney.paidCents;
+  // Money already sitting on unissued drafts counts against "left to draft" —
+  // the quick button must never stack a second helping of the same fee.
+  const draftedCents = billingInvoices
+    .filter((i) => i.status === "DRAFT")
+    .reduce(
+      (s, i) =>
+        s +
+        i.lines.reduce(
+          (t, l) => t + ((l.transactionId ?? i.transactionId) === txn.id ? l.amountCents : 0),
+          0,
+        ),
+      0,
+    );
+  const remainingToBillCents =
+    txn.expectedFeeCents != null ? Math.max(0, txn.expectedFeeCents - fileMoney.billedCents) : null;
+  const remainingToDraftCents =
+    remainingToBillCents != null ? Math.max(0, remainingToBillCents - draftedCents) : null;
+
   const portalBase = await portalOrigin(tenantId);
   // Pro-AI state for this transaction: proActive = may use AI here (paid plan,
   // self-host, or a Free workspace that spent a credit on it); credits = the
@@ -355,6 +417,41 @@ export default async function TransactionDetailPage({
               className="rounded-lg border border-dashed border-stone-300 px-3 py-1.5 text-sm text-stone-400 transition hover:border-stone-400 hover:text-stone-500"
             >
               + CC email
+            </Link>
+          )}
+          {!isGuest && (
+            <Link
+              href={`/dashboard/transactions/${txn.id}?tab=billing`}
+              title="Billing for this file"
+              className="flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm shadow-xs transition hover:border-stone-300 hover:bg-stone-50"
+            >
+              {fileMoney.billedCents > 0 ? (
+                <>
+                  <span className="text-stone-500">Billed</span>
+                  <span className="tabular-nums font-medium text-stone-800">
+                    {fmtCents(fileMoney.billedCents)}
+                  </span>
+                  <span className="text-stone-300">·</span>
+                  {stillDueCents > 0 ? (
+                    <span className="tabular-nums font-medium text-amber-700">
+                      {fmtCents(stillDueCents)} due
+                    </span>
+                  ) : (
+                    <span className="font-medium text-brand-700">paid</span>
+                  )}
+                </>
+              ) : txn.expectedFeeCents == null ? (
+                <span className="text-stone-400">Billing — fee not set</span>
+              ) : txn.expectedFeeCents === 0 ? (
+                <span className="text-stone-400">No charge</span>
+              ) : (
+                <>
+                  <span className="text-stone-500">Unbilled</span>
+                  <span className="tabular-nums font-medium text-amber-700">
+                    {fmtCents(txn.expectedFeeCents)}
+                  </span>
+                </>
+              )}
             </Link>
           )}
         </div>
@@ -545,7 +642,7 @@ export default async function TransactionDetailPage({
         </aside>
         <div className="flex min-w-0 flex-col gap-3 xl:order-2">
           <nav className="flex flex-wrap gap-1 border-b border-stone-200">
-            {TXN_TABS.map(([key, labelText]) => (
+            {TXN_TABS.filter(([key]) => !(isGuest && key === "billing")).map(([key, labelText]) => (
               <Link
                 key={key}
                 href={`/dashboard/transactions/${txn.id}?tab=${key}`}
@@ -1123,6 +1220,319 @@ export default async function TransactionDetailPage({
             </div>
           )}
           {tab === "vendors" && <VendorOrderTab tenantId={tenantId} transactionId={id} />}
+          {tab === "billing" && !isGuest && (
+            <div className="flex flex-col gap-3">
+              <section className={card}>
+                <div className="mb-3 flex items-baseline justify-between gap-3">
+                  <h2 className="font-medium">Billing</h2>
+                  <Link
+                    href={`/dashboard/transactions/${txn.id}?tab=dates`}
+                    className="text-xs text-brand-700 hover:underline"
+                  >
+                    {txn.expectedFeeCents == null
+                      ? "Set the expected fee →"
+                      : "Edit expected fee →"}
+                  </Link>
+                </div>
+                {/* The ledger strip: the four numbers a TC needs to trust a file. */}
+                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                  {(
+                    [
+                      [
+                        "Expected",
+                        txn.expectedFeeCents == null
+                          ? "—"
+                          : txn.expectedFeeCents === 0
+                            ? "No charge"
+                            : fmtCents(txn.expectedFeeCents),
+                        "text-stone-800",
+                      ],
+                      ["Billed", fmtCents(fileMoney.billedCents), "text-stone-800"],
+                      [
+                        "Paid",
+                        fmtCents(fileMoney.paidCents),
+                        fileMoney.paidCents > 0 ? "text-brand-700" : "text-stone-800",
+                      ],
+                      [
+                        "Still due",
+                        fmtCents(Math.max(0, stillDueCents)),
+                        stillDueCents > 0 ? "text-amber-700" : "text-stone-800",
+                      ],
+                    ] as const
+                  ).map(([labelText, value, tone], i) => (
+                    <div
+                      key={labelText}
+                      className={`flex flex-col ${i === 0 ? "" : "border-l border-stone-200 pl-6"}`}
+                    >
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
+                        {labelText}
+                      </span>
+                      <span className={`tabular-nums text-lg font-semibold ${tone}`}>{value}</span>
+                    </div>
+                  ))}
+                </div>
+                {(() => {
+                  const base = Math.max(txn.expectedFeeCents ?? 0, fileMoney.billedCents);
+                  if (base <= 0) return null;
+                  const pct = (n: number) => `${Math.min(100, Math.max(0, (n / base) * 100))}%`;
+                  return (
+                    <div className="mt-3">
+                      <div className="relative h-1.5 overflow-hidden rounded-full bg-stone-100">
+                        <div
+                          className="absolute inset-y-0 left-0 rounded-full bg-stone-300"
+                          style={{ width: pct(fileMoney.billedCents) }}
+                        />
+                        <div
+                          className="absolute inset-y-0 left-0 rounded-full bg-brand-600"
+                          style={{ width: pct(fileMoney.paidCents) }}
+                        />
+                      </div>
+                      <p className="mt-1 text-xs text-stone-400">
+                        {fmtCents(fileMoney.paidCents)} collected of {fmtCents(base)}{" "}
+                        {txn.expectedFeeCents != null && txn.expectedFeeCents > 0
+                          ? "expected"
+                          : "billed"}
+                        {remainingToBillCents != null && remainingToBillCents > 0 && (
+                          <span className="text-amber-700">
+                            {" "}
+                            · {fmtCents(remainingToBillCents)} not yet invoiced
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  );
+                })()}
+              </section>
+
+              <section className={card}>
+                <h2 className="mb-1 font-medium">Invoices on this file</h2>
+                {billingInvoices.length === 0 ? (
+                  <p className="text-sm text-stone-500">
+                    Nothing billed on this file yet — draft the fee below, or add a charge.
+                  </p>
+                ) : (
+                  <ul className="flex flex-col divide-y divide-stone-100">
+                    {billingInvoices.map((inv) => {
+                      const money = invoiceMoney(inv.lines, inv.payments);
+                      const state = displayState(inv.status, money);
+                      const paidShown =
+                        inv.provider !== "freehold" && inv.status === "PAID"
+                          ? money.totalCents
+                          : paidCents(inv.payments);
+                      const attributed = inv.lines.reduce(
+                        (t, l) =>
+                          t +
+                          ((l.transactionId ?? inv.transactionId) === txn.id ? l.amountCents : 0),
+                        0,
+                      );
+                      const stateBadge: Record<
+                        InvoiceDisplayState,
+                        ["success" | "danger" | "progress" | "neutral", string]
+                      > = {
+                        draft: ["neutral", "Draft"],
+                        unpaid: ["progress", "Unpaid"],
+                        partial: ["progress", "Partly paid"],
+                        paid: ["success", "Paid"],
+                        void: ["neutral", "Void"],
+                      };
+                      const [tone, stateText] = stateBadge[state];
+                      return (
+                        <li key={inv.id} className="py-2">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                            <span className="font-medium">{invoiceLabel(inv.number)}</span>
+                            <Badge tone={tone}>{stateText}</Badge>
+                            {inv.client && (
+                              <span className="text-xs text-stone-400">{inv.client.name}</span>
+                            )}
+                            {attributed !== money.totalCents && (
+                              <span className="text-xs text-stone-400">
+                                this file's share {fmtCents(attributed)}
+                              </span>
+                            )}
+                            <span className="ml-auto flex items-baseline gap-3 tabular-nums">
+                              <span className="font-medium">{fmtCents(money.totalCents)}</span>
+                              {paidShown > 0 && (
+                                <span className="text-xs text-brand-700">
+                                  {fmtCents(paidShown)} paid
+                                </span>
+                              )}
+                              {state !== "void" &&
+                                state !== "draft" &&
+                                money.totalCents - paidShown > 0 && (
+                                  <span className="text-xs text-amber-700">
+                                    {fmtCents(money.totalCents - paidShown)} due
+                                  </span>
+                                )}
+                            </span>
+                          </div>
+                          {inv.lines.length > 1 && (
+                            <ul className="mt-1 flex flex-col gap-0.5 border-l-2 border-stone-100 pl-3">
+                              {inv.lines.map((l) => (
+                                <li key={l.id} className="flex gap-3 text-xs text-stone-500">
+                                  <span>{l.description}</span>
+                                  <span className="ml-auto tabular-nums">
+                                    {fmtCents(l.amountCents)}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {isAdmin && (
+                            <div className="mt-1.5 flex flex-wrap items-center gap-3">
+                              <a
+                                href={`/api/invoices/${inv.id}/pdf`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs font-medium text-brand-700 hover:text-brand-600"
+                              >
+                                PDF
+                              </a>
+                              {inv.status === "DRAFT" && (
+                                <>
+                                  <form
+                                    action={issueDraftInvoice}
+                                    className="flex flex-wrap items-center gap-2"
+                                  >
+                                    <input type="hidden" name="id" value={inv.id} />
+                                    <label className="flex items-center gap-1.5 text-xs text-stone-600">
+                                      <input
+                                        type="checkbox"
+                                        name="dueAtClosing"
+                                        value="1"
+                                        defaultChecked={Boolean(txn.closeDate)}
+                                        className="accent-brand-600"
+                                      />
+                                      due at closing
+                                    </label>
+                                    <input
+                                      name="dueDate"
+                                      type="date"
+                                      className={`${input} px-2 py-1 text-xs`}
+                                    />
+                                    <button
+                                      type="submit"
+                                      className={`${btnGhost} px-2 py-1 text-xs`}
+                                    >
+                                      Issue invoice
+                                    </button>
+                                  </form>
+                                  <form action={deleteDraftInvoice}>
+                                    <input type="hidden" name="id" value={inv.id} />
+                                    <button
+                                      type="submit"
+                                      className="text-xs text-stone-400 hover:text-red-600"
+                                    >
+                                      discard draft
+                                    </button>
+                                  </form>
+                                </>
+                              )}
+                              {inv.status === "SENT" && inv.provider === "freehold" && (
+                                <form
+                                  action={markInvoicePaid}
+                                  className="flex items-center gap-1.5"
+                                >
+                                  <input type="hidden" name="id" value={inv.id} />
+                                  <input
+                                    name="paidNote"
+                                    placeholder="check #1042"
+                                    className={`${input} w-28 px-2 py-1 text-xs`}
+                                  />
+                                  <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                                    Mark paid
+                                  </button>
+                                </form>
+                              )}
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                <p className="mt-2 text-xs text-stone-400">
+                  Full invoice management — payments, partials, credit —{" "}
+                  <Link href="/dashboard/invoices" className="text-brand-700 hover:underline">
+                    on the Invoices page →
+                  </Link>
+                </p>
+              </section>
+
+              {isAdmin && (
+                <section className={card}>
+                  <h2 className="mb-1 font-medium">Add a charge</h2>
+                  <p className="mb-3 text-sm text-stone-500">
+                    Lands on this file's draft invoice (one is created if none is open) — review and
+                    issue when ready. Extra work, deposits, adjustments.
+                  </p>
+                  {remainingToDraftCents != null && remainingToDraftCents > 0 && (
+                    <form action={addTransactionCharge} className="mb-3">
+                      <input type="hidden" name="transactionId" value={txn.id} />
+                      <input type="hidden" name="kind" value="service" />
+                      <input
+                        type="hidden"
+                        name="description"
+                        value={`Transaction coordination: ${txn.propertyAddress}`}
+                      />
+                      <input
+                        type="hidden"
+                        name="amount"
+                        value={(remainingToDraftCents / 100).toFixed(2)}
+                      />
+                      <button type="submit" className={btn}>
+                        Draft the remaining fee — {fmtCents(remainingToDraftCents)}
+                      </button>
+                    </form>
+                  )}
+                  <form action={addTransactionCharge} className="flex flex-wrap items-end gap-2">
+                    <input type="hidden" name="transactionId" value={txn.id} />
+                    <label className={label}>
+                      Type
+                      <select name="kind" defaultValue="upcharge" className={input}>
+                        {LINE_KINDS.map(([k, lbl]) => (
+                          <option key={k} value={k}>
+                            {lbl}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className={`${label} min-w-56 flex-1`}>
+                      Description
+                      <input
+                        name="description"
+                        required
+                        placeholder="Rush closing — additional coordination"
+                        className={input}
+                      />
+                    </label>
+                    <label className={label}>
+                      Amount ($)
+                      <input
+                        name="amount"
+                        inputMode="decimal"
+                        required
+                        placeholder="75.00"
+                        className={`${input} w-28`}
+                      />
+                    </label>
+                    <button type="submit" className={btnGhost}>
+                      Add charge
+                    </button>
+                  </form>
+                  <p className="mt-3 border-t border-stone-100 pt-2 text-xs text-stone-400">
+                    Team payout for this file is set per person under{" "}
+                    <Link
+                      href={`/dashboard/transactions/${txn.id}?tab=participants`}
+                      className="text-brand-700 hover:underline"
+                    >
+                      Participants
+                    </Link>
+                    ; per-file gross/net arrives with the payouts stage.
+                  </p>
+                </section>
+              )}
+            </div>
+          )}
           {tab === "compliance" && (
             <section className={card}>
               <div className="mb-3 flex flex-wrap items-center gap-3">

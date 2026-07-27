@@ -13,6 +13,7 @@ import { logActivity } from "@/lib/activity";
 import type { ContractParty } from "@/lib/ai/contract-schema";
 import { logAudit } from "@/lib/audit";
 import { fireIntroEmail, firePostCloseEmail } from "@/lib/auto-emails";
+import { ensureAutoDraft } from "@/lib/billing-drafts";
 import { resolveDefaultFee, tenantBillingPolicy } from "@/lib/billing-policy";
 import { confirmed, dateOnly, intOr, oneOf, optStr, str } from "@/lib/forms";
 import { gapForPending, gapMessage, licenseEnforcement } from "@/lib/licensing";
@@ -139,6 +140,9 @@ export async function createTransaction(formData: FormData) {
     }
     return txn;
   });
+  // Billing policy may want an invoice at entry (upfront/per-entry modes) —
+  // a reviewed DRAFT, never auto-sent.
+  await ensureAutoDraft(tenantId, created.id, "entry");
   await emitWebhook(tenantId, "transaction.created", {
     id: created.id,
     propertyAddress: created.propertyAddress,
@@ -243,7 +247,11 @@ export async function updateTransaction(formData: FormData) {
     });
     await recomputeAnchoredTasks(tx, id, updated);
   });
-  if (closedNow) firePostCloseEmail(tenantId, id, session.user);
+  if (closedNow) {
+    firePostCloseEmail(tenantId, id, session.user);
+    // The closing billing moment: draft whatever expected fee remains unbilled.
+    await ensureAutoDraft(tenantId, id, "close");
+  }
 
   if (redirected.length > 0) {
     logAudit({

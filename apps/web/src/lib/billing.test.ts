@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type AttributableInvoice,
+  autoDraftTarget,
   billingExceptions,
   creditBalanceCents,
   displayState,
@@ -193,6 +194,38 @@ describe("billingExceptions", () => {
       summary({}),
     );
     expect(out).toEqual([]);
+  });
+});
+
+describe("autoDraftTarget", () => {
+  it("drafts the full fee at entry for upfront and per-entry modes", () => {
+    expect(autoDraftTarget("upfront_full", "entry", 40000, 50, 0)).toBe(40000);
+    expect(autoDraftTarget("per_file_entry", "entry", 40000, 50, 0)).toBe(40000);
+  });
+
+  it("drafts only the deposit share at entry under upfront_deposit", () => {
+    expect(autoDraftTarget("upfront_deposit", "entry", 40000, 50, 0)).toBe(20000);
+    expect(autoDraftTarget("upfront_deposit", "entry", 40000, 25, 0)).toBe(10000);
+  });
+
+  it("closing-billers draft nothing at entry, the remainder at close", () => {
+    expect(autoDraftTarget("per_file_close", "entry", 40000, 50, 0)).toBe(0);
+    expect(autoDraftTarget("per_file_close", "close", 40000, 50, 0)).toBe(40000);
+    // Deposit already billed: close drafts the balance.
+    expect(autoDraftTarget("upfront_deposit", "close", 40000, 50, 20000)).toBe(20000);
+  });
+
+  it("never double-charges: clamped to what's still unbilled", () => {
+    expect(autoDraftTarget("per_file_close", "close", 40000, 50, 40000)).toBe(0);
+    expect(autoDraftTarget("per_file_close", "close", 40000, 50, 50000)).toBe(0);
+    expect(autoDraftTarget("upfront_deposit", "entry", 40000, 50, 15000)).toBe(5000);
+  });
+
+  it("consolidated modes and no-fee files never event-draft", () => {
+    expect(autoDraftTarget("monthly", "close", 40000, 50, 0)).toBe(0);
+    expect(autoDraftTarget("weekly", "entry", 40000, 50, 0)).toBe(0);
+    expect(autoDraftTarget("per_file_close", "close", null, 50, 0)).toBe(0);
+    expect(autoDraftTarget("per_file_close", "close", 0, 50, 0)).toBe(0);
   });
 });
 

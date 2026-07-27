@@ -4,9 +4,11 @@ import { Badge, type BadgeTone } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
 import {
   createInvoice,
+  deleteDraftInvoice,
   erpnextBaseUrl,
   erpnextConnected,
   invoicingAllowed,
+  issueDraftInvoice,
   markInvoicePaid,
   sendInvoice,
   voidInvoice,
@@ -208,9 +210,9 @@ export default async function InvoicesPage({
           {feeUnsetCount > 0 && (
             <p className="mt-2 text-xs text-stone-400">
               {feeUnsetCount} file{feeUnsetCount === 1 ? "" : "s"}{" "}
-              {feeUnsetCount === 1 ? "has" : "have"} no expected fee set — set a
-              standard fee on the client (or workspace default in Settings) and new files fill in
-              automatically; existing files take a fee on their Dates &amp; details tab.
+              {feeUnsetCount === 1 ? "has" : "have"} no expected fee set — set a standard fee on the
+              client (or workspace default in Settings) and new files fill in automatically;
+              existing files take a fee on their Dates &amp; details tab.
             </p>
           )}
         </section>
@@ -470,6 +472,25 @@ export default async function InvoicesPage({
                             >
                               PDF
                             </a>
+                          )}
+                          {isAdmin && inv.status === "DRAFT" && (
+                            <>
+                              <form action={issueDraftInvoice}>
+                                <input type="hidden" name="id" value={inv.id} />
+                                <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                                  Issue
+                                </button>
+                              </form>
+                              <form action={deleteDraftInvoice}>
+                                <input type="hidden" name="id" value={inv.id} />
+                                <button
+                                  type="submit"
+                                  className="text-xs text-stone-400 hover:text-red-600"
+                                >
+                                  discard
+                                </button>
+                              </form>
+                            </>
                           )}
                           {isAdmin && inv.status === "SENT" && canEmail && inv.client?.email && (
                             <form action={sendInvoice}>

@@ -15,6 +15,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       include: {
         client: { select: { name: true } },
         transaction: { select: { propertyAddress: true } },
+        lines: {
+          orderBy: { sortOrder: "asc" },
+          select: { description: true, amountCents: true },
+        },
       },
     }),
   );
@@ -36,6 +40,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       dueDate: invoice.dueDate,
       issuedOn: invoice.createdAt,
       transactionAddress: invoice.transaction?.propertyAddress ?? null,
+      lines: invoice.lines,
+      isDraft: invoice.status === "DRAFT",
     }),
   );
   return new Response(new Uint8Array(pdf), {

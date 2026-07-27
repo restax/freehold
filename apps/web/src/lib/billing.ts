@@ -187,6 +187,36 @@ export function billingExceptions(
   );
 }
 
+// ---------- event-driven drafts ----------
+
+/**
+ * How much to put on an auto-draft when a file hits a billing moment. At
+ * entry, upfront modes draft their share (full fee, or the deposit percent);
+ * at closing, every per-file mode drafts whatever expected fee remains
+ * unbilled. Consolidated modes (monthly/weekly) never draft per event —
+ * that's the scheduler's job. Always clamped to what's actually still
+ * unbilled, so re-running a moment can never double-charge.
+ */
+export function autoDraftTarget(
+  mode: string,
+  phase: "entry" | "close",
+  expectedCents: number | null,
+  depositPercent: number,
+  alreadyBilledCents: number,
+): number {
+  if (expectedCents == null || expectedCents <= 0) return 0;
+  if (mode === "monthly" || mode === "weekly") return 0;
+  const remaining = Math.max(0, expectedCents - alreadyBilledCents);
+  if (phase === "close") return remaining;
+  // Entry: only upfront/entry modes bill now; closing-billers wait.
+  if (mode === "per_file_entry" || mode === "upfront_full") return remaining;
+  if (mode === "upfront_deposit") {
+    const deposit = Math.round((expectedCents * depositPercent) / 100);
+    return Math.max(0, Math.min(deposit - alreadyBilledCents, remaining));
+  }
+  return 0;
+}
+
 /** Suggested methods for payment entry; the field also takes free text. */
 export const PAYMENT_METHODS = [
   "Check",

@@ -57,6 +57,10 @@ export interface InvoicePdfInput {
   dueDate: Date | null;
   issuedOn: Date;
   transactionAddress: string | null;
+  /** Itemization; single-line invoices may omit it (description carries it). */
+  lines?: Array<{ description: string; amountCents: number }>;
+  /** Drafts are watermarked so a not-yet-issued PDF can't pass as a bill. */
+  isDraft?: boolean;
 }
 
 const dateOnly = (d: Date) => d.toISOString().slice(0, 10);
@@ -67,10 +71,17 @@ export function invoiceText(inv: InvoicePdfInput): string {
     `${invoiceLabel(inv.number)} — ${inv.workspaceName}`,
     `Issued: ${dateOnly(inv.issuedOn)}`,
   ];
+  if (inv.isDraft) lines.push("DRAFT — not yet issued");
   if (inv.clientName) lines.push(`Billed to: ${inv.clientName}`);
   if (inv.transactionAddress) lines.push(`Re: ${inv.transactionAddress}`);
   lines.push("");
-  lines.push(inv.description);
+  if (inv.lines && inv.lines.length > 1) {
+    for (const l of inv.lines) {
+      lines.push(`  ${l.description}  —  ${fmtCents(l.amountCents)}`);
+    }
+  } else {
+    lines.push(inv.description);
+  }
   lines.push("");
   lines.push(`Amount due: ${fmtCents(inv.amountCents)}`);
   if (inv.paymentTerms) lines.push(`Terms: ${inv.paymentTerms}`);
