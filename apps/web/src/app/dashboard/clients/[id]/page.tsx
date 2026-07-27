@@ -1,5 +1,13 @@
 import { prisma, withTenant } from "@freehold/db";
-import { Buildings, LinkSimple } from "@phosphor-icons/react/dist/ssr";
+import {
+  Buildings,
+  LinkSimple,
+  MapPin,
+  Receipt,
+  Storefront,
+  User,
+  UsersThree,
+} from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, StatusBadge } from "@/components/badges";
@@ -9,17 +17,26 @@ import { RevealSkyslope } from "@/components/reveal-skyslope";
 import { saveClientBilling } from "@/lib/actions/billing-policy";
 import {
   addClientAgent,
+  addClientAgentInline,
   addClientNote,
   deleteClient,
   removeClientAgent,
   saveClientAlertConfig,
   saveClientEmailPrefs,
+  updateClientProfile,
 } from "@/lib/actions/clients";
 import { setClientCompliance } from "@/lib/actions/compliance";
 import { createAgentPortalLink, setPortalLinkActive } from "@/lib/actions/portal";
 import { connectSkyslope, disconnectSkyslope } from "@/lib/actions/skyslope";
+import { createCredential } from "@/lib/actions/vault";
 import { parseEmailPrefs } from "@/lib/auto-emails";
 import { BILLING_MODE_LABEL, BILLING_MODES, tenantBillingPolicy } from "@/lib/billing-policy";
+import {
+  billingContactFrom,
+  brokerageInfoFrom,
+  CLIENT_TYPE_LABEL,
+  clientKind,
+} from "@/lib/client-profile";
 import { fmtDate, fmtMoney } from "@/lib/format";
 import { portalOrigin } from "@/lib/portal";
 import { decodeSkyslopeConfig, maskKey, parseSkyslopeConfig, skyslopeState } from "@/lib/skyslope";
@@ -29,8 +46,10 @@ import {
   btn,
   btnGhost,
   card,
+  fieldGroupLabel,
   input,
   label as labelCls,
+  summaryLink,
   tableWrap,
   td,
   th,
@@ -39,12 +58,14 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const TYPE_LABEL: Record<string, string> = {
-  AGENT: "Agent",
-  BROKERAGE: "Brokerage",
-  TITLE: "Title company",
-  LENDER: "Lender",
-  OTHER: "Other",
+/** Header icon per type — an office is a building, an agent is a person. */
+const TYPE_ICON: Record<string, typeof Buildings> = {
+  AGENT: User,
+  BROKERAGE: Buildings,
+  TEAM: UsersThree,
+  TITLE: Storefront,
+  LENDER: Storefront,
+  OTHER: Storefront,
 };
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -144,6 +165,14 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
     t.portalLinks.filter((pl) => pl.audience === "CLIENT").map((pl) => ({ ...pl, transaction: t })),
   );
 
+  const kind = clientKind(client.type);
+  const billingContact = billingContactFrom(client.billingContact);
+  const brokerage = brokerageInfoFrom(client.brokerageInfo);
+  const TypeIcon = TYPE_ICON[client.type] ?? Storefront;
+  // Offices always have a roster; anything else keeps the section only if a
+  // roster already exists (legacy data must stay reachable, never orphaned).
+  const showAgents = kind === "office" || client.agents.length > 0;
+
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -151,15 +180,146 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           ← Clients
         </Link>
         <h1 className="flex items-center gap-2.5 text-xl font-semibold">
-          <Buildings size={20} weight="duotone" className="text-brand-600" aria-hidden />
+          <TypeIcon size={20} weight="duotone" className="text-brand-600" aria-hidden />
           {client.name}
+          <Badge tone={kind === "office" ? "attention" : "neutral"}>
+            {CLIENT_TYPE_LABEL[client.type]}
+          </Badge>
         </h1>
         <p className="text-sm text-stone-500">
-          {TYPE_LABEL[client.type]}
-          {client.email ? ` · ${client.email}` : ""}
-          {client.phone ? ` · ${client.phone}` : ""}
+          {[client.email, client.phone].filter(Boolean).join(" · ") || "No contact info yet"}
         </p>
+        <div className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-sm text-stone-500">
+          {client.address && (
+            <span className="flex items-center gap-1.5">
+              <MapPin size={14} className="text-stone-400" aria-hidden />
+              {client.address}
+            </span>
+          )}
+          {kind === "office" && billingContact && (
+            <span
+              className="flex items-center gap-1.5"
+              title="Invoices email the billing contact when one is set"
+            >
+              <Receipt size={14} className="text-stone-400" aria-hidden />
+              Billing:{" "}
+              {[billingContact.name, billingContact.email, billingContact.phone]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+          )}
+          {kind === "individual" && brokerage && (
+            <span className="flex items-center gap-1.5">
+              <Buildings size={14} className="text-stone-400" aria-hidden />
+              {[brokerage.name, brokerage.phone, brokerage.address].filter(Boolean).join(" · ")}
+            </span>
+          )}
+        </div>
       </div>
+
+      <details className={card}>
+        <summary className={summaryLink}>Edit profile</summary>
+        <form action={updateClientProfile} className="mt-4 flex flex-col gap-4">
+          <input type="hidden" name="id" value={client.id} />
+          <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+            <label className={labelCls}>
+              {kind === "office" ? "Office name *" : "Name *"}
+              <input name="name" required defaultValue={client.name} className={input} />
+            </label>
+            <label className={labelCls}>
+              Email
+              <input
+                name="email"
+                type="email"
+                defaultValue={client.email ?? ""}
+                className={input}
+              />
+            </label>
+            <label className={labelCls}>
+              Phone
+              <input name="phone" defaultValue={client.phone ?? ""} className={input} />
+            </label>
+            <label className={labelCls}>
+              {kind === "office" ? "Office address" : "Address"}
+              <input name="address" defaultValue={client.address ?? ""} className={input} />
+            </label>
+          </div>
+          {kind === "office" && (
+            <div className="border-t border-stone-100 pt-3">
+              <p className={fieldGroupLabel}>Billing contact</p>
+              <p className="mb-2 text-xs text-stone-400">
+                Invoices email the billing contact when one is set, the office email otherwise.
+              </p>
+              <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+                <label className={labelCls}>
+                  Name
+                  <input
+                    name="billingName"
+                    defaultValue={billingContact?.name ?? ""}
+                    className={input}
+                  />
+                </label>
+                <label className={labelCls}>
+                  Email
+                  <input
+                    name="billingEmail"
+                    type="email"
+                    defaultValue={billingContact?.email ?? ""}
+                    className={input}
+                  />
+                </label>
+                <label className={labelCls}>
+                  Phone
+                  <input
+                    name="billingPhone"
+                    defaultValue={billingContact?.phone ?? ""}
+                    className={input}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+          {kind === "individual" && (
+            <div className="border-t border-stone-100 pt-3">
+              <p className={fieldGroupLabel}>Their brokerage</p>
+              <p className="mb-2 text-xs text-stone-400">
+                Where they hang their license — reference info for your file.
+              </p>
+              <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_2fr]">
+                <label className={labelCls}>
+                  Brokerage name
+                  <input
+                    name="brokerageName"
+                    defaultValue={brokerage?.name ?? ""}
+                    className={input}
+                  />
+                </label>
+                <label className={labelCls}>
+                  Brokerage phone
+                  <input
+                    name="brokeragePhone"
+                    defaultValue={brokerage?.phone ?? ""}
+                    className={input}
+                  />
+                </label>
+                <label className={labelCls}>
+                  Brokerage address
+                  <input
+                    name="brokerageAddress"
+                    defaultValue={brokerage?.address ?? ""}
+                    className={input}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+          <div className="border-t border-stone-100 pt-3">
+            <button type="submit" className={btn}>
+              Save profile
+            </button>
+          </div>
+        </form>
+      </details>
 
       <section className={card}>
         <h2 className="mb-3 font-medium">Transactions</h2>
@@ -205,190 +365,271 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         )}
       </section>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Agents</h2>
-        <p className="mb-3 text-sm text-stone-500">
-          Who works under {client.name}. Portal access is granted per agent — agents who don't want
-          one simply never get a link.
-        </p>
-        {client.agents.length === 0 ? (
-          <p className="mb-3 text-sm text-stone-400">No agents attached yet.</p>
-        ) : (
-          <ul className="mb-3 flex flex-col">
-            {client.agents.map((a) => {
-              const agentLinks = client.portalLinks.filter((pl) => pl.contactId === a.contact.id);
-              const activeLink = agentLinks.find((pl) => !pl.revokedAt);
-              return (
-                <li key={a.id} className="border-b border-stone-100 py-2 last:border-0">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Link
-                      href={`/dashboard/contacts/${a.contact.id}`}
-                      className="text-sm font-medium text-brand-700 hover:text-brand-600"
-                    >
-                      {a.contact.name}
-                    </Link>
-                    {a.contact.grade && (
-                      <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-800">
-                        {a.contact.grade}
-                      </span>
-                    )}
-                    <span className="text-xs text-stone-400">
-                      {[a.contact.email, a.contact.phone].filter(Boolean).join(" · ")}
-                      {a.contact.credentials.length > 0 &&
-                        ` · ${a.contact.credentials.length} credential${a.contact.credentials.length === 1 ? "" : "s"}`}
-                    </span>
-                    <div className="ml-auto flex items-center gap-3">
-                      {!activeLink && agentLinks.length === 0 && (
-                        <form action={createAgentPortalLink}>
-                          <input type="hidden" name="clientId" value={client.id} />
-                          <input type="hidden" name="contactId" value={a.contact.id} />
-                          <button type="submit" className={`${btnGhost} px-2.5 py-1 text-xs`}>
-                            Give portal access
-                          </button>
-                        </form>
-                      )}
-                      <form action={removeClientAgent}>
-                        <input type="hidden" name="id" value={a.id} />
-                        <button
-                          type="submit"
-                          className="text-xs text-stone-300 hover:text-red-600"
-                          title="Detach from this client — deactivates their portal links, deletes nothing"
-                        >
-                          remove
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-                  {agentLinks.map((pl) => {
-                    const active = !pl.revokedAt;
-                    return (
-                      <div key={pl.id} className="mt-2 flex flex-wrap items-center gap-3 pl-4">
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
-                            active ? "bg-brand-50 text-brand-800" : "bg-stone-100 text-stone-500"
-                          }`}
-                        >
-                          <span
-                            aria-hidden
-                            className={`h-1.5 w-1.5 rounded-full ${active ? "bg-brand-500" : "bg-stone-400"}`}
-                          />
-                          {active ? "Portal active" : "Portal inactive"}
+      {showAgents && (
+        <section className={card}>
+          <h2 className="mb-1 flex items-center gap-2 font-medium">
+            <UsersThree size={16} className="text-stone-400" aria-hidden />
+            Agents
+            {client.agents.length > 0 && (
+              <span className="text-xs font-normal text-stone-400">{client.agents.length}</span>
+            )}
+          </h2>
+          <p className="mb-3 text-sm text-stone-500">
+            Who works under {client.name}. Portal access and vault logins are per agent — agents who
+            don't want a portal simply never get a link.
+          </p>
+          {client.agents.length === 0 ? (
+            <p className="mb-3 text-sm text-stone-400">No agents on the roster yet.</p>
+          ) : (
+            <ul className="mb-3 flex flex-col">
+              {client.agents.map((a) => {
+                const agentLinks = client.portalLinks.filter((pl) => pl.contactId === a.contact.id);
+                const activeLink = agentLinks.find((pl) => !pl.revokedAt);
+                return (
+                  <li key={a.id} className="border-b border-stone-100 py-2 last:border-0">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Link
+                        href={`/dashboard/contacts/${a.contact.id}`}
+                        className="text-sm font-medium text-brand-700 hover:text-brand-600"
+                      >
+                        {a.contact.name}
+                      </Link>
+                      {a.contact.grade && (
+                        <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-800">
+                          {a.contact.grade}
                         </span>
-                        {pl.lastAccessedAt && (
-                          <span className="text-xs text-stone-400">
-                            last opened {fmtDate(pl.lastAccessedAt)}
-                          </span>
-                        )}
-                        <div className="ml-auto flex items-center gap-3">
-                          {active && (
-                            <>
-                              <a
-                                href={`${portalBase}/portal/${pl.token}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-xs font-medium text-brand-700 hover:underline"
-                              >
-                                View as agent
-                              </a>
-                              <a
-                                href={`mailto:${a.contact.email ?? ""}?subject=${encodeURIComponent(`Your transaction portal — ${client.name}`)}&body=${encodeURIComponent(`Here's your live portal with every deal, deadline, and document:\n\n${portalBase}/portal/${pl.token}\n\nBookmark it — it's always current.`)}`}
-                                className="text-xs font-medium text-brand-700 hover:underline"
-                              >
-                                Email link
-                              </a>
-                            </>
-                          )}
-                          <form action={setPortalLinkActive}>
-                            <input type="hidden" name="id" value={pl.id} />
-                            <input type="hidden" name="active" value={active ? "0" : "1"} />
+                      )}
+                      <span className="text-xs text-stone-400">
+                        {[a.contact.email, a.contact.phone].filter(Boolean).join(" · ")}
+                        {a.contact.credentials.length > 0 &&
+                          ` · ${a.contact.credentials.length} login${a.contact.credentials.length === 1 ? "" : "s"} in the vault`}
+                      </span>
+                      <div className="ml-auto flex items-center gap-3">
+                        {!activeLink && agentLinks.length === 0 && (
+                          <form action={createAgentPortalLink}>
+                            <input type="hidden" name="clientId" value={client.id} />
+                            <input type="hidden" name="contactId" value={a.contact.id} />
                             <button type="submit" className={`${btnGhost} px-2.5 py-1 text-xs`}>
-                              {active ? "Deactivate" : "Activate"}
+                              Give portal access
                             </button>
                           </form>
-                        </div>
+                        )}
+                        <form action={removeClientAgent}>
+                          <input type="hidden" name="id" value={a.id} />
+                          <button
+                            type="submit"
+                            className="text-xs text-stone-300 hover:text-red-600"
+                            title="Detach from this client — deactivates their portal links, deletes nothing"
+                          >
+                            remove
+                          </button>
+                        </form>
                       </div>
-                    );
-                  })}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        <form action={addClientAgent} className="flex items-end gap-2">
-          <input type="hidden" name="clientId" value={client.id} />
-          <label className={labelCls}>
-            Add an agent
-            <select name="contactId" required className={`${input} w-64`} defaultValue="">
-              <option value="" disabled>
-                Pick a contact…
-              </option>
-              {addableContacts.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="submit" className={btn}>
-            Attach
-          </button>
-        </form>
-        {legacyAgentLinks.length > 0 && (
-          <div className="mt-4 border-t border-stone-100 pt-3">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400">
-              Client-wide portal links
-            </h3>
-            <ul className="flex flex-col">
-              {legacyAgentLinks.map((pl) => {
-                const active = !pl.revokedAt;
-                return (
-                  <li
-                    key={pl.id}
-                    className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 last:border-0"
-                  >
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
-                        active ? "bg-brand-50 text-brand-800" : "bg-stone-100 text-stone-500"
-                      }`}
-                    >
-                      <span
-                        aria-hidden
-                        className={`h-1.5 w-1.5 rounded-full ${active ? "bg-brand-500" : "bg-stone-400"}`}
-                      />
-                      {active ? "Active" : "Inactive"}
-                    </span>
-                    <span className="text-sm font-medium">{pl.label}</span>
-                    {pl.lastAccessedAt && (
-                      <span className="text-xs text-stone-400">
-                        last opened {fmtDate(pl.lastAccessedAt)}
-                      </span>
-                    )}
-                    <div className="ml-auto flex items-center gap-3">
-                      {active && (
-                        <a
-                          href={`${portalBase}/portal/${pl.token}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs font-medium text-brand-700 hover:underline"
-                        >
-                          View as agent
-                        </a>
-                      )}
-                      <form action={setPortalLinkActive}>
-                        <input type="hidden" name="id" value={pl.id} />
-                        <input type="hidden" name="active" value={active ? "0" : "1"} />
-                        <button type="submit" className={`${btnGhost} px-2.5 py-1 text-xs`}>
-                          {active ? "Deactivate" : "Activate"}
+                    </div>
+                    {agentLinks.map((pl) => {
+                      const active = !pl.revokedAt;
+                      return (
+                        <div key={pl.id} className="mt-2 flex flex-wrap items-center gap-3 pl-4">
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
+                              active ? "bg-brand-50 text-brand-800" : "bg-stone-100 text-stone-500"
+                            }`}
+                          >
+                            <span
+                              aria-hidden
+                              className={`h-1.5 w-1.5 rounded-full ${active ? "bg-brand-500" : "bg-stone-400"}`}
+                            />
+                            {active ? "Portal active" : "Portal inactive"}
+                          </span>
+                          {pl.lastAccessedAt && (
+                            <span className="text-xs text-stone-400">
+                              last opened {fmtDate(pl.lastAccessedAt)}
+                            </span>
+                          )}
+                          <div className="ml-auto flex items-center gap-3">
+                            {active && (
+                              <>
+                                <a
+                                  href={`${portalBase}/portal/${pl.token}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs font-medium text-brand-700 hover:underline"
+                                >
+                                  View as agent
+                                </a>
+                                <a
+                                  href={`mailto:${a.contact.email ?? ""}?subject=${encodeURIComponent(`Your transaction portal — ${client.name}`)}&body=${encodeURIComponent(`Here's your live portal with every deal, deadline, and document:\n\n${portalBase}/portal/${pl.token}\n\nBookmark it — it's always current.`)}`}
+                                  className="text-xs font-medium text-brand-700 hover:underline"
+                                >
+                                  Email link
+                                </a>
+                              </>
+                            )}
+                            <form action={setPortalLinkActive}>
+                              <input type="hidden" name="id" value={pl.id} />
+                              <input type="hidden" name="active" value={active ? "0" : "1"} />
+                              <button type="submit" className={`${btnGhost} px-2.5 py-1 text-xs`}>
+                                {active ? "Deactivate" : "Activate"}
+                              </button>
+                            </form>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <details className="mt-1.5 pl-4">
+                      <summary className={`${summaryLink} text-xs`}>
+                        Store a login for {a.contact.name.split(" ")[0]}
+                      </summary>
+                      <form
+                        action={createCredential}
+                        className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
+                      >
+                        <input type="hidden" name="clientId" value={client.id} />
+                        <input type="hidden" name="contactId" value={a.contact.id} />
+                        <input
+                          type="hidden"
+                          name="backTo"
+                          value={`/dashboard/clients/${client.id}`}
+                        />
+                        <label className={labelCls}>
+                          System
+                          <input
+                            name="system"
+                            required
+                            className={`${input} w-40`}
+                            placeholder="MLS"
+                          />
+                        </label>
+                        <label className={labelCls}>
+                          Username
+                          <input name="username" required className={`${input} w-44`} />
+                        </label>
+                        <label className={labelCls}>
+                          Secret
+                          <input
+                            name="secret"
+                            type="password"
+                            required
+                            className={`${input} w-44`}
+                          />
+                        </label>
+                        <label className={labelCls}>
+                          URL
+                          <input name="url" className={`${input} w-44`} placeholder="https://" />
+                        </label>
+                        <button type="submit" className={btn}>
+                          Store encrypted
                         </button>
                       </form>
-                    </div>
+                    </details>
                   </li>
                 );
               })}
             </ul>
+          )}
+          <div className="flex flex-col gap-3 border-t border-stone-100 pt-3">
+            <form action={addClientAgentInline} className="flex flex-wrap items-end gap-2">
+              <input type="hidden" name="clientId" value={client.id} />
+              <label className={labelCls}>
+                New agent *
+                <input name="name" required className={`${input} w-48`} placeholder="Priya Raman" />
+              </label>
+              <label className={labelCls}>
+                Email
+                <input name="email" type="email" className={`${input} w-52`} />
+              </label>
+              <label className={labelCls}>
+                Phone
+                <input name="phone" className={`${input} w-36`} />
+              </label>
+              <button type="submit" className={btn}>
+                Add to roster
+              </button>
+              <span className="pb-1.5 text-xs text-stone-400">
+                Creates their contact record and attaches it here.
+              </span>
+            </form>
+            {addableContacts.length > 0 && (
+              <details>
+                <summary className={`${summaryLink} text-xs`}>
+                  Or attach an existing contact
+                </summary>
+                <form action={addClientAgent} className="mt-2 flex items-end gap-2">
+                  <input type="hidden" name="clientId" value={client.id} />
+                  <select name="contactId" required className={`${input} w-64`} defaultValue="">
+                    <option value="" disabled>
+                      Pick a contact…
+                    </option>
+                    {addableContacts.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="submit" className={btnGhost}>
+                    Attach
+                  </button>
+                </form>
+              </details>
+            )}
           </div>
-        )}
-      </section>
+          {legacyAgentLinks.length > 0 && (
+            <div className="mt-4 border-t border-stone-100 pt-3">
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400">
+                Client-wide portal links
+              </h3>
+              <ul className="flex flex-col">
+                {legacyAgentLinks.map((pl) => {
+                  const active = !pl.revokedAt;
+                  return (
+                    <li
+                      key={pl.id}
+                      className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 last:border-0"
+                    >
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
+                          active ? "bg-brand-50 text-brand-800" : "bg-stone-100 text-stone-500"
+                        }`}
+                      >
+                        <span
+                          aria-hidden
+                          className={`h-1.5 w-1.5 rounded-full ${active ? "bg-brand-500" : "bg-stone-400"}`}
+                        />
+                        {active ? "Active" : "Inactive"}
+                      </span>
+                      <span className="text-sm font-medium">{pl.label}</span>
+                      {pl.lastAccessedAt && (
+                        <span className="text-xs text-stone-400">
+                          last opened {fmtDate(pl.lastAccessedAt)}
+                        </span>
+                      )}
+                      <div className="ml-auto flex items-center gap-3">
+                        {active && (
+                          <a
+                            href={`${portalBase}/portal/${pl.token}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs font-medium text-brand-700 hover:underline"
+                          >
+                            View as agent
+                          </a>
+                        )}
+                        <form action={setPortalLinkActive}>
+                          <input type="hidden" name="id" value={pl.id} />
+                          <input type="hidden" name="active" value={active ? "0" : "1"} />
+                          <button type="submit" className={`${btnGhost} px-2.5 py-1 text-xs`}>
+                            {active ? "Deactivate" : "Activate"}
+                          </button>
+                        </form>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
 
       <section className={card}>
         <h2 className="mb-1 font-medium">Credentials</h2>
@@ -416,16 +657,26 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                 </tr>
               </thead>
               <tbody>
-                {[
-                  ...client.credentials.map((c) => ({ ...c, who: client.name, contactId: null })),
-                  ...client.agents.flatMap((a) =>
-                    a.contact.credentials.map((c) => ({
-                      ...c,
-                      who: a.contact.name,
-                      contactId: a.contact.id,
-                    })),
-                  ),
-                ].map((c) => (
+                {(() => {
+                  // A login can carry both clientId and contactId (stored for
+                  // an agent from this page) — the agent row wins, the
+                  // client-level list drops it, so it renders exactly once.
+                  const agentCredIds = new Set(
+                    client.agents.flatMap((a) => a.contact.credentials.map((c) => c.id)),
+                  );
+                  return [
+                    ...client.credentials
+                      .filter((c) => !agentCredIds.has(c.id))
+                      .map((c) => ({ ...c, who: client.name, contactId: null as string | null })),
+                    ...client.agents.flatMap((a) =>
+                      a.contact.credentials.map((c) => ({
+                        ...c,
+                        who: a.contact.name,
+                        contactId: a.contact.id as string | null,
+                      })),
+                    ),
+                  ];
+                })().map((c) => (
                   <tr key={c.id} className={trHover}>
                     <td className={`${td} font-medium`}>{c.system}</td>
                     <td className={td}>

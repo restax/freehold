@@ -75,6 +75,85 @@ export async function createClient(formData: FormData) {
   redirect(`/dashboard/clients/${client.id}`);
 }
 
+/**
+ * Edit the profile: name, contact points, address, and the type-specific
+ * blob — billing contact for offices, brokerage reference for agents. Only
+ * the blob that matches the client's stored type is written, and blanking
+ * every field of a blob clears it.
+ */
+export async function updateClientProfile(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  const name = str(formData, "name");
+  if (!id || !name) return;
+
+  await withTenant(tenantId, async (tx) => {
+    const existing = await tx.client.findUnique({ where: { id }, select: { type: true } });
+    if (!existing) return;
+    const isOffice = existing.type === ClientType.BROKERAGE || existing.type === ClientType.TEAM;
+    const billingContact = isOffice
+      ? (contactJson(formData, ["billingName", "billingEmail", "billingPhone"]) ?? Prisma.DbNull)
+      : undefined;
+    const brokerageInfo =
+      existing.type === ClientType.AGENT
+        ? (() => {
+            const bName = optStr(formData, "brokerageName");
+            const bPhone = optStr(formData, "brokeragePhone");
+            const bAddress = optStr(formData, "brokerageAddress");
+            if (!bName && !bPhone && !bAddress) return Prisma.DbNull;
+            return {
+              ...(bName && { name: bName }),
+              ...(bPhone && { phone: bPhone }),
+              ...(bAddress && { address: bAddress }),
+            };
+          })()
+        : undefined;
+    await tx.client.update({
+      where: { id },
+      data: {
+        name,
+        email: optStr(formData, "email"),
+        phone: optStr(formData, "phone"),
+        address: optStr(formData, "address"),
+        billingContact,
+        brokerageInfo,
+      },
+    });
+  });
+  revalidatePath(`/dashboard/clients/${id}`);
+  revalidatePath("/dashboard/clients");
+}
+
+/**
+ * Add an agent to an office by typing who they are — creates the Contact
+ * (category Agent, company = the office) and attaches it in one step, so a
+ * roster doesn't require a detour through the contacts page.
+ */
+export async function addClientAgentInline(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const clientId = str(formData, "clientId");
+  const name = str(formData, "name");
+  if (!clientId || !name) return;
+
+  await withTenant(tenantId, async (tx) => {
+    const client = await tx.client.findUnique({ where: { id: clientId }, select: { name: true } });
+    if (!client) return;
+    const contact = await tx.contact.create({
+      data: {
+        tenantId,
+        name,
+        email: optStr(formData, "email"),
+        phone: optStr(formData, "phone"),
+        category: "Agent",
+        company: client.name,
+      },
+    });
+    await tx.clientAgent.create({ data: { tenantId, clientId, contactId: contact.id } });
+  });
+  revalidatePath(`/dashboard/clients/${clientId}`);
+  revalidatePath("/dashboard/contacts");
+}
+
 export async function updateClientEsign(formData: FormData) {
   const { tenantId } = await requireTenant();
   const id = str(formData, "id");

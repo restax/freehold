@@ -20,6 +20,16 @@ export interface BrokerageInfo {
   address: string | null;
 }
 
+/** One label map for every page that names a client type. */
+export const CLIENT_TYPE_LABEL: Record<string, string> = {
+  AGENT: "Agent",
+  BROKERAGE: "Brokerage",
+  TEAM: "Team",
+  TITLE: "Title company",
+  LENDER: "Lender",
+  OTHER: "Other",
+};
+
 /** The two structural kinds plus everything else (title, lender, other). */
 export type ClientKind = "individual" | "office" | "company";
 
