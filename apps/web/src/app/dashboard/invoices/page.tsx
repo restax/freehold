@@ -30,12 +30,13 @@ import {
   transactionBilling,
 } from "@/lib/billing";
 import { clientBillingPolicy, lateFeeCents, lateFeeEligible } from "@/lib/billing-policy";
+import { agingReport, monthlyCollected } from "@/lib/billing-reports";
 import { emailEnabled } from "@/lib/email";
 import { erpnextInvoiceUrl } from "@/lib/erpnext";
 import { fmtDate } from "@/lib/format";
 import { agingBucket, daysOverdue, invoiceLabel, TERM_PRESETS } from "@/lib/invoicing";
 import { fmtCents } from "@/lib/pay";
-import { getMemberRole, requireTenant } from "@/lib/tenant";
+import { getBillingAccess, requireTenant } from "@/lib/tenant";
 import { btn, btnGhost, card, input, label, summaryLink } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -62,9 +63,9 @@ export default async function InvoicesPage({
 }) {
   const { tenantId, userId } = await requireTenant();
   const { invoiceError } = await searchParams;
-  const [allowed, role, canEmail, hasErpnext, org] = await Promise.all([
+  const [allowed, access, canEmail, hasErpnext, org] = await Promise.all([
     invoicingAllowed(tenantId),
-    getMemberRole(tenantId, userId),
+    getBillingAccess(tenantId, userId),
     Promise.resolve(emailEnabled()),
     erpnextConnected(tenantId),
     prisma.organization.findUniqueOrThrow({
@@ -72,10 +73,25 @@ export default async function InvoicesPage({
       select: { billingDefaults: true },
     }),
   ]);
-  const isAdmin = role === "owner" || role === "admin";
+  // Billing is permissioned, not role-bound: owners/admins always, and any
+  // teammate the Team page granted view/manage/full.
+  if (!access.view) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div>
+          <h1 className="text-xl font-semibold">Invoices</h1>
+          <p className="text-sm text-stone-500">
+            Billing is limited to owners, admins, and teammates granted billing access. Ask a
+            workspace admin to grant yours on the Team page.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  const isAdmin = access.manage;
   const erpnextUrl = hasErpnext ? await erpnextBaseUrl(tenantId) : null;
 
-  const payRequests = isAdmin
+  const payRequests = access.comp
     ? await withTenant(tenantId, (tx) =>
         tx.paymentRequest.findMany({
           orderBy: [{ status: "asc" }, { requestedAt: "asc" }],
@@ -170,6 +186,23 @@ export default async function InvoicesPage({
     0,
   );
 
+  // Reports: A/R aging over open balances, and collections by month.
+  const aging = agingReport(
+    outstanding.map((i) => ({
+      balanceCents: invoiceMoney(i.lines, i.payments).balanceCents,
+      daysPastDue: i.dueDate && agingBucket(i.dueDate) === "overdue" ? daysOverdue(i.dueDate) : 0,
+    })),
+  );
+  const collected = monthlyCollected(
+    invoices.flatMap((i) =>
+      i.provider === "freehold"
+        ? i.payments.map((p) => ({ amountCents: p.amountCents, receivedAt: p.receivedAt }))
+        : [],
+    ),
+    6,
+  );
+  const monthMax = Math.max(1, ...collected.map((m) => m.cents));
+
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -215,6 +248,74 @@ export default async function InvoicesPage({
           <p className="mt-1 text-xs text-stone-400">
             Get this as an email every morning — switch it on under Settings → Invoice report.
           </p>
+        </section>
+      )}
+
+      {allowed && invoices.length > 0 && (
+        <section className={card}>
+          <details>
+            <summary className={summaryLink}>Reports &amp; export</summary>
+            <div className="mt-3 grid gap-6 lg:grid-cols-2">
+              <div>
+                <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-stone-400">
+                  A/R aging (open balances)
+                </p>
+                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                  {Object.entries(aging).map(([bucket, cents], i) => (
+                    <div
+                      key={bucket}
+                      className={`flex flex-col ${i === 0 ? "" : "border-l border-stone-200 pl-4"}`}
+                    >
+                      <span className="text-[10px] uppercase tracking-wide text-stone-400">
+                        {bucket}
+                      </span>
+                      <span
+                        className={`tabular-nums text-sm font-semibold ${
+                          cents > 0 && bucket !== "Current" ? "text-amber-700" : "text-stone-700"
+                        }`}
+                      >
+                        {fmtCents(cents)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-stone-400">
+                  Collected by month
+                </p>
+                <ul className="flex flex-col gap-1">
+                  {collected.map((m) => (
+                    <li key={m.month} className="flex items-center gap-2 text-xs">
+                      <span className="w-14 tabular-nums text-stone-400">{m.month}</span>
+                      <span
+                        className="h-1.5 rounded-full bg-brand-600/80"
+                        style={{ width: `${Math.max(2, (m.cents / monthMax) * 160)}px` }}
+                      />
+                      <span className="tabular-nums text-stone-600">{fmtCents(m.cents)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <p className="mt-3 border-t border-stone-100 pt-2 text-xs text-stone-400">
+              Export for your accountant:{" "}
+              <a
+                href="/api/billing/export?type=invoices"
+                className="font-medium text-brand-700 hover:underline"
+              >
+                invoices.csv
+              </a>{" "}
+              ·{" "}
+              <a
+                href="/api/billing/export?type=payments"
+                className="font-medium text-brand-700 hover:underline"
+              >
+                payments.csv
+              </a>{" "}
+              — one row per charge / per payment, importable into QuickBooks and friends.
+            </p>
+          </details>
         </section>
       )}
 

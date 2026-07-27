@@ -18,7 +18,7 @@ import { invoiceLabel, invoiceText, nextInvoiceNumber } from "@/lib/invoicing";
 import { fmtCents, parseFeeCents } from "@/lib/pay";
 import { getTenantPlan, isCloud } from "@/lib/plans";
 import { renderTemplatePdf } from "@/lib/templates";
-import { requireAdminTenant } from "@/lib/tenant";
+import { getBillingAccess, requireAdminTenant, requireTenant } from "@/lib/tenant";
 
 /**
  * Client invoicing (tenant bills their client) with no payment processor.
@@ -89,8 +89,9 @@ export async function refreshErpnextInvoices(_formData?: FormData) {
 }
 
 export async function createInvoice(formData: FormData) {
-  const { tenantId, isAdmin, session } = await requireAdminTenant();
-  if (!isAdmin || !(await invoicingAllowed(tenantId))) return;
+  const { tenantId, session } = await requireTenant();
+  if (!(await getBillingAccess(tenantId, session.user.id)).manage) return;
+  if (!(await invoicingAllowed(tenantId))) return;
 
   const clientId = str(formData, "clientId");
   const description = str(formData, "description") || "Transaction coordination services";
@@ -183,8 +184,8 @@ export async function createInvoice(formData: FormData) {
 
 /** Email the invoice to the client, PDF attached. */
 export async function sendInvoice(formData: FormData) {
-  const { tenantId, isAdmin, session } = await requireAdminTenant();
-  if (!isAdmin || !emailEnabled()) return;
+  const { tenantId, session } = await requireTenant();
+  if (!(await getBillingAccess(tenantId, session.user.id)).manage || !emailEnabled()) return;
   const id = str(formData, "id");
   if (!id) return;
 
@@ -251,8 +252,8 @@ export async function sendInvoice(formData: FormData) {
  * and closes the follow-up task, since there's nothing left to chase.
  */
 export async function markInvoicePaid(formData: FormData) {
-  const { tenantId, isAdmin, session } = await requireAdminTenant();
-  if (!isAdmin) return;
+  const { tenantId, session } = await requireTenant();
+  if (!(await getBillingAccess(tenantId, session.user.id)).manage) return;
   const id = str(formData, "id");
   if (!id) return;
 
@@ -315,8 +316,8 @@ export async function markInvoicePaid(formData: FormData) {
 
 /** Withdraw an unpaid invoice; the follow-up closes with it. */
 export async function voidInvoice(formData: FormData) {
-  const { tenantId, isAdmin, session } = await requireAdminTenant();
-  if (!isAdmin) return;
+  const { tenantId, session } = await requireTenant();
+  if (!(await getBillingAccess(tenantId, session.user.id)).manage) return;
   const id = str(formData, "id");
   if (!id) return;
 
@@ -354,8 +355,9 @@ export async function voidInvoice(formData: FormData) {
  * ad-hoc fees get on the books without leaving the transaction page.
  */
 export async function addTransactionCharge(formData: FormData) {
-  const { tenantId, isAdmin, session } = await requireAdminTenant();
-  if (!isAdmin || !(await invoicingAllowed(tenantId))) return;
+  const { tenantId, session } = await requireTenant();
+  if (!(await getBillingAccess(tenantId, session.user.id)).manage) return;
+  if (!(await invoicingAllowed(tenantId))) return;
   const transactionId = str(formData, "transactionId");
   const description = str(formData, "description");
   const amountCents = parseFeeCents(str(formData, "amount"));
@@ -425,8 +427,8 @@ export async function addTransactionCharge(formData: FormData) {
  * file's closing date, for invoices sent ahead to be paid at the table.
  */
 export async function issueDraftInvoice(formData: FormData) {
-  const { tenantId, isAdmin, session } = await requireAdminTenant();
-  if (!isAdmin) return;
+  const { tenantId, session } = await requireTenant();
+  if (!(await getBillingAccess(tenantId, session.user.id)).manage) return;
   const id = str(formData, "id");
   if (!id) return;
   const dueAtClosing = str(formData, "dueAtClosing") === "1";
@@ -484,8 +486,8 @@ export async function issueDraftInvoice(formData: FormData) {
 
 /** Discard a draft. Only drafts — issued invoices are VOIDed, never deleted. */
 export async function deleteDraftInvoice(formData: FormData) {
-  const { tenantId, isAdmin, session } = await requireAdminTenant();
-  if (!isAdmin) return;
+  const { tenantId, session } = await requireTenant();
+  if (!(await getBillingAccess(tenantId, session.user.id)).manage) return;
   const id = str(formData, "id");
   if (!id) return;
   const removed = await withTenant(tenantId, async (tx) => {

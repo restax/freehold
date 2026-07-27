@@ -1,5 +1,6 @@
 import { prisma, withTenant } from "@freehold/db";
 import { redirect } from "next/navigation";
+import { billingCapability } from "@/lib/billing-access";
 import { getSession, listTenants } from "./session";
 import { vendorIdForUser } from "./vendor-auth";
 
@@ -44,6 +45,15 @@ export async function getMemberRole(tenantId: string, userId: string): Promise<s
     select: { role: true },
   });
   return member?.role ?? "member";
+}
+
+/** This member's billing capability (role + Team-page grant, resolved). */
+export async function getBillingAccess(tenantId: string, userId: string) {
+  const member = await prisma.member.findFirst({
+    where: { organizationId: tenantId, userId },
+    select: { role: true, billingRole: true },
+  });
+  return billingCapability(member?.role ?? "member", member?.billingRole);
 }
 
 /** Role plus assigned compliance tier, for review-authority checks. */

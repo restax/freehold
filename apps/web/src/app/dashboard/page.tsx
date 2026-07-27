@@ -7,7 +7,10 @@ import { EmptyState } from "@/components/empty-state";
 import { HubNews } from "@/components/hub-news";
 import { toggleTask } from "@/lib/actions/tasks";
 import { rankAlerts, transactionAlerts } from "@/lib/alerts";
+import { billingExceptions, invoiceMoney, transactionBilling } from "@/lib/billing";
 import { fmtDate, STATUS_LABEL } from "@/lib/format";
+import { agingBucket } from "@/lib/invoicing";
+import { fmtCents } from "@/lib/pay";
 import {
   byPriorityThenDate,
   effectivePriority,
@@ -15,7 +18,7 @@ import {
   priorityBadgeStyle,
   rowHighlightStyle,
 } from "@/lib/priority";
-import { requireTenant } from "@/lib/tenant";
+import { getBillingAccess, requireTenant } from "@/lib/tenant";
 import { card, tableWrap, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -158,6 +161,58 @@ export default async function DashboardPage() {
   // Files that have gone quiet, worst first — same verdict the transaction
   // page and the daily briefing show.
   const needsAttention = rankAlerts(await transactionAlerts(tenantId, now));
+
+  // The money strip, for anyone with billing access: what's owed, what's
+  // overdue, what came in this month, and whether any closed file slipped
+  // through unbilled — the same figures the invoices page computes.
+  const billingAccess = await getBillingAccess(tenantId, userId);
+  const revenue = billingAccess.view
+    ? await withTenant(tenantId, async (tx) => {
+        const open = await tx.invoice.findMany({
+          where: { status: "SENT" },
+          select: {
+            dueDate: true,
+            lines: { select: { amountCents: true } },
+            payments: { select: { amountCents: true } },
+          },
+        });
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const collected = await tx.invoicePayment.aggregate({
+          where: { receivedAt: { gte: monthStart } },
+          _sum: { amountCents: true },
+        });
+        const [closedFiles, invoices] = await Promise.all([
+          tx.transaction.findMany({
+            where: { status: "CLOSED" },
+            select: { id: true, propertyAddress: true, status: true, expectedFeeCents: true },
+          }),
+          tx.invoice.findMany({
+            select: {
+              status: true,
+              provider: true,
+              transactionId: true,
+              amountCents: true,
+              lines: { select: { transactionId: true, amountCents: true } },
+              payments: { select: { amountCents: true } },
+            },
+          }),
+        ]);
+        const outstanding = open.reduce(
+          (s, i) => s + Math.max(0, invoiceMoney(i.lines, i.payments).balanceCents),
+          0,
+        );
+        const overdue = open
+          .filter((i) => agingBucket(i.dueDate) === "overdue")
+          .reduce((s, i) => s + Math.max(0, invoiceMoney(i.lines, i.payments).balanceCents), 0);
+        return {
+          outstanding,
+          overdue,
+          collectedThisMonth: collected._sum.amountCents ?? 0,
+          exceptions: billingExceptions(closedFiles, (id) => transactionBilling(id, invoices))
+            .length,
+        };
+      })
+    : null;
 
   const { counts, openTasks, closings, doneThisWeek, prospecting, recent, licenseAlerts, myFiles } =
     await withTenant(tenantId, async (tx) => ({
@@ -384,6 +439,49 @@ export default async function DashboardPage() {
               </Link>
             </p>
           )}
+        </section>
+      )}
+
+      {revenue && (
+        <section className={card}>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-medium">Money</h2>
+            <Link href="/dashboard/invoices" className="text-xs text-brand-700 hover:underline">
+              Invoices →
+            </Link>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
+            {(
+              [
+                ["Outstanding", fmtCents(revenue.outstanding), "text-stone-800"],
+                [
+                  "Overdue",
+                  fmtCents(revenue.overdue),
+                  revenue.overdue > 0 ? "text-red-700" : "text-stone-800",
+                ],
+                [
+                  "Collected this month",
+                  fmtCents(revenue.collectedThisMonth),
+                  revenue.collectedThisMonth > 0 ? "text-brand-700" : "text-stone-800",
+                ],
+                [
+                  "Closed unbilled",
+                  String(revenue.exceptions),
+                  revenue.exceptions > 0 ? "text-amber-700" : "text-stone-800",
+                ],
+              ] as const
+            ).map(([labelText, value, tone], i) => (
+              <div
+                key={labelText}
+                className={`flex flex-col ${i === 0 ? "" : "border-l border-stone-200 pl-6"}`}
+              >
+                <span className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
+                  {labelText}
+                </span>
+                <span className={`tabular-nums text-lg font-semibold ${tone}`}>{value}</span>
+              </div>
+            ))}
+          </div>
         </section>
       )}
 

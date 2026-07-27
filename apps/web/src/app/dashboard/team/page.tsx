@@ -6,9 +6,11 @@ import {
   cancelInvitation,
   inviteMember,
   removeMember,
+  updateMemberBillingRole,
   updateMemberComplianceTier,
   updateMemberRole,
 } from "@/lib/actions/team";
+import { BILLING_ROLE_OPTIONS, billingRoleLabel } from "@/lib/billing-access";
 import { fmtDate } from "@/lib/format";
 import { licenseHealth } from "@/lib/licenses";
 import { seatState } from "@/lib/plans";
@@ -100,6 +102,7 @@ export default async function TeamPage() {
                 <th className={th}>Licenses</th>
                 <th className={th}>Role</th>
                 <th className={th}>Compliance review</th>
+                <th className={th}>Billing</th>
                 <th className={th} />
               </tr>
             </thead>
@@ -185,6 +188,33 @@ export default async function TeamPage() {
                           className={`${input} px-2 py-1 text-xs`}
                         >
                           {TIER_OPTIONS.map(([value, text]) => (
+                            <option key={value} value={value}>
+                              {text}
+                            </option>
+                          ))}
+                        </select>
+                        <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                          Save
+                        </button>
+                      </form>
+                    )}
+                  </td>
+                  <td className={td}>
+                    {m.role === "owner" ? (
+                      <span className="text-stone-500">Full authority</span>
+                    ) : !isAdmin ? (
+                      <span className="text-stone-500">
+                        {billingRoleLabel(m.role, m.billingRole)}
+                      </span>
+                    ) : (
+                      <form action={updateMemberBillingRole} className="flex items-center gap-1">
+                        <input type="hidden" name="memberId" value={m.id} />
+                        <select
+                          name="billingRole"
+                          defaultValue={m.billingRole ?? "default"}
+                          className={`${input} px-2 py-1 text-xs`}
+                        >
+                          {BILLING_ROLE_OPTIONS.map(([value, text]) => (
                             <option key={value} value={value}>
                               {text}
                             </option>

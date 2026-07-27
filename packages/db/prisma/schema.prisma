@@ -706,6 +706,12 @@ model Member {
   /// by role (owner/admin hold top authority, member submits only); 0 =
   /// submitter only even for an admin; 1..N = approves at levels up to N.
   complianceTier Int?         @map("compliance_tier")
+  /// Billing authority, assigned from the Team page. null = default by role
+  /// (owner/admin see and manage everything incl. team comp; member sees
+  /// nothing). "view" reads invoices and revenue; "manage" also records
+  /// money; "full" additionally sees team payout/comp data. Resolved by
+  /// lib/billing-access.ts.
+  billingRole    String?      @map("billing_role")
   /// Capability token for this person's subscribe-once personal calendar feed
   /// in this workspace (a user in two tenants gets a separate feed per one,
   /// same as everything else here — roles and assignments don't cross tenants).

@@ -102,6 +102,39 @@ export async function updateMemberComplianceTier(formData: FormData) {
   revalidatePath("/dashboard/team");
 }
 
+/**
+ * Grant or revoke billing authority. "default" follows the role (owner/admin
+ * full, member none); view/manage/full grant increasing access — full
+ * includes seeing what teammates are paid. Audited: this decides who reads
+ * the books.
+ */
+export async function updateMemberBillingRole(formData: FormData) {
+  const { tenantId, isAdmin, session } = await requireAdminTenant();
+  if (!isAdmin) return;
+  const memberId = str(formData, "memberId");
+  const raw = str(formData, "billingRole");
+  if (!memberId) return;
+  if (!["default", "view", "manage", "full"].includes(raw)) return;
+  const billingRole = raw === "default" ? null : raw;
+  const target = await prisma.member.findFirst({
+    where: { id: memberId, organizationId: tenantId },
+    include: { user: { select: { email: true } } },
+  });
+  if (!target || target.role === "owner") return;
+  await prisma.member.update({ where: { id: memberId }, data: { billingRole } });
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "billing.access_changed",
+    summary:
+      billingRole === null
+        ? `${target.user.email} follows their role for billing access`
+        : `${target.user.email} granted billing access: ${billingRole}`,
+  });
+  revalidatePath("/dashboard/team");
+}
+
 export async function removeMember(formData: FormData) {
   const { tenantId, userId, isAdmin } = await requireAdminTenant();
   if (!isAdmin) return;

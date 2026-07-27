@@ -100,7 +100,7 @@ import {
 } from "@/lib/priority";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
 import {
-  GUEST_ROLE,
+  getBillingAccess,
   getMemberCompliance,
   getMemberRole,
   guestMaySeeTransaction,
@@ -144,7 +144,9 @@ export default async function TransactionDetailPage({
   const { tenantId, session } = await requireTenant({ allowGuest: true });
   const role = await getMemberRole(tenantId, session.user.id);
   const isAdmin = role === "owner" || role === "admin";
-  const isGuest = role === GUEST_ROLE;
+  // Money on the file is permissioned separately from working the file
+  // (guests resolve to no access inside billingCapability).
+  const billing = await getBillingAccess(tenantId, session.user.id);
   const labels = await tenantSideLabels(tenantId);
   const { id } = await params;
   // A guest reaches only the files they were handed; anything else doesn't
@@ -268,7 +270,7 @@ export default async function TransactionDetailPage({
   // Money on this file: every invoice touching it (directly or via a line on
   // a consolidated invoice), and the attributed billed/paid totals. Hidden
   // from guests — outside coverage staff work the file, not the money.
-  const billingInvoices = isGuest
+  const billingInvoices = !billing.view
     ? []
     : await withTenant(tenantId, (tx) =>
         tx.invoice.findMany({
@@ -419,7 +421,7 @@ export default async function TransactionDetailPage({
               + CC email
             </Link>
           )}
-          {!isGuest && (
+          {billing.view && (
             <Link
               href={`/dashboard/transactions/${txn.id}?tab=billing`}
               title="Billing for this file"
@@ -642,20 +644,22 @@ export default async function TransactionDetailPage({
         </aside>
         <div className="flex min-w-0 flex-col gap-3 xl:order-2">
           <nav className="flex flex-wrap gap-1 border-b border-stone-200">
-            {TXN_TABS.filter(([key]) => !(isGuest && key === "billing")).map(([key, labelText]) => (
-              <Link
-                key={key}
-                href={`/dashboard/transactions/${txn.id}?tab=${key}`}
-                aria-current={tab === key ? "page" : undefined}
-                className={`rounded-t-lg px-3 py-2 text-sm transition-colors ${
-                  tab === key
-                    ? "border border-b-0 border-stone-200 bg-white font-medium text-brand-800"
-                    : "text-stone-500 hover:text-stone-800"
-                }`}
-              >
-                {labelText}
-              </Link>
-            ))}
+            {TXN_TABS.filter(([key]) => !(!billing.view && key === "billing")).map(
+              ([key, labelText]) => (
+                <Link
+                  key={key}
+                  href={`/dashboard/transactions/${txn.id}?tab=${key}`}
+                  aria-current={tab === key ? "page" : undefined}
+                  className={`rounded-t-lg px-3 py-2 text-sm transition-colors ${
+                    tab === key
+                      ? "border border-b-0 border-stone-200 bg-white font-medium text-brand-800"
+                      : "text-stone-500 hover:text-stone-800"
+                  }`}
+                >
+                  {labelText}
+                </Link>
+              ),
+            )}
           </nav>
           {tab === "tasks" && (
             <section className={card}>
@@ -1220,7 +1224,7 @@ export default async function TransactionDetailPage({
             </div>
           )}
           {tab === "vendors" && <VendorOrderTab tenantId={tenantId} transactionId={id} />}
-          {tab === "billing" && !isGuest && (
+          {tab === "billing" && billing.view && (
             <div className="flex flex-col gap-3">
               <section className={card}>
                 <div className="mb-3 flex items-baseline justify-between gap-3">
@@ -1377,7 +1381,7 @@ export default async function TransactionDetailPage({
                               ))}
                             </ul>
                           )}
-                          {isAdmin && (
+                          {billing.manage && (
                             <div className="mt-1.5 flex flex-wrap items-center gap-3">
                               <a
                                 href={`/api/invoices/${inv.id}/pdf`}
@@ -1458,7 +1462,7 @@ export default async function TransactionDetailPage({
                 </p>
               </section>
 
-              {isAdmin && (
+              {billing.manage && (
                 <section className={card}>
                   <h2 className="mb-1 font-medium">Add a charge</h2>
                   <p className="mb-3 text-sm text-stone-500">

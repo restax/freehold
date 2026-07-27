@@ -9,7 +9,7 @@ import { clientBillingPolicy, lateFeeCents } from "@/lib/billing-policy";
 import { dateOnly, optStr, str } from "@/lib/forms";
 import { invoiceLabel } from "@/lib/invoicing";
 import { fmtCents, parseFeeCents } from "@/lib/pay";
-import { requireAdminTenant } from "@/lib/tenant";
+import { getBillingAccess, requireTenant } from "@/lib/tenant";
 
 /**
  * Incoming money. Everything here writes append-only ledger entries — a
@@ -64,8 +64,8 @@ async function syncStatusWithLedger(tx: TenantTx, invoiceId: string) {
 
 /** Record money received against an invoice — partial amounts welcome. */
 export async function recordInvoicePayment(formData: FormData) {
-  const { tenantId, isAdmin, session } = await requireAdminTenant();
-  if (!isAdmin) return;
+  const { tenantId, session } = await requireTenant();
+  if (!(await getBillingAccess(tenantId, session.user.id)).manage) return;
   const id = str(formData, "id");
   const amountCents = parseFeeCents(str(formData, "amount"));
   if (!id || amountCents === null || amountCents <= 0) return;
@@ -117,8 +117,8 @@ export async function recordInvoicePayment(formData: FormData) {
 
 /** Reverse a payment entry (returned check, recorded in error). */
 export async function reverseInvoicePayment(formData: FormData) {
-  const { tenantId, isAdmin, session } = await requireAdminTenant();
-  if (!isAdmin) return;
+  const { tenantId, session } = await requireTenant();
+  if (!(await getBillingAccess(tenantId, session.user.id)).manage) return;
   const paymentId = str(formData, "paymentId");
   if (!paymentId) return;
   const note = optStr(formData, "note") ?? "Payment reversed";
@@ -171,8 +171,8 @@ export async function reverseInvoicePayment(formData: FormData) {
 
 /** Put money on (or take it off) a client's account: deposit, refund, adjustment. */
 export async function recordClientCredit(formData: FormData) {
-  const { tenantId, isAdmin, session } = await requireAdminTenant();
-  if (!isAdmin) return;
+  const { tenantId, session } = await requireTenant();
+  if (!(await getBillingAccess(tenantId, session.user.id)).manage) return;
   const clientId = str(formData, "clientId");
   const kindRaw = str(formData, "kind");
   const amountCents = parseFeeCents(str(formData, "amount"));
@@ -224,8 +224,8 @@ export async function recordClientCredit(formData: FormData) {
  * so neither ledger can go negative.
  */
 export async function applyClientCredit(formData: FormData) {
-  const { tenantId, isAdmin, session } = await requireAdminTenant();
-  if (!isAdmin) return;
+  const { tenantId, session } = await requireTenant();
+  if (!(await getBillingAccess(tenantId, session.user.id)).manage) return;
   const id = str(formData, "id");
   const requested = parseFeeCents(str(formData, "amount"));
   if (!id || requested === null || requested <= 0) return;
@@ -302,8 +302,8 @@ export async function applyClientCredit(formData: FormData) {
  * suggestion — never automatic — and at most one per invoice.
  */
 export async function addLateFee(formData: FormData) {
-  const { tenantId, isAdmin, session } = await requireAdminTenant();
-  if (!isAdmin) return;
+  const { tenantId, session } = await requireTenant();
+  if (!(await getBillingAccess(tenantId, session.user.id)).manage) return;
   const id = str(formData, "id");
   if (!id) return;
   const org = await prisma.organization.findUnique({

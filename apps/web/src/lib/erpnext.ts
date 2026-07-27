@@ -168,6 +168,8 @@ export interface ErpnextInvoiceInput {
   dueDate: Date | null;
   /** Our own INV-0007, carried into ERPNext's remarks for cross-reference. */
   reference: string;
+  /** Itemization; when present, one Sales Invoice item per line. */
+  lines?: Array<{ description: string; amountCents: number }>;
 }
 
 /**
@@ -189,14 +191,15 @@ export async function createSalesInvoice(
       docstatus: 1,
       ...(input.dueDate ? { due_date: input.dueDate.toISOString().slice(0, 10) } : {}),
       remarks: `${input.reference} — ${input.description}`,
-      items: [
-        {
-          item_code: conn.itemCode,
-          qty: 1,
-          rate: input.amountCents / 100,
-          description: input.description,
-        },
-      ],
+      items: (input.lines && input.lines.length > 0
+        ? input.lines
+        : [{ description: input.description, amountCents: input.amountCents }]
+      ).map((l) => ({
+        item_code: conn.itemCode,
+        qty: 1,
+        rate: l.amountCents / 100,
+        description: l.description,
+      })),
     },
   });
   if (!created.ok) return created;
