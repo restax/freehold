@@ -59,6 +59,14 @@ export function middleware(req: NextRequest) {
     url.pathname = `/t/${slug}`;
     return NextResponse.rewrite(url);
   }
+  // Public intake forms belong to the tenant's own face: acme.<root>/f/<form>
+  // serves the same page as /t/acme/f/<form> rather than bouncing to the apex.
+  // /fl/<token> is the emailed capability link for the same forms.
+  if (pathname.startsWith("/f/") || pathname.startsWith("/fl/")) {
+    const url = req.nextUrl.clone();
+    url.pathname = `/t/${slug}${pathname}`;
+    return NextResponse.rewrite(url);
+  }
   if (pathname.startsWith("/portal/")) {
     return NextResponse.next();
   }

@@ -21,6 +21,7 @@ export function TenantSiteView({
   hiddenFields,
   heroImageSrc = "/site/site-hero.jpg",
   about,
+  publicForms = [],
 }: {
   name: string;
   logoUrl?: string | null;
@@ -32,6 +33,12 @@ export function TenantSiteView({
   heroImageSrc?: string;
   /** Optional short "About us" block rendered right under the hero. */
   about?: { heading: string; body: string };
+  /**
+   * Published forms the workspace placed on its public website. They appear
+   * here automatically — the TC ticks "public website" in the designer and
+   * never links anything by hand.
+   */
+  publicForms?: Array<{ slug: string; title: string; description: string | null }>;
 }) {
   const services = (site.services ?? "")
     .split("\n")
@@ -129,6 +136,34 @@ export function TenantSiteView({
                 </li>
               ))}
             </ul>
+          </div>
+        </section>
+      )}
+
+      {/* Intake forms the workspace published to its public site. */}
+      {publicForms.length > 0 && (
+        <section id="forms" className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
+          <h2 className="font-display text-2xl font-bold tracking-tight">Get started</h2>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            {publicForms.map((f) => (
+              <a
+                key={f.slug}
+                href={`/f/${f.slug}`}
+                className="group flex flex-col rounded-2xl border border-stone-200 bg-white p-5 transition-colors hover:border-brand-600/40 hover:bg-brand-50/30"
+              >
+                <span className="font-display text-lg font-bold tracking-tight text-stone-900">
+                  {f.title}
+                </span>
+                {f.description && (
+                  <span className="mt-1.5 text-sm leading-relaxed text-stone-600">
+                    {f.description}
+                  </span>
+                )}
+                <span className="mt-3 text-sm font-medium text-brand-700 group-hover:text-brand-600">
+                  Start →
+                </span>
+              </a>
+            ))}
           </div>
         </section>
       )}

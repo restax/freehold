@@ -1,4 +1,4 @@
-import { prisma } from "@freehold/db";
+import { prisma, withTenant } from "@freehold/db";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { TenantSiteView } from "@/components/tenant-site";
@@ -42,10 +42,19 @@ export default async function TenantSite({ params, searchParams }: Props) {
   const { thanks } = await searchParams;
   const org = await prisma.organization.findUnique({
     where: { slug },
-    select: { name: true, logo: true, siteConfig: true },
+    select: { id: true, name: true, logo: true, siteConfig: true },
   });
   if (!org) notFound();
   const site = parseSiteConfig(org.siteConfig);
+  // Forms place themselves: anything published and marked for the public
+  // website shows up here without the TC linking it.
+  const publicForms = await withTenant(org.id, (tx) =>
+    tx.form.findMany({
+      where: { status: "published", showPublic: true, clientId: null },
+      orderBy: { name: "asc" },
+      select: { slug: true, title: true, description: true },
+    }),
+  );
 
   if (!site.published) {
     return (
@@ -80,6 +89,7 @@ export default async function TenantSite({ params, searchParams }: Props) {
       name={org.name}
       logoUrl={org.logo}
       site={site}
+      publicForms={publicForms}
       thanks={Boolean(thanks)}
       leadAction={submitTenantLead}
       hiddenFields={{ slug }}

@@ -684,6 +684,11 @@ model Organization {
   clientAgents            ClientAgent[]
   emailTemplatesLib       EmailTemplate[]
   intakeSubmissions       IntakeSubmission[]
+  forms                   Form[]
+  formSubmissions         FormSubmission[]
+  formSubmissionFiles     FormSubmissionFile[]
+  formAccessLinks         FormAccessLink[]
+  formLookupAttempts      FormLookupAttempt[]
   emails                  Email[]
   apiKeys                 ApiKey[]
   invoices                Invoice[]
@@ -815,6 +820,9 @@ model Client {
   updatedAt             DateTime             @updatedAt
   invoices              Invoice[]
   creditEntries         ClientCreditEntry[]
+  forms                 Form[]
+  formSubmissions       FormSubmission[]
+  formAccessLinks       FormAccessLink[]
 
   @@index([tenantId])
   @@map("client")
@@ -889,6 +897,179 @@ model IntakeSubmission {
 
   @@index([tenantId, transactionId])
   @@map("intake_submission")
+}
+
+/// A TC-designed intake form. The layout is a JSON document (rows of one or
+/// two cells; a cell holds a field, a divider, or a text block) authored in
+/// the drag-and-drop designer and rendered server-side as a plain form.
+///
+/// Two axes decide who sees a form:
+///   * placement — showPublic puts it on the tenant's public site, showPortal
+///     puts it in client portals; neither = internal only.
+///   * clientId — null is the shared version everyone gets; set makes it that
+///     client's private variant, which wins over the shared one for them.
+/// The unique on (tenantId, kind, clientId) keeps private-variant resolution
+/// deterministic while leaving shared forms (clientId NULL, and NULLs don't
+/// collide in Postgres unique indexes) free to be many.
+model Form {
+  id          String       @id @default(uuid())
+  tenantId    String       @map("tenant_id")
+  tenant      Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// "client_intake" | "transaction_intake" — a plain string (the
+  /// InvoiceLine.kind precedent) so a new kind never needs a migration.
+  kind        String
+  /// TC-facing name, shown in the forms list and menus.
+  name        String
+  /// URL segment for the public form: /t/<org>/f/<slug>.
+  slug        String
+  /// Shown to the person filling it in.
+  title       String
+  description String?
+  /// The row/cell document. Parsed tolerantly by lib/form-schema.ts — a
+  /// malformed layout reads as empty rather than throwing on a public page.
+  layout      Json
+  /// "draft" | "published". Only published forms render anywhere.
+  status      String       @default("draft")
+  showPublic  Boolean      @default(false) @map("show_public")
+  showPortal  Boolean      @default(false) @map("show_portal")
+  /// Null = the shared version; set = this client's private variant.
+  clientId    String?      @map("client_id")
+  client      Client?      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  submissions FormSubmission[]
+  accessLinks FormAccessLink[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([tenantId, slug])
+  @@unique([tenantId, kind, clientId])
+  @@index([tenantId])
+  @@map("form")
+}
+
+/// One filled-in form. The layout it was filled against is snapshotted here,
+/// so editing (or deleting) the form later never changes what a past
+/// submission means — the queue and the converter always read the snapshot,
+/// never the live form.
+model FormSubmission {
+  id                    String       @id @default(uuid())
+  tenantId              String       @map("tenant_id")
+  tenant                Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Nulled if the form is deleted; submissions are business records and
+  /// outlive their form. formName/formKind are denormalized for that case.
+  formId                String?      @map("form_id")
+  form                  Form?        @relation(fields: [formId], references: [id], onDelete: SetNull)
+  formName              String       @map("form_name")
+  formKind              String       @map("form_kind")
+  /// The layout as filled — see the model comment.
+  schemaSnapshot        Json         @map("schema_snapshot")
+  /// Answers, keyed by field key.
+  data                  Json
+  /// Denormalized for the review queue, so listing never parses `data`.
+  submitterName         String?      @map("submitter_name")
+  submitterEmail        String?      @map("submitter_email")
+  submitterPhone        String?      @map("submitter_phone")
+  /// Set when submitted through an identified (magic-link) session.
+  clientId              String?      @map("client_id")
+  client                Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  /// "new" | "converted" | "dismissed" — public submissions are reviewed
+  /// before anything enters the live pipeline.
+  status                String       @default("new")
+  /// What the review produced, once converted.
+  convertedClientId     String?      @map("converted_client_id")
+  convertedTransactionId String?     @map("converted_transaction_id")
+  /// Documents created from this submission's files at conversion time.
+  /// Empty until someone converts it — see FormSubmissionFile.
+  documentIds           String[]     @default([]) @map("document_ids")
+  files                 FormSubmissionFile[]
+  /// Salted hash of the submitter's IP, per tenant, used only to rate-limit
+  /// public submissions. Hashed rather than stored raw: it is abuse-control
+  /// data, not something the workspace ever needs to read back.
+  ipHash                String?      @map("ip_hash")
+  reviewedAt            DateTime?    @map("reviewed_at")
+  reviewedByName        String?      @map("reviewed_by_name")
+  createdAt             DateTime     @default(now())
+
+  @@index([tenantId, status])
+  @@index([tenantId, formId])
+  @@index([tenantId, ipHash, createdAt])
+  @@map("form_submission")
+}
+
+/// A scoped capability to fill in ONE form as ONE known client, emailed to
+/// someone who proved they own that client's address.
+///
+/// Deliberately not a sign-in. It grants no session, no dashboard, no
+/// portal, and no read access to anything — only "open this form with your
+/// details filled in". Two-factor auth on the real account is therefore
+/// untouched by this, which is the whole point: new business shouldn't
+/// require an authenticator app, and a forwarded link must not become an
+/// account takeover. The worst a leaked link can do is queue a submission
+/// a person still has to review.
+///
+/// Unlike PortalLink (which has no expiry at all), these die on their own.
+model FormAccessLink {
+  id             String       @id @default(uuid())
+  tenantId       String       @map("tenant_id")
+  tenant         Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  formId         String       @map("form_id")
+  form           Form         @relation(fields: [formId], references: [id], onDelete: Cascade)
+  clientId       String       @map("client_id")
+  client         Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// The address the link was sent to — the thing that was proven.
+  email          String
+  token          String       @unique
+  expiresAt      DateTime     @map("expires_at")
+  revokedAt      DateTime?    @map("revoked_at")
+  lastAccessedAt DateTime?    @map("last_accessed_at")
+  usedAt         DateTime?    @map("used_at")
+  createdAt      DateTime     @default(now())
+
+  @@index([tenantId, formId])
+  @@map("form_access_link")
+}
+
+/// One row per "is this email one of yours?" check on a public form.
+///
+/// The public form tells a visitor whether their address is already a
+/// client — good for the returning client, but it also means the endpoint
+/// could be used to probe who a TC's clients are. This table is what makes
+/// the answer rate-limitable: attempts are counted whatever the outcome,
+/// so a script gets cut off long before it can enumerate a client list.
+/// Holds no address, only the salted per-tenant hash of the source.
+model FormLookupAttempt {
+  id        String       @id @default(uuid())
+  tenantId  String       @map("tenant_id")
+  tenant    Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ipHash    String       @map("ip_hash")
+  createdAt DateTime     @default(now())
+
+  @@index([tenantId, ipHash, createdAt])
+  @@map("form_lookup_attempt")
+}
+
+/// A file uploaded with a submission. Deliberately NOT a Document: a
+/// Document belongs to a transaction and shows up in the workspace's
+/// document library, and nothing a stranger uploads should land there
+/// before a person has looked at it. These become Documents on the new
+/// transaction at conversion time, and die with the submission otherwise.
+model FormSubmissionFile {
+  id              String         @id @default(uuid())
+  tenantId        String         @map("tenant_id")
+  tenant          Organization   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  submissionId    String         @map("submission_id")
+  submission      FormSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  /// The answer key of the file field this arrived on.
+  fieldKey        String         @map("field_key")
+  filename        String
+  contentType     String         @map("content_type")
+  sizeBytes       Int            @map("size_bytes")
+  data            Bytes?
+  storageKey      String?        @map("storage_key")
+  storageProvider String?        @map("storage_provider")
+  createdAt       DateTime       @default(now())
+
+  @@index([tenantId, submissionId])
+  @@map("form_submission_file")
 }
 
 /// Which agents (contacts) work under a managed client (team/brokerage).
