@@ -76,6 +76,39 @@ export async function createClient(formData: FormData) {
 }
 
 /**
+ * Reclassify a client — e.g. a contact entered as an individual agent turns
+ * out to be a brokerage. Changing kind (office ↔ individual ↔ company)
+ * clears whichever type-specific blob no longer applies, so a stale
+ * brokerage reference doesn't linger invisibly on what's now an office.
+ * Same-kind changes (BROKERAGE ↔ TEAM) keep the billing contact as-is.
+ */
+export async function updateClientType(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  const type = oneOf(formData, "type", CLIENT_TYPES, ClientType.AGENT);
+  if (!id) return;
+
+  await withTenant(tenantId, async (tx) => {
+    const existing = await tx.client.findUnique({ where: { id }, select: { type: true } });
+    if (!existing || existing.type === type) return;
+    const wasOffice = existing.type === ClientType.BROKERAGE || existing.type === ClientType.TEAM;
+    const isOffice = type === ClientType.BROKERAGE || type === ClientType.TEAM;
+    await tx.client.update({
+      where: { id },
+      data: {
+        type,
+        ...(wasOffice && !isOffice ? { billingContact: Prisma.DbNull } : {}),
+        ...(existing.type === ClientType.AGENT && type !== ClientType.AGENT
+          ? { brokerageInfo: Prisma.DbNull }
+          : {}),
+      },
+    });
+  });
+  revalidatePath(`/dashboard/clients/${id}`);
+  revalidatePath("/dashboard/clients");
+}
+
+/**
  * Edit the profile: name, contact points, address, and the type-specific
  * blob — billing contact for offices, brokerage reference for agents. Only
  * the blob that matches the client's stored type is written, and blanking

@@ -1,4 +1,4 @@
-import { prisma, withTenant } from "@freehold/db";
+import { ClientType, prisma, withTenant } from "@freehold/db";
 import {
   Buildings,
   LinkSimple,
@@ -24,6 +24,7 @@ import {
   saveClientAlertConfig,
   saveClientEmailPrefs,
   updateClientProfile,
+  updateClientType,
 } from "@/lib/actions/clients";
 import { setClientCompliance } from "@/lib/actions/compliance";
 import { createAgentPortalLink, setPortalLinkActive } from "@/lib/actions/portal";
@@ -179,12 +180,27 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         <Link href="/dashboard/clients" className="text-sm text-stone-500 hover:underline">
           ← Clients
         </Link>
-        <h1 className="flex items-center gap-2.5 text-xl font-semibold">
+        <h1 className="flex flex-wrap items-center gap-2.5 text-xl font-semibold">
           <TypeIcon size={20} weight="duotone" className="text-brand-600" aria-hidden />
           {client.name}
-          <Badge tone={kind === "office" ? "attention" : "neutral"}>
-            {CLIENT_TYPE_LABEL[client.type]}
-          </Badge>
+          <form action={updateClientType} className="flex items-center gap-1.5">
+            <input type="hidden" name="id" value={client.id} />
+            <select
+              name="type"
+              defaultValue={client.type}
+              title="Reclassify this client"
+              className={`${input} rounded-full border-none bg-stone-100 px-2.5 py-0.5 text-xs font-medium text-stone-700`}
+            >
+              {Object.values(ClientType).map((t) => (
+                <option key={t} value={t}>
+                  {CLIENT_TYPE_LABEL[t]}
+                </option>
+              ))}
+            </select>
+            <button type="submit" className={`${btnGhost} px-2 py-0.5 text-xs`}>
+              Save
+            </button>
+          </form>
         </h1>
         <p className="text-sm text-stone-500">
           {[client.email, client.phone].filter(Boolean).join(" · ") || "No contact info yet"}
