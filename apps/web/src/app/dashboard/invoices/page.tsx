@@ -753,32 +753,55 @@ export default async function InvoicesPage({
                 return (
                   <li key={inv.id}>
                     <details>
-                      <summary className="flex cursor-pointer select-none flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2 text-sm hover:bg-stone-50">
-                        <span className="font-medium">{invoiceLabel(inv.number)}</span>
-                        <Badge tone={tone}>{stateText}</Badge>
-                        {isOverdue && inv.dueDate && (
-                          <span className="text-xs font-medium text-red-700">
-                            {daysOverdue(inv.dueDate)}d overdue
-                          </span>
-                        )}
-                        <span className="text-stone-500">{inv.client?.name ?? "—"}</span>
-                        {inv.transaction && (
-                          <span className="text-xs text-stone-400">
-                            {inv.transaction.propertyAddress}
-                          </span>
-                        )}
-                        <span className="ml-auto flex items-baseline gap-3 tabular-nums">
-                          <span className="font-semibold">{fmtCents(money.totalCents)}</span>
-                          {paidShown > 0 && (
-                            <span className="text-xs text-brand-700">
-                              {fmtCents(paidShown)} paid
+                      <summary className="flex cursor-pointer select-none flex-col gap-1 py-2 text-sm hover:bg-stone-50">
+                        <span className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                          <span className="font-medium">{invoiceLabel(inv.number)}</span>
+                          <Badge tone={tone}>{stateText}</Badge>
+                          <span className="text-stone-500">{inv.client?.name ?? "—"}</span>
+                          {inv.transaction && (
+                            <span className="text-xs text-stone-400">
+                              {inv.transaction.propertyAddress}
                             </span>
                           )}
-                          {inv.status !== "VOID" && inv.status !== "DRAFT" && balanceShown > 0 && (
-                            <span className="text-xs font-medium text-amber-700">
-                              {fmtCents(balanceShown)} due
-                            </span>
-                          )}
+                        </span>
+                        <span className="grid grid-cols-[6.5rem_6rem_5.5rem_5.5rem_5.5rem] items-baseline gap-x-4 text-xs tabular-nums">
+                          <span className="text-stone-400">
+                            {inv.sentAt
+                              ? `sent ${fmtDate(inv.sentAt)}`
+                              : inv.status === "DRAFT"
+                                ? "draft"
+                                : "—"}
+                          </span>
+                          <span
+                            className={isOverdue ? "font-medium text-red-700" : "text-stone-300"}
+                          >
+                            {isOverdue && inv.dueDate
+                              ? `${daysOverdue(inv.dueDate)}d overdue`
+                              : "—"}
+                          </span>
+                          <span className="text-right font-semibold text-stone-800">
+                            {fmtCents(money.totalCents)}
+                          </span>
+                          <span
+                            className={
+                              paidShown > 0
+                                ? "text-right text-brand-700"
+                                : "text-right text-stone-300"
+                            }
+                          >
+                            {paidShown > 0 ? `${fmtCents(paidShown)} paid` : "—"}
+                          </span>
+                          <span
+                            className={
+                              inv.status !== "VOID" && inv.status !== "DRAFT" && balanceShown > 0
+                                ? "text-right font-medium text-amber-700"
+                                : "text-right text-stone-300"
+                            }
+                          >
+                            {inv.status !== "VOID" && inv.status !== "DRAFT" && balanceShown > 0
+                              ? `${fmtCents(balanceShown)} due`
+                              : "—"}
+                          </span>
                         </span>
                       </summary>
 
