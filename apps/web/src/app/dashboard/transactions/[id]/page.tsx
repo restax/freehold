@@ -1344,8 +1344,8 @@ export default async function TransactionDetailPage({
                       const dueShown = money.totalCents - paidShown;
                       return (
                         <li key={inv.id} className="py-2">
-                          <div className="flex flex-col gap-1 text-sm">
-                            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                          <div className="flex flex-col gap-1 text-sm lg:flex-row lg:items-baseline lg:justify-between lg:gap-4">
+                            <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
                               <span className="font-medium">{invoiceLabel(inv.number)}</span>
                               <Badge tone={tone}>{stateText}</Badge>
                               {inv.client && (
@@ -1357,7 +1357,7 @@ export default async function TransactionDetailPage({
                                 </span>
                               )}
                             </div>
-                            <div className="grid grid-cols-[5.5rem_5.5rem_5.5rem] items-baseline gap-x-4 text-xs tabular-nums">
+                            <div className="grid shrink-0 grid-cols-[5.5rem_5.5rem_5.5rem] items-baseline gap-x-4 text-xs tabular-nums">
                               <span className="text-right font-medium text-stone-800">
                                 {fmtCents(money.totalCents)}
                               </span>
@@ -1512,8 +1512,11 @@ export default async function TransactionDetailPage({
                                 fileMoney.paidCents,
                               );
                               return (
-                                <li key={a.id} className="flex flex-col gap-1 py-1.5 text-sm">
-                                  <span className="flex flex-wrap items-baseline gap-x-3">
+                                <li
+                                  key={a.id}
+                                  className="flex flex-col gap-1 py-1.5 text-sm lg:flex-row lg:items-baseline lg:justify-between lg:gap-4"
+                                >
+                                  <span className="flex min-w-0 flex-wrap items-baseline gap-x-3">
                                     <span className="font-medium">{a.user.name}</span>
                                     <span className="text-xs text-stone-400">
                                       {a.feePercentBp != null
@@ -1528,7 +1531,7 @@ export default async function TransactionDetailPage({
                                       </span>
                                     )}
                                   </span>
-                                  <span className="grid grid-cols-[7rem_7rem] gap-x-4 text-xs tabular-nums">
+                                  <span className="grid shrink-0 grid-cols-[7rem_7rem] gap-x-4 text-xs tabular-nums">
                                     <span className="text-right text-stone-600">
                                       earned {fmtCents(p.earnedCents)}
                                     </span>
