@@ -891,6 +891,11 @@ enum TaskPriority {
 /// A buyer or seller intake form submitted through a client portal.
 /// Uploaded files become Document rows on the transaction; `data` holds the
 /// answered fields keyed by field id.
+///
+/// Historical only — the hardcoded intake form that wrote these rows was
+/// retired once designed forms (Form/FormSubmission) covered the same job.
+/// Existing rows still render on the transaction page; nothing writes new
+/// ones.
 model IntakeSubmission {
   id            String       @id @default(uuid())
   tenantId      String       @map("tenant_id")
@@ -1414,7 +1419,6 @@ model PortalLink {
   showTasks        Boolean        @default(true) @map("show_tasks")
   showDocuments    Boolean        @default(false) @map("show_documents")
   showParties      Boolean        @default(true) @map("show_parties")
-  showIntake       Boolean        @default(true) @map("show_intake")
   /// Opt-in: let this client order the workspace's connected vendors from the
   /// portal, and see those orders' status and appointments. Off by default.
   showVendorOrders Boolean        @default(false) @map("show_vendor_orders")

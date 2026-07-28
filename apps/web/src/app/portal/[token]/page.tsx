@@ -14,14 +14,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/badges";
 import { FormBody } from "@/components/form-render";
-import { submitIntake } from "@/lib/actions/intake";
 import { placeClientOrder } from "@/lib/actions/portal-orders";
 import { submitPortalForm } from "@/lib/actions/public-forms";
 import { type Appearance, portalVars, tenantAppearance } from "@/lib/appearance";
 import { portalFormsFor, trimKnownClientFields } from "@/lib/form-resolve";
 import { parseLayout } from "@/lib/form-schema";
 import { fmtDate, fmtMoney, ROLE_LABEL, STATUS_LABEL } from "@/lib/format";
-import { INTAKE_UPLOAD_HINT, intakeFields } from "@/lib/intake";
 import { resolveAgentPortal, resolvePortal } from "@/lib/portal";
 import { type PortalVendorData, portalVendorData } from "@/lib/portal-vendors";
 import { type SideLabels, sideLabel, tenantSideLabels } from "@/lib/side-labels";
@@ -69,81 +67,10 @@ function PortalHeader({
   );
 }
 
-const intakeInputCls =
-  "w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm focus:border-brand-600 focus:outline-none";
-
-function IntakeForm({
-  token,
-  kind,
-  heading,
-}: {
-  token: string;
-  kind: "buy" | "sell";
-  heading: string;
-}) {
-  return (
-    <details className="rounded-lg border border-stone-200/70">
-      <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-brand-800 hover:bg-stone-50">
-        {heading}
-      </summary>
-      <form action={submitIntake} className="flex flex-col gap-3 border-t border-stone-100 p-4">
-        <input type="hidden" name="token" value={token} />
-        <input type="hidden" name="kind" value={kind} />
-        <div className="grid gap-3 sm:grid-cols-2">
-          {intakeFields(kind).map((f) =>
-            f.type === "textarea" ? (
-              <label
-                key={f.id}
-                className="flex flex-col gap-1 text-sm font-medium text-stone-700 sm:col-span-2"
-              >
-                {f.label}
-                {f.required ? " *" : ""}
-                <textarea
-                  name={`f_${f.id}`}
-                  rows={3}
-                  placeholder={f.placeholder}
-                  className={intakeInputCls}
-                />
-              </label>
-            ) : (
-              <label key={f.id} className="flex flex-col gap-1 text-sm font-medium text-stone-700">
-                {f.label}
-                {f.required ? " *" : ""}
-                <input
-                  name={`f_${f.id}`}
-                  type={f.type ?? "text"}
-                  required={f.required}
-                  placeholder={f.placeholder}
-                  className={intakeInputCls}
-                />
-              </label>
-            ),
-          )}
-        </div>
-        <label className="flex flex-col gap-1 text-sm font-medium text-stone-700">
-          Documents
-          <input
-            type="file"
-            name="files"
-            multiple
-            className="text-sm text-stone-600 file:mr-3 file:rounded-lg file:border-0 file:bg-stone-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-stone-700 hover:file:bg-stone-200"
-          />
-          <span className="text-xs font-normal text-stone-400">
-            {INTAKE_UPLOAD_HINT[kind]} Up to 5 files, 10&nbsp;MB each.
-          </span>
-        </label>
-        <button
-          type="submit"
-          className="self-start rounded-lg bg-brand-700 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
-        >
-          Submit
-        </button>
-      </form>
-    </details>
-  );
-}
-
 /* ---------------- Buyer & Seller portal ---------------- */
+
+const portalInputCls =
+  "w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm focus:border-brand-600 focus:outline-none";
 
 const ORDER_STATUS_TONE: Record<string, string> = {
   SENT: "bg-stone-100 text-stone-600",
@@ -230,7 +157,6 @@ function PortalForms({
 function ClientPortal(
   portal: NonNullable<Awaited<ReturnType<typeof resolvePortal>>>,
   labels: SideLabels,
-  intakeDone: boolean,
   vendorData: PortalVendorData | null,
   appearance: Appearance,
   portalForms: PortalForm[],
@@ -473,7 +399,7 @@ function ClientPortal(
                 <input type="hidden" name="token" value={link.token} />
                 <label className="flex flex-col gap-1 text-sm">
                   Vendor
-                  <select name="vendorId" required className={intakeInputCls}>
+                  <select name="vendorId" required className={portalInputCls}>
                     {vendorData.connectedVendors.map((v) => (
                       <option key={v.id} value={v.id}>
                         {v.name}
@@ -487,7 +413,7 @@ function ClientPortal(
                     name="type"
                     required
                     placeholder="Home inspection"
-                    className={intakeInputCls}
+                    className={portalInputCls}
                   />
                 </label>
                 <label className="flex min-w-48 flex-1 flex-col gap-1 text-sm">
@@ -495,7 +421,7 @@ function ClientPortal(
                   <input
                     name="details"
                     placeholder="Anything they should know"
-                    className={intakeInputCls}
+                    className={portalInputCls}
                   />
                 </label>
                 <button
@@ -514,35 +440,6 @@ function ClientPortal(
         )}
 
         <PortalForms forms={portalForms} token={link.token} sent={formSent} cardCls={cardCls} />
-
-        {link.showIntake && (
-          <section className={cardCls}>
-            <h2 className="mb-1 font-medium">Intake forms</h2>
-            <p className="mb-3 text-sm text-stone-500">
-              A few details {tenantName} needs to keep your closing moving — takes about five
-              minutes, and you can attach documents as you go.
-            </p>
-            {intakeDone ? (
-              <p className="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-900">
-                Thank you — your intake form is in. {tenantName} has been notified and will follow
-                up if anything else is needed.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {(txn.side === "BUY_SIDE" || txn.side === "DUAL") && (
-                  <IntakeForm token={link.token} kind="buy" heading={`${labels.buy} intake form`} />
-                )}
-                {(txn.side === "SELL_SIDE" || txn.side === "DUAL") && (
-                  <IntakeForm
-                    token={link.token}
-                    kind="sell"
-                    heading={`${labels.sell} intake form`}
-                  />
-                )}
-              </div>
-            )}
-          </section>
-        )}
 
         <p className="text-center text-xs text-stone-400">
           <a
@@ -803,10 +700,10 @@ export default async function PortalPage({
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ q?: string; intake?: string; formSent?: string; formInvalid?: string }>;
+  searchParams: Promise<{ q?: string; formSent?: string; formInvalid?: string }>;
 }) {
   const { token } = await params;
-  const { q, intake, formSent } = await searchParams;
+  const { q, formSent } = await searchParams;
 
   const clientPortal = await resolvePortal(token);
   if (clientPortal) {
@@ -828,7 +725,6 @@ export default async function PortalPage({
     return ClientPortal(
       clientPortal,
       labels,
-      intake === "done",
       vendorData,
       appearance,
       portalForms,

@@ -2823,15 +2823,6 @@ export default async function TransactionDetailPage({
                   <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
                     <input
                       type="checkbox"
-                      name="showIntake"
-                      defaultChecked
-                      className="h-4 w-4 accent-brand-600"
-                    />
-                    Intake forms
-                  </label>
-                  <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
-                    <input
-                      type="checkbox"
                       name="showVendorOrders"
                       className="h-4 w-4 accent-brand-600"
                     />
