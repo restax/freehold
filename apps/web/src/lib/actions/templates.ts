@@ -97,7 +97,7 @@ export async function generateDocument(formData: FormData) {
   revalidatePath(`/dashboard/transactions/${transactionId}`);
 }
 
-/** Tenant overrides for the automated email templates (intro / post-close). */
+/** Tenant overrides for the automated email templates (intro / post-close / review). */
 export async function saveEmailTemplates(formData: FormData) {
   const { tenantId, isAdmin } = await requireAdminTenant();
   if (!isAdmin) return;
@@ -109,6 +109,7 @@ export async function saveEmailTemplates(formData: FormData) {
       emailTemplates: {
         intro: { subject: val("introSubject"), body: val("introBody") },
         postClose: { subject: val("postCloseSubject"), body: val("postCloseBody") },
+        review: { subject: val("reviewSubject"), body: val("reviewBody") },
       },
     },
   });
@@ -211,6 +212,17 @@ export async function saveEmailSettings(formData: FormData) {
     quietStart: Number(formData.get("quietStart") ?? 20),
     quietEnd: Number(formData.get("quietEnd") ?? 8),
     timeZone: String(formData.get("timeZone") ?? "America/Chicago").trim(),
+  });
+  revalidatePath("/dashboard/emails");
+}
+
+/** How long after close to wait before asking for a review. Its own action so it sits next to the review template, not the general signature/footer form. */
+export async function saveReviewDelay(formData: FormData) {
+  const { tenantId, isAdmin } = await requireAdminTenant();
+  if (!isAdmin) return;
+  const raw = Number(formData.get("reviewDelayDays"));
+  await mergeEmailSettings(tenantId, {
+    reviewDelayDays: Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 3,
   });
   revalidatePath("/dashboard/emails");
 }

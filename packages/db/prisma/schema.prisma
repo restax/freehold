@@ -1050,6 +1050,12 @@ model FormAccessLink {
 /// workspace, and a review of "Dana" should still read as a review of Dana
 /// a year later. The user link is kept as well, so the dashboard can still
 /// group by person while they're around.
+///
+/// No RLS — same as portal_link, unlike form_access_link. This is looked up
+/// by its bare token before the tenant is known (like a portal link);
+/// form_access_link is always resolved after the org is known from a URL
+/// slug. The token (24 random bytes) is the authorization; every read or
+/// write after the lookup still goes through withTenant(review.tenantId).
 model ClientReview {
   id                String       @id @default(uuid())
   tenantId          String       @map("tenant_id")

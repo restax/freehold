@@ -8,6 +8,7 @@ import {
   restoreDefaultTemplates,
   saveEmailSettings,
   saveEmailTemplates,
+  saveReviewDelay,
   updateEmailTemplateLib,
 } from "@/lib/actions/templates";
 import { EMAIL_PHASES, phaseOf } from "@/lib/default-email-templates";
@@ -305,11 +306,11 @@ export default async function EmailTemplatesPage({
       <section className={card}>
         <h2 className="mb-1 font-medium">Automated emails</h2>
         <p className="mb-4 text-sm text-stone-500">
-          Sent for you: the intro when a file opens and the congratulations after closing.
-          Per-client on/off switches live on each client's page.
+          Sent for you: the intro when a file opens, the congratulations after closing, and the
+          review ask a few days after that. Per-client on/off switches live on each client's page.
         </p>
         <form action={saveEmailTemplates} className="flex flex-col gap-4">
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-6 lg:grid-cols-3">
             <div className="flex flex-col gap-2">
               <h3 className="text-sm font-semibold text-stone-700">Intro email</h3>
               <label className={labelCls}>
@@ -340,9 +341,44 @@ export default async function EmailTemplatesPage({
                 rows={8}
               />
             </div>
+            <div className="flex flex-col gap-2">
+              <h3 className="text-sm font-semibold text-stone-700">Review request</h3>
+              <label className={labelCls}>
+                Subject
+                <input
+                  name="reviewSubject"
+                  defaultValue={automated.review.subject}
+                  className={input}
+                />
+              </label>
+              <span className="text-sm font-medium text-stone-700">Body</span>
+              <TemplateEditor name="reviewBody" defaultValue={automated.review.body} rows={8} />
+            </div>
           </div>
           <button type="submit" className={`${btn} self-start`}>
             Save automated emails
+          </button>
+        </form>
+        <form
+          action={saveReviewDelay}
+          className="mt-4 flex flex-wrap items-center gap-3 border-t border-stone-100 pt-4"
+        >
+          <label className={labelCls}>
+            Send the review request
+            <span className="flex items-center gap-2">
+              <input
+                type="number"
+                name="reviewDelayDays"
+                min={1}
+                max={60}
+                defaultValue={settings.reviewDelayDays}
+                className={`${input} w-20`}
+              />
+              days after closing
+            </span>
+          </label>
+          <button type="submit" className={`${btnGhost} self-end px-3 py-1.5 text-xs`}>
+            Save
           </button>
         </form>
       </section>

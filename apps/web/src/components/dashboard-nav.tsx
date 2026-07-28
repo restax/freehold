@@ -23,6 +23,7 @@ import {
   PlugsConnected,
   Receipt,
   ShieldCheck,
+  Star,
   Sun,
   Toolbox,
   UserCircle,
@@ -79,6 +80,7 @@ const GROUPS: NavGroup[] = [
     label: "Business",
     items: [
       { href: "/dashboard/invoices", label: "Invoices", icon: Receipt },
+      { href: "/dashboard/reviews", label: "Reviews", icon: Star },
       { href: "/dashboard/directory", label: "Directory", icon: Compass },
       { href: "/dashboard/vendors", label: "Vendors", icon: Toolbox },
       { href: "/dashboard/engagements", label: "Engagements", icon: Handshake },

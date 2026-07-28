@@ -33,11 +33,19 @@ export interface EmailSettings {
   footer?: string;
   /** Address the workspace CCs on all transaction email (copy-to-clipboard in the UI). */
   cc?: string;
+  /** Days after close before the review ask goes out. Unset = 3. */
+  reviewDelayDays?: number;
 }
 
 export function parseEmailSettings(raw: unknown): EmailSettings {
   const c = raw as EmailSettings | null;
-  return { signature: c?.signature ?? "", footer: c?.footer ?? "", cc: c?.cc ?? "" };
+  const days = Number(c?.reviewDelayDays);
+  return {
+    signature: c?.signature ?? "",
+    footer: c?.footer ?? "",
+    cc: c?.cc ?? "",
+    reviewDelayDays: Number.isFinite(days) && days > 0 ? Math.round(days) : 3,
+  };
 }
 
 const esc = (s: string) =>
@@ -174,6 +182,7 @@ export interface EmailTemplateDef {
 export interface TenantEmailTemplates {
   intro: EmailTemplateDef;
   postClose: EmailTemplateDef;
+  review: EmailTemplateDef;
 }
 
 export const EMAIL_MERGE_CODES = [
@@ -191,6 +200,7 @@ export const EMAIL_MERGE_CODES = [
   "{{title_company_name}}",
   "{{task_title}}",
   "{{task_due}}",
+  "{{review_link}}",
 ] as const;
 
 export const DEFAULT_EMAIL_TEMPLATES: TenantEmailTemplates = {
@@ -216,10 +226,23 @@ All documents stay available in your portal, and we keep the full record on file
 It was a pleasure working with you,
 {{tc_name}}`,
   },
+  review: {
+    subject: "How did we do on {{property_address}}?",
+    body: `Hi {{client_name}},
+
+Now that {{property_address}} has closed, we'd love to hear how it went — for us, and for {{tc_name}} specifically. It takes under a minute:
+
+{{review_link}}
+
+Thank you for the business,
+{{tenant_name}}`,
+  },
 };
 
 export function parseEmailTemplates(raw: unknown): TenantEmailTemplates {
-  const c = raw as Partial<Record<"intro" | "postClose", Partial<EmailTemplateDef>>> | null;
+  const c = raw as Partial<
+    Record<"intro" | "postClose" | "review", Partial<EmailTemplateDef>>
+  > | null;
   return {
     intro: {
       subject: c?.intro?.subject?.trim() || DEFAULT_EMAIL_TEMPLATES.intro.subject,
@@ -228,6 +251,10 @@ export function parseEmailTemplates(raw: unknown): TenantEmailTemplates {
     postClose: {
       subject: c?.postClose?.subject?.trim() || DEFAULT_EMAIL_TEMPLATES.postClose.subject,
       body: c?.postClose?.body?.trim() || DEFAULT_EMAIL_TEMPLATES.postClose.body,
+    },
+    review: {
+      subject: c?.review?.subject?.trim() || DEFAULT_EMAIL_TEMPLATES.review.subject,
+      body: c?.review?.body?.trim() || DEFAULT_EMAIL_TEMPLATES.review.body,
     },
   };
 }

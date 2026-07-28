@@ -33,7 +33,6 @@ import { createClientFormVariant } from "@/lib/actions/forms";
 import { createAgentPortalLink, setPortalLinkActive } from "@/lib/actions/portal";
 import { connectSkyslope, disconnectSkyslope } from "@/lib/actions/skyslope";
 import { createCredential } from "@/lib/actions/vault";
-import { parseEmailPrefs } from "@/lib/auto-emails";
 import { BILLING_MODE_LABEL, BILLING_MODES, tenantBillingPolicy } from "@/lib/billing-policy";
 import {
   billingContactFrom,
@@ -41,6 +40,7 @@ import {
   CLIENT_TYPE_LABEL,
   clientKind,
 } from "@/lib/client-profile";
+import { parseEmailPrefs } from "@/lib/email-prefs";
 import { FORM_KIND_LABEL } from "@/lib/form-schema";
 import { fmtDate, fmtMoney } from "@/lib/format";
 import { transactionHasPro } from "@/lib/plans";
@@ -1224,8 +1224,8 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         <h2 className="mb-1 font-medium">Automated emails</h2>
         <p className="mb-3 text-sm text-stone-500">
           Lifecycle emails {client.name} receives automatically. Wording is editable under{" "}
-          <Link href="/dashboard/templates" className="text-brand-700 hover:underline">
-            Templates
+          <Link href="/dashboard/emails" className="text-brand-700 hover:underline">
+            Email templates
           </Link>
           .
         </p>
@@ -1248,6 +1248,15 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
               className="accent-brand-600"
             />
             Post-close email
+          </label>
+          <label className="flex items-center gap-2 text-sm font-medium text-stone-700">
+            <input
+              type="checkbox"
+              name="review"
+              defaultChecked={emailPrefs.review}
+              className="accent-brand-600"
+            />
+            Review request
           </label>
           <button type="submit" className={`${btnGhost} px-3 py-1.5 text-xs`}>
             Save

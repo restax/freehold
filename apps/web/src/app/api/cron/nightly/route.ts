@@ -4,6 +4,7 @@ import { runDailyBriefings } from "@/lib/daily-briefing";
 import { runOwnerExports } from "@/lib/export-run";
 import { runInvoiceReports } from "@/lib/invoice-report";
 import { flushOutbox } from "@/lib/outbox";
+import { runReviewRequests } from "@/lib/review-requests";
 import { sweepExpiredExports } from "@/lib/storage";
 import { runVendorAdRenewals } from "@/lib/vendor-ad-renewals";
 
@@ -32,6 +33,7 @@ export async function GET(req: Request) {
   // Consolidated drafts before the invoice report, so a month-boundary run
   // reports the drafts it just created.
   const scheduledBilling = await runScheduledBilling();
+  const reviewRequests = await runReviewRequests();
   return NextResponse.json({
     outbox,
     exports,
@@ -40,5 +42,6 @@ export async function GET(req: Request) {
     exportSweep,
     adRenewals,
     scheduledBilling,
+    reviewRequests,
   });
 }

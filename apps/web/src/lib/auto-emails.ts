@@ -1,6 +1,7 @@
 import { prisma, withTenant } from "@freehold/db";
 import { after } from "next/server";
 import { emailEnabled, sendTenantEmail } from "@/lib/email";
+import { parseEmailPrefs } from "@/lib/email-prefs";
 import {
   type EmailContact,
   parseEmailSettings,
@@ -17,16 +18,6 @@ import { fmtDate } from "@/lib/format";
  * everything here is fire-and-forget — a mail failure never breaks the
  * user's action.
  */
-
-interface ClientEmailPrefs {
-  intro?: boolean;
-  postClose?: boolean;
-}
-
-export function parseEmailPrefs(raw: unknown): Required<ClientEmailPrefs> {
-  const c = raw as ClientEmailPrefs | null;
-  return { intro: c?.intro !== false, postClose: c?.postClose !== false };
-}
 
 /** Signature-block contacts for a transaction's branded emails. */
 export async function emailContextForTransaction(

@@ -67,7 +67,11 @@ export function middleware(req: NextRequest) {
     url.pathname = `/t/${slug}${pathname}`;
     return NextResponse.rewrite(url);
   }
-  if (pathname.startsWith("/portal/")) {
+  // Portal and review links don't need the slug in the path — the token
+  // alone resolves the tenant — so they pass through unchanged rather than
+  // bouncing to the apex, keeping the branded acme.<root> URL that was
+  // actually emailed.
+  if (pathname.startsWith("/portal/") || pathname.startsWith("/r/")) {
     return NextResponse.next();
   }
   return NextResponse.redirect(`${protocol}//${root}${pathname}${search}`, 308);

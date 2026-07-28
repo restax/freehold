@@ -354,6 +354,7 @@ export async function saveClientEmailPrefs(formData: FormData) {
         emailPrefs: {
           intro: formData.get("intro") === "on",
           postClose: formData.get("postClose") === "on",
+          review: formData.get("review") === "on",
         },
       },
     }),
