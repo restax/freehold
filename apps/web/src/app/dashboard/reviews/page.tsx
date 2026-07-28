@@ -48,7 +48,7 @@ export default async function ReviewsPage() {
   const publicComments = answered.filter((r) => r.publishAllowed && r.comment);
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="font-display text-xl font-bold tracking-tight text-stone-900">Reviews</h1>
         <p className="mt-1 text-sm text-stone-500">
@@ -96,51 +96,55 @@ export default async function ReviewsPage() {
         </div>
       </div>
 
-      {standings.length > 0 && (
-        <section className={card}>
-          <h2 className="mb-3 font-medium">By coordinator</h2>
-          <div className="flex flex-col divide-y divide-stone-100">
-            {standings.map((s) => (
-              <div
-                key={s.coordinatorId ?? s.coordinatorName}
-                className="flex items-center justify-between gap-3 py-2 text-sm"
-              >
-                <span className="font-medium text-stone-800">{s.coordinatorName}</span>
-                <span className="flex items-center gap-2">
-                  <Stars value={s.average} />
-                  <span className="tabular-nums text-stone-500">{s.average.toFixed(1)}</span>
-                  <span className="text-xs text-stone-400">({s.count})</span>
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section className={card}>
-        <h2 className="mb-3 font-medium">Recent answers</h2>
-        {answered.length === 0 ? (
-          <p className="text-sm text-stone-400">Nothing answered yet.</p>
-        ) : (
-          <ul className="flex flex-col divide-y divide-stone-100">
-            {answered.slice(0, 25).map((r) => (
-              <li key={r.id} className="flex flex-col gap-1 py-3 text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-stone-800">{r.client.name}</span>
-                  <span className="text-xs text-stone-400">{r.transaction.propertyAddress}</span>
-                  {r.businessRating && <Stars value={r.businessRating} />}
-                  {r.publishAllowed && (
-                    <Badge tone="success">
-                      <span className="text-[10px]">Quotable</span>
-                    </Badge>
-                  )}
+      <div
+        className={`grid gap-4 lg:items-start ${standings.length > 0 ? "lg:grid-cols-[20rem_1fr]" : ""}`}
+      >
+        {standings.length > 0 && (
+          <section className={card}>
+            <h2 className="mb-3 font-medium">By coordinator</h2>
+            <div className="flex flex-col divide-y divide-stone-100">
+              {standings.map((s) => (
+                <div
+                  key={s.coordinatorId ?? s.coordinatorName}
+                  className="flex items-center justify-between gap-3 py-2 text-sm"
+                >
+                  <span className="font-medium text-stone-800">{s.coordinatorName}</span>
+                  <span className="flex items-center gap-2">
+                    <Stars value={s.average} />
+                    <span className="tabular-nums text-stone-500">{s.average.toFixed(1)}</span>
+                    <span className="text-xs text-stone-400">({s.count})</span>
+                  </span>
                 </div>
-                {r.comment && <p className="text-stone-600">{r.comment}</p>}
-              </li>
-            ))}
-          </ul>
+              ))}
+            </div>
+          </section>
         )}
-      </section>
+
+        <section className={card}>
+          <h2 className="mb-3 font-medium">Recent answers</h2>
+          {answered.length === 0 ? (
+            <p className="text-sm text-stone-400">Nothing answered yet.</p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-stone-100">
+              {answered.slice(0, 25).map((r) => (
+                <li key={r.id} className="flex flex-col gap-1 py-3 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-stone-800">{r.client.name}</span>
+                    <span className="text-xs text-stone-400">{r.transaction.propertyAddress}</span>
+                    {r.businessRating && <Stars value={r.businessRating} />}
+                    {r.publishAllowed && (
+                      <Badge tone="success">
+                        <span className="text-[10px]">Quotable</span>
+                      </Badge>
+                    )}
+                  </div>
+                  {r.comment && <p className="text-stone-600">{r.comment}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

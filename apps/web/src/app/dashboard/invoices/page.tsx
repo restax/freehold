@@ -756,8 +756,8 @@ export default async function InvoicesPage({
                 return (
                   <li key={inv.id}>
                     <details>
-                      <summary className="flex cursor-pointer select-none flex-col gap-1 py-2 text-sm hover:bg-stone-50">
-                        <span className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                      <summary className="flex cursor-pointer select-none flex-col gap-1 py-2 text-sm hover:bg-stone-50 lg:flex-row lg:items-baseline lg:justify-between lg:gap-4">
+                        <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
                           <span className="font-medium">{invoiceLabel(inv.number)}</span>
                           <Badge tone={tone}>{stateText}</Badge>
                           <span className="text-stone-500">{inv.client?.name ?? "—"}</span>
@@ -767,7 +767,7 @@ export default async function InvoicesPage({
                             </span>
                           )}
                         </span>
-                        <span className="grid grid-cols-[6.5rem_6rem_5.5rem_5.5rem_5.5rem] items-baseline gap-x-4 text-xs tabular-nums">
+                        <span className="grid shrink-0 grid-cols-[6.5rem_6rem_5.5rem_5.5rem_5.5rem] items-baseline gap-x-4 text-xs tabular-nums">
                           <span className="text-stone-400">
                             {inv.sentAt
                               ? `sent ${fmtDate(inv.sentAt)}`
