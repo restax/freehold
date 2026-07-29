@@ -18,8 +18,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { DotsSixVertical, Sliders, X } from "@phosphor-icons/react";
 import { useMemo, useState, useTransition } from "react";
-import { saveTransactionColumns } from "@/lib/actions/table-prefs";
-import type { ColumnDef } from "@/lib/transaction-columns";
+import type { ColumnDef } from "@/lib/table-columns";
 
 /**
  * "Customize table": pick the columns, then drag them into the order you
@@ -38,10 +37,13 @@ export function ColumnPicker({
   all,
   groups,
   selected,
+  action,
 }: {
   all: ColumnDef[];
   groups: Array<{ group: string; columns: ColumnDef[] }>;
   selected: string[];
+  /** Which table's preference this writes — transactions, contacts, … */
+  action: (formData: FormData) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [order, setOrder] = useState<string[]>(selected);
@@ -91,7 +93,7 @@ export function ColumnPicker({
     const fd = new FormData();
     for (const k of order) fd.append("columns", k);
     startTransition(async () => {
-      await saveTransactionColumns(fd);
+      await action(fd);
       setOpen(false);
     });
   }

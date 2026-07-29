@@ -1,7 +1,15 @@
 import { prisma, withTenant } from "@freehold/db";
 import Link from "next/link";
+import { ColumnPicker } from "@/components/column-picker";
 import { EmptyState } from "@/components/empty-state";
 import { VoiceSearchBox } from "@/components/voice-search-box";
+import { saveContactColumns } from "@/lib/actions/table-prefs";
+import {
+  CONTACT_COLUMNS,
+  contactColumnGroups,
+  contactTableMinWidth,
+  resolveContactColumns,
+} from "@/lib/contact-columns";
 import {
   CONTACT_VIEWS,
   contactViewShape,
@@ -11,6 +19,7 @@ import {
   staleBefore,
   upcomingWindow,
 } from "@/lib/contact-views";
+import { fmtDate } from "@/lib/format";
 import { getMemberRole, requireTenant } from "@/lib/tenant";
 import { OPEN_STATUSES } from "@/lib/transaction-status";
 import { btn, btnGhost, input, tableFixed, tableWrap, tdFixed, th, trHover } from "@/lib/ui";
@@ -25,6 +34,120 @@ function FilterGroup({ title, children }: { title: string; children: React.React
       <div className="flex flex-col gap-2">{children}</div>
     </div>
   );
+}
+
+/**
+ * The list query, lifted out so the row type can be inferred from it rather
+ * than restated — a column renderer that drifts from the query is a runtime
+ * `undefined`, not a compile error.
+ */
+async function loadContacts(tenantId: string, where: Record<string, unknown>) {
+  return withTenant(tenantId, (tx) =>
+    tx.contact.findMany({
+      where,
+      orderBy: [{ name: "asc" }],
+      take: 500,
+      include: {
+        owners: { include: { user: { select: { name: true } } } },
+        referredBy: { select: { name: true } },
+      },
+    }),
+  );
+}
+
+/** The row shape the table renders — inferred from the query above. */
+type Row = Awaited<ReturnType<typeof loadContacts>>[number];
+
+const dash = <span className="text-stone-300">—</span>;
+
+function second(c: Row, k: "first" | "last" | "email" | "cell"): string {
+  const s = c.secondary as Record<string, string> | null;
+  return s?.[k] ?? "";
+}
+
+/** Plain text for a cell, used as the hover title so truncation isn't lossy. */
+function cellTitle(c: Row, key: string): string {
+  switch (key) {
+    case "categories":
+      return c.categories.join(", ");
+    case "owners":
+      return c.owners.map((o) => o.user.name).join(", ");
+    case "secondName":
+      return [second(c, "first"), second(c, "last")].filter(Boolean).join(" ");
+    case "secondEmail":
+      return second(c, "email");
+    case "secondPhone":
+      return second(c, "cell");
+    default: {
+      const v = (c as unknown as Record<string, unknown>)[key];
+      return typeof v === "string" ? v : "";
+    }
+  }
+}
+
+function renderCell(c: Row, key: string): React.ReactNode {
+  switch (key) {
+    case "name":
+      return (
+        <>
+          <Link
+            href={`/dashboard/contacts/${c.id}`}
+            className="font-medium text-brand-700 hover:text-brand-600"
+          >
+            {c.name}
+          </Link>
+          {c.company && <span className="block truncate text-xs text-stone-400">{c.company}</span>}
+        </>
+      );
+    case "categories":
+      return c.categories.length === 0 ? (
+        dash
+      ) : (
+        <span className="flex flex-wrap gap-1">
+          {c.categories.slice(0, 2).map((cat) => (
+            <span
+              key={cat}
+              className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-600"
+            >
+              {cat}
+            </span>
+          ))}
+          {c.categories.length > 2 && (
+            <span className="text-xs text-stone-400">+{c.categories.length - 2}</span>
+          )}
+        </span>
+      );
+    case "owners":
+      return c.owners.length === 0 ? dash : c.owners.map((o) => o.user.name).join(", ");
+    case "grade":
+      return c.grade ? (
+        <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-800">
+          {c.grade}
+        </span>
+      ) : (
+        dash
+      );
+    case "secondName": {
+      const n = [second(c, "first"), second(c, "last")].filter(Boolean).join(" ");
+      return n || dash;
+    }
+    case "secondEmail":
+      return second(c, "email") || dash;
+    case "secondPhone":
+      return second(c, "cell") || dash;
+    case "lastTouch":
+      return c.touchDate ? fmtDate(c.touchDate) : dash;
+    case "nextTouch":
+      return c.nextTouchAt ? fmtDate(c.nextTouchAt) : dash;
+    case "createdAt":
+      return fmtDate(c.createdAt);
+    case "referredBy":
+      return c.referredBy?.name ?? c.referralSource ?? dash;
+    default: {
+      const v = (c as unknown as Record<string, unknown>)[key];
+      return typeof v === "string" && v ? v : dash;
+    }
+  }
 }
 
 export default async function ContactsPage({
@@ -45,7 +168,7 @@ export default async function ContactsPage({
     getMemberRole(tenantId, userId),
     prisma.member.findMany({
       where: { organizationId: tenantId },
-      include: { user: { select: { id: true, name: true } } },
+      select: { userId: true, tablePrefs: true, user: { select: { id: true, name: true } } },
     }),
   ]);
 
@@ -107,14 +230,13 @@ export default async function ContactsPage({
     ...(filters.noCategory ? { categories: { isEmpty: true } } : {}),
   };
 
-  const contacts = await withTenant(tenantId, (tx) =>
-    tx.contact.findMany({
-      where,
-      orderBy: [{ name: "asc" }],
-      take: 500,
-      include: { owners: { include: { user: { select: { name: true } } } } },
-    }),
-  );
+  const contacts = await loadContacts(tenantId, where);
+
+  // This person's own column layout for this workspace; unset falls back to
+  // the defaults in lib/contact-columns.ts.
+  const me = members.find((m) => m.userId === userId);
+  const storedColumns = (me?.tablePrefs as { contactColumns?: unknown } | null)?.contactColumns;
+  const columns = resolveContactColumns(storedColumns);
 
   const filtersActive = hasContactFilters(filters);
   const linkFor = (view: string) =>
@@ -155,6 +277,12 @@ export default async function ContactsPage({
           {filtersActive || filters.view !== "all" ? " matching" : ""}
           {restricted && " · showing only contacts you own (workspace policy)"}
         </p>
+        <ColumnPicker
+          action={saveContactColumns}
+          all={[...CONTACT_COLUMNS]}
+          groups={contactColumnGroups()}
+          selected={columns.map((c) => c.key)}
+        />
       </div>
 
       {/* Filters on the left, the list on the right — the filters stay put
@@ -273,71 +401,36 @@ export default async function ContactsPage({
             </EmptyState>
           ) : (
             <div className={tableWrap}>
-              <table className={tableFixed} style={{ minWidth: "52rem" }}>
+              <table className={tableFixed} style={{ minWidth: contactTableMinWidth(columns) }}>
                 <colgroup>
-                  <col style={{ width: "18rem" }} />
-                  <col style={{ width: "10rem" }} />
-                  <col style={{ width: "14rem" }} />
-                  <col style={{ width: "16rem" }} />
-                  <col style={{ width: "8rem" }} />
+                  {columns.map((c) => (
+                    <col key={c.key} style={{ width: c.width }} />
+                  ))}
                 </colgroup>
                 <thead>
                   <tr>
-                    <th className={th}>Name</th>
-                    <th className={th}>Phone</th>
-                    <th className={th}>Email</th>
-                    <th className={th}>Categories</th>
-                    <th className={th}>Owner</th>
+                    {columns.map((c) => (
+                      <th
+                        key={c.key}
+                        className={`${th} ${c.align === "right" ? "text-right" : ""}`}
+                      >
+                        {c.label}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {contacts.map((c) => (
                     <tr key={c.id} className={trHover}>
-                      <td className={tdFixed}>
-                        <Link
-                          href={`/dashboard/contacts/${c.id}`}
-                          className="font-medium text-brand-700 hover:text-brand-600"
+                      {columns.map((col) => (
+                        <td
+                          key={col.key}
+                          className={`${tdFixed} ${col.align === "right" ? "text-right" : ""}`}
+                          title={cellTitle(c, col.key)}
                         >
-                          {c.name}
-                        </Link>
-                        {c.company && (
-                          <span className="block truncate text-xs text-stone-400">{c.company}</span>
-                        )}
-                      </td>
-                      <td className={tdFixed} title={c.phone ?? ""}>
-                        {c.phone ?? <span className="text-stone-300">—</span>}
-                      </td>
-                      <td className={tdFixed} title={c.email ?? ""}>
-                        {c.email ?? <span className="text-stone-300">—</span>}
-                      </td>
-                      <td className={tdFixed} title={c.categories.join(", ")}>
-                        {c.categories.length === 0 ? (
-                          <span className="text-stone-300">—</span>
-                        ) : (
-                          <span className="flex flex-wrap gap-1">
-                            {c.categories.slice(0, 2).map((cat) => (
-                              <span
-                                key={cat}
-                                className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-600"
-                              >
-                                {cat}
-                              </span>
-                            ))}
-                            {c.categories.length > 2 && (
-                              <span className="text-xs text-stone-400">
-                                +{c.categories.length - 2}
-                              </span>
-                            )}
-                          </span>
-                        )}
-                      </td>
-                      <td className={tdFixed}>
-                        {c.owners.length === 0 ? (
-                          <span className="text-stone-300">—</span>
-                        ) : (
-                          c.owners.map((o) => o.user.name).join(", ")
-                        )}
-                      </td>
+                          {renderCell(c, col.key)}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>

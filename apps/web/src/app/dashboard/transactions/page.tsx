@@ -4,6 +4,7 @@ import { StatusBadge } from "@/components/badges";
 import { ColumnPicker } from "@/components/column-picker";
 import { EmptyState } from "@/components/empty-state";
 import { MultiSelect } from "@/components/multi-select";
+import { saveTransactionColumns } from "@/lib/actions/table-prefs";
 import { fmtDate, fmtMoney, STATUS_LABEL } from "@/lib/format";
 import { licenseGap, requiredStates } from "@/lib/licensing";
 import { creditBalance, getTenantPlan, isCloud, transactionLimit } from "@/lib/plans";
@@ -372,6 +373,7 @@ export default async function TransactionsPage({
           </button>
         </form>
         <ColumnPicker
+          action={saveTransactionColumns}
           all={[...TRANSACTION_COLUMNS]}
           groups={columnGroups()}
           selected={columnKeys}
