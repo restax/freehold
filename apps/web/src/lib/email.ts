@@ -43,6 +43,23 @@ export interface SendEmailInput {
    * merely because someone's mailbox came unlinked.
    */
   sendAsUserId?: string | null;
+  /**
+   * Hand the schedule to Resend rather than sending now: it holds the message
+   * and releases it on the minute. Only honoured on the shared-address path —
+   * a send going out from someone's own mailbox is scheduled through Nylas by
+   * lib/outbox.ts before it ever reaches here.
+   */
+  sendAt?: Date;
+}
+
+export interface SentEmail {
+  /** Id of the stored Email row. */
+  id: string;
+  /**
+   * The provider's own id for the message. Needed to call a scheduled send
+   * back off before it goes out; null when the provider returned none.
+   */
+  providerId: string | null;
 }
 
 /** Whether this user can send as themselves right now. */
@@ -55,8 +72,8 @@ export async function canSendAsSelf(userId: string): Promise<boolean> {
   return grant?.status === "valid";
 }
 
-/** Send + record. Returns the stored Email id, or throws on provider errors. */
-export async function sendTenantEmail(input: SendEmailInput): Promise<string> {
+/** Send + record. Returns the stored row and the provider's id, or throws. */
+export async function sendTenantEmail(input: SendEmailInput): Promise<SentEmail> {
   // The coordinator's own mailbox, when they've asked for it and it works.
   // Resolved before the shared-address guard below: sending as yourself
   // doesn't need EMAIL_FROM_DOMAIN or a Resend key at all.
@@ -141,7 +158,22 @@ export async function sendTenantEmail(input: SendEmailInput): Promise<string> {
         },
       }),
     );
-    return storedSelf.id;
+    // The unprotected lookup the inbound webhook resolves tenant context
+    // from — see NylasSend's doc comment. Only when this was an immediate
+    // send: a scheduled one has no real message/thread id yet, so there's
+    // nothing to key a row on until it actually goes out.
+    if (sent.messageId && sent.threadId) {
+      await prisma.nylasSend.create({
+        data: {
+          tenantId: input.tenantId,
+          transactionId: input.transactionId ?? null,
+          contactId: input.contactId ?? null,
+          providerId: sent.messageId,
+          nylasThreadId: sent.threadId,
+        },
+      });
+    }
+    return { id: storedSelf.id, providerId: sent.messageId || null };
   }
 
   const res = await fetch("https://api.resend.com/emails", {
@@ -159,6 +191,10 @@ export async function sendTenantEmail(input: SendEmailInput): Promise<string> {
       text: input.body,
       ...(input.html ? { html: input.html } : {}),
       ...(input.attachments?.length ? { attachments: input.attachments } : {}),
+      // ISO 8601 rather than Resend's natural-language form ("in 1 hour"):
+      // the caller already has an exact instant, and handing over a phrase
+      // would re-resolve it against Resend's clock and its idea of the zone.
+      ...(input.sendAt ? { scheduled_at: input.sendAt.toISOString() } : {}),
     }),
   });
   if (!res.ok) {
@@ -190,11 +226,31 @@ export async function sendTenantEmail(input: SendEmailInput): Promise<string> {
         bodyText: input.body,
         replyToken,
         providerId: json.id ?? null,
-        status: "SENT",
+        // A scheduled message is on the file from the moment it's booked, but
+        // it hasn't gone anywhere yet — saying SENT would be a lie for up to
+        // thirty days. The delivery webhook moves it to DELIVERED on its own
+        // once Resend releases it.
+        status: input.sendAt ? "SCHEDULED" : "SENT",
       },
     }),
   );
-  return stored.id;
+  return { id: stored.id, providerId: json.id ?? null };
+}
+
+/**
+ * Call off a schedule Resend is holding.
+ *
+ * Returns false when Resend won't take it back — the message has already been
+ * released, and reporting that honestly is the point: the row stays
+ * uncancelled and the coordinator learns it went out, rather than seeing
+ * "cancelled" for mail that is already in someone's inbox.
+ */
+export async function cancelResendEmail(providerId: string): Promise<boolean> {
+  const res = await fetch(
+    `https://api.resend.com/emails/${encodeURIComponent(providerId)}/cancel`,
+    { method: "POST", headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` } },
+  );
+  return res.ok;
 }
 
 /**

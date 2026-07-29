@@ -5,6 +5,7 @@ import {
   NYLAS_SCHEDULE_MAX_MS,
   NYLAS_SCHEDULE_MIN_MS,
   nylasEnabled,
+  parseParties,
   scheduleFitsNylas,
   verifyNylasWebhook,
 } from "./nylas";
@@ -114,6 +115,39 @@ describe("scheduleFitsNylas", () => {
 
   it("refuses a time already past", () => {
     expect(scheduleFitsNylas(at(-60 * 1000), now)).toBe(false);
+  });
+});
+
+describe("parseParties", () => {
+  it("reads name and email off a normal party list", () => {
+    expect(parseParties([{ name: "Sam Rivera", email: "sam@example.com" }])).toEqual([
+      { name: "Sam Rivera", email: "sam@example.com" },
+    ]);
+  });
+
+  it("defaults a missing name to empty rather than dropping the party", () => {
+    // A bare address with no display name is common and still a real
+    // recipient — losing it would misrepresent who the message went to.
+    expect(parseParties([{ email: "sam@example.com" }])).toEqual([
+      { name: "", email: "sam@example.com" },
+    ]);
+  });
+
+  it("defaults a missing email to empty rather than throwing", () => {
+    expect(parseParties([{ name: "Sam" }])).toEqual([{ name: "Sam", email: "" }]);
+  });
+
+  it("is safe on non-array input", () => {
+    for (const bad of [undefined, null, "sam@example.com", {}, 42]) {
+      expect(parseParties(bad)).toEqual([]);
+    }
+  });
+
+  it("is safe on a null entry inside the array", () => {
+    expect(parseParties([null, { email: "sam@example.com" }])).toEqual([
+      { name: "", email: "" },
+      { name: "", email: "sam@example.com" },
+    ]);
   });
 });
 

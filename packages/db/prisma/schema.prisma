@@ -1315,6 +1315,30 @@ model EmailThread {
   @@map("email_thread")
 }
 
+/// EmailThread's counterpart for the send-as-self path: the Nylas webhook
+/// arrives with a message id and a thread id, nothing else, and Email is
+/// RLS-protected — a query against it with no `app.tenant_id` set (the
+/// webhook has no tenant context yet) matches nothing under the app role,
+/// not "everything," so this lookup cannot go through Email directly.
+/// One row per Nylas send, deliberately with no RLS, same reasoning as
+/// EmailThread above.
+model NylasSend {
+  id            String   @id @default(uuid())
+  tenantId      String   @map("tenant_id")
+  transactionId String?  @map("transaction_id")
+  contactId     String?  @map("contact_id")
+  /// The Nylas message id — resolves "is this webhook notifying on a message
+  /// we just sent" without re-recording our own outbound content as a reply.
+  providerId    String   @unique @map("provider_id")
+  /// The Nylas thread id — resolves "which file does a reply on this
+  /// conversation belong to."
+  nylasThreadId String   @map("nylas_thread_id")
+  createdAt     DateTime @default(now())
+
+  @@index([nylasThreadId])
+  @@map("nylas_send")
+}
+
 model Email {
   id            String         @id @default(uuid())
   tenantId      String         @map("tenant_id")
@@ -2645,6 +2669,11 @@ model EmailOutbox {
   /// grant that scheduled it, and a reconnect can replace a user's grant.
   nylasScheduleId String? @map("nylas_schedule_id")
   nylasGrantId    String? @map("nylas_grant_id")
+  /// Set when Resend holds the schedule itself — the shared-address
+  /// equivalent of nylasScheduleId above, and skipped by the flush for the
+  /// same reason. No grant to pin alongside it: cancelling only needs the
+  /// message id and the workspace's own API key.
+  resendEmailId   String? @map("resend_email_id")
 
   @@index([sendAt, sentAt])
   @@map("email_outbox")

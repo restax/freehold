@@ -117,6 +117,98 @@ export async function revokeNylasGrant(grantId: string): Promise<void> {
   });
 }
 
+export interface NylasParty {
+  name: string;
+  email: string;
+}
+
+export interface NylasAttachmentMeta {
+  id: string;
+  filename: string;
+  sizeBytes: number;
+  contentType: string;
+}
+
+export interface NylasMessage {
+  id: string;
+  threadId: string;
+  from: NylasParty[];
+  to: NylasParty[];
+  subject: string;
+  /** HTML. */
+  body: string;
+  attachments: NylasAttachmentMeta[];
+}
+
+/** Exported for testing — the shape the webhook route trusts least, since it comes straight off the wire. */
+export function parseParties(v: unknown): NylasParty[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((p) => {
+    const r = (p ?? {}) as Record<string, unknown>;
+    return { name: typeof r.name === "string" ? r.name : "", email: String(r.email ?? "") };
+  });
+}
+
+/**
+ * The full message, fetched fresh rather than trusted from a webhook body.
+ *
+ * message.created's own payload is a thin reference (id, grant_id, thread_id)
+ * — and for a message over 1MB, Nylas sends message.created.truncated with
+ * the body stripped out entirely. Re-fetching here means the truncation case
+ * needs no special handling: it's just another GET.
+ */
+export async function fetchNylasMessage(grantId: string, messageId: string): Promise<NylasMessage> {
+  const res = await fetch(
+    `${host()}/v3/grants/${encodeURIComponent(grantId)}/messages/${encodeURIComponent(messageId)}`,
+    {
+      headers: { Authorization: `Bearer ${process.env.NYLAS_API_KEY}`, Accept: "application/json" },
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Nylas message lookup failed: ${res.status} ${await res.text()}`);
+  }
+  const json = (await res.json()) as { data?: Record<string, unknown> };
+  const d = json.data ?? {};
+  const attachments = Array.isArray(d.attachments) ? d.attachments : [];
+  return {
+    id: typeof d.id === "string" ? d.id : messageId,
+    threadId: typeof d.thread_id === "string" ? d.thread_id : "",
+    from: parseParties(d.from),
+    to: parseParties(d.to),
+    subject: typeof d.subject === "string" ? d.subject : "",
+    body: typeof d.body === "string" ? d.body : "",
+    attachments: attachments.map((a) => {
+      const r = (a ?? {}) as Record<string, unknown>;
+      return {
+        id: String(r.id ?? ""),
+        filename: typeof r.filename === "string" ? r.filename : "attachment",
+        sizeBytes: typeof r.size === "number" ? r.size : 0,
+        contentType:
+          typeof r.content_type === "string" ? r.content_type : "application/octet-stream",
+      };
+    }),
+  };
+}
+
+/** Raw bytes of one attachment. Nylas wants the attachment id URL-encoded. */
+export async function downloadNylasAttachment(
+  grantId: string,
+  messageId: string,
+  attachmentId: string,
+): Promise<Buffer> {
+  const url =
+    `${host()}/v3/grants/${encodeURIComponent(grantId)}` +
+    `/attachments/${encodeURIComponent(attachmentId)}/download` +
+    `?message_id=${encodeURIComponent(messageId)}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${process.env.NYLAS_API_KEY}` },
+  });
+  if (!res.ok) {
+    throw new Error(`Nylas attachment download failed: ${res.status}`);
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
 export interface NylasSendInput {
   grantId: string;
   to: string[];

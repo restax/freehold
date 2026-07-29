@@ -1,17 +1,26 @@
-import { prisma } from "@freehold/db";
-import { sendTenantEmail } from "@/lib/email";
+import { prisma, withTenant } from "@freehold/db";
+import { cancelResendEmail, emailEnabled, sendTenantEmail } from "@/lib/email";
+import { scheduleFitsResend } from "@/lib/email-schedule";
 import { cancelNylasSchedule, nylasEnabled, scheduleFitsNylas, sendViaNylas } from "@/lib/nylas";
 
 /**
  * The outbox: scheduled and quiet-hours-deferred email. Automated sends route
  * through enqueueOrSend so a 2am task completion becomes an 8am email.
  *
- * **Rows here are only as punctual as whatever drains them.** There is an
- * /api/outbox/run endpoint, but it is *not* registered in vercel.json — the
- * only thing calling flushOutbox in production is the nightly cron, so a row
- * parked here can wait until the next daily run. Anything that has to arrive
- * at the time the coordinator picked should go through scheduleEmail below,
- * which hands the schedule to Nylas when it can.
+ * **Rows here are only as punctual as whatever drains them**, and what drains
+ * them is the nightly cron. /api/outbox/run exists but is not registered in
+ * vercel.json, and can't be: Vercel's Hobby plan allows a project two cron
+ * jobs on daily schedules only, and both slots are spoken for. A row parked
+ * here waits for the next nightly run — up to the best part of a day.
+ *
+ * So a time the coordinator actually picked is never left to this table.
+ * Both scheduleEmail and enqueueOrSend hand the schedule to a provider that
+ * will hold it and release it on the minute — Nylas when the message is going
+ * out from someone's own mailbox, Resend when it's going out from the
+ * workspace address. The rows they leave behind are records for the UI (see
+ * it, cancel it), and the flush skips them. What still lands in this table as
+ * real work is only what neither provider would take: a schedule past thirty
+ * days, or a send-as-self whose mailbox is currently unlinked.
  */
 
 export interface QuietHours {
@@ -89,7 +98,36 @@ export interface OutboxInput {
   respectQuietHours?: boolean;
 }
 
-/** Send immediately when allowed; otherwise queue for the cron. */
+/**
+ * The branded wrapper for a transaction's outbox mail.
+ *
+ * Rendered against the workspace's current signature, footer and party
+ * details rather than a copy frozen when the row was written. That used to
+ * happen at flush time, which was as late as possible; now that a provider
+ * holds the schedule, the latest we can still render is the moment the send
+ * is handed over. Both callers go through here so neither drifts.
+ */
+async function renderOutboxHtml(
+  tenantId: string,
+  transactionId: string | null,
+  body: string,
+): Promise<string | undefined> {
+  if (!transactionId) return undefined;
+  const { emailContextForTransaction } = await import("@/lib/auto-emails");
+  const { parseEmailSettings, renderEmailHtml } = await import("@/lib/email-template");
+  const ctx = await emailContextForTransaction(tenantId, transactionId, {}).catch(() => null);
+  if (!ctx) return undefined;
+  return renderEmailHtml({
+    tenantName: ctx.org.name,
+    body,
+    tc: ctx.tcCard,
+    agent: ctx.agentCard,
+    otherSide: ctx.otherCard,
+    ...parseEmailSettings(ctx.org.emailSettings),
+  });
+}
+
+/** Send immediately when allowed; otherwise schedule it for later. */
 export async function enqueueOrSend(input: OutboxInput): Promise<"sent" | "queued"> {
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: input.tenantId },
@@ -111,15 +149,17 @@ export async function enqueueOrSend(input: OutboxInput): Promise<"sent" | "queue
     });
     return "sent";
   }
-  await prisma.emailOutbox.create({
-    data: {
-      tenantId: input.tenantId,
-      transactionId: input.transactionId ?? null,
-      toAddr: input.to,
-      subject: input.subject,
-      body: input.body,
-      sendAt,
-    },
+  // Deferred out of quiet hours. That end time is a real time — 8am means
+  // 8am — so it goes through the same scheduling path as a coordinator's
+  // explicit "send later" rather than being parked for the nightly cron,
+  // which would turn an 8am email into whenever the cron next ran.
+  await scheduleEmail({
+    tenantId: input.tenantId,
+    transactionId: input.transactionId,
+    to: input.to,
+    subject: input.subject,
+    body: input.body,
+    sendAt,
   });
   return "queued";
 }
@@ -140,13 +180,17 @@ export interface ScheduleInput {
 /**
  * Hold a message for a set time, preferring whoever can hit that time.
  *
- * When it's going out from the coordinator's own mailbox, Nylas holds it and
- * delivers on the minute. Our own outbox can only be as punctual as the cron
- * that drains it, so a message parked there arrives on the next run rather
- * than at the time the coordinator picked. Nylas only accepts a window of two
- * minutes to thirty days, so anything outside that still falls back to us.
+ * Neither provider is a nicety: our own outbox is only as punctual as the
+ * nightly cron that drains it, so a message parked there arrives on the next
+ * run rather than at the time the coordinator picked. Whoever is carrying the
+ * message holds the schedule instead — Nylas for a coordinator's own mailbox,
+ * Resend for the workspace address — and releases it on the minute.
+ *
+ * Both providers stop at thirty days, and Nylas also refuses anything under
+ * two minutes. A schedule outside what the carrier will take falls back to
+ * the outbox, and is the one case that still waits for the cron.
  */
-export async function scheduleEmail(input: ScheduleInput): Promise<"nylas" | "outbox"> {
+export async function scheduleEmail(input: ScheduleInput): Promise<"nylas" | "resend" | "outbox"> {
   const grant =
     input.sendAsUserId && nylasEnabled()
       ? await prisma.nylasGrant.findUnique({
@@ -167,6 +211,16 @@ export async function scheduleEmail(input: ScheduleInput): Promise<"nylas" | "ou
     // Recorded even though Nylas owns the delivery, so it shows up in the
     // coordinator's scheduled list and stays cancellable. The flush skips
     // rows carrying a schedule id.
+    //
+    // Known gap: a reply to *this* message won't thread onto the file. The
+    // inbound webhook resolves a reply's transaction via NylasSend, keyed on
+    // the real message/thread id — and a scheduled send doesn't have those
+    // yet (sendViaNylas returns a schedule id in their place; the message
+    // itself doesn't exist until Nylas releases it). Closing this needs the
+    // message.send_success webhook, which fires once the send completes and
+    // can supply the missing ids — not built yet. Nothing breaks either way:
+    // an unmatched reply is silently ignored, same as any other mail in a
+    // connected inbox that isn't about a Freehold transaction.
     await prisma.emailOutbox.create({
       data: {
         tenantId: input.tenantId,
@@ -181,6 +235,49 @@ export async function scheduleEmail(input: ScheduleInput): Promise<"nylas" | "ou
       },
     });
     return "nylas";
+  }
+
+  // Resend holds it instead, from the workspace address.
+  //
+  // Gated on the grant being unusable rather than merely on Nylas having
+  // declined the window: a coordinator with a working mailbox who scheduled
+  // something forty days out asked to send as themselves, and quietly
+  // rerouting that to the shared identity is not ours to decide. Those wait
+  // for the cron, which still re-checks the grant when it drains them.
+  if (grant?.status !== "valid" && emailEnabled() && scheduleFitsResend(input.sendAt)) {
+    const html =
+      input.html ??
+      (await renderOutboxHtml(input.tenantId, input.transactionId ?? null, input.body));
+    const sent = await sendTenantEmail({
+      tenantId: input.tenantId,
+      transactionId: input.transactionId,
+      to: input.to,
+      subject: input.subject,
+      body: input.body,
+      html,
+      attachments: input.attachments,
+      sendAt: input.sendAt,
+    });
+    // Recorded even though Resend owns the delivery, same as the Nylas branch
+    // above: this is what puts the message in the coordinator's scheduled list
+    // and keeps it cancellable. The flush skips rows carrying a message id.
+    //
+    // The fallback id covers a 200 that somehow carried no id. The message is
+    // already booked at that point and can't be unbooked, so the row has to
+    // exist and has to stay out of the flush; a cancel against it will fail at
+    // Resend, which is the truthful answer — we have no handle on that send.
+    await prisma.emailOutbox.create({
+      data: {
+        tenantId: input.tenantId,
+        transactionId: input.transactionId ?? null,
+        toAddr: input.to,
+        subject: input.subject,
+        body: input.body,
+        sendAt: input.sendAt,
+        resendEmailId: sent.providerId ?? "unknown",
+      },
+    });
+    return "resend";
   }
 
   await prisma.emailOutbox.create({
@@ -200,21 +297,38 @@ export async function scheduleEmail(input: ScheduleInput): Promise<"nylas" | "ou
 /**
  * Call off a scheduled send.
  *
- * Returns false when the message is already gone — Nylas needs ten seconds'
- * notice, so a cancel can lose the race. Saying so is the point: the row
+ * Returns false when the message is already gone — a provider holding the
+ * schedule wants some notice before the send time (Nylas asks for ten
+ * seconds), so a cancel can lose the race. Saying so is the point: the row
  * stays uncancelled and the coordinator learns it went out, rather than
  * seeing "cancelled" for mail that is already in someone's inbox.
  */
 export async function cancelScheduled(id: string, tenantId: string): Promise<boolean> {
   const row = await prisma.emailOutbox.findFirst({
     where: { id, tenantId, sentAt: null, canceledAt: null },
-    select: { nylasScheduleId: true, nylasGrantId: true },
+    select: { nylasScheduleId: true, nylasGrantId: true, resendEmailId: true },
   });
   if (!row) return false;
 
   if (row.nylasScheduleId && row.nylasGrantId) {
     const ok = await cancelNylasSchedule(row.nylasGrantId, row.nylasScheduleId).catch(() => false);
     if (!ok) return false;
+  } else if (row.resendEmailId) {
+    const ok = await cancelResendEmail(row.resendEmailId).catch(() => false);
+    if (!ok) return false;
+    // The Email row was written when the send was booked, so it's sitting in
+    // the thread as SCHEDULED for a message that will now never arrive.
+    //
+    // Through withTenant, not the bare client: `email` is RLS-protected, so an
+    // unscoped updateMany matches nothing and reports a contented zero. That
+    // silence is the whole hazard — the cancel looks like it worked while the
+    // thread still shows the message as due to go out.
+    await withTenant(tenantId, (tx) =>
+      tx.email.updateMany({
+        where: { providerId: row.resendEmailId as string, status: "SCHEDULED" },
+        data: { status: "CANCELLED" },
+      }),
+    ).catch(() => {});
   }
   await prisma.emailOutbox.updateMany({
     where: { id, tenantId, sentAt: null },
@@ -223,7 +337,13 @@ export async function cancelScheduled(id: string, tenantId: string): Promise<boo
   return true;
 }
 
-/** Cron entry: deliver everything due. Failures retry up to 5 runs. */
+/**
+ * Cron entry: deliver everything due. Failures retry up to 5 runs.
+ *
+ * The residue, not the main path — what reaches here is a schedule no
+ * provider would hold, so these are late by design rather than on time. See
+ * the note at the top of this file.
+ */
 export async function flushOutbox(): Promise<{ sent: number; failed: number }> {
   const due = await prisma.emailOutbox.findMany({
     where: {
@@ -231,9 +351,10 @@ export async function flushOutbox(): Promise<{ sent: number; failed: number }> {
       canceledAt: null,
       sendAt: { lte: new Date() },
       attempts: { lt: 5 },
-      // Nylas is delivering these itself; sending them here too would put
-      // the same message in the recipient's inbox twice.
+      // A provider is delivering these itself; sending them here too would
+      // put the same message in the recipient's inbox twice.
       nylasScheduleId: null,
+      resendEmailId: null,
     },
     orderBy: { sendAt: "asc" },
     take: 50,
@@ -242,26 +363,7 @@ export async function flushOutbox(): Promise<{ sent: number; failed: number }> {
   let failed = 0;
   for (const row of due) {
     try {
-      // Branded HTML is rendered at send time so signatures/footers and
-      // party details are current, not frozen at scheduling time.
-      let html: string | undefined;
-      if (row.transactionId) {
-        const { emailContextForTransaction } = await import("@/lib/auto-emails");
-        const { parseEmailSettings, renderEmailHtml } = await import("@/lib/email-template");
-        const ctx = await emailContextForTransaction(row.tenantId, row.transactionId, {}).catch(
-          () => null,
-        );
-        if (ctx) {
-          html = renderEmailHtml({
-            tenantName: ctx.org.name,
-            body: row.body,
-            tc: ctx.tcCard,
-            agent: ctx.agentCard,
-            otherSide: ctx.otherCard,
-            ...parseEmailSettings(ctx.org.emailSettings),
-          });
-        }
-      }
+      const html = await renderOutboxHtml(row.tenantId, row.transactionId, row.body);
       await sendTenantEmail({
         tenantId: row.tenantId,
         transactionId: row.transactionId,

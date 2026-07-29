@@ -2515,23 +2515,40 @@ export default async function TransactionDetailPage({
                       >
                         <div className="mb-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
                           <span className="font-medium">
-                            {e.direction === "INBOUND" ? "↩ Reply" : "→ Sent"}
+                            {/* A message can be booked and then called back
+                                without ever going out, so the heading has to
+                                carry that — "Sent" over a cancelled row, with
+                                the truth demoted to a badge, contradicts
+                                itself. Only mail that actually left says Sent. */}
+                            {e.direction === "INBOUND"
+                              ? "↩ Reply"
+                              : e.status === "SCHEDULED"
+                                ? "◷ Scheduled"
+                                : e.status === "CANCELLED"
+                                  ? "⊘ Cancelled"
+                                  : "→ Sent"}
                           </span>
                           <span className="text-stone-500">
                             {e.direction === "INBOUND" ? `from ${e.fromAddr}` : `to ${e.toAddr}`}
                           </span>
                           <span className="ml-auto flex items-center gap-2">
-                            {e.status !== "SENT" && e.status !== "RECEIVED" && (
-                              <span
-                                className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
-                                  e.status === "DELIVERED"
-                                    ? "bg-brand-50 text-brand-700"
-                                    : "bg-red-100 text-red-700"
-                                }`}
-                              >
-                                {e.status.toLowerCase()}
-                              </span>
-                            )}
+                            {/* Whatever the heading already said needs no
+                                badge repeating it — what's left is the
+                                delivery outcome. */}
+                            {e.status !== "SENT" &&
+                              e.status !== "RECEIVED" &&
+                              e.status !== "SCHEDULED" &&
+                              e.status !== "CANCELLED" && (
+                                <span
+                                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                                    e.status === "DELIVERED"
+                                      ? "bg-brand-50 text-brand-700"
+                                      : "bg-red-100 text-red-700"
+                                  }`}
+                                >
+                                  {e.status.toLowerCase()}
+                                </span>
+                              )}
                             <span className="font-mono text-xs tabular-nums text-stone-400">
                               {fmtDate(e.createdAt)}
                             </span>
