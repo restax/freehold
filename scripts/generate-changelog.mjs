@@ -8,10 +8,21 @@
 // go stale the way a hand-maintained array in a component file did — nobody
 // has to remember a second place to write the update.
 //
-// Runs as part of `pnpm build` in apps/web. Vercel's checkout is sometimes a
-// shallow clone with only the latest commit or two, which would truncate the
-// real list — so on a shallow checkout this is a safe no-op that leaves the
-// already-committed JSON alone rather than overwriting it with a shorter one.
+// Runs as part of `pnpm build` in apps/web — but that build-time run is a
+// no-op in production. This project deploys via `vercel --prod` from a local
+// checkout, not a GitHub-integrated build, so Vercel's build sandbox has no
+// `.git` directory at all (confirmed: "fatal: not a git repository", not a
+// shallow-clone truncation as originally assumed here). The safe-no-op
+// fallback below still matters for that reason, just not the one first
+// written — it's what makes "no git history available" leave the
+// already-committed JSON alone instead of blanking the panel.
+//
+// **So this has to be run locally and its output committed**, same commit as
+// the `Changelog:` trailer that's meant to show up: `node
+// scripts/generate-changelog.mjs`, then `git add
+// apps/web/src/content/changelog.json`. The build-time run only helps on a
+// deploy setup that actually gives Vercel real git history (a GitHub-
+// integrated build) — worth revisiting if this project ever switches to one.
 import { execSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import path from "node:path";

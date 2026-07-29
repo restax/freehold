@@ -1,26 +1,6 @@
 [
   {
-    "date": "2026-07-29",
-    "text": "Contacts now save as your own filtered views, with a column picker on the list."
-  },
-  {
-    "date": "2026-07-29",
-    "text": "Agents & commissions live on the transaction — pick the entity, the split, and the note in one place."
-  },
-  {
-    "date": "2026-07-29",
-    "text": "Transactions split by side: the fields, dates, and money you see now match whether you're on the buy or sell side of the file."
-  },
-  {
-    "date": "2026-07-29",
-    "text": "The transactions list is a real filterable grid now, with its own creation page and address lookup built in."
-  },
-  {
-    "date": "2026-07-28",
-    "text": "Forms route themselves to the right menu, and a contract you upload gets read automatically."
-  },
-  {
-    "date": "2026-07-28",
-    "text": "Clients can leave a review of the file and their coordinator once it closes."
+    "date": "2026-07-30",
+    "text": "Scheduled emails sent from your own inbox now show up on the file right away, and replies to them thread back automatically once they go out."
   }
 ]
