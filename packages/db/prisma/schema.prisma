@@ -1222,6 +1222,9 @@ model Contact {
   socialLinks    Json?              @map("social_links")
   isSample       Boolean            @default(false)
   parties        TransactionParty[]
+  /// Files where this contact is our side's agent (see Transaction).
+  primaryAgentFor Transaction[]     @relation("TxnPrimaryAgent")
+  coAgentFor      Transaction[]     @relation("TxnCoAgent")
   contactNotes   ContactNote[]
   emails         Email[]
   tasks          Task[]
@@ -1338,13 +1341,33 @@ model Transaction {
   onMarketDate           DateTime?                     @map("on_market_date") @db.Date
   expireDate             DateTime?                     @map("expire_date") @db.Date
   mlsId                  String?                       @map("mls_id")
-  /// The co-agent is a Client (managed agent); workspace users are assigned
-  /// through TransactionAssignee rows.
+  /// Deprecated, no longer read or written. Left in place so the commission
+  /// backfill in 20260729060000 stays re-runnable if it read a percentage
+  /// wrongly; a follow-up migration drops both once the new fields are seen
+  /// carrying real data. Do not build anything on these.
   coAgentClientId        String?                       @map("co_agent_client_id")
+  payout                 Json?
+  /// Our own side's agents on this file, as CRM contacts. Distinct from
+  /// `parties` (which records both sides as read off the contract) and from
+  /// `client` (who hired us — for a brokerage client the primary agent is one
+  /// of their roster). Workspace users are assigned through
+  /// TransactionAssignee rows, not here.
+  primaryAgentContactId  String?                       @map("primary_agent_contact_id")
+  primaryAgentContact    Contact?                      @relation("TxnPrimaryAgent", fields: [primaryAgentContactId], references: [id], onDelete: SetNull)
+  coAgentContactId       String?                       @map("co_agent_contact_id")
+  coAgentContact         Contact?                      @relation("TxnCoAgent", fields: [coAgentContactId], references: [id], onDelete: SetNull)
+  /// What our client earns on this file, as a percentage of the contract
+  /// price. One number, not a per-side split: the side is explicit on the
+  /// file, so a second percentage only ever described the other party.
+  commissionPct          Float?                        @map("commission_pct")
+  /// Typed, not computed. A contract rarely states the gross, and the actual
+  /// figure only exists once the broker pays the agent — the gap between the
+  /// two is the thing worth chasing.
+  estimatedGrossCents    Int?                          @map("estimated_gross_cents")
+  actualGrossCents       Int?                          @map("actual_gross_cents")
+  commissionNote         String?                       @map("commission_note")
   assignees              TransactionAssignee[]
   review                 ClientReview?
-  /// Commission breakdown: {listPct, buyPct, note} — gross computes from price.
-  payout                 Json?
   emails                 Email[]
   /// Contract-governed date changes awaiting an executed amendment:
   /// {closeDate?: "YYYY-MM-DD", contractDate?: "YYYY-MM-DD"}

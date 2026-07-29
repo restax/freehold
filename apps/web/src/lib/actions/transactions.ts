@@ -15,6 +15,7 @@ import { logAudit } from "@/lib/audit";
 import { fireIntroEmail, firePostCloseEmail } from "@/lib/auto-emails";
 import { ensureAutoDraft } from "@/lib/billing-drafts";
 import { resolveDefaultFee, tenantBillingPolicy } from "@/lib/billing-policy";
+import { parseCommissionPct, parseGrossCents } from "@/lib/commission";
 import { confirmed, dateOnly, intOr, oneOf, optStr, str } from "@/lib/forms";
 import { gapForPending, gapMessage, licenseEnforcement } from "@/lib/licensing";
 import { parseFeeCents } from "@/lib/pay";
@@ -45,13 +46,27 @@ function commonFields(formData: FormData) {
     onMarketDate: dateOnly(formData, "onMarketDate"),
     expireDate: dateOnly(formData, "expireDate"),
     mlsId: optStr(formData, "mlsId"),
-    coAgentClientId: optStr(formData, "coAgentClientId"),
     notes: optStr(formData, "notes"),
     // Expected fee: only forms that carry the field can change it. Blank means
     // "fall back to the client/workspace default" (re-resolved below); an
     // explicit 0 means this file is deliberately not billed.
     ...(formData.has("expectedFee")
       ? { expectedFeeCents: parseFeeCents(str(formData, "expectedFee")) }
+      : {}),
+    // Agents & commissions, each behind the same guard, so a form without that
+    // section can't null a commission somebody entered. This is the shape of
+    // the bug that quietly wiped every file's listing details for months.
+    ...(formData.has("commissionPct")
+      ? { commissionPct: parseCommissionPct(str(formData, "commissionPct")) }
+      : {}),
+    ...(formData.has("estimatedGross")
+      ? { estimatedGrossCents: parseGrossCents(str(formData, "estimatedGross")) }
+      : {}),
+    ...(formData.has("actualGross")
+      ? { actualGrossCents: parseGrossCents(str(formData, "actualGross")) }
+      : {}),
+    ...(formData.has("commissionNote")
+      ? { commissionNote: optStr(formData, "commissionNote") }
       : {}),
   };
 }
@@ -76,28 +91,36 @@ async function resolvedExpectedFee(
   return resolveDefaultFee(client?.defaultFeeCents, tenantBillingPolicy(org?.billingDefaults));
 }
 
-/** Payout tab: commission percentages; gross computes from contract price. */
-export async function updatePayout(formData: FormData) {
-  const { tenantId } = await requireTenant();
-  const id = str(formData, "id");
-  if (!id) return;
-  const num = (n: string) => {
-    const v = Number(str(formData, n));
-    return Number.isFinite(v) && v >= 0 ? v : null;
-  };
-  await withTenant(tenantId, (tx) =>
-    tx.transaction.update({
-      where: { id },
-      data: {
-        payout: {
-          listPct: num("listPct"),
-          buyPct: num("buyPct"),
-          note: optStr(formData, "payoutNote"),
-        },
-      },
-    }),
+/**
+ * Contact ids from a form, narrowed to contacts that actually belong to this
+ * workspace. A hand-posted id naming another tenant's contact would otherwise
+ * satisfy the foreign key and link a stranger onto the file — FK checks don't
+ * go through RLS.
+ */
+async function safeContactIds(
+  tx: TenantTx,
+  ids: Array<string | null>,
+): Promise<Record<string, string | null>> {
+  const wanted = ids.filter((v): v is string => Boolean(v));
+  if (wanted.length === 0) return {};
+  const found = new Set(
+    (await tx.contact.findMany({ where: { id: { in: wanted } }, select: { id: true } })).map(
+      (c) => c.id,
+    ),
   );
-  revalidatePath(`/dashboard/transactions/${id}`);
+  return Object.fromEntries(wanted.map((id) => [id, found.has(id) ? id : null]));
+}
+
+/** The workspace users picked as TC/assistants, verified as members here. */
+async function safeAssigneeIds(tx: TenantTx, ids: Array<string | null>): Promise<string[]> {
+  const wanted = [...new Set(ids.filter((v): v is string => Boolean(v)))];
+  if (wanted.length === 0) return [];
+  const members = await tx.member.findMany({
+    where: { userId: { in: wanted } },
+    select: { userId: true },
+  });
+  const ok = new Set(members.map((m) => m.userId));
+  return wanted.filter((id) => ok.has(id));
 }
 
 export async function createTransaction(formData: FormData) {
@@ -106,17 +129,18 @@ export async function createTransaction(formData: FormData) {
   if (!propertyAddress) return;
   const limit = await transactionLimit(tenantId);
   if (limit.limited) return; // cloud free-tier cap; the page shows the upgrade banner
-  const assigneeId = optStr(formData, "assigneeId");
+  // Two TC/assistant slots on the form; a workspace may only have one person.
+  const assigneeIds = formData.getAll("assigneeIds").map(String).filter(Boolean);
   const fields = commonFields(formData);
+  const primaryAgentId = optStr(formData, "primaryAgentContactId");
+  const coAgentId = optStr(formData, "coAgentContactId");
 
   // Under "block" enforcement a file in a license-required state can't be
   // created without a licensed coordinator on it. Under "warn" it saves and
   // the file carries a flag instead.
   const enforcement = await licenseEnforcement(tenantId);
   if (enforcement === "block") {
-    const gap = await withTenant(tenantId, (tx) =>
-      gapForPending(tx, fields.state, assigneeId ? [assigneeId] : []),
-    );
+    const gap = await withTenant(tenantId, (tx) => gapForPending(tx, fields.state, assigneeIds));
     if (gap) {
       // Back to the form that was being filled, not the list — the
       // coordinator needs to change the assignee and try again.
@@ -131,13 +155,22 @@ export async function createTransaction(formData: FormData) {
       fields.clientId,
       fields.expectedFeeCents,
     );
+    const contacts = await safeContactIds(tx, [primaryAgentId, coAgentId]);
     const txn = await tx.transaction.create({
-      data: { tenantId, propertyAddress, ...fields, expectedFeeCents },
+      data: {
+        tenantId,
+        propertyAddress,
+        ...fields,
+        expectedFeeCents,
+        primaryAgentContactId: primaryAgentId ? (contacts[primaryAgentId] ?? null) : null,
+        coAgentContactId: coAgentId ? (contacts[coAgentId] ?? null) : null,
+      },
     });
     // Optional create-time assignment; more people can be added on the file.
-    if (assigneeId) {
-      await tx.transactionAssignee.create({
-        data: { tenantId, transactionId: txn.id, userId: assigneeId },
+    const assignees = await safeAssigneeIds(tx, assigneeIds);
+    if (assignees.length > 0) {
+      await tx.transactionAssignee.createMany({
+        data: assignees.map((userId) => ({ tenantId, transactionId: txn.id, userId })),
       });
     }
     return txn;
@@ -202,6 +235,42 @@ export async function updateTransaction(formData: FormData) {
       ...(propertyAddress ? { propertyAddress } : {}),
       ...fields,
     };
+    // Our side's agents, only when the form carried them, and only after the
+    // ids are confirmed to be this workspace's contacts.
+    if (formData.has("primaryAgentContactId") || formData.has("coAgentContactId")) {
+      const primary = optStr(formData, "primaryAgentContactId");
+      const co = optStr(formData, "coAgentContactId");
+      const ok = await safeContactIds(tx, [primary, co]);
+      if (formData.has("primaryAgentContactId")) {
+        data.primaryAgentContactId = primary ? (ok[primary] ?? null) : null;
+      }
+      if (formData.has("coAgentContactId")) {
+        data.coAgentContactId = co ? (ok[co] ?? null) : null;
+      }
+    }
+    // TC/assistant slots replace the file's assignment wholesale when the form
+    // carries them: the two selects are the complete answer, so clearing one
+    // has to actually unassign that person.
+    if (formData.has("assigneeIds")) {
+      const wanted = await safeAssigneeIds(tx, formData.getAll("assigneeIds").map(String));
+      await tx.transactionAssignee.deleteMany({
+        where: { transactionId: id, userId: { notIn: wanted.length > 0 ? wanted : ["-"] } },
+      });
+      const already = new Set(
+        (
+          await tx.transactionAssignee.findMany({
+            where: { transactionId: id },
+            select: { userId: true },
+          })
+        ).map((a) => a.userId),
+      );
+      const added = wanted.filter((u) => !already.has(u));
+      if (added.length > 0) {
+        await tx.transactionAssignee.createMany({
+          data: added.map((userId) => ({ tenantId, transactionId: id, userId })),
+        });
+      }
+    }
     if ("expectedFeeCents" in fields && fields.expectedFeeCents == null) {
       data.expectedFeeCents = await resolvedExpectedFee(tx, tenantId, fields.clientId, null);
     }

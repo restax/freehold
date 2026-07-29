@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActivityPanel } from "@/components/activity-panel";
 import { AddressAutocomplete } from "@/components/address-autocomplete";
+import { AgentsCommissions } from "@/components/agents-commissions";
 import { Avatar } from "@/components/avatar";
 import { Badge, EnvelopeBadge, ExtractionBadge } from "@/components/badges";
 import { CcEmailPill } from "@/components/cc-email-pill";
@@ -65,7 +66,6 @@ import {
   removeTransactionParty,
   setCustomField,
   setRequiredDocument,
-  updatePayout,
   updateTransaction,
   withdrawDateChange,
 } from "@/lib/actions/transactions";
@@ -2054,6 +2054,25 @@ export default async function TransactionDetailPage({
                       contractDate: txn.contractDate ? fmtDate(txn.contractDate) : "",
                     }}
                   />
+                  {/* Agents and commission. The TC/assistant slots are off
+                      here: Participants already manages assignment, with
+                      per-person fees and no cap of two. */}
+                  <div className="sm:col-span-2 lg:col-span-4">
+                    <AgentsCommissions
+                      includeAssignees={false}
+                      contacts={contacts.map((c) => ({ id: c.id, name: c.name, hint: c.email }))}
+                      users={[]}
+                      clientTypes={Object.fromEntries(clients.map((c) => [c.id, c.type]))}
+                      defaults={{
+                        clientId: txn.clientId,
+                        primaryAgentContactId: txn.primaryAgentContactId,
+                        coAgentContactId: txn.coAgentContactId,
+                        commissionPct: txn.commissionPct,
+                        estimatedGrossCents: txn.estimatedGrossCents,
+                        actualGrossCents: txn.actualGrossCents,
+                      }}
+                    />
+                  </div>
                   <label className={`${label} lg:col-span-2`}>
                     MLS ID
                     <input name="mlsId" defaultValue={txn.mlsId ?? ""} className={input} />
@@ -2622,60 +2641,6 @@ export default async function TransactionDetailPage({
                   Attach a client to this transaction to invoice them.
                 </p>
               )}
-            </section>
-          )}
-          {tab === "payout" && (
-            <section className={card}>
-              <h2 className="mb-1 font-medium">Payout</h2>
-              <p className="mb-3 text-sm text-stone-500">
-                Commission percentages against the contract price
-                {txn.purchasePrice ? ` (${fmtMoney(txn.purchasePrice)})` : ""}.
-              </p>
-              {(() => {
-                const payout =
-                  (txn.payout as { listPct?: number; buyPct?: number; note?: string } | null) ?? {};
-                const price = txn.purchasePrice ?? 0;
-                const gross = (pct?: number | null) =>
-                  pct && price ? fmtMoney(Math.round((price * pct) / 100)) : "—";
-                return (
-                  <form action={updatePayout} className="flex flex-col gap-3">
-                    <input type="hidden" name="id" value={txn.id} />
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <label className={label}>
-                        {labels.sell} %
-                        <input
-                          name="listPct"
-                          defaultValue={payout.listPct ?? ""}
-                          inputMode="decimal"
-                          className={input}
-                        />
-                      </label>
-                      <label className={label}>
-                        {labels.buy} %
-                        <input
-                          name="buyPct"
-                          defaultValue={payout.buyPct ?? ""}
-                          inputMode="decimal"
-                          className={input}
-                        />
-                      </label>
-                    </div>
-                    <p className="text-sm text-stone-600">
-                      Estimated gross — list: <strong>{gross(payout.listPct)}</strong> · buy:{" "}
-                      <strong>{gross(payout.buyPct)}</strong>
-                    </p>
-                    <label className={label}>
-                      Notes
-                      <input name="payoutNote" defaultValue={payout.note ?? ""} className={input} />
-                    </label>
-                    <div>
-                      <button type="submit" className={btn}>
-                        Save payout
-                      </button>
-                    </div>
-                  </form>
-                );
-              })()}
             </section>
           )}
           {tab === "misc" && (

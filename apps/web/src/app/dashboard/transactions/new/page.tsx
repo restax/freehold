@@ -1,6 +1,7 @@
 import { TransactionSide, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { AddressAutocomplete } from "@/components/address-autocomplete";
+import { AgentsCommissions } from "@/components/agents-commissions";
 import { ContractUploadForm } from "@/components/contract-upload-form";
 import { SideFields } from "@/components/side-fields";
 import { StatusSelect } from "@/components/status-select";
@@ -43,10 +44,16 @@ export default async function NewTransactionPage({
     creditBalance(tenantId),
     tenantSideLabels(tenantId),
   ]);
-  const { clients, members } = await withTenant(tenantId, async (tx) => ({
+  const { clients, members, contacts } = await withTenant(tenantId, async (tx) => ({
     clients: await tx.client.findMany({ orderBy: { name: "asc" } }),
     members: await tx.member.findMany({
       include: { user: { select: { id: true, name: true } } },
+    }),
+    // Names only: the picker filters locally, and shipping whole contact rows
+    // to the browser would be both slower and more than it needs to know.
+    contacts: await tx.contact.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, email: true },
     }),
   }));
 
@@ -166,7 +173,7 @@ export default async function NewTransactionPage({
           <SideFields labels={labels} />
 
           <div className="border-t border-stone-100 pt-3">
-            <p className={fieldGroupLabel}>Client &amp; team</p>
+            <p className={fieldGroupLabel}>Client</p>
             <div className="grid gap-x-4 gap-y-3 sm:grid-cols-3">
               <label className={label}>
                 Client
@@ -179,29 +186,18 @@ export default async function NewTransactionPage({
                   ))}
                 </select>
               </label>
-              <label className={label}>
-                Co-agent (managed agent)
-                <select name="coAgentClientId" className={input} defaultValue="">
-                  <option value="">—</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={label}>
-                Assign to
-                <select name="assigneeId" className={input} defaultValue="">
-                  <option value="">—</option>
-                  {members.map((m) => (
-                    <option key={m.user.id} value={m.user.id}>
-                      {m.user.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
             </div>
+          </div>
+
+          {/* The people on the file: our side's agents, and which of our own
+              coordinators is running it. Replaces the old single "Assign to"
+              and the client-based co-agent. */}
+          <div className="border-t border-stone-100 pt-3">
+            <AgentsCommissions
+              contacts={contacts.map((c) => ({ id: c.id, name: c.name, hint: c.email }))}
+              users={members.map((m) => ({ id: m.user.id, name: m.user.name }))}
+              clientTypes={Object.fromEntries(clients.map((c) => [c.id, c.type]))}
+            />
           </div>
 
           {/* MLS ID applies to both sides — a buy-side file still references

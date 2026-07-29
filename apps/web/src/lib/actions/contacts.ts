@@ -171,6 +171,33 @@ export async function createContact(formData: FormData) {
   redirect(`/dashboard/contacts/${created.id}`);
 }
 
+/**
+ * Create a contact from just a name and hand back its id.
+ *
+ * For the agent pickers on a transaction: a coordinator opening a file often
+ * has an agent who isn't in the CRM yet, and bouncing them to the Contacts
+ * page to add one would lose everything they'd typed into the form. Name-only
+ * on purpose — the rest gets filled in on the contact's own page later.
+ *
+ * Returns a value rather than redirecting, because the caller is a picker
+ * sitting inside another form that must stay where it is.
+ */
+export async function createContactByName(
+  name: string,
+): Promise<{ id: string; name: string } | null> {
+  const { tenantId, userId } = await requireTenant();
+  const clean = name.trim().slice(0, 200);
+  if (!clean) return null;
+  const created = await withTenant(tenantId, (tx) =>
+    tx.contact.create({
+      data: { tenantId, name: clean, ownerId: userId },
+      select: { id: true, name: true },
+    }),
+  );
+  revalidatePath("/dashboard/contacts");
+  return created;
+}
+
 export async function updateContact(formData: FormData) {
   const { tenantId } = await requireTenant();
   const id = str(formData, "id");
