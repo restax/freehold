@@ -78,7 +78,8 @@ const TENANT_TOOLS: VoiceTool[] = [
         query: { type: "string", description: "Address or client name, partial match" },
         status: {
           type: "string",
-          description: "LISTING, UNDER_CONTRACT, PENDING, CLOSED, or CANCELLED",
+          description:
+            "DRAFT, COMING_SOON, ACTIVE, TMP_OFF_MARKET, UNDER_CONTRACT, PENDING, CLOSED, or CANCELLED",
         },
       },
     },

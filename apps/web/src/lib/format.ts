@@ -7,7 +7,12 @@ export function fmtMoney(n: number | null | undefined): string {
 }
 
 export const STATUS_LABEL: Record<string, string> = {
-  LISTING: "Listing",
+  DRAFT: "Draft",
+  COMING_SOON: "Coming soon",
+  ACTIVE: "Active",
+  // Spelled out rather than the industry's "Tmp Off Market" — see the wording
+  // table in CLAUDE.md.
+  TMP_OFF_MARKET: "Temporarily off market",
   UNDER_CONTRACT: "Under contract",
   PENDING: "Pending",
   CLOSED: "Closed",

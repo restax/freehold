@@ -153,10 +153,22 @@ export function mapTransactionHeaders(headers: string[]) {
 /* ------------------------------ Value parsing ------------------------------ */
 
 const STATUS_SYNONYMS: Record<string, string> = {
-  listing: "LISTING",
-  "active listing": "LISTING",
-  active: "LISTING",
-  "pre listing": "LISTING",
+  listing: "ACTIVE",
+  "active listing": "ACTIVE",
+  active: "ACTIVE",
+  "on market": "ACTIVE",
+  // The other system's wording for the same lifecycle stages. Imports come
+  // from whatever the coordinator was using before, so the spellings matter
+  // more here than anywhere else.
+  "coming soon": "COMING_SOON",
+  "pre listing": "COMING_SOON",
+  "pre-listing": "COMING_SOON",
+  draft: "DRAFT",
+  "temporarily off market": "TMP_OFF_MARKET",
+  "temp off market": "TMP_OFF_MARKET",
+  "tmp off market": "TMP_OFF_MARKET",
+  "off market": "TMP_OFF_MARKET",
+  hold: "TMP_OFF_MARKET",
   "under contract": "UNDER_CONTRACT",
   "in contract": "UNDER_CONTRACT",
   contract: "UNDER_CONTRACT",

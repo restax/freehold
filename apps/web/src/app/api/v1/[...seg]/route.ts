@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { prisma, withTenant } from "@freehold/db";
+import { prisma, type TransactionStatus, withTenant } from "@freehold/db";
 import { generateWebhookSecret } from "@freehold/integrations";
 import { NextResponse } from "next/server";
+import { normalizeStatus } from "@/lib/transaction-status";
 import { emitWebhook } from "@/lib/webhook-emit";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,6 @@ export const dynamic = "force-dynamic";
  * endpoints, same keys. Keep the two in sync (unification is a TODO).
  */
 
-const STATUSES = ["LISTING", "UNDER_CONTRACT", "PENDING", "CLOSED", "CANCELLED"] as const;
 const SIDES = ["BUY_SIDE", "SELL_SIDE", "DUAL"] as const;
 
 const dateOnly = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
@@ -125,9 +125,9 @@ async function handle(req: Request, seg: string[]): Promise<Response> {
     const status = url.searchParams.get("status");
     const clientId = url.searchParams.get("clientId");
     const where = {
-      ...(status && (STATUSES as readonly string[]).includes(status)
-        ? { status: status as (typeof STATUSES)[number] }
-        : {}),
+      // normalizeStatus keeps the retired LISTING working as ACTIVE, so an
+      // integration written against the old docs still filters correctly.
+      ...(normalizeStatus(status) ? { status: normalizeStatus(status) as TransactionStatus } : {}),
       ...(clientId ? { clientId } : {}),
     };
     const transactions = await withTenant(tenantId, (tx) =>
@@ -146,9 +146,7 @@ async function handle(req: Request, seg: string[]): Promise<Response> {
       const v = str(k);
       return v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T00:00:00Z`) : null;
     };
-    const status = (STATUSES as readonly string[]).includes(str("status") ?? "")
-      ? (str("status") as (typeof STATUSES)[number])
-      : "UNDER_CONTRACT";
+    const status = normalizeStatus(str("status")) ?? "UNDER_CONTRACT";
     const side = (SIDES as readonly string[]).includes(str("side") ?? "")
       ? (str("side") as (typeof SIDES)[number])
       : "BUY_SIDE";

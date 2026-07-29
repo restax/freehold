@@ -12,6 +12,8 @@
  * wrong. Tested rather than trusted.
  */
 
+import { OPEN_STATUSES } from "./transaction-status";
+
 export const TRANSACTION_VIEWS = [
   { key: "all", label: "All" },
   { key: "open", label: "Open" },
@@ -29,8 +31,11 @@ export function isViewKey(v: unknown): v is TransactionViewKey {
 /** Days out that counts as "closing soon" on the saved view. */
 export const CLOSING_SOON_DAYS = 14;
 
-/** Statuses that mean the file is still live work, not history. */
-export const OPEN_STATUSES = ["LISTING", "UNDER_CONTRACT", "PENDING"] as const;
+/**
+ * Re-exported so the page can keep importing its filters and its status set
+ * from one module, while lib/transaction-status.ts stays the definition.
+ */
+export { OPEN_STATUSES };
 
 export interface ViewShape {
   /** Restrict to these statuses; empty means every status. */

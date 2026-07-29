@@ -272,7 +272,7 @@ export async function seedTenantData(tenantId: string, userId: string) {
         propertyAddress: "88 Harbor Lane (Sample)",
         city: "Springfield",
         state: "IL",
-        status: "LISTING",
+        status: "ACTIVE",
         side: "SELL_SIDE",
         isSample: true,
       },

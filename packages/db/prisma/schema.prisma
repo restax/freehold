@@ -844,8 +844,14 @@ model Client {
   @@map("client")
 }
 
+/// The listing lifecycle, in the order a file moves through it. Everything
+/// before CLOSED/CANCELLED is "open" — see OPEN_STATUSES in
+/// lib/transaction-views.ts, which is the single definition of that split.
 enum TransactionStatus {
-  LISTING
+  DRAFT
+  COMING_SOON
+  ACTIVE
+  TMP_OFF_MARKET
   UNDER_CONTRACT
   PENDING
   CLOSED

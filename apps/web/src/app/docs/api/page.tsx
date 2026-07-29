@@ -83,8 +83,9 @@ export default function ApiDocsPage() {
             Your clients with transaction counts and portal links (audience, active, last opened).
           </Endpoint>
           <Endpoint method="GET" path="/v1/transactions?status=UNDER_CONTRACT">
-            List transactions, newest first (up to 200). Optional <code>status</code> filter:
-            LISTING, UNDER_CONTRACT, PENDING, CLOSED, CANCELLED.
+            List transactions, newest first (up to 200). Optional <code>status</code> filter: DRAFT,
+            COMING_SOON, ACTIVE, TMP_OFF_MARKET, UNDER_CONTRACT, PENDING, CLOSED, CANCELLED. The
+            retired LISTING is still accepted and stored as ACTIVE.
           </Endpoint>
           <Endpoint method="POST" path="/v1/transactions">
             Create a transaction. <code>propertyAddress</code> is required; <code>status</code>,{" "}

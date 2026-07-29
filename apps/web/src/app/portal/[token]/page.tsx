@@ -19,7 +19,7 @@ import { submitPortalForm } from "@/lib/actions/public-forms";
 import { type Appearance, portalVars, tenantAppearance } from "@/lib/appearance";
 import { portalFormsFor, trimKnownClientFields } from "@/lib/form-resolve";
 import { parseLayout } from "@/lib/form-schema";
-import { fmtDate, fmtMoney, ROLE_LABEL, STATUS_LABEL } from "@/lib/format";
+import { fmtDate, fmtMoney, ROLE_LABEL } from "@/lib/format";
 import { resolveAgentPortal, resolvePortal } from "@/lib/portal";
 import { type PortalVendorData, portalVendorData } from "@/lib/portal-vendors";
 import { type SideLabels, sideLabel, tenantSideLabels } from "@/lib/side-labels";
@@ -466,7 +466,20 @@ function ClientPortal(
 
 /* ---------------- Managed Agent portal ---------------- */
 
-const PIPELINE_ORDER = ["UNDER_CONTRACT", "PENDING", "LISTING", "CLOSED"] as const;
+/**
+ * The four numbers an agent wants at a glance, each a group rather than a
+ * single status — the lifecycle splits pre-offer work four ways, and counting
+ * one of them would quietly leave a client's file out of every column.
+ *
+ * DRAFT is deliberately absent: a draft isn't a deal yet, and showing one to
+ * the client would be promising work that hasn't started.
+ */
+const PIPELINE_ORDER = [
+  { label: "Under contract", statuses: ["UNDER_CONTRACT"] },
+  { label: "Pending", statuses: ["PENDING"] },
+  { label: "On market", statuses: ["COMING_SOON", "ACTIVE", "TMP_OFF_MARKET"] },
+  { label: "Closed", statuses: ["CLOSED"] },
+] as const;
 
 function AgentPortal(
   portal: NonNullable<Awaited<ReturnType<typeof resolveAgentPortal>>>,
@@ -519,12 +532,12 @@ function AgentPortal(
       <div className="mx-auto -mt-8 flex max-w-3xl flex-col gap-5 px-4 pb-10">
         <section className={cardCls}>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {PIPELINE_ORDER.map((s) => (
-              <div key={s}>
+            {PIPELINE_ORDER.map((group) => (
+              <div key={group.label}>
                 <p className="font-serif text-3xl font-semibold tabular-nums leading-none">
-                  {byStatus(s)}
+                  {group.statuses.reduce((n, s) => n + byStatus(s), 0)}
                 </p>
-                <p className="mt-1 text-xs text-stone-500">{STATUS_LABEL[s]}</p>
+                <p className="mt-1 text-xs text-stone-500">{group.label}</p>
               </div>
             ))}
           </div>

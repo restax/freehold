@@ -8,7 +8,32 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
  * Keys are stored hashed; every request runs inside the tenant's RLS scope.
  */
 
-const STATUSES = ["LISTING", "UNDER_CONTRACT", "PENDING", "CLOSED", "CANCELLED"] as const;
+const STATUSES = [
+  "DRAFT",
+  "COMING_SOON",
+  "ACTIVE",
+  "TMP_OFF_MARKET",
+  "UNDER_CONTRACT",
+  "PENDING",
+  "CLOSED",
+  "CANCELLED",
+] as const;
+
+/**
+ * LISTING was a documented value before the lifecycle split; it now means
+ * ACTIVE. Kept as an alias so an integration written against the old docs
+ * doesn't start silently filtering nothing. Mirrors normalizeStatus in the
+ * web app's lib/transaction-status.ts — this service can't import from it.
+ */
+function normalizeStatus(raw: unknown): (typeof STATUSES)[number] | null {
+  if (typeof raw !== "string") return null;
+  const key = raw
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+  if ((STATUSES as readonly string[]).includes(key)) return key as (typeof STATUSES)[number];
+  return key === "LISTING" ? "ACTIVE" : null;
+}
 const SIDES = ["BUY_SIDE", "SELL_SIDE", "DUAL"] as const;
 
 async function authenticate(req: FastifyRequest, reply: FastifyReply): Promise<string | null> {
@@ -123,9 +148,10 @@ export function registerV1(app: FastifyInstance) {
     const tenantId = await authenticate(req, reply);
     if (!tenantId) return;
     const { status } = req.query as { status?: string };
-    const where = STATUSES.includes(status as (typeof STATUSES)[number])
-      ? // biome-ignore lint/suspicious/noExplicitAny: validated against STATUSES above
-        { status: status as any }
+    const normalized = normalizeStatus(status);
+    const where = normalized
+      ? // biome-ignore lint/suspicious/noExplicitAny: validated by normalizeStatus above
+        { status: normalized as any }
       : {};
     const transactions = await withTenant(tenantId, (tx) =>
       tx.transaction.findMany({ where, orderBy: { createdAt: "desc" }, take: 200 }),
@@ -141,9 +167,7 @@ export function registerV1(app: FastifyInstance) {
     if (!propertyAddress) {
       return reply.code(422).send({ error: "propertyAddress_required" });
     }
-    const status = STATUSES.includes(body.status as (typeof STATUSES)[number])
-      ? (body.status as string)
-      : "UNDER_CONTRACT";
+    const status = normalizeStatus(body.status) ?? "UNDER_CONTRACT";
     const side = SIDES.includes(body.side as (typeof SIDES)[number])
       ? (body.side as string)
       : "BUY_SIDE";

@@ -25,7 +25,12 @@ export function Badge({ tone, children }: { tone: BadgeTone; children: React.Rea
 }
 
 const TXN_TONE: Record<string, BadgeTone> = {
-  LISTING: "attention",
+  // Pre-offer statuses share the "attention" tone: the file is on the market
+  // and needs chasing, which is the same signal LISTING used to carry.
+  DRAFT: "neutral",
+  COMING_SOON: "attention",
+  ACTIVE: "attention",
+  TMP_OFF_MARKET: "attention",
   UNDER_CONTRACT: "progress",
   PENDING: "progress",
   CLOSED: "success",

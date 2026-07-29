@@ -23,8 +23,11 @@ import { card, tableWrap, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
+// The pipeline strip stays four columns wide on purpose — it's a glance, not
+// the full lifecycle. ACTIVE stands in for everything pre-offer (the other
+// pre-offer statuses are visible on the transactions list itself).
 const PIPELINE: TransactionStatus[] = [
-  TransactionStatus.LISTING,
+  TransactionStatus.ACTIVE,
   TransactionStatus.UNDER_CONTRACT,
   TransactionStatus.PENDING,
   TransactionStatus.CLOSED,
