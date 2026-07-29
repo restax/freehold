@@ -1341,12 +1341,6 @@ model Transaction {
   onMarketDate           DateTime?                     @map("on_market_date") @db.Date
   expireDate             DateTime?                     @map("expire_date") @db.Date
   mlsId                  String?                       @map("mls_id")
-  /// Deprecated, no longer read or written. Left in place so the commission
-  /// backfill in 20260729060000 stays re-runnable if it read a percentage
-  /// wrongly; a follow-up migration drops both once the new fields are seen
-  /// carrying real data. Do not build anything on these.
-  coAgentClientId        String?                       @map("co_agent_client_id")
-  payout                 Json?
   /// Our own side's agents on this file, as CRM contacts. Distinct from
   /// `parties` (which records both sides as read off the contract) and from
   /// `client` (who hired us — for a brokerage client the primary agent is one
