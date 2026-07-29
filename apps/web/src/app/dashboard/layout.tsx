@@ -1,10 +1,12 @@
-import { withTenant } from "@freehold/db";
+import { prisma, withTenant } from "@freehold/db";
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { DashboardNav, ProfileNavLink, SettingsNavLink } from "@/components/dashboard-nav";
+import { DashboardNav } from "@/components/dashboard-nav";
 import { DemoWatermark } from "@/components/demo-watermark";
 import { Wordmark } from "@/components/marketing";
 import { SignOutButton } from "@/components/sign-out-button";
 import { SupportTicketWidget } from "@/components/support-ticket-widget";
+import { TopBar } from "@/components/top-bar";
 import { VoiceWidget } from "@/components/voice-widget";
 import { openBillingPortal } from "@/lib/actions/billing";
 import { brandRamp, priorityVars, tenantAppearance } from "@/lib/appearance";
@@ -32,6 +34,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
     ? 0
     : await withTenant(active.id, (tx) => tx.formSubmission.count({ where: { status: "new" } }));
   const appearance = await tenantAppearance(active.id);
+  // The workspace's own mark, shown at the top of the rail when they've set one.
+  const org = await prisma.organization.findUnique({
+    where: { id: active.id },
+    select: { logo: true },
+  });
 
   // Failed-renewal lock: access is paused until payment is fixed, but nothing
   // is deleted and the recovery path (Stripe portal, sign-out) stays open.
@@ -86,7 +93,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div
-      className="flex min-h-screen"
+      className="flex min-h-screen flex-col"
       style={{ ...themeVars, ...priorityVars(appearance) } as React.CSSProperties}
     >
       {isDemoTenant && <DemoWatermark />}
@@ -101,86 +108,63 @@ export default async function DashboardLayout({ children }: { children: React.Re
           label. Below lg it collapses to an icon rail instead of shrinking —
           still legible (each item keeps a tooltip), and the content area gets
           its width back. */}
-      <aside className="sticky top-0 flex h-screen w-14 shrink-0 flex-col overflow-y-auto overflow-x-hidden border-r border-stone-200 bg-white px-2 py-6 lg:w-56 lg:px-4">
-        <div className="mb-1 flex shrink-0 justify-center lg:justify-start">
-          <Wordmark href="/dashboard" collapsible />
-        </div>
-        {/* shrink-0 matters here specifically: `truncate` sets overflow:hidden,
-            which per the flexbox spec gives this item an automatic minimum
-            size of 0 (instead of its content size). Once the sidebar's total
-            content outgrows h-screen, flexbox shrinks its children to fit —
-            and this item, uniquely allowed to shrink to nothing, was the one
-            that collapsed to a sliver while its siblings barely moved. The
-            fix is to opt every sidebar section out of shrinking, so
-            overflow-y-auto scrolls the sidebar instead of crushing a child. */}
-        <div className="mb-4 mt-1 hidden shrink-0 truncate rounded-lg bg-stone-100/80 px-2.5 py-1.5 text-xs font-medium text-stone-500 lg:block">
-          {active?.name}
-        </div>
-        {isGuest && (
-          <p className="mb-3 hidden shrink-0 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900 lg:block">
-            You're covering files for this workspace as a guest.
-          </p>
-        )}
-        {!isGuest && (
-          <details className="group relative mb-3 shrink-0">
-            <summary
-              title="Create"
-              className="flex cursor-pointer select-none items-center justify-center gap-1 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700"
-            >
-              +<span className="hidden lg:inline">&nbsp;Create</span>
-            </summary>
-            {/* min-w keeps the menu usable when the rail itself is only 56px. */}
-            <div className="absolute left-0 z-10 mt-1 flex min-w-40 flex-col rounded-lg border border-stone-200 bg-white py-1 shadow-lg lg:right-0">
-              <a
-                href="/dashboard/transactions/new"
-                className="px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
-              >
-                Transaction
-              </a>
-              <a
-                href="/dashboard/contacts/new"
-                className="px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
-              >
-                Contact
-              </a>
-              <a
-                href="/dashboard/contacts?view=touch"
-                className="px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
-              >
-                Contact note
-              </a>
-              <a
-                href="/dashboard/transactions"
-                className="px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
-              >
-                Task
-              </a>
-            </div>
-          </details>
-        )}
-        <DashboardNav isGuest={isGuest} supportUnread={supportUnread} formsPending={formsPending} />
-        <div className="mt-auto flex shrink-0 flex-col gap-1 border-t border-stone-200 pt-3">
-          {/* Text-only composer with no icon to collapse to — hidden on the
-              rail, where Support is still one click away in the nav above. */}
-          <div className="hidden lg:block">
-            <SupportTicketWidget />
-          </div>
-          <ProfileNavLink />
-          {!isGuest && <SettingsNavLink />}
-          <div className="flex flex-col items-center gap-1 pt-1 lg:flex-row lg:items-center lg:justify-between lg:gap-2 lg:px-2.5">
-            <span className="hidden truncate text-xs text-stone-400 lg:inline">
-              {session.user.email}
+      <TopBar
+        userName={session.user.name ?? session.user.email}
+        userEmail={session.user.email}
+        isGuest={isGuest}
+        alerts={supportUnread + formsPending}
+      />
+      <div className="flex min-h-0 flex-1">
+        <aside className="sticky top-14 flex h-[calc(100vh-3.5rem)] w-14 shrink-0 flex-col overflow-y-auto overflow-x-hidden border-r border-stone-200 bg-white px-2 py-6 lg:w-56 lg:px-4">
+          {/* The workspace owns the top of the rail now — its name, and its
+            logo when one has been uploaded. Freehold's own mark moved to the
+            foot of the menu: whose software this is matters less, every
+            minute of the day, than whose workspace you're in. */}
+          <Link
+            href="/dashboard"
+            title={active?.name}
+            className="mb-4 flex shrink-0 items-center gap-2 rounded-lg px-1 py-1 transition-colors hover:bg-stone-100 lg:px-2"
+          >
+            {org?.logo ? (
+              // biome-ignore lint/performance/noImgElement: tenant logo is a data URL, not a static asset next/image can optimise
+              <img src={org.logo} alt="" className="h-7 w-7 shrink-0 rounded object-contain" />
+            ) : (
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-brand-600 text-sm font-bold text-white">
+                {(active?.name ?? "?").trim().charAt(0).toUpperCase()}
+              </span>
+            )}
+            <span className="hidden truncate text-sm font-semibold text-stone-900 lg:block">
+              {active?.name}
             </span>
-            <SignOutButton collapsible />
+          </Link>
+          {isGuest && (
+            <p className="mb-3 hidden shrink-0 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900 lg:block">
+              You're covering files for this workspace as a guest.
+            </p>
+          )}
+          <DashboardNav
+            isGuest={isGuest}
+            supportUnread={supportUnread}
+            formsPending={formsPending}
+          />
+          <div className="mt-auto flex shrink-0 flex-col gap-2 border-t border-stone-200 pt-3">
+            {/* Text-only composer with no icon to collapse to — hidden on the
+              rail, where Support is still one click away. */}
+            <div className="hidden lg:block">
+              <SupportTicketWidget />
+            </div>
+            <div className="flex justify-center pt-1 lg:justify-start lg:px-1">
+              <Wordmark href="/dashboard" collapsible />
+            </div>
           </div>
-        </div>
-      </aside>
-      {/* min-w-0 lets the content column shrink below its intrinsic width — a
+        </aside>
+        {/* min-w-0 lets the content column shrink below its intrinsic width — a
           flex item defaults to min-width:auto, which is what was pushing the
           whole page into a horizontal scroll on a narrow window. */}
-      <main id="main" className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-        <div className="mx-auto max-w-[1920px]">{children}</div>
-      </main>
+        <main id="main" className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          <div className="mx-auto max-w-[1920px]">{children}</div>
+        </main>
+      </div>
       {/* Lives in the layout so voice search is one press away on every
           dashboard page, not just a destination you have to navigate to. */}
       <VoiceWidget />

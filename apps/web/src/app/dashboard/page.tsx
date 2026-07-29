@@ -1,10 +1,12 @@
 import { TaskStatus, TransactionStatus, withTenant } from "@freehold/db";
 import { CalendarCheck, CheckCircle, Sun, Warning } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { AddressPill } from "@/components/address-pill";
 import { StatusBadge, statusDot } from "@/components/badges";
 import { DemoWelcome } from "@/components/demo-welcome";
 import { EmptyState } from "@/components/empty-state";
 import { HubNews } from "@/components/hub-news";
+import { SectionCard } from "@/components/section-card";
 import { toggleTask } from "@/lib/actions/tasks";
 import { rankAlerts, transactionAlerts } from "@/lib/alerts";
 import { billingExceptions, invoiceMoney, transactionBilling } from "@/lib/billing";
@@ -314,13 +316,6 @@ export default async function DashboardPage() {
     (t) => !(t.completedAt && dayKey(t.completedAt) === todayKey),
   );
 
-  const heading = now.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-
   function TaskRow({ t, tone }: { t: (typeof openTasks)[number]; tone: "red" | "default" }) {
     const eff = effectivePriority(t, t.transaction ?? null);
     return (
@@ -354,12 +349,12 @@ export default async function DashboardPage() {
           </span>
         )}
         {t.transaction && (
-          <Link
+          <AddressPill
             href={`/dashboard/transactions/${t.transaction.id}`}
-            className="ml-auto truncate text-sm text-brand-600 hover:underline"
+            className="ml-auto max-w-[12rem] sm:max-w-[16rem]"
           >
             {t.transaction.propertyAddress}
-          </Link>
+          </AddressPill>
         )}
       </li>
     );
@@ -368,10 +363,6 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-4">
       <DemoWelcome />
-      <div>
-        <p className="text-sm text-stone-500">{heading}</p>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Your day</h1>
-      </div>
 
       {licenseAlerts.length > 0 && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -393,26 +384,21 @@ export default async function DashboardPage() {
           the thing most likely to go wrong, and it's invisible everywhere
           else on this page. */}
       {needsAttention.length > 0 && (
-        <section className={`${card} border-amber-300/70`}>
-          <h2 className="mb-1 flex items-center gap-2 font-medium">
-            <Warning size={18} weight="fill" className="text-amber-600" aria-hidden />
-            Needs attention
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
-              {needsAttention.length}
-            </span>
-          </h2>
+        <SectionCard
+          title="Needs attention"
+          count={needsAttention.length}
+          icon={<Warning size={15} weight="fill" className="text-amber-600" aria-hidden />}
+          className="border-amber-300/70"
+        >
           <p className="mb-3 text-sm text-stone-500">
             Quiet files, and files with a critical date close enough that a quiet day matters.
           </p>
           <ul className="flex flex-col divide-y divide-stone-100">
             {needsAttention.slice(0, 8).map((a) => (
               <li key={a.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2">
-                <Link
-                  href={`/dashboard/transactions/${a.id}`}
-                  className="text-sm font-medium text-brand-700 hover:text-brand-600"
-                >
+                <AddressPill href={`/dashboard/transactions/${a.id}`}>
                   {a.propertyAddress}
-                </Link>
+                </AddressPill>
                 {a.staleness.stale && (
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
                     {a.staleness.quietDays}d quiet
@@ -442,18 +428,19 @@ export default async function DashboardPage() {
               </Link>
             </p>
           )}
-        </section>
+        </SectionCard>
       )}
 
       {revenue && (
-        <section className={card}>
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="font-medium">Money</h2>
+        <SectionCard
+          title="Money"
+          action={
             <Link href="/dashboard/invoices" className="text-xs text-brand-700 hover:underline">
               Invoices →
             </Link>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
+          }
+        >
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
             {(
               [
                 ["Outstanding", fmtCents(revenue.outstanding), "text-stone-800"],
@@ -485,386 +472,377 @@ export default async function DashboardPage() {
               </div>
             ))}
           </div>
-        </section>
+        </SectionCard>
       )}
 
-      {/* Panels flow into 2 columns on wide screens, 3 on ultrawide — a
-          balanced masonry so the day fills the display instead of one long,
-          sparse column. Each panel stays whole (break-inside-avoid). */}
-      <div className="columns-1 gap-6 lg:columns-2 2xl:columns-3 [&>*]:mb-6 [&>*]:break-inside-avoid">
-        {/* Today */}
-        <section className={card}>
-          <h2 className="mb-3 flex items-center gap-2 font-medium">
-            <Sun size={18} weight="fill" className="text-brand-600" aria-hidden />
-            Today
-          </h2>
+      {/* Two columns: the day's work on the left (Today runs long, so it's
+          the only thing in its column), everything else — stats first,
+          then the rest of the week — stacked on the right. */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+        <div className="flex flex-col gap-6">
+          {/* Today */}
+          <SectionCard
+            title="Today"
+            icon={<Sun size={15} weight="fill" className="text-brand-600" aria-hidden />}
+          >
+            {todayClosings.map((c) => (
+              <AddressPill
+                key={c.id}
+                href={`/dashboard/transactions/${c.id}`}
+                className="mb-2 w-full px-3 py-2.5"
+                icon={<CalendarCheck size={17} weight="fill" aria-hidden />}
+              >
+                Closing day — {c.propertyAddress}
+              </AddressPill>
+            ))}
 
-          {todayClosings.map((c) => (
-            <Link
-              key={c.id}
-              href={`/dashboard/transactions/${c.id}`}
-              className="mb-2 flex items-center gap-2.5 rounded-lg bg-brand-50 px-3 py-2.5 text-sm font-medium text-brand-800 transition-colors hover:bg-brand-100"
-            >
-              <CalendarCheck size={17} weight="fill" className="text-brand-700" aria-hidden />
-              Closing day — {c.propertyAddress}
-            </Link>
-          ))}
+            {overdue.length > 0 && (
+              <div className="mb-3">
+                <h3 className="mb-1 flex items-center gap-1.5 text-sm font-medium text-red-600">
+                  <Warning size={15} weight="fill" aria-hidden />
+                  Overdue
+                </h3>
+                <ul className="flex flex-col">
+                  {overdue.map((t) => (
+                    <TaskRow key={t.id} t={t} tone="red" />
+                  ))}
+                </ul>
+              </div>
+            )}
 
-          {overdue.length > 0 && (
-            <div className="mb-3">
-              <h3 className="mb-1 flex items-center gap-1.5 text-sm font-medium text-red-600">
-                <Warning size={15} weight="fill" aria-hidden />
-                Overdue
-              </h3>
+            {dueToday.length > 0 ? (
               <ul className="flex flex-col">
-                {overdue.map((t) => (
-                  <TaskRow key={t.id} t={t} tone="red" />
+                {dueToday.map((t) => (
+                  <TaskRow key={t.id} t={t} tone="default" />
                 ))}
               </ul>
-            </div>
-          )}
+            ) : (
+              overdue.length === 0 &&
+              todayClosings.length === 0 &&
+              doneToday.length === 0 &&
+              noDate.length === 0 && (
+                <p className="text-sm text-stone-500">Nothing due today. Enjoy the quiet.</p>
+              )
+            )}
 
-          {dueToday.length > 0 ? (
-            <ul className="flex flex-col">
-              {dueToday.map((t) => (
-                <TaskRow key={t.id} t={t} tone="default" />
-              ))}
-            </ul>
-          ) : (
-            overdue.length === 0 &&
-            todayClosings.length === 0 &&
-            doneToday.length === 0 &&
-            noDate.length === 0 && (
-              <p className="text-sm text-stone-500">Nothing due today. Enjoy the quiet.</p>
-            )
-          )}
-
-          {noDate.length > 0 && (
-            <div
-              className={
-                dueToday.length > 0 || overdue.length > 0
-                  ? "mt-3 border-t border-stone-100 pt-2"
-                  : ""
-              }
-            >
-              <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-stone-400">
-                Anytime — no due date
-              </h3>
-              <ul className="flex flex-col">
-                {noDate.map((t) => (
-                  <li
-                    key={t.id}
-                    className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0"
-                  >
-                    <form action={toggleTask}>
-                      <input type="hidden" name="id" value={t.id} />
-                      <input type="hidden" name="transactionId" value={t.transactionId ?? ""} />
-                      <button
-                        type="submit"
-                        title="Mark done"
-                        className="h-5 w-5 rounded border border-stone-300 transition-colors hover:border-brand-600"
-                      />
-                    </form>
-                    <span className="text-sm">{t.title}</span>
-                    {t.transaction && (
-                      <Link
-                        href={`/dashboard/transactions/${t.transaction.id}`}
-                        className="ml-auto truncate text-sm text-brand-600 hover:underline"
-                      >
-                        {t.transaction.propertyAddress}
-                      </Link>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {doneToday.length > 0 && (
-            <div
-              className={
-                dueToday.length > 0 || overdue.length > 0 || noDate.length > 0
-                  ? "mt-3 border-t border-stone-100 pt-2"
-                  : ""
-              }
-            >
-              <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-stone-400">
-                Done today — click a check to undo
-              </h3>
-              <ul className="flex flex-col">
-                {doneToday.map((t) => (
-                  <li
-                    key={t.id}
-                    className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0"
-                  >
-                    <form action={toggleTask}>
-                      <input type="hidden" name="id" value={t.id} />
-                      <input type="hidden" name="transactionId" value={t.transactionId ?? ""} />
-                      <button
-                        type="submit"
-                        title="Undo — reopen this task"
-                        className="flex h-5 w-5 items-center justify-center rounded border border-brand-600 bg-brand-600 text-xs text-white transition hover:bg-brand-700"
-                      >
-                        ✓
-                      </button>
-                    </form>
-                    <span className="text-sm text-stone-400 line-through">{t.title}</span>
-                    {t.transaction && (
-                      <Link
-                        href={`/dashboard/transactions/${t.transaction.id}`}
-                        className="ml-auto truncate text-sm text-stone-400 hover:text-brand-600 hover:underline"
-                      >
-                        {t.transaction.propertyAddress}
-                      </Link>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </section>
-
-        {/* Your assigned files */}
-        {myFiles.length > 0 && (
-          <section className={card}>
-            <h2 className="mb-1 font-medium">Your files</h2>
-            <p className="mb-2 text-xs text-stone-400">
-              Active transactions assigned to you, soonest closing first.
-            </p>
-            <ul className="flex flex-col">
-              {myFiles.map((t) => (
-                <li
-                  key={t.id}
-                  className="flex items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
-                >
-                  <Link
-                    href={`/dashboard/transactions/${t.id}`}
-                    className="font-medium text-brand-700 hover:underline"
-                  >
-                    {t.propertyAddress}
-                  </Link>
-                  <StatusBadge status={t.status} />
-                  {t.client && <span className="text-stone-400">{t.client.name}</span>}
-                  {t.closeDate && (
-                    <span className="ml-auto tabular-nums text-stone-400">
-                      closes {fmtDate(t.closeDate)}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-            <Link
-              href="/dashboard/transactions?mine=1"
-              className="mt-2 inline-block text-sm text-brand-700 hover:underline"
-            >
-              All your files →
-            </Link>
-          </section>
-        )}
-
-        {/* Prospecting queue */}
-        {prospecting.length > 0 && (
-          <section className={card}>
-            <h2 className="mb-1 font-medium">Prospecting due</h2>
-            <p className="mb-2 text-xs text-stone-400">
-              Contacts whose auto-prospect cadence says it's time. Open one and hit "Touched today"
-              when you've reached out.
-            </p>
-            <ul className="flex flex-col">
-              {prospecting.map((c) => (
-                <li
-                  key={c.id}
-                  className="flex items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
-                >
-                  <Link
-                    href={`/dashboard/contacts/${c.id}`}
-                    className="font-medium text-brand-700 hover:underline"
-                  >
-                    {c.name}
-                  </Link>
-                  {c.grade && (
-                    <span className="rounded-full bg-brand-50 px-1.5 py-0.5 text-xs font-semibold text-brand-800">
-                      {c.grade}
-                    </span>
-                  )}
-                  <span className="ml-auto tabular-nums text-stone-400">
-                    due {fmtDate(c.nextTouchAt)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <Link
-              href="/dashboard/contacts?view=touch"
-              className="mt-2 inline-block text-sm text-brand-700 hover:underline"
-            >
-              All due contacts →
-            </Link>
-          </section>
-        )}
-
-        {/* Week agenda */}
-        <section className={card}>
-          <h2 className="mb-3 font-medium">Next 7 days</h2>
-          {agendaDays.length === 0 ? (
-            <p className="text-sm text-stone-500">No deadlines or closings on the horizon.</p>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {agendaDays.map(({ date, tasks, closings: dayClosings }) => (
-                <div key={dayKey(date)} className="flex gap-4">
-                  <div className="w-24 shrink-0 pt-1.5">
-                    <p className="text-sm font-medium">{dayLabel(date, todayKey)}</p>
-                    <p className="text-xs tabular-nums text-stone-400">{dayKey(date)}</p>
-                  </div>
-                  <div className="min-w-0 flex-1 border-l-2 border-stone-100 pl-4">
-                    {dayClosings.map((c) => (
-                      <Link
-                        key={c.id}
-                        href={`/dashboard/transactions/${c.id}`}
-                        className="mb-1 flex items-center gap-2 rounded-lg bg-brand-50 px-2.5 py-1.5 text-sm font-medium text-brand-800 transition-colors hover:bg-brand-100"
-                      >
-                        <CalendarCheck
-                          size={15}
-                          weight="fill"
-                          className="text-brand-700"
-                          aria-hidden
+            {noDate.length > 0 && (
+              <div
+                className={
+                  dueToday.length > 0 || overdue.length > 0
+                    ? "mt-3 border-t border-stone-100 pt-2"
+                    : ""
+                }
+              >
+                <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-stone-400">
+                  Anytime — no due date
+                </h3>
+                <ul className="flex flex-col">
+                  {noDate.map((t) => (
+                    <li
+                      key={t.id}
+                      className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0"
+                    >
+                      <form action={toggleTask}>
+                        <input type="hidden" name="id" value={t.id} />
+                        <input type="hidden" name="transactionId" value={t.transactionId ?? ""} />
+                        <button
+                          type="submit"
+                          title="Mark done"
+                          className="h-5 w-5 rounded border border-stone-300 transition-colors hover:border-brand-600"
                         />
-                        Closing — {c.propertyAddress}
-                      </Link>
-                    ))}
-                    <ul className="flex flex-col">
-                      {tasks.map((t) => (
-                        <TaskRow key={t.id} t={t} tone="default" />
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+                      </form>
+                      <span className="text-sm">{t.title}</span>
+                      {t.transaction && (
+                        <AddressPill
+                          href={`/dashboard/transactions/${t.transaction.id}`}
+                          className="ml-auto max-w-[12rem] sm:max-w-[16rem]"
+                        >
+                          {t.transaction.propertyAddress}
+                        </AddressPill>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-        {/* Pipeline */}
-        <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-stone-200/70 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_8px_rgb(41_37_36/0.04)]">
-          {PIPELINE.map((s, i) => (
-            <Link
-              key={s}
-              href={`/dashboard/transactions?status=${s}`}
-              className={`flex flex-col gap-1 border-stone-100 px-5 pb-4 pt-5 transition-colors hover:bg-stone-50 ${
-                [
-                  "border-b border-r sm:border-b-0",
-                  "border-b sm:border-b-0 sm:border-r",
-                  "border-r",
-                  "",
-                ][i]
-              }`}
-            >
-              <span className="font-serif text-3xl font-semibold tabular-nums leading-none">
-                {countFor(s)}
-              </span>
-              <span className="mt-1 flex items-center gap-1.5 text-sm text-stone-500">
-                <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${statusDot(s)}`} />
-                {STATUS_LABEL[s]}
-              </span>
-            </Link>
-          ))}
+            {doneToday.length > 0 && (
+              <div
+                className={
+                  dueToday.length > 0 || overdue.length > 0 || noDate.length > 0
+                    ? "mt-3 border-t border-stone-100 pt-2"
+                    : ""
+                }
+              >
+                <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-stone-400">
+                  Done today — click a check to undo
+                </h3>
+                <ul className="flex flex-col">
+                  {doneToday.map((t) => (
+                    <li
+                      key={t.id}
+                      className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0"
+                    >
+                      <form action={toggleTask}>
+                        <input type="hidden" name="id" value={t.id} />
+                        <input type="hidden" name="transactionId" value={t.transactionId ?? ""} />
+                        <button
+                          type="submit"
+                          title="Undo — reopen this task"
+                          className="flex h-5 w-5 items-center justify-center rounded border border-brand-600 bg-brand-600 text-xs text-white transition hover:bg-brand-700"
+                        >
+                          ✓
+                        </button>
+                      </form>
+                      <span className="text-sm text-stone-400 line-through">{t.title}</span>
+                      {t.transaction && (
+                        <AddressPill
+                          href={`/dashboard/transactions/${t.transaction.id}`}
+                          className="ml-auto max-w-[12rem] sm:max-w-[16rem]"
+                        >
+                          {t.transaction.propertyAddress}
+                        </AddressPill>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </SectionCard>
+
+          {/* Your assigned files */}
+          {myFiles.length > 0 && (
+            <section className={card}>
+              <h2 className="mb-1 font-medium">Your files</h2>
+              <p className="mb-2 text-xs text-stone-400">
+                Active transactions assigned to you, soonest closing first.
+              </p>
+              <ul className="flex flex-col">
+                {myFiles.map((t) => (
+                  <li
+                    key={t.id}
+                    className="flex items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
+                  >
+                    <AddressPill href={`/dashboard/transactions/${t.id}`}>
+                      {t.propertyAddress}
+                    </AddressPill>
+                    <StatusBadge status={t.status} />
+                    {t.client && <span className="text-stone-400">{t.client.name}</span>}
+                    {t.closeDate && (
+                      <span className="ml-auto tabular-nums text-stone-400">
+                        closes {fmtDate(t.closeDate)}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/dashboard/transactions?mine=1"
+                className="mt-2 inline-block text-sm text-brand-700 hover:underline"
+              >
+                All your files →
+              </Link>
+            </section>
+          )}
+
+          {/* Prospecting queue */}
+          {prospecting.length > 0 && (
+            <section className={card}>
+              <h2 className="mb-1 font-medium">Prospecting due</h2>
+              <p className="mb-2 text-xs text-stone-400">
+                Contacts whose auto-prospect cadence says it's time. Open one and hit "Touched
+                today" when you've reached out.
+              </p>
+              <ul className="flex flex-col">
+                {prospecting.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
+                  >
+                    <Link
+                      href={`/dashboard/contacts/${c.id}`}
+                      className="font-medium text-brand-700 hover:underline"
+                    >
+                      {c.name}
+                    </Link>
+                    {c.grade && (
+                      <span className="rounded-full bg-brand-50 px-1.5 py-0.5 text-xs font-semibold text-brand-800">
+                        {c.grade}
+                      </span>
+                    )}
+                    <span className="ml-auto tabular-nums text-stone-400">
+                      due {fmtDate(c.nextTouchAt)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/dashboard/contacts?view=touch"
+                className="mt-2 inline-block text-sm text-brand-700 hover:underline"
+              >
+                All due contacts →
+              </Link>
+            </section>
+          )}
         </div>
 
-        {/* Done earlier this week */}
-        {doneEarlier.length > 0 && (
-          <section className={card}>
-            <h2 className="mb-1 flex items-center gap-2 font-medium">
-              <CheckCircle size={18} weight="fill" className="text-brand-600" aria-hidden />
-              Done earlier this week
-            </h2>
-            <p className="mb-2 text-xs text-stone-400">Click a check to undo.</p>
-            <ul className="flex flex-col">
-              {doneEarlier.map((t) => {
-                return (
-                  <li
-                    key={t.id}
-                    className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0"
-                  >
-                    <form action={toggleTask}>
-                      <input type="hidden" name="id" value={t.id} />
-                      <input type="hidden" name="transactionId" value={t.transactionId ?? ""} />
-                      <button
-                        type="submit"
-                        title="Undo — reopen this task"
-                        className="flex h-5 w-5 items-center justify-center rounded border border-brand-600 bg-brand-600 text-xs text-white transition hover:bg-brand-700"
-                      >
-                        ✓
-                      </button>
-                    </form>
-                    <span className="whitespace-nowrap text-sm tabular-nums text-stone-400">
-                      {fmtDate(t.completedAt)}
-                    </span>
-                    <span className="text-sm text-stone-400 line-through">{t.title}</span>
-                    {t.transaction && (
-                      <Link
-                        href={`/dashboard/transactions/${t.transaction.id}`}
-                        className="ml-auto truncate text-sm text-stone-400 hover:text-brand-600 hover:underline"
-                      >
-                        {t.transaction.propertyAddress}
-                      </Link>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
-
-        {/* Recent transactions */}
-        <section className={card}>
-          <h2 className="mb-3 font-medium">Recent transactions</h2>
-          {recent.length === 0 ? (
-            <EmptyState
-              title="No transactions yet"
-              hint="Create your first transaction and Freehold will track its dates, tasks, people, and paperwork in one place."
-            >
-              <Link
-                href="/dashboard/transactions"
-                className="text-sm font-medium text-brand-700 hover:text-brand-600"
-              >
-                Create a transaction →
-              </Link>
-            </EmptyState>
-          ) : (
-            <div className={tableWrap}>
-              <table className="w-full">
-                <thead>
-                  <tr>
-                    <th className={th}>Property</th>
-                    <th className={th}>Client</th>
-                    <th className={th}>Status</th>
-                    <th className={th}>Close date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recent.map((t) => (
-                    <tr key={t.id} className={trHover}>
-                      <td className={td}>
-                        <Link
-                          href={`/dashboard/transactions/${t.id}`}
-                          className="font-medium text-brand-700 hover:text-brand-600"
-                        >
-                          {t.propertyAddress}
-                        </Link>
-                      </td>
-                      <td className={td}>{t.client?.name ?? "—"}</td>
-                      <td className={td}>
-                        <StatusBadge status={t.status} />
-                      </td>
-                      <td className={td}>{fmtDate(t.closeDate)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div className="flex flex-col gap-6">
+          {/* Transaction stats — first thing in the right column; more panels
+            will land here over time. */}
+          <SectionCard title="Transaction stats" bodyClassName="p-0">
+            <div className="grid grid-cols-2 sm:grid-cols-4">
+              {PIPELINE.map((s, i) => (
+                <Link
+                  key={s}
+                  href={`/dashboard/transactions?status=${s}`}
+                  className={`flex flex-col gap-0.5 border-stone-100 px-4 py-3 transition-colors hover:bg-stone-50 ${
+                    [
+                      "border-b border-r sm:border-b-0",
+                      "border-b sm:border-b-0 sm:border-r",
+                      "border-r",
+                      "",
+                    ][i]
+                  }`}
+                >
+                  <span className="font-serif text-2xl font-semibold tabular-nums leading-none">
+                    {countFor(s)}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-xs text-stone-500">
+                    <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${statusDot(s)}`} />
+                    {STATUS_LABEL[s]}
+                  </span>
+                </Link>
+              ))}
             </div>
-          )}
-        </section>
+          </SectionCard>
 
-        <HubNews />
+          {/* Week agenda */}
+          <SectionCard title="Next 7 days">
+            {agendaDays.length === 0 ? (
+              <p className="text-sm text-stone-500">No deadlines or closings on the horizon.</p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {agendaDays.map(({ date, tasks, closings: dayClosings }) => (
+                  <div key={dayKey(date)} className="flex gap-4">
+                    <div className="w-24 shrink-0 pt-1.5">
+                      <p className="text-sm font-medium">{dayLabel(date, todayKey)}</p>
+                      <p className="text-xs tabular-nums text-stone-400">{dayKey(date)}</p>
+                    </div>
+                    <div className="min-w-0 flex-1 border-l-2 border-stone-100 pl-4">
+                      {dayClosings.map((c) => (
+                        <AddressPill
+                          key={c.id}
+                          href={`/dashboard/transactions/${c.id}`}
+                          className="mb-1 w-full px-2.5 py-1.5"
+                          icon={<CalendarCheck size={15} weight="fill" aria-hidden />}
+                        >
+                          Closing — {c.propertyAddress}
+                        </AddressPill>
+                      ))}
+                      <ul className="flex flex-col">
+                        {tasks.map((t) => (
+                          <TaskRow key={t.id} t={t} tone="default" />
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+
+          {/* Done earlier this week */}
+          {doneEarlier.length > 0 && (
+            <SectionCard
+              title="Done earlier this week"
+              icon={<CheckCircle size={15} weight="fill" className="text-brand-600" aria-hidden />}
+            >
+              <p className="mb-2 text-xs text-stone-400">Click a check to undo.</p>
+              <ul className="flex flex-col">
+                {doneEarlier.map((t) => {
+                  return (
+                    <li
+                      key={t.id}
+                      className="flex items-center gap-3 border-b border-stone-100 py-2 last:border-0"
+                    >
+                      <form action={toggleTask}>
+                        <input type="hidden" name="id" value={t.id} />
+                        <input type="hidden" name="transactionId" value={t.transactionId ?? ""} />
+                        <button
+                          type="submit"
+                          title="Undo — reopen this task"
+                          className="flex h-5 w-5 items-center justify-center rounded border border-brand-600 bg-brand-600 text-xs text-white transition hover:bg-brand-700"
+                        >
+                          ✓
+                        </button>
+                      </form>
+                      <span className="whitespace-nowrap text-sm tabular-nums text-stone-400">
+                        {fmtDate(t.completedAt)}
+                      </span>
+                      <span className="text-sm text-stone-400 line-through">{t.title}</span>
+                      {t.transaction && (
+                        <AddressPill
+                          href={`/dashboard/transactions/${t.transaction.id}`}
+                          className="ml-auto max-w-[12rem] sm:max-w-[16rem]"
+                        >
+                          {t.transaction.propertyAddress}
+                        </AddressPill>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </SectionCard>
+          )}
+
+          {/* Recent transactions */}
+          <SectionCard title="Recent transactions">
+            {recent.length === 0 ? (
+              <EmptyState
+                title="No transactions yet"
+                hint="Create your first transaction and Freehold will track its dates, tasks, people, and paperwork in one place."
+              >
+                <Link
+                  href="/dashboard/transactions"
+                  className="text-sm font-medium text-brand-700 hover:text-brand-600"
+                >
+                  Create a transaction →
+                </Link>
+              </EmptyState>
+            ) : (
+              <div className={tableWrap}>
+                <table className="w-full">
+                  <thead>
+                    <tr>
+                      <th className={th}>Property</th>
+                      <th className={th}>Client</th>
+                      <th className={th}>Status</th>
+                      <th className={th}>Close date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recent.map((t) => (
+                      <tr key={t.id} className={trHover}>
+                        <td className={td}>
+                          <AddressPill href={`/dashboard/transactions/${t.id}`}>
+                            {t.propertyAddress}
+                          </AddressPill>
+                        </td>
+                        <td className={td}>{t.client?.name ?? "—"}</td>
+                        <td className={td}>
+                          <StatusBadge status={t.status} />
+                        </td>
+                        <td className={td}>{fmtDate(t.closeDate)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </SectionCard>
+
+          <HubNews />
+        </div>
       </div>
     </div>
   );

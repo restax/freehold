@@ -143,3 +143,42 @@ form:has(select[name="side"] option[value="DUAL"]:checked) .side-panel-buy {
     display: block;
   }
 }
+
+/* The top bar's ground colour.
+ *
+ * A desaturated green-grey rather than black: flat black sat hard against the
+ * warm stone greys the rest of the app uses, and read as a different product
+ * bolted on top. This is dark enough for white text at roughly 9:1 contrast
+ * while keeping a trace of the forest brand hue.
+ *
+ * A variable because it's the kind of value that gets nudged — one line here
+ * rather than hunting arbitrary values through the markup.
+ */
+:root {
+  --topbar: #3c4a43;
+  --topbar-hover: #4a5a52;
+}
+
+/* SectionCard's title-strip fill.
+ *
+ * Has to sit strictly between the page background (stone-50) and the card
+ * border — it was previously the same stone-50 as the page itself, so the
+ * "shaded" strip was invisible against its own surroundings. Tinted toward
+ * the top bar's green-grey so the two shaded surfaces read as one family
+ * rather than two unrelated greys.
+ */
+:root {
+  --section-header: #eef1ed;
+}
+
+/* The address pill — every clickable reference to a transaction's property
+ * address, anywhere on a dashboard page, renders the same way: a rounded
+ * earthy-green chip, one shade darker on hover. Deliberately not the
+ * saturated --color-brand emerald — that reads bright/synthetic as a fill
+ * color at this scale. See CLAUDE.md ("Address links").
+ */
+:root {
+  --pill-green: #e3e8d4;
+  --pill-green-hover: #cdd6b6;
+  --pill-green-text: #3f4c2b;
+}

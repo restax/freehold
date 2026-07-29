@@ -2,6 +2,7 @@
 
 import {
   AddressBook,
+  ArrowLeft,
   Buildings,
   CalendarBlank,
   Compass,
@@ -33,6 +34,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { VOICE_OPEN_EVENT } from "@/components/voice-widget";
+import { isAdminPath } from "@/lib/nav-sections";
 
 const SUPPORT_HREF = "/dashboard/support";
 const FORMS_HREF = "/dashboard/forms";
@@ -76,18 +78,37 @@ const GROUPS: NavGroup[] = [
       { href: "/dashboard/import", label: "Import", icon: DownloadSimple },
     ],
   },
+];
+
+/**
+ * The admin menu. Everything here is set-up-and-configure work rather than
+ * coordinating a file, so it lives behind the Admin button instead of making
+ * the everyday menu twice as long as it needs to be.
+ */
+const ADMIN_GROUPS: NavGroup[] = [
   {
-    label: "Business",
+    label: "Money",
     items: [
       { href: "/dashboard/invoices", label: "Invoices", icon: Receipt },
+      { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
+    ],
+  },
+  {
+    label: "Network",
+    items: [
       { href: "/dashboard/reviews", label: "Reviews", icon: Star },
       { href: "/dashboard/directory", label: "Directory", icon: Compass },
       { href: "/dashboard/vendors", label: "Vendors", icon: Toolbox },
       { href: "/dashboard/engagements", label: "Engagements", icon: Handshake },
+    ],
+  },
+  {
+    label: "Workspace",
+    items: [
+      { href: "/dashboard/settings", label: "Settings", icon: GearSix },
+      { href: "/dashboard/team", label: "Team", icon: UsersThree },
       { href: "/dashboard/website", label: "Website", icon: Globe },
       { href: "/dashboard/integrations", label: "Integrations", icon: PlugsConnected },
-      { href: "/dashboard/team", label: "Team", icon: UsersThree },
-      { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
       { href: "/dashboard/support", label: "Support", icon: Lifebuoy },
     ],
   },
@@ -218,11 +239,15 @@ export function DashboardNav({
 
   // Hiding these is courtesy, not security — every page refuses guests
   // server-side regardless of what the sidebar shows.
+  // Which menu shows is derived from the path, not held in state: a refresh
+  // keeps you where you were, and an admin URL opens with the admin menu.
+  const inAdmin = !isGuest && isAdminPath(pathname);
+  const source = inAdmin ? ADMIN_GROUPS : GROUPS;
   const groups = isGuest
-    ? GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => GUEST_HREFS.has(i.href)) })).filter(
-        (g) => g.items.length > 0,
-      )
-    : GROUPS;
+    ? source
+        .map((g) => ({ ...g, items: g.items.filter((i) => GUEST_HREFS.has(i.href)) }))
+        .filter((g) => g.items.length > 0)
+    : source;
 
   return (
     <nav className="flex shrink-0 flex-col">
@@ -257,6 +282,18 @@ export function DashboardNav({
           )}
         </div>
       ))}
+      {/* The way out of admin. Without it the only route back is the browser's
+          back button or hunting for the Admin toggle you came in by. */}
+      {inAdmin && (
+        <Link
+          href="/dashboard"
+          title="Back to your workspace"
+          className={`${navRowCls} mt-5 border-t border-stone-200 pt-4 text-stone-600 hover:bg-stone-100 hover:text-stone-900`}
+        >
+          <ArrowLeft size={16} className="shrink-0 text-stone-400" aria-hidden />
+          <span className={navLabelCls}>Back to workspace</span>
+        </Link>
+      )}
     </nav>
   );
 }
