@@ -2044,7 +2044,7 @@ export default async function TransactionDetailPage({
                       reads as blank. */}
                   <SideFields
                     labels={labels}
-                    panelClassName="sm:col-span-2 lg:col-span-4"
+                    className="sm:col-span-2 lg:col-span-4"
                     values={{
                       listPrice: txn.listPrice,
                       listDate: txn.listDate ? fmtDate(txn.listDate) : "",

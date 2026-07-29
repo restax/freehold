@@ -4,9 +4,14 @@ import { fieldGroupLabel, input, label } from "@/lib/ui";
 /**
  * The money and dates that belong to each side of a deal.
  *
- * A listing has a list price and a list date; a file under contract has a
- * contract price and an effective date; a dual file has both. Which panel
- * shows is driven entirely by the side <select> through CSS in globals.css
+ * The two panels sit side by side in one fixed row — sell on the left, buy on
+ * the right — and each keeps that spot whatever the side is. Switching between
+ * Buy, Sell and Dual only changes which is *visible*; nothing reflows, so a
+ * field a coordinator is reaching for never slides out from under the cursor.
+ * The row is as tall as the taller panel at all times, by design: reserved
+ * blank space is cheaper than movement.
+ *
+ * Visibility is driven by the side <select> through CSS in globals.css
  * (`.side-panel`), so this stays a plain server-rendered form with no client
  * JS and nothing to hydrate.
  *
@@ -19,11 +24,11 @@ import { fieldGroupLabel, input, label } from "@/lib/ui";
 export function SideFields({
   labels,
   values,
-  panelClassName = "",
+  className = "",
 }: {
   labels: SideLabels;
-  /** Extra classes on each panel — the edit form's grid needs a column span. */
-  panelClassName?: string;
+  /** Extra classes on the row — the edit form's grid needs a column span. */
+  className?: string;
   /** Existing values, on the edit form. Omitted when creating. */
   values?: {
     listPrice?: number | null;
@@ -36,12 +41,12 @@ export function SideFields({
 }) {
   const v = values ?? {};
   return (
-    <>
-      <div
-        className={`side-panel side-panel-sell border-t border-stone-100 pt-3 ${panelClassName}`}
-      >
+    <div
+      className={`grid gap-x-6 gap-y-4 border-t border-stone-100 pt-3 sm:grid-cols-2 ${className}`}
+    >
+      <div className="side-panel side-panel-sell">
         <p className={fieldGroupLabel}>{labels.sell} info</p>
-        <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
           <label className={label}>
             List price ($)
             <input
@@ -76,7 +81,7 @@ export function SideFields({
         </div>
       </div>
 
-      <div className={`side-panel side-panel-buy border-t border-stone-100 pt-3 ${panelClassName}`}>
+      <div className="side-panel side-panel-buy">
         <p className={fieldGroupLabel}>{labels.buy} info</p>
         <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
           <label className={label}>
@@ -99,6 +104,6 @@ export function SideFields({
           </label>
         </div>
       </div>
-    </>
+    </div>
   );
 }

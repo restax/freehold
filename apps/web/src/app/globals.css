@@ -108,16 +108,38 @@ body {
  * visible until hydration and all of them visible if JS never arrives. :has()
  * with option:checked re-evaluates the moment the selection changes.
  *
+ * visibility, not display: the panels sit side by side and must keep their
+ * exact position when the side changes. display:none collapsed the hidden one
+ * out of flow, so switching between Buy, Sell and Dual made the surviving
+ * fields jump. visibility leaves the box where it is — the row is always as
+ * tall as the taller panel, and nothing moves. Hidden panels are also skipped
+ * by tabbing and can't be clicked, which display:none gave us for free.
+ *
  * The hidden inputs still submit. They must: the update action reads every
  * field unconditionally, so an absent one would null the stored value — a
  * buy-side file would silently lose the list price it already had.
  */
 .side-panel {
-  display: none;
+  visibility: hidden;
 }
 form:has(select[name="side"] option[value="SELL_SIDE"]:checked) .side-panel-sell,
 form:has(select[name="side"] option[value="DUAL"]:checked) .side-panel-sell,
 form:has(select[name="side"] option[value="BUY_SIDE"]:checked) .side-panel-buy,
 form:has(select[name="side"] option[value="DUAL"]:checked) .side-panel-buy {
-  display: block;
+  visibility: visible;
+}
+
+/* Stacked on a narrow screen the two panels are above/below rather than
+ * side by side, so reserving the space would leave a screen-height hole
+ * instead of holding a column still. There, collapse it. */
+@media (max-width: 639px) {
+  .side-panel {
+    display: none;
+  }
+  form:has(select[name="side"] option[value="SELL_SIDE"]:checked) .side-panel-sell,
+  form:has(select[name="side"] option[value="DUAL"]:checked) .side-panel-sell,
+  form:has(select[name="side"] option[value="BUY_SIDE"]:checked) .side-panel-buy,
+  form:has(select[name="side"] option[value="DUAL"]:checked) .side-panel-buy {
+    display: block;
+  }
 }
