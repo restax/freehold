@@ -7,6 +7,7 @@ import "react-pdf/dist/Page/TextLayer.css";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { Badge, type BadgeTone } from "@/components/badges";
+import { SIDE_LABEL } from "@/lib/format";
 import { btn, btnDanger, card } from "@/lib/ui";
 
 // The pdf.js worker is vendored into /public (copied from pdfjs-dist, kept in
@@ -212,6 +213,22 @@ export function ExtractionReview({
                         <input type="hidden" name="addr:state" />
                         <input type="hidden" name="addr:zip" />
                       </span>
+                    ) : !readOnly && f.key === "side" ? (
+                      /* Derived from the client picked at upload, not read off
+                         the page — so it's a choice, not a quote. Blank means
+                         nothing matched and the reviewer has to say. */
+                      <select
+                        name={`value:${f.id}`}
+                        defaultValue={f.value}
+                        className="rounded-md border border-stone-300 bg-white px-2 py-1 text-sm"
+                      >
+                        <option value="">— pick a side —</option>
+                        {Object.entries(SIDE_LABEL).map(([v, l]) => (
+                          <option key={v} value={v}>
+                            {l}
+                          </option>
+                        ))}
+                      </select>
                     ) : (
                       <span className="text-stone-700">{f.value}</span>
                     )}

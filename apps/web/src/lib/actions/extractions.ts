@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { type ContractParty, transactionUpdateFor } from "@/lib/ai/contract-schema";
 import { completeExtraction, extractionModel } from "@/lib/ai/extraction-run";
-import { str } from "@/lib/forms";
+import { optStr, str } from "@/lib/forms";
 import {
   creditBalance,
   getTenantPlan,
@@ -14,6 +14,7 @@ import {
   transactionHasPro,
   transactionLimit,
 } from "@/lib/plans";
+import { deriveSide } from "@/lib/side-derive";
 import { putObject } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
@@ -86,6 +87,8 @@ export async function createFromContract(formData: FormData) {
   const { tenantId, userId } = await requireTenant();
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0 || file.size > MAX_BYTES) return;
+  // Optional: naming the client here is what lets us work out the side below.
+  const clientId = optStr(formData, "clientId");
 
   // Plan cap first — never strand an upload against a full plan. Then, on Cloud
   // Free, upload-and-extract opts this brand-new transaction into pro AI (the
@@ -106,11 +109,19 @@ export async function createFromContract(formData: FormData) {
   const model = await extractionModel(tenantId);
 
   const { transaction, extraction, doc } = await withTenant(tenantId, async (tx) => {
+    const safeClientId = clientId
+      ? ((await tx.client.findUnique({ where: { id: clientId }, select: { id: true } }))?.id ??
+        null)
+      : null;
     const transaction = await tx.transaction.create({
       data: {
         tenantId,
         propertyAddress: provisionalAddress(filename),
         status: TransactionStatus.UNDER_CONTRACT,
+        // Re-read under RLS rather than trusted from the form: a hand-posted
+        // clientId naming another tenant's client would otherwise pass the
+        // foreign-key check and link the file across workspaces.
+        ...(safeClientId ? { clientId: safeClientId } : {}),
       },
       select: { id: true },
     });
@@ -153,9 +164,81 @@ export async function createFromContract(formData: FormData) {
   if (needsCredit) await spendCreditForTransaction(tenantId, transaction.id, userId);
 
   await completeExtraction(tenantId, extraction.id, doc, model, transaction.id);
+  await addDerivedSideField(tenantId, extraction.id, clientId);
 
   revalidatePath("/dashboard/transactions");
   redirect(`/dashboard/transactions/${transaction.id}/extractions/${extraction.id}`);
+}
+
+/**
+ * Work out which side of the deal is ours and add it to the review, from the
+ * client named at upload matched against the agents the extractor found.
+ *
+ * A contract names a buyer's agent and a listing agent but never says which
+ * one hired us, and the same agent is a buyer's agent on one file and the
+ * listing agent on the next — so the side can't live on the client record. It
+ * has to be derived per deal, and it's worth deriving: side decides which
+ * fields the form shows, which price column means anything, and which agent
+ * the client portal hides from the other party.
+ *
+ * The row is always added when a client was chosen, even when nothing
+ * matched. A confident match arrives checked; an unmatched one arrives blank
+ * and LOW, which the review screen leaves unticked, so the reviewer is asked
+ * rather than defaulted. Nothing here writes to the transaction — applying is
+ * still their click.
+ */
+async function addDerivedSideField(
+  tenantId: string,
+  extractionId: string,
+  clientId: string | null,
+) {
+  if (!clientId) return;
+
+  await withTenant(tenantId, async (tx) => {
+    const client = await tx.client.findUnique({
+      where: { id: clientId },
+      select: { name: true, agents: { select: { contact: { select: { name: true } } } } },
+    });
+    if (!client) return;
+
+    // The extractor already stored both agents as party rows.
+    const parties = await tx.extractionField.findMany({
+      where: { extractionId, key: { in: ["party:buyer_agent", "party:listing_agent"] } },
+      select: { key: true, value: true, page: true },
+    });
+    const agentOf = (role: string) => parties.find((p) => p.key === `party:${role}`) ?? null;
+    const buyer = agentOf("buyer_agent");
+    const listing = agentOf("listing_agent");
+
+    const match = deriveSide({
+      clientNames: [client.name, ...client.agents.map((a) => a.contact.name)],
+      buyerAgent: buyer?.value ?? null,
+      listingAgent: listing?.value ?? null,
+    });
+
+    const max = await tx.extractionField.aggregate({
+      where: { extractionId },
+      _max: { sortOrder: true },
+    });
+
+    await tx.extractionField.create({
+      data: {
+        tenantId,
+        extractionId,
+        key: "side",
+        label: "Which side is yours",
+        value: match?.side ?? "",
+        valueType: "TEXT",
+        target: FieldTarget.TRANSACTION_FIELD,
+        confidence: match ? "HIGH" : "LOW",
+        page: (match?.side === "SELL_SIDE" ? listing?.page : buyer?.page) ?? null,
+        quote: match
+          ? `${client.name} matched "${match.matchedOn}" on the contract`
+          : `Couldn't match ${client.name} to either agent named on the contract — pick the side.`,
+        sortOrder: (max._max.sortOrder ?? 0) + 1,
+      },
+    });
+  });
 }
 
 /**

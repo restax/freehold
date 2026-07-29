@@ -1,4 +1,4 @@
-import { PartyRole, prisma, TransactionSide, TransactionStatus, withTenant } from "@freehold/db";
+import { PartyRole, prisma, TransactionSide, withTenant } from "@freehold/db";
 import { Warning } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -15,6 +15,8 @@ import {
 import { DangerDelete } from "@/components/danger-delete";
 import { DocumentDropZone } from "@/components/document-drop-zone";
 import { LiveDictateButton } from "@/components/live-dictate-button";
+import { SideFields } from "@/components/side-fields";
+import { StatusSelect } from "@/components/status-select";
 import { VendorOrderTab } from "@/components/vendor-order-tab";
 import { VisibilityToggles } from "@/components/visibility-toggles";
 import { assignUser, unassignUser } from "@/lib/actions/assignees";
@@ -88,7 +90,7 @@ import {
 import { emailEnabled } from "@/lib/email";
 import { EMAIL_MERGE_CODES, parseEmailSettings, renderMerge } from "@/lib/email-template";
 import { suggestForTask } from "@/lib/email-template-library";
-import { fmtDate, fmtMoney, ROLE_LABEL, STATUS_LABEL } from "@/lib/format";
+import { fmtDate, fmtMoney, ROLE_LABEL } from "@/lib/format";
 import { invoiceLabel, TERM_PRESETS } from "@/lib/invoicing";
 import { gapForTransaction, gapMessage } from "@/lib/licensing";
 import { fmtCents } from "@/lib/pay";
@@ -112,7 +114,6 @@ import { btn, btnGhost, card, input, label } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
-const STATUSES = Object.values(TransactionStatus);
 const SIDES = Object.values(TransactionSide);
 const ROLES = Object.values(PartyRole);
 
@@ -1961,16 +1962,7 @@ export default async function TransactionDetailPage({
                       ))}
                     </select>
                   </label>
-                  <label className={label}>
-                    Status
-                    <select name="status" defaultValue={txn.status} className={input}>
-                      {STATUSES.map((s) => (
-                        <option key={s} value={s}>
-                          {STATUS_LABEL[s]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <StatusSelect defaultValue={txn.status} />
                   <label className={label}>
                     City
                     <input name="city" defaultValue={txn.city ?? ""} className={input} />
@@ -1999,15 +1991,6 @@ export default async function TransactionDetailPage({
                     </select>
                   </label>
                   <label className={label}>
-                    Purchase price ($)
-                    <input
-                      name="purchasePrice"
-                      inputMode="numeric"
-                      defaultValue={txn.purchasePrice ?? ""}
-                      className={input}
-                    />
-                  </label>
-                  <label className={label}>
                     Expected fee ($)
                     <input
                       name="expectedFee"
@@ -2021,15 +2004,6 @@ export default async function TransactionDetailPage({
                     <span className="text-xs font-normal text-stone-400">
                       What you'll bill for this file. Blank = client default · 0 = no charge.
                     </span>
-                  </label>
-                  <label className={label}>
-                    Contract date
-                    <input
-                      name="contractDate"
-                      type="date"
-                      defaultValue={txn.contractDate ? fmtDate(txn.contractDate) : ""}
-                      className={input}
-                    />
                   </label>
                   <label className={label}>
                     Close date
@@ -2061,6 +2035,28 @@ export default async function TransactionDetailPage({
                       }
                       className={input}
                     />
+                  </label>
+                  {/* The side panels carry the list/contract money and dates.
+                      Before this they weren't on the form at all, which meant
+                      every save nulled listPrice, listDate, onMarketDate,
+                      expireDate and mlsId — updateTransaction reads each one
+                      unconditionally, and a field absent from the payload
+                      reads as blank. */}
+                  <SideFields
+                    labels={labels}
+                    panelClassName="sm:col-span-2 lg:col-span-4"
+                    values={{
+                      listPrice: txn.listPrice,
+                      listDate: txn.listDate ? fmtDate(txn.listDate) : "",
+                      onMarketDate: txn.onMarketDate ? fmtDate(txn.onMarketDate) : "",
+                      expireDate: txn.expireDate ? fmtDate(txn.expireDate) : "",
+                      purchasePrice: txn.purchasePrice,
+                      contractDate: txn.contractDate ? fmtDate(txn.contractDate) : "",
+                    }}
+                  />
+                  <label className={`${label} lg:col-span-2`}>
+                    MLS ID
+                    <input name="mlsId" defaultValue={txn.mlsId ?? ""} className={input} />
                   </label>
                   <label className={`${label} lg:col-span-3`}>
                     Notes

@@ -274,6 +274,12 @@ export function transactionUpdateFor(key: string, value: string): Record<string,
       const d = parseDateValue(value);
       return d == null ? null : { closeDate: d };
     }
+    // Derived from the client named at upload, not read off the page — and
+    // checked against the enum here because the reviewer can change it in a
+    // <select> before applying. A blank (nothing matched, nothing picked)
+    // applies nothing rather than defaulting the file to a side.
+    case "side":
+      return ["BUY_SIDE", "SELL_SIDE", "DUAL"].includes(value) ? { side: value } : null;
     default:
       return null;
   }
