@@ -1,10 +1,17 @@
 import { prisma } from "@freehold/db";
 import { sendTenantEmail } from "@/lib/email";
+import { cancelNylasSchedule, nylasEnabled, scheduleFitsNylas, sendViaNylas } from "@/lib/nylas";
 
 /**
- * The outbox: scheduled and quiet-hours-deferred email. Rows are flushed by
- * the hourly cron (/api/outbox/run). Automated sends route through
- * enqueueOrSend so a 2am task completion becomes an 8am email.
+ * The outbox: scheduled and quiet-hours-deferred email. Automated sends route
+ * through enqueueOrSend so a 2am task completion becomes an 8am email.
+ *
+ * **Rows here are only as punctual as whatever drains them.** There is an
+ * /api/outbox/run endpoint, but it is *not* registered in vercel.json — the
+ * only thing calling flushOutbox in production is the nightly cron, so a row
+ * parked here can wait until the next daily run. Anything that has to arrive
+ * at the time the coordinator picked should go through scheduleEmail below,
+ * which hands the schedule to Nylas when it can.
  */
 
 export interface QuietHours {
@@ -117,6 +124,105 @@ export async function enqueueOrSend(input: OutboxInput): Promise<"sent" | "queue
   return "queued";
 }
 
+export interface ScheduleInput {
+  tenantId: string;
+  transactionId?: string | null;
+  to: string;
+  subject: string;
+  body: string;
+  html?: string;
+  sendAt: Date;
+  /** Send from this user's own mailbox, if they've connected one. */
+  sendAsUserId?: string | null;
+  attachments?: Array<{ filename: string; content: string }>;
+}
+
+/**
+ * Hold a message for a set time, preferring whoever can hit that time.
+ *
+ * When it's going out from the coordinator's own mailbox, Nylas holds it and
+ * delivers on the minute. Our own outbox can only be as punctual as the cron
+ * that drains it, so a message parked there arrives on the next run rather
+ * than at the time the coordinator picked. Nylas only accepts a window of two
+ * minutes to thirty days, so anything outside that still falls back to us.
+ */
+export async function scheduleEmail(input: ScheduleInput): Promise<"nylas" | "outbox"> {
+  const grant =
+    input.sendAsUserId && nylasEnabled()
+      ? await prisma.nylasGrant.findUnique({
+          where: { userId: input.sendAsUserId },
+          select: { grantId: true, status: true },
+        })
+      : null;
+
+  if (grant?.status === "valid" && scheduleFitsNylas(input.sendAt)) {
+    const sent = await sendViaNylas({
+      grantId: grant.grantId,
+      to: [input.to],
+      subject: input.subject,
+      body: input.html ?? input.body,
+      attachments: input.attachments,
+      sendAt: input.sendAt,
+    });
+    // Recorded even though Nylas owns the delivery, so it shows up in the
+    // coordinator's scheduled list and stays cancellable. The flush skips
+    // rows carrying a schedule id.
+    await prisma.emailOutbox.create({
+      data: {
+        tenantId: input.tenantId,
+        transactionId: input.transactionId ?? null,
+        toAddr: input.to,
+        subject: input.subject,
+        body: input.body,
+        sendAt: input.sendAt,
+        sendAsUserId: input.sendAsUserId ?? null,
+        nylasScheduleId: sent.scheduleId,
+        nylasGrantId: grant.grantId,
+      },
+    });
+    return "nylas";
+  }
+
+  await prisma.emailOutbox.create({
+    data: {
+      tenantId: input.tenantId,
+      transactionId: input.transactionId ?? null,
+      toAddr: input.to,
+      subject: input.subject,
+      body: input.body,
+      sendAt: input.sendAt,
+      sendAsUserId: input.sendAsUserId ?? null,
+    },
+  });
+  return "outbox";
+}
+
+/**
+ * Call off a scheduled send.
+ *
+ * Returns false when the message is already gone — Nylas needs ten seconds'
+ * notice, so a cancel can lose the race. Saying so is the point: the row
+ * stays uncancelled and the coordinator learns it went out, rather than
+ * seeing "cancelled" for mail that is already in someone's inbox.
+ */
+export async function cancelScheduled(id: string, tenantId: string): Promise<boolean> {
+  const row = await prisma.emailOutbox.findFirst({
+    where: { id, tenantId, sentAt: null, canceledAt: null },
+    select: { nylasScheduleId: true, nylasGrantId: true },
+  });
+  if (!row) return false;
+
+  if (row.nylasScheduleId && row.nylasGrantId) {
+    const ok = await cancelNylasSchedule(row.nylasGrantId, row.nylasScheduleId).catch(() => false);
+    if (!ok) return false;
+  }
+  await prisma.emailOutbox.updateMany({
+    where: { id, tenantId, sentAt: null },
+    data: { canceledAt: new Date() },
+  });
+  return true;
+}
+
 /** Cron entry: deliver everything due. Failures retry up to 5 runs. */
 export async function flushOutbox(): Promise<{ sent: number; failed: number }> {
   const due = await prisma.emailOutbox.findMany({
@@ -125,6 +231,9 @@ export async function flushOutbox(): Promise<{ sent: number; failed: number }> {
       canceledAt: null,
       sendAt: { lte: new Date() },
       attempts: { lt: 5 },
+      // Nylas is delivering these itself; sending them here too would put
+      // the same message in the recipient's inbox twice.
+      nylasScheduleId: null,
     },
     orderBy: { sendAt: "asc" },
     take: 50,
@@ -160,6 +269,7 @@ export async function flushOutbox(): Promise<{ sent: number; failed: number }> {
         subject: row.subject,
         body: row.body,
         html,
+        sendAsUserId: row.sendAsUserId,
       });
       await prisma.emailOutbox.update({
         where: { id: row.id },

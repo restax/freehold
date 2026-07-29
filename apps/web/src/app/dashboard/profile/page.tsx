@@ -1,8 +1,11 @@
 import { prisma, withTenant } from "@freehold/db";
+import { EnvelopeSimple } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { Avatar } from "@/components/avatar";
 import { Badge } from "@/components/badges";
+import { SectionCard } from "@/components/section-card";
 import { addLicense, deleteLicense } from "@/lib/actions/licenses";
+import { disconnectNylas } from "@/lib/actions/nylas";
 import { requestPayment, withdrawPaymentRequest } from "@/lib/actions/pay";
 import { removeAvatar, updateProfile, uploadAvatar } from "@/lib/actions/profile";
 import { type AttributableInvoice, transactionBilling } from "@/lib/billing";
@@ -15,10 +18,24 @@ import { btn, btnGhost, card, input, label, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProfilePage() {
+/** What came back from the mailbox connect round trip, in plain language. */
+const NYLAS_FLASH: Record<string, string> = {
+  connected: "Your mailbox is connected. You can now send as yourself.",
+  denied: "You cancelled before granting access, so nothing was connected.",
+  invalid: "That connection link had expired. Please try connecting again.",
+  failed: "We couldn't finish connecting your mailbox. Please try again.",
+  unconfigured: "Sending from your own mailbox isn't set up on this install yet.",
+};
+
+export default async function ProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ nylas?: string }>;
+}) {
   // Guests keep their own profile, licenses, and pay — all of it their data.
   const { tenantId, userId } = await requireTenant({ allowGuest: true });
-  const [user, licenses, unbilled, payRequests] = await Promise.all([
+  const nylasFlash = (await searchParams).nylas;
+  const [user, licenses, unbilled, payRequests, nylasGrant] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { id: userId },
       select: { id: true, name: true, email: true, image: true },
@@ -87,6 +104,10 @@ export default async function ProfilePage() {
         include: { items: { select: { address: true, feeCents: true } } },
       }),
     ),
+    prisma.nylasGrant.findUnique({
+      where: { userId },
+      select: { email: true, provider: true, status: true, lastError: true, connectedAt: true },
+    }),
   ]);
   const unbilledTotal = unbilled.reduce((sum, a) => sum + a.payableCents, 0);
 
@@ -136,6 +157,65 @@ export default async function ProfilePage() {
           </form>
         </div>
       </section>
+
+      <SectionCard
+        title="Your email"
+        icon={<EnvelopeSimple size={15} weight="fill" aria-hidden />}
+        action={
+          nylasGrant ? (
+            <form action={disconnectNylas}>
+              <button type="submit" className="text-xs text-stone-400 hover:text-red-600">
+                Disconnect
+              </button>
+            </form>
+          ) : null
+        }
+      >
+        <p className="mb-3 text-sm text-stone-500">
+          By default your workspace sends from its own Freehold address, and replies come back onto
+          the transaction automatically. Connect your own mailbox to send as yourself instead —
+          recipients see your real address, and the sent copy lands in your own Sent folder.
+        </p>
+
+        {nylasFlash && (
+          <p
+            className={`mb-3 rounded-lg px-3 py-2 text-sm ${
+              nylasFlash === "connected"
+                ? "bg-brand-50 text-brand-800"
+                : "bg-amber-50 text-amber-900"
+            }`}
+          >
+            {NYLAS_FLASH[nylasFlash] ?? "Something went wrong connecting your mailbox."}
+          </p>
+        )}
+
+        {nylasGrant ? (
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <span className="font-medium">{nylasGrant.email}</span>
+            <Badge tone={nylasGrant.status === "valid" ? "success" : "danger"}>
+              {nylasGrant.status === "valid" ? "Connected" : "Needs reconnecting"}
+            </Badge>
+            {nylasGrant.provider && (
+              <span className="text-xs uppercase tracking-wide text-stone-400">
+                {nylasGrant.provider}
+              </span>
+            )}
+            <span className="ml-auto text-xs text-stone-400">
+              since {fmtDate(nylasGrant.connectedAt)}
+            </span>
+            {nylasGrant.status !== "valid" && (
+              <p className="w-full text-xs text-amber-700">
+                {nylasGrant.lastError ??
+                  "Your mail provider ended this connection. Reconnect to keep sending as yourself."}
+              </p>
+            )}
+          </div>
+        ) : (
+          <a href="/api/nylas/connect" className={btn}>
+            Connect your mailbox
+          </a>
+        )}
+      </SectionCard>
 
       {(unbilled.length > 0 || payRequests.length > 0) && (
         <section className={card}>

@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { prisma, withTenant } from "@freehold/db";
 import { parseEmailSettings } from "@/lib/email-template";
+import { nylasEnabled, sendViaNylas } from "@/lib/nylas";
 
 /**
  * Transactional email with reply capture, via Resend. No IMAP, no SMTP, no
@@ -35,11 +36,39 @@ export interface SendEmailInput {
   html?: string;
   /** Optional attachments (base64 content), capped by the caller. */
   attachments?: Array<{ filename: string; content: string }>;
+  /**
+   * Send from this user's own connected mailbox instead of the workspace's
+   * shared address. Falls back to the shared address if they haven't
+   * connected one, or their grant has gone invalid — a send never fails
+   * merely because someone's mailbox came unlinked.
+   */
+  sendAsUserId?: string | null;
+}
+
+/** Whether this user can send as themselves right now. */
+export async function canSendAsSelf(userId: string): Promise<boolean> {
+  if (!nylasEnabled()) return false;
+  const grant = await prisma.nylasGrant.findUnique({
+    where: { userId },
+    select: { status: true },
+  });
+  return grant?.status === "valid";
 }
 
 /** Send + record. Returns the stored Email id, or throws on provider errors. */
 export async function sendTenantEmail(input: SendEmailInput): Promise<string> {
-  if (!emailEnabled()) throw new Error("Email is not configured.");
+  // The coordinator's own mailbox, when they've asked for it and it works.
+  // Resolved before the shared-address guard below: sending as yourself
+  // doesn't need EMAIL_FROM_DOMAIN or a Resend key at all.
+  const grant = input.sendAsUserId
+    ? await prisma.nylasGrant.findUnique({
+        where: { userId: input.sendAsUserId },
+        select: { grantId: true, email: true, status: true },
+      })
+    : null;
+  const asSelf = grant?.status === "valid" && nylasEnabled();
+
+  if (!asSelf && !emailEnabled()) throw new Error("Email is not configured.");
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: input.tenantId },
     select: { name: true, slug: true, emailSettings: true },
@@ -77,6 +106,43 @@ export async function sendTenantEmail(input: SendEmailInput): Promise<string> {
       already.add(a.toLowerCase());
       return true;
     });
+
+  // Sending as the coordinator: from their real address, and deliberately
+  // *without* a reply+<token> Reply-To. Rewriting it would send the reply
+  // back to Freehold instead of the person the recipient thinks they're
+  // talking to, which is the one thing this feature exists to avoid. Replies
+  // land in their mailbox and reach the file through the Nylas thread id.
+  if (asSelf && grant) {
+    const sent = await sendViaNylas({
+      grantId: grant.grantId,
+      to: [input.to],
+      cc,
+      subject: input.subject,
+      // Their mail client shows what their recipient will see, so the branded
+      // wrapper goes on here too when there is one.
+      body: input.html ?? input.body,
+      attachments: input.attachments,
+    });
+    const storedSelf = await withTenant(input.tenantId, (tx) =>
+      tx.email.create({
+        data: {
+          tenantId: input.tenantId,
+          transactionId: input.transactionId ?? null,
+          contactId: input.contactId ?? null,
+          direction: "OUTBOUND",
+          fromAddr: grant.email,
+          toAddr: input.to,
+          subject: input.subject,
+          bodyText: input.body,
+          providerId: sent.messageId || null,
+          nylasThreadId: sent.threadId || null,
+          nylasSentBy: input.sendAsUserId ?? null,
+          status: "SENT",
+        },
+      }),
+    );
+    return storedSelf.id;
+  }
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",

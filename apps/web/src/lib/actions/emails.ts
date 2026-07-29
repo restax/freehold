@@ -8,6 +8,7 @@ import { emailContextForTransaction } from "@/lib/auto-emails";
 import { emailEnabled, sendTenantEmail } from "@/lib/email";
 import { parseEmailSettings, renderEmailHtml } from "@/lib/email-template";
 import { optStr, str } from "@/lib/forms";
+import { cancelScheduled, scheduleEmail } from "@/lib/outbox";
 import { getObjectBytes } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
 
@@ -58,15 +59,40 @@ export async function sendTransactionEmail(formData: FormData) {
     ).catch(() => {});
   }
 
-  // "Send later": exact schedule chosen by the TC → outbox (branded HTML
-  // renders at flush time). Quiet hours don't apply to explicit schedules.
+  // Who it goes out as. The checkbox only appears when a mailbox is
+  // connected, but the flag is re-checked in sendTenantEmail rather than
+  // trusted from the form.
+  const sendAsUserId = optStr(formData, "sendAsSelf") ? session.user.id : null;
+
+  const ctx = await emailContextForTransaction(tenantId, transactionId, session.user);
+  const html = ctx
+    ? renderEmailHtml({
+        tenantName: ctx.org.name,
+        body,
+        tc: ctx.tcCard,
+        agent: ctx.agentCard,
+        otherSide: ctx.otherCard,
+        ...parseEmailSettings(ctx.org.emailSettings),
+      })
+    : undefined;
+
+  // "Send later": exact schedule chosen by the TC. Held by Nylas when it's
+  // going out from their own mailbox (delivered on the minute), otherwise by
+  // our outbox. Quiet hours don't apply to explicit schedules.
   const sendAtRaw = optStr(formData, "sendAt");
   if (sendAtRaw) {
     const sendAt = new Date(sendAtRaw);
     if (!Number.isNaN(sendAt.getTime()) && sendAt.getTime() > Date.now()) {
-      const { prisma } = await import("@freehold/db");
-      await prisma.emailOutbox.create({
-        data: { tenantId, transactionId, toAddr: to, subject, body, sendAt },
+      await scheduleEmail({
+        tenantId,
+        transactionId,
+        to,
+        subject,
+        body,
+        html,
+        sendAt,
+        sendAsUserId,
+        attachments,
       });
       logAudit({
         tenantId,
@@ -82,7 +108,6 @@ export async function sendTransactionEmail(formData: FormData) {
     }
   }
 
-  const ctx = await emailContextForTransaction(tenantId, transactionId, session.user);
   await sendTenantEmail({
     tenantId,
     transactionId,
@@ -91,18 +116,8 @@ export async function sendTransactionEmail(formData: FormData) {
     subject,
     body,
     attachments,
-    ...(ctx
-      ? {
-          html: renderEmailHtml({
-            tenantName: ctx.org.name,
-            body,
-            tc: ctx.tcCard,
-            agent: ctx.agentCard,
-            otherSide: ctx.otherCard,
-            ...parseEmailSettings(ctx.org.emailSettings),
-          }),
-        }
-      : {}),
+    sendAsUserId,
+    ...(html ? { html } : {}),
   });
   logAudit({
     tenantId,
@@ -123,16 +138,18 @@ export async function sendTransactionEmail(formData: FormData) {
   revalidatePath(`/dashboard/transactions/${transactionId}`);
 }
 
-/** Cancel a scheduled (outbox) email before it sends. */
+/**
+ * Cancel a scheduled email before it sends.
+ *
+ * A Nylas-held schedule needs ten seconds' notice, so this can lose the race
+ * — cancelScheduled says so rather than marking the row cancelled for mail
+ * that has already left.
+ */
 export async function cancelScheduledEmail(formData: FormData) {
   const { tenantId } = await requireTenant();
   const id = str(formData, "id");
   const transactionId = str(formData, "transactionId");
   if (!id) return;
-  const { prisma } = await import("@freehold/db");
-  await prisma.emailOutbox.updateMany({
-    where: { id, tenantId, sentAt: null },
-    data: { canceledAt: new Date() },
-  });
+  await cancelScheduled(id, tenantId);
   revalidatePath(`/dashboard/transactions/${transactionId}`);
 }

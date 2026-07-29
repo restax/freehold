@@ -335,6 +335,13 @@ export default async function TransactionDetailPage({
     where: { tenantId, transactionId: txn.id, sentAt: null, canceledAt: null },
     orderBy: { sendAt: "asc" },
   });
+  // Only offered when this coordinator has a working mailbox connected —
+  // see /dashboard/profile.
+  const myMailbox = await prisma.nylasGrant.findUnique({
+    where: { userId: session.user.id },
+    select: { email: true, status: true },
+  });
+  const canSendAsMe = myMailbox?.status === "valid";
   const attachPrechecked = new Set<string>();
   let composeSubject = "";
   let composeBody = "";
@@ -2425,6 +2432,21 @@ export default async function TransactionDetailPage({
                         sent email renders them properly. Merge codes work in templates:{" "}
                         {EMAIL_MERGE_CODES.slice(0, 4).join(" ")} …
                       </p>
+                      {canSendAsMe && (
+                        <label className="flex flex-wrap items-center gap-2 text-xs text-stone-600">
+                          <input
+                            type="checkbox"
+                            name="sendAsSelf"
+                            value="1"
+                            className="accent-brand-600"
+                          />
+                          Send from my own address ({myMailbox?.email}) instead of the workspace
+                          address
+                          <span className="w-full text-stone-400">
+                            The reply comes back to your mailbox, and still lands on this file.
+                          </span>
+                        </label>
+                      )}
                       <div className="flex flex-wrap items-end gap-3">
                         <button type="submit" className={btn}>
                           Send email
@@ -2455,6 +2477,11 @@ export default async function TransactionDetailPage({
                         <span className="tabular-nums text-xs text-stone-400">
                           {e.sendAt.toLocaleString()}
                         </span>
+                        {e.sendAsUserId && (
+                          <span className="rounded-full bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-600">
+                            from your address
+                          </span>
+                        )}
                         <form action={cancelScheduledEmail} className="ml-auto">
                           <input type="hidden" name="id" value={e.id} />
                           <input type="hidden" name="transactionId" value={txn.id} />

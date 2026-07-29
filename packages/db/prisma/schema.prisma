@@ -52,6 +52,7 @@ model User {
   supportTickets         SupportTicket[]
   vendorUsers            VendorUser[]
   clientReviews          ClientReview[]
+  nylasGrant             NylasGrant?
 
   @@map("user")
 }
@@ -538,6 +539,37 @@ model Account {
 
   @@index([userId])
   @@map("account")
+}
+
+/// A TC's own inbox, connected via Nylas so they can send as themselves
+/// instead of the workspace's shared Resend address. Person-scoped, not
+/// tenant-scoped — like Account/Session, this follows the user across every
+/// workspace they belong to rather than requiring a reconnect per workspace.
+/// No RLS for the same reason: it has no tenant_id to key off.
+///
+/// One row per user, upserted on (re)connect — connecting a different
+/// account overwrites grantId/email/provider on the same row rather than
+/// creating a second one. `status`/`provider` mirror Nylas's own vocabulary
+/// directly (`grant_status` values, provider slugs) rather than a closed
+/// Prisma enum, so a new provider or status Nylas adds doesn't need a
+/// migration here — same reasoning as Email.status above.
+model NylasGrant {
+  id          String   @id @default(uuid())
+  userId      String   @unique @map("user_id")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  grantId     String   @unique @map("grant_id")
+  email       String
+  provider    String
+  /// Nylas grant_status: "valid" while the connection works, "invalid" once
+  /// the user revokes access at the provider or a token can't be refreshed.
+  status      String   @default("valid")
+  /// Set when a send fails or the grant flips invalid — surfaced in the
+  /// profile UI so the TC knows to reconnect rather than silently failing.
+  lastError   String?  @map("last_error")
+  connectedAt DateTime @default(now()) @map("connected_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("nylas_grant")
 }
 
 model Verification {
@@ -1297,13 +1329,22 @@ model Email {
   subject       String
   bodyText      String         @map("body_text")
   /// Reply capture token; inbound mail to reply+<token>@ matches the thread.
+  /// Null on mail sent from a coordinator's own mailbox — that path doesn't
+  /// rewrite Reply-To (the whole point is that the recipient replies to a
+  /// real person), so replies come back through the Nylas ids below instead.
   replyToken    String?        @map("reply_token")
   providerId    String?        @map("provider_id")
+  /// Set when this went out through a coordinator's connected mailbox rather
+  /// than the workspace's shared address. The thread id is what an inbound
+  /// reply carries, so it's the hook that puts that reply on this file.
+  nylasThreadId String?        @map("nylas_thread_id")
+  nylasSentBy   String?        @map("nylas_sent_by")
   status        String         @default("SENT")
   createdAt     DateTime       @default(now())
 
   @@index([tenantId, transactionId, createdAt])
   @@index([replyToken])
+  @@index([nylasThreadId])
   @@map("email")
 }
 
@@ -2595,6 +2636,15 @@ model EmailOutbox {
   attempts      Int       @default(0)
   lastError     String?   @map("last_error")
   createdAt     DateTime  @default(now())
+  /// Who it goes out as, when that's a coordinator's own mailbox.
+  sendAsUserId  String?   @map("send_as_user_id")
+  /// Set when Nylas holds the schedule itself rather than our cron. Those
+  /// rows exist only so the coordinator can see and cancel the send — the
+  /// flush deliberately skips them, or the mail would go out twice.
+  /// The grant is pinned alongside the id because cancelling addresses the
+  /// grant that scheduled it, and a reconnect can replace a user's grant.
+  nylasScheduleId String? @map("nylas_schedule_id")
+  nylasGrantId    String? @map("nylas_grant_id")
 
   @@index([sendAt, sentAt])
   @@map("email_outbox")
