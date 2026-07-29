@@ -1,6 +1,6 @@
 "use server";
 
-import { withTenant } from "@freehold/db";
+import { type TenantTx, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logAudit } from "@/lib/audit";
@@ -78,6 +78,12 @@ function parseContactForm(formData: FormData) {
     purchaseAnniversary: monthDay(formData, "purchase"),
   };
 
+  // Lead tracking and the yearly touch dates are no longer on the contact
+  // form. They stay in the database, so they're only touched by a form that
+  // actually carries them — otherwise every save from the redesigned form
+  // would quietly erase a lead type and four anniversaries nobody was shown.
+  const editsLead = formData.has("leadType");
+  const editsTouchDates = formData.has("birthdayM");
   const leadTypeRaw = str(formData, "leadType");
   const leadType = ["BUYER", "SELLER", "NONE"].includes(leadTypeRaw) ? leadTypeRaw : null;
   const leadDetails =
@@ -145,25 +151,61 @@ function parseContactForm(formData: FormData) {
     referredById,
     referralSource,
     referralDate: referralDateRaw ? new Date(`${referralDateRaw}T00:00:00Z`) : null,
-    leadType,
-    leadDetails: asJson(leadDetails),
-    touchDates: Object.values(touchDates).some(Boolean) ? asJson(touchDates) : undefined,
+    ...(editsLead ? { leadType, leadDetails: asJson(leadDetails) } : {}),
+    ...(editsTouchDates
+      ? { touchDates: Object.values(touchDates).some(Boolean) ? asJson(touchDates) : undefined }
+      : {}),
     photoUrl: optStr(formData, "photoUrl"),
     socialLinks: Object.values(socialLinks).some(Boolean) ? asJson(socialLinks) : undefined,
-    ownerId: optStr(formData, "ownerId"),
+    // The second person's searchable text, kept in step with `secondary`
+    // right where it's written — an indexed lowercase column beats matching
+    // inside a JSON blob on a field people look up constantly.
+    secondarySearch:
+      [secondary?.first, secondary?.last, secondary?.email]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .trim() || null,
+    teamName: optStr(formData, "teamName"),
+    brokerageLicense: optStr(formData, "brokerageLicense"),
+    salespersonLicense: optStr(formData, "salespersonLicense"),
+    mailingAddress: str(formData, "mailingAddress") === "home" ? "home" : "work",
   };
+}
+
+/**
+ * Owner ids from a form, narrowed to people who are actually in this
+ * workspace. A hand-posted id would otherwise hand a contact to a stranger —
+ * the foreign key alone doesn't check membership.
+ */
+async function safeOwnerIds(tx: TenantTx, ids: string[]): Promise<string[]> {
+  const wanted = [...new Set(ids.map((v) => v.trim()).filter(Boolean))];
+  if (wanted.length === 0) return [];
+  const members = await tx.member.findMany({
+    where: { userId: { in: wanted } },
+    select: { userId: true },
+  });
+  const ok = new Set(members.map((m) => m.userId));
+  return wanted.filter((id) => ok.has(id));
 }
 
 export async function createContact(formData: FormData) {
   const { tenantId, userId } = await requireTenant();
   const fields = parseContactForm(formData);
+  // Whoever is named on the form owns it; nobody named means the person
+  // creating it, so a contact is never orphaned at birth.
+  const owners = await withTenant(tenantId, (tx) =>
+    safeOwnerIds(tx, formData.getAll("ownerIds").map(String)),
+  );
   const created = await withTenant(tenantId, (tx) =>
     tx.contact.create({
       data: {
         tenantId,
         ...fields,
-        ownerId: fields.ownerId ?? userId,
         nextTouchAt: nextTouchFrom(fields.grade),
+        owners: {
+          create: (owners.length > 0 ? owners : [userId]).map((uid) => ({ tenantId, userId: uid })),
+        },
       },
     }),
   );
@@ -190,7 +232,7 @@ export async function createContactByName(
   if (!clean) return null;
   const created = await withTenant(tenantId, (tx) =>
     tx.contact.create({
-      data: { tenantId, name: clean, ownerId: userId },
+      data: { tenantId, name: clean, owners: { create: [{ tenantId, userId }] } },
       select: { id: true, name: true },
     }),
   );
@@ -216,6 +258,28 @@ export async function updateContact(formData: FormData) {
         ...(existing.grade !== fields.grade ? { nextTouchAt: nextTouchFrom(fields.grade) } : {}),
       },
     });
+
+    // Owners are reconciled, not replaced wholesale, so the createdAt on a
+    // long-standing owner survives an unrelated edit. Only a form that carries
+    // the field touches them at all — otherwise saving from anywhere else
+    // would quietly unassign everybody.
+    if (formData.has("ownerIds")) {
+      const wanted = await safeOwnerIds(tx, formData.getAll("ownerIds").map(String));
+      await tx.contactOwner.deleteMany({
+        where: { contactId: id, userId: { notIn: wanted.length > 0 ? wanted : ["-"] } },
+      });
+      const already = new Set(
+        (
+          await tx.contactOwner.findMany({ where: { contactId: id }, select: { userId: true } })
+        ).map((o) => o.userId),
+      );
+      const added = wanted.filter((u) => !already.has(u));
+      if (added.length > 0) {
+        await tx.contactOwner.createMany({
+          data: added.map((userId) => ({ tenantId, contactId: id, userId })),
+        });
+      }
+    }
   });
   revalidatePath(`/dashboard/contacts/${id}`);
   revalidatePath("/dashboard/contacts");

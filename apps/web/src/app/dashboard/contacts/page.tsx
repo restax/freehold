@@ -57,9 +57,9 @@ export default async function ContactsPage({
   // narrow to this user; an explicit owner filter narrows further.
   const ownerScope =
     restricted || shape.mineOnly
-      ? { ownerId: userId }
+      ? { owners: { some: { userId } } }
       : filters.ownerIds.length > 0
-        ? { ownerId: { in: filters.ownerIds } }
+        ? { owners: { some: { userId: { in: filters.ownerIds } } } }
         : {};
 
   const where = {
@@ -77,8 +77,15 @@ export default async function ContactsPage({
     ...(filters.q
       ? {
           OR: [
+            // `name` already merges both people ("Priya & Dev Raman"), so a
+            // name search finds the record by either of them. secondarySearch
+            // is their lowercased name+email, indexed — people look the second
+            // person up constantly, and matching inside the JSON blob meant a
+            // case-sensitive scan of every row.
             { name: { contains: filters.q, mode: "insensitive" as const } },
             { company: { contains: filters.q, mode: "insensitive" as const } },
+            { email: { contains: filters.q, mode: "insensitive" as const } },
+            { secondarySearch: { contains: filters.q.toLowerCase() } },
           ],
         }
       : {}),
@@ -105,7 +112,7 @@ export default async function ContactsPage({
       where,
       orderBy: [{ name: "asc" }],
       take: 500,
-      include: { owner: { select: { name: true } } },
+      include: { owners: { include: { user: { select: { name: true } } } } },
     }),
   );
 
@@ -168,10 +175,12 @@ export default async function ContactsPage({
             <input
               name="q"
               defaultValue={filters.q ?? ""}
-              placeholder="Name, company"
+              placeholder="Name, company, email"
               className={input}
             />
-            <p className="text-xs text-stone-400">Searches contact names &amp; company.</p>
+            <p className="text-xs text-stone-400">
+              Searches names, company and email — including the second person on a record.
+            </p>
           </FilterGroup>
 
           <FilterGroup title="Name">
@@ -323,7 +332,11 @@ export default async function ContactsPage({
                         )}
                       </td>
                       <td className={tdFixed}>
-                        {c.owner?.name ?? <span className="text-stone-300">—</span>}
+                        {c.owners.length === 0 ? (
+                          <span className="text-stone-300">—</span>
+                        ) : (
+                          c.owners.map((o) => o.user.name).join(", ")
+                        )}
                       </td>
                     </tr>
                   ))}

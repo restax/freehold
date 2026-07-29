@@ -52,7 +52,31 @@ export async function sendTenantEmail(input: SendEmailInput): Promise<string> {
   // added automatically here. Only for transaction-scoped mail, and never when
   // it's also the recipient (no pointless self-CC).
   const ccAddr = input.transactionId ? (parseEmailSettings(org.emailSettings).cc ?? "").trim() : "";
-  const cc = ccAddr && ccAddr.toLowerCase() !== input.to.trim().toLowerCase() ? ccAddr : "";
+
+  // The second person on a contact record — an assistant, a spouse — is copied
+  // on everything sent to that contact. That's the whole reason one record
+  // holds two people: keeping them in the loop shouldn't depend on whoever is
+  // composing remembering to add them. Done here rather than at each call site
+  // so every path that mails a contact behaves the same way.
+  const partner = input.contactId
+    ? await withTenant(input.tenantId, async (tx) => {
+        const c = await tx.contact.findUnique({
+          where: { id: input.contactId as string },
+          select: { secondary: true },
+        });
+        const second = c?.secondary as { email?: string } | null;
+        return (second?.email ?? "").trim();
+      }).catch(() => "")
+    : "";
+
+  const already = new Set([input.to.trim().toLowerCase()]);
+  const cc = [ccAddr, partner]
+    .map((a) => a.trim())
+    .filter((a) => {
+      if (!a || already.has(a.toLowerCase())) return false;
+      already.add(a.toLowerCase());
+      return true;
+    });
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -63,7 +87,7 @@ export async function sendTenantEmail(input: SendEmailInput): Promise<string> {
     body: JSON.stringify({
       from,
       to: [input.to],
-      ...(cc ? { cc: [cc] } : {}),
+      ...(cc.length > 0 ? { cc } : {}),
       reply_to: replyTo,
       subject: input.subject,
       text: input.body,

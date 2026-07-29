@@ -11,7 +11,9 @@ export default async function EditContactPage({ params }: { params: Promise<{ id
   const { tenantId } = await requireTenant();
   const { id } = await params;
   const [contact, contacts, members] = await Promise.all([
-    withTenant(tenantId, (tx) => tx.contact.findUnique({ where: { id } })),
+    withTenant(tenantId, (tx) =>
+      tx.contact.findUnique({ where: { id }, include: { owners: { select: { userId: true } } } }),
+    ),
     withTenant(tenantId, (tx) =>
       tx.contact.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     ),

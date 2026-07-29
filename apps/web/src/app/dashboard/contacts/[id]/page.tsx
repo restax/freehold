@@ -1,4 +1,4 @@
-import { prisma, withTenant } from "@freehold/db";
+import { withTenant } from "@freehold/db";
 import { EnvelopeSimple, Phone, UserCircle, UsersThree } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -94,6 +94,7 @@ export default async function ContactDetailPage({
           include: { client: { select: { name: true } } },
         },
         contactNotes: { orderBy: { createdAt: "desc" }, take: 50 },
+        owners: { include: { user: { select: { name: true } } } },
         tasks: { orderBy: [{ status: "asc" }, { dueDate: "asc" }], take: 50 },
         parties: {
           include: {
@@ -113,9 +114,7 @@ export default async function ContactDetailPage({
   );
   if (!contact) notFound();
 
-  const owner = contact.ownerId
-    ? await prisma.user.findUnique({ where: { id: contact.ownerId }, select: { name: true } })
-    : null;
+  const ownerNames = contact.owners.map((o) => o.user.name);
 
   const secondary = contact.secondary as PersonFields | null;
   const socialRaw = contact.socialLinks as SocialLinks | null;
@@ -536,8 +535,10 @@ export default async function ContactDetailPage({
           {tab === "details" && (
             <div className="flex flex-col gap-4 text-sm">
               <p className="flex gap-3">
-                <span className="w-48 text-stone-500">Owner</span>
-                <span>{owner?.name ?? "Unassigned"}</span>
+                <span className="w-48 text-stone-500">
+                  {ownerNames.length > 1 ? "Owners" : "Owner"}
+                </span>
+                <span>{ownerNames.length > 0 ? ownerNames.join(", ") : "Unassigned"}</span>
               </p>
               <p className="flex gap-3">
                 <span className="w-48 text-stone-500">Referred by</span>

@@ -43,7 +43,7 @@ model User {
   accounts               Account[]
   members                Member[]
   invitations            Invitation[]
-  ownedContacts          Contact[]             @relation("ContactOwner")
+  ownedContacts          ContactOwner[]        @relation("ContactOwner")
   assignedTasks          Task[]                @relation("TaskAssignee")
   licenses               UserLicense[]
   transactionAssignments TransactionAssignee[]
@@ -630,6 +630,7 @@ model Organization {
   invitations             Invitation[]
   clients                 Client[]
   contacts                Contact[]
+  contactOwners           ContactOwner[]
   transactions            Transaction[]
   parties                 TransactionParty[]
   tasks                   Task[]
@@ -1176,8 +1177,10 @@ model Contact {
   id             String             @id @default(uuid())
   tenantId       String             @map("tenant_id")
   tenant         Organization       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerId        String?
-  owner          User?              @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  /// Many-to-many: a contact can be covered by more than one coordinator, and
+  /// pretending otherwise made one of them wrong every time somebody shared a
+  /// brokerage or went on holiday.
+  owners         ContactOwner[]
   name           String
   email          String?
   phone          String?
@@ -1192,6 +1195,9 @@ model Contact {
   lastName       String?            @map("last_name")
   jobTitle       String?            @map("job_title")
   company        String?
+  /// An agent's team is a different thing from their brokerage, and a
+  /// mail-merge addresses one or the other.
+  teamName       String?            @map("team_name")
   website        String?
   workPhone      String?            @map("work_phone")
   fax            String?
@@ -1209,6 +1215,16 @@ model Contact {
   referredById   String?            @map("referred_by_id")
   referredBy     Contact?           @relation("ContactReferrals", fields: [referredById], references: [id], onDelete: SetNull)
   referrals      Contact[]          @relation("ContactReferrals")
+  /// Licence numbers a coordinator copies off a contract constantly.
+  brokerageLicense   String?        @map("brokerage_license")
+  salespersonLicense String?        @map("salesperson_license")
+  /// Which address post actually goes to: "home" or "work". Storing both
+  /// and guessing is how a mailer reaches an office that closed.
+  mailingAddress String             @default("work") @map("mailing_address")
+  /// The second person's name and email, lowercased, so looking them up is an
+  /// indexed match rather than a scan through a JSON blob. Maintained by
+  /// parseContactForm — the only thing that writes `secondary`.
+  secondarySearch String?           @map("secondary_search")
   referralSource String?            @map("referral_source")
   referralDate   DateTime?          @map("referral_date") @db.Date
   /// BUYER | SELLER | NONE
@@ -1307,6 +1323,24 @@ model ClientNote {
 }
 
 /// Timestamped CRM notes on a contact (the Notes tab + quick-add).
+/// Who covers a contact. Many-to-many so shared and stand-in coverage is
+/// representable; deleting either side removes the link, never the record.
+model ContactOwner {
+  id        String       @id @default(uuid())
+  tenantId  String       @map("tenant_id")
+  tenant    Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contactId String       @map("contact_id")
+  contact   Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  userId    String       @map("user_id")
+  user      User         @relation("ContactOwner", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@unique([contactId, userId])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("contact_owner")
+}
+
 model ContactNote {
   id        String       @id @default(uuid())
   tenantId  String       @map("tenant_id")
