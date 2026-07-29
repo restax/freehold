@@ -3,6 +3,7 @@ import { Warning } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActivityPanel } from "@/components/activity-panel";
+import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { Avatar } from "@/components/avatar";
 import { Badge, EnvelopeBadge, ExtractionBadge } from "@/components/badges";
 import { CcEmailPill } from "@/components/cc-email-pill";
@@ -1941,14 +1942,14 @@ export default async function TransactionDetailPage({
                   className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
                 >
                   <input type="hidden" name="id" value={txn.id} />
-                  <label className={`${label} lg:col-span-2`}>
-                    Property address
-                    <input
+                  <div className="lg:col-span-2">
+                    <AddressAutocomplete
                       name="propertyAddress"
+                      label="Property address"
                       defaultValue={txn.propertyAddress}
-                      className={input}
+                      fills={{ city: "city", state: "state", zip: "zip" }}
                     />
-                  </label>
+                  </div>
                   <label className={label}>
                     Client
                     <select name="clientId" defaultValue={txn.clientId ?? ""} className={input}>

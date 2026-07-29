@@ -118,7 +118,9 @@ export async function createTransaction(formData: FormData) {
       gapForPending(tx, fields.state, assigneeId ? [assigneeId] : []),
     );
     if (gap) {
-      redirect(`/dashboard/transactions?licenseError=${encodeURIComponent(gapMessage(gap))}`);
+      // Back to the form that was being filled, not the list — the
+      // coordinator needs to change the assignee and try again.
+      redirect(`/dashboard/transactions/new?licenseError=${encodeURIComponent(gapMessage(gap))}`);
     }
   }
 

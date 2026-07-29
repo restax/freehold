@@ -2,6 +2,7 @@ import { ClientType, EsignProvider, withTenant } from "@freehold/db";
 import { Buildings, Storefront, User, UsersThree } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { Fragment } from "react";
+import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { Badge } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
 import { createClient, updateClientEsign } from "@/lib/actions/clients";
@@ -206,14 +207,7 @@ export default async function ClientsPage({
                     Brokerage phone
                     <input name="brokeragePhone" className={input} />
                   </label>
-                  <label className={label}>
-                    Brokerage address
-                    <input
-                      name="brokerageAddress"
-                      className={input}
-                      placeholder="200 Main St, Suite 4, Springfield IL"
-                    />
-                  </label>
+                  <AddressAutocomplete name="brokerageAddress" label="Brokerage address" />
                 </div>
               </div>
               <div className="border-t border-stone-100 pt-3">
@@ -248,14 +242,9 @@ export default async function ClientsPage({
                     Office email
                     <input name="email" type="email" className={input} />
                   </label>
-                  <label className={`${label} sm:col-span-2`}>
-                    Office address
-                    <input
-                      name="address"
-                      className={input}
-                      placeholder="200 Main St, Suite 4, Springfield IL"
-                    />
-                  </label>
+                  <div className="sm:col-span-2">
+                    <AddressAutocomplete name="address" label="Office address" />
+                  </div>
                   <EsignField />
                 </div>
               </div>

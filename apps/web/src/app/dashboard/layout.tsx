@@ -132,7 +132,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             {/* min-w keeps the menu usable when the rail itself is only 56px. */}
             <div className="absolute left-0 z-10 mt-1 flex min-w-40 flex-col rounded-lg border border-stone-200 bg-white py-1 shadow-lg lg:right-0">
               <a
-                href="/dashboard/transactions"
+                href="/dashboard/transactions/new"
                 className="px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
               >
                 Transaction

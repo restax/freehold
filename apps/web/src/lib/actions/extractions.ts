@@ -176,7 +176,18 @@ export async function applyExtraction(formData: FormData) {
         transaction: { select: { id: true, customFields: true, contractParties: true } },
       },
     });
-    const chosen = extraction.fields.filter((f) => selectedIds.includes(f.id));
+    // A reviewer can correct a value before applying it — today that's the
+    // property address, fixed with the same Mapbox picker used everywhere
+    // else, because a contract's address is often abbreviated or misspelled
+    // and it's the one field every later lookup keys off. Anything not
+    // overridden keeps exactly what the model read.
+    const chosen = extraction.fields
+      .filter((f) => selectedIds.includes(f.id))
+      .map((f) => {
+        const edited = formData.get(`value:${f.id}`);
+        const next = typeof edited === "string" ? edited.trim() : "";
+        return next && next !== f.value ? { ...f, value: next } : f;
+      });
 
     const columnUpdates: Record<string, unknown> = {};
     const customFields = {
@@ -204,6 +215,22 @@ export async function applyExtraction(formData: FormData) {
         if (value && !parties.some((p) => p.role === role && p.value === value)) {
           parties.push({ role, value });
         }
+      }
+    }
+
+    // If the reviewer corrected the address with the picker, the city/state/ZIP
+    // that came with the chosen suggestion apply too — otherwise the file ends
+    // up with a Haverhill street address still filed under Springfield. Only
+    // when the address field was actually applied, and never blanking a column
+    // the picker had nothing to say about.
+    if (chosen.some((f) => f.key === "property_address")) {
+      for (const [param, column] of [
+        ["addr:city", "city"],
+        ["addr:state", "state"],
+        ["addr:zip", "zip"],
+      ] as const) {
+        const value = formData.get(param);
+        if (typeof value === "string" && value.trim()) columnUpdates[column] = value.trim();
       }
     }
 

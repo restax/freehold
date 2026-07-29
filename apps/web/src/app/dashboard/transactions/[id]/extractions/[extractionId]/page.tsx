@@ -83,6 +83,7 @@ export default async function ExtractionReviewPage({
           discardAction={discardExtraction}
           fields={extraction.fields.map((f) => ({
             id: f.id,
+            key: f.key,
             label: f.label,
             value: f.value,
             confidence: f.confidence,

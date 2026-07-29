@@ -11,6 +11,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { Badge, StatusBadge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
 import { RevealCredential } from "@/components/reveal-credential";
@@ -277,10 +278,13 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
               Phone
               <input name="phone" defaultValue={client.phone ?? ""} className={input} />
             </label>
-            <label className={labelCls}>
-              {kind === "office" ? "Office address" : "Address"}
-              <input name="address" defaultValue={client.address ?? ""} className={input} />
-            </label>
+            {/* One field, so it takes the whole one-line address rather than
+                splitting into city/state/zip columns this form doesn't have. */}
+            <AddressAutocomplete
+              name="address"
+              label={kind === "office" ? "Office address" : "Address"}
+              defaultValue={client.address ?? ""}
+            />
           </div>
           {kind === "office" && (
             <div className="border-t border-stone-100 pt-3">
@@ -340,14 +344,11 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                     className={input}
                   />
                 </label>
-                <label className={labelCls}>
-                  Brokerage address
-                  <input
-                    name="brokerageAddress"
-                    defaultValue={brokerage?.address ?? ""}
-                    className={input}
-                  />
-                </label>
+                <AddressAutocomplete
+                  name="brokerageAddress"
+                  label="Brokerage address"
+                  defaultValue={brokerage?.address ?? ""}
+                />
               </div>
             </div>
           )}

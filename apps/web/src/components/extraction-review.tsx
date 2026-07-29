@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/TextLayer.css";
 import "react-pdf/dist/Page/AnnotationLayer.css";
+import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { Badge, type BadgeTone } from "@/components/badges";
 import { btn, btnDanger, card } from "@/lib/ui";
 
@@ -34,6 +35,8 @@ const PDF_WIDTH = 540;
 
 export interface ReviewField {
   id: string;
+  /** The extractor's field key — "property_address", "close_date", … */
+  key: string;
   label: string;
   value: string;
   confidence: string;
@@ -189,7 +192,29 @@ export function ExtractionReview({
                       />
                     )}
                     <span className="font-medium">{f.label}</span>
-                    <span className="text-stone-700">{f.value}</span>
+                    {/* The address is the one extracted value worth correcting
+                        in place: contracts abbreviate it ("15 Talmuth"), and
+                        every later lookup keys off it. Same picker as manual
+                        entry — leave it alone and the model's reading applies
+                        unchanged. */}
+                    {!readOnly && f.key === "property_address" ? (
+                      <span className="min-w-64 flex-1">
+                        <AddressAutocomplete
+                          name={`value:${f.id}`}
+                          defaultValue={f.value}
+                          fills={{ city: "addr:city", state: "addr:state", zip: "addr:zip" }}
+                        />
+                        {/* The picker writes the street line into the field
+                            above and the rest here, so correcting the address
+                            also corrects the file's city/state/ZIP instead of
+                            leaving them pointing at a different town. */}
+                        <input type="hidden" name="addr:city" />
+                        <input type="hidden" name="addr:state" />
+                        <input type="hidden" name="addr:zip" />
+                      </span>
+                    ) : (
+                      <span className="text-stone-700">{f.value}</span>
+                    )}
                     <Badge tone={CONF_TONE[f.confidence] ?? "neutral"}>
                       {f.confidence.toLowerCase()}
                     </Badge>
