@@ -95,3 +95,29 @@ body {
   color: transparent;
   border-radius: 2px;
 }
+
+/* Side-driven field groups on the transaction forms.
+ *
+ * A buy-side file has a contract price and an effective date; a listing has a
+ * list price and a list date; a dual file has both. Showing all four to
+ * everyone is how a coordinator ends up typing a list price on a buy-side
+ * deal.
+ *
+ * Pure CSS keyed off the side <select>, deliberately: the form is a zero-JS
+ * server-action form, and a client island would leave the wrong fields
+ * visible until hydration and all of them visible if JS never arrives. :has()
+ * with option:checked re-evaluates the moment the selection changes.
+ *
+ * The hidden inputs still submit. They must: the update action reads every
+ * field unconditionally, so an absent one would null the stored value — a
+ * buy-side file would silently lose the list price it already had.
+ */
+.side-panel {
+  display: none;
+}
+form:has(select[name="side"] option[value="SELL_SIDE"]:checked) .side-panel-sell,
+form:has(select[name="side"] option[value="DUAL"]:checked) .side-panel-sell,
+form:has(select[name="side"] option[value="BUY_SIDE"]:checked) .side-panel-buy,
+form:has(select[name="side"] option[value="DUAL"]:checked) .side-panel-buy {
+  display: block;
+}
