@@ -30,3 +30,11 @@ export const summaryLink =
 /** Small caps section heading inside a card or long form — groups related fields without a nested card. */
 export const fieldGroupLabel =
   "mb-1.5 text-[10px] font-medium uppercase tracking-wide text-stone-400";
+
+/**
+ * Strict-column table: fixed layout so a column is the same width on every
+ * row and the eye can run straight down it. Requires an explicit width on
+ * each <col>; cells truncate rather than reflowing the grid.
+ */
+export const tableFixed = "w-full table-fixed border-collapse";
+export const tdFixed = "truncate border-b border-stone-100 px-2.5 py-1.5 text-sm";

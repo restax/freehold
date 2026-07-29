@@ -1,28 +1,32 @@
-import { TransactionSide, TransactionStatus, withTenant } from "@freehold/db";
+import { TransactionStatus, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { StatusBadge } from "@/components/badges";
-import { ContractUploadForm } from "@/components/contract-upload-form";
+import { ColumnPicker } from "@/components/column-picker";
 import { EmptyState } from "@/components/empty-state";
-import { createFromContract } from "@/lib/actions/extractions";
-import { createTransaction } from "@/lib/actions/transactions";
+import { MultiSelect } from "@/components/multi-select";
 import { fmtDate, fmtMoney, STATUS_LABEL } from "@/lib/format";
 import { licenseGap, requiredStates } from "@/lib/licensing";
 import { creditBalance, getTenantPlan, isCloud, transactionLimit } from "@/lib/plans";
-import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
+import { type SideLabels, sideLabel, tenantSideLabels } from "@/lib/side-labels";
 import { requireTenant } from "@/lib/tenant";
 import {
-  btn,
-  btnGhost,
-  card,
-  fieldGroupLabel,
-  input,
-  label,
-  summaryLink,
-  tableWrap,
-  td,
-  th,
-  trHover,
-} from "@/lib/ui";
+  columnGroups,
+  resolveColumns,
+  TRANSACTION_COLUMNS,
+  tableMinWidth,
+} from "@/lib/transaction-columns";
+import {
+  closingSoonWindow,
+  hasActiveFilters,
+  isViewKey,
+  multiParam,
+  searchTerm,
+  startOfYear,
+  TRANSACTION_VIEWS,
+  type TransactionFilters,
+  viewShape,
+} from "@/lib/transaction-views";
+import { btn, btnGhost, card, input, tableFixed, tableWrap, tdFixed, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 // Contract extraction runs synchronously in the createFromContract server
@@ -31,12 +35,159 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const STATUSES = Object.values(TransactionStatus);
-const SIDES = Object.values(TransactionSide);
+
+/** The row shape the table renders — inferred from the query below. */
+type Row = {
+  id: string;
+  propertyAddress: string;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  status: string;
+  side: string;
+  mlsId: string | null;
+  purchasePrice: number | null;
+  listPrice: number | null;
+  contractDate: Date | null;
+  closeDate: Date | null;
+  listDate: Date | null;
+  onMarketDate: Date | null;
+  mortgageCommitmentDate: Date | null;
+  inspectionDeadlineDate: Date | null;
+  updatedAt: Date;
+  client: { name: string } | null;
+  parties: Array<{ contact: { name: string } }>;
+  tasks: Array<{ id: string }>;
+  assignees: Array<{ user: { name: string } }>;
+  _count: { tasks: number; documents: number };
+};
+
+/** Days on market: from listing to close, or to today while it's still live. */
+function domOf(t: Row, todayMs: number): string {
+  const start = t.onMarketDate ?? t.listDate;
+  if (!start) return "—";
+  const end =
+    t.status === "CLOSED" || t.status === "CANCELLED"
+      ? (t.closeDate?.getTime() ?? t.updatedAt.getTime())
+      : todayMs;
+  return String(Math.max(0, Math.round((end - start.getTime()) / 86400000)));
+}
+
+/** The soonest date still ahead of the file — what a coordinator chases next. */
+function nextKeyDate(t: Row): string {
+  const candidates: Array<[string, Date | null]> = [
+    ["Inspection", t.inspectionDeadlineDate],
+    ["Mortgage", t.mortgageCommitmentDate],
+    ["Closing", t.closeDate],
+  ];
+  const upcoming = candidates
+    .filter((c): c is [string, Date] => c[1] !== null)
+    .sort((a, b) => a[1].getTime() - b[1].getTime());
+  const next = upcoming[0];
+  return next ? `${next[0]} ${fmtDate(next[1])}` : "—";
+}
+
+const partyNames = (t: Row) => t.parties.map((p) => p.contact.name).join(", ");
+const coordinatorNames = (t: Row) => t.assignees.map((a) => a.user.name).join(", ");
+
+/** Tooltip for cells that truncate, so a clipped value is still readable. */
+function cellTitle(t: Row, key: string, labels: SideLabels): string | undefined {
+  switch (key) {
+    case "address":
+      return t.propertyAddress;
+    case "buyersSellers":
+      return partyNames(t) || undefined;
+    case "coordinators":
+      return coordinatorNames(t) || undefined;
+    case "client":
+      return t.client?.name;
+    case "side":
+      return sideLabel(t.side, labels);
+    default:
+      return undefined;
+  }
+}
+
+function renderCell(
+  t: Row,
+  key: string,
+  ctx: { labels: SideLabels; todayMs: number; unlicensed: boolean },
+): React.ReactNode {
+  switch (key) {
+    case "address":
+      return (
+        <>
+          <Link
+            href={`/dashboard/transactions/${t.id}`}
+            className="font-medium text-brand-700 hover:text-brand-600"
+          >
+            {t.propertyAddress}
+          </Link>
+          {ctx.unlicensed && (
+            <span
+              title={`${t.state} requires a licensed coordinator on this file`}
+              className="ml-2 inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-900"
+            >
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+              unlicensed
+            </span>
+          )}
+        </>
+      );
+    case "city":
+      return t.city ?? "—";
+    case "state":
+      return t.state ?? "—";
+    case "zip":
+      return t.zip ?? "—";
+    case "status":
+      return <StatusBadge status={t.status} />;
+    case "side":
+      return sideLabel(t.side, ctx.labels);
+    case "buyersSellers":
+      return partyNames(t) || "—";
+    case "client":
+      return t.client?.name ?? "—";
+    case "price":
+      return fmtMoney(t.purchasePrice ?? t.listPrice);
+    case "listPrice":
+      return fmtMoney(t.listPrice);
+    case "contractPrice":
+      return fmtMoney(t.purchasePrice);
+    case "mlsId":
+      return t.mlsId ?? "—";
+    case "contractDate":
+      return fmtDate(t.contractDate);
+    case "closeDate":
+      return fmtDate(t.closeDate);
+    case "nextDate":
+      return nextKeyDate(t);
+    case "dom":
+      return domOf(t, ctx.todayMs);
+    case "tasks":
+      // Open over total: "3/12" reads faster than either number alone.
+      return t._count.tasks === 0 ? "—" : `${t.tasks.length}/${t._count.tasks}`;
+    case "documents":
+      return t._count.documents === 0 ? "—" : String(t._count.documents);
+    case "coordinators":
+      return coordinatorNames(t) || "—";
+    default:
+      return "—";
+  }
+}
 
 export default async function TransactionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; mine?: string; licenseError?: string }>;
+  searchParams: Promise<{
+    view?: string;
+    q?: string;
+    status?: string | string[];
+    assignee?: string | string[];
+    client?: string | string[];
+    mine?: string;
+    licenseError?: string;
+  }>;
 }) {
   const { tenantId, userId, isGuest } = await requireTenant({ allowGuest: true });
   const labels = await tenantSideLabels(tenantId);
@@ -53,31 +204,77 @@ export default async function TransactionsPage({
   // self-host. Without a key, extraction can't run, so we hide the card
   // rather than leave a stranded provisional transaction behind a failure.
   const aiAvailable = Boolean(process.env.ANTHROPIC_API_KEY);
-  const { status, mine, licenseError } = await searchParams;
-  const statusFilter = STATUSES.includes(status as TransactionStatus)
-    ? (status as TransactionStatus)
-    : undefined;
-  const mineFilter = mine === "1";
+  const params = await searchParams;
+  const { licenseError } = params;
+
+  const view = isViewKey(params.view) ? params.view : "all";
+  const shape = viewShape(view);
+  const filters: TransactionFilters = {
+    view,
+    q: searchTerm(params.q),
+    statuses: multiParam(params.status, STATUSES),
+    assigneeIds: multiParam(params.assignee),
+    clientIds: multiParam(params.client),
+  };
+  // The old ?mine=1 link still works; it just reads as another way to say
+  // "scope this to me" on top of whatever view is selected.
+  const mineOnly = shape.mineOnly || params.mine === "1";
+  // Explicit status filters win over the view's defaults — a view is a
+  // starting point, not a cage.
+  const statusesInPlay = filters.statuses.length > 0 ? filters.statuses : [...shape.statuses];
+  const now = new Date();
 
   const { transactions, clients, requiredStateSet, allLicenses } = await withTenant(
     tenantId,
     async (tx) => ({
       transactions: await tx.transaction.findMany({
         where: {
-          ...(statusFilter ? { status: statusFilter } : {}),
+          ...(statusesInPlay.length > 0
+            ? { status: { in: statusesInPlay as TransactionStatus[] } }
+            : {}),
           // A guest is outside coverage staff: they see only what they were
           // handed, whatever the filters say.
-          ...(mineFilter || isGuest ? { assignees: { some: { userId } } } : {}),
+          ...(mineOnly || isGuest ? { assignees: { some: { userId } } } : {}),
+          ...(filters.assigneeIds.length > 0
+            ? { assignees: { some: { userId: { in: filters.assigneeIds } } } }
+            : {}),
+          ...(filters.clientIds.length > 0 ? { clientId: { in: filters.clientIds } } : {}),
+          ...(shape.closingSoon ? { closeDate: closingSoonWindow(now) } : {}),
+          ...(shape.closedThisYear ? { closeDate: { gte: startOfYear(now) } } : {}),
+          ...(shape.hasOpenTasks ? { tasks: { some: { status: { not: "DONE" } } } } : {}),
+          // Address or anyone named on the file — what a coordinator
+          // actually remembers about a deal.
+          ...(filters.q
+            ? {
+                OR: [
+                  { propertyAddress: { contains: filters.q, mode: "insensitive" as const } },
+                  { city: { contains: filters.q, mode: "insensitive" as const } },
+                  { mlsId: { contains: filters.q, mode: "insensitive" as const } },
+                  { client: { name: { contains: filters.q, mode: "insensitive" as const } } },
+                  {
+                    parties: {
+                      some: {
+                        contact: {
+                          name: { contains: filters.q, mode: "insensitive" as const },
+                        },
+                      },
+                    },
+                  },
+                ],
+              }
+            : {}),
         },
         orderBy: { updatedAt: "desc" },
         include: {
           client: { select: { name: true } },
-          _count: { select: { tasks: true } },
+          _count: { select: { tasks: true, documents: true } },
           parties: {
             where: { role: { in: ["BUYER", "SELLER"] } },
             include: { contact: { select: { name: true } } },
           },
-          assignees: { select: { userId: true } },
+          // Open-task count per file, for the Tasks column.
+          tasks: { where: { status: { not: "DONE" } }, select: { id: true } },
+          assignees: { select: { userId: true, user: { select: { name: true } } } },
         },
       }),
       clients: await tx.client.findMany({ orderBy: { name: "asc" } }),
@@ -94,6 +291,15 @@ export default async function TransactionsPage({
     include: { user: { select: { id: true, name: true } } },
   });
   const todayMs = Date.now();
+  const filtersActive = hasActiveFilters(filters);
+
+  // This person's own column layout for this workspace; unset falls back to
+  // the defaults in lib/transaction-columns.ts.
+  const me = members.find((m) => m.userId === userId);
+  const storedColumns = (me?.tablePrefs as { transactionColumns?: unknown } | null)
+    ?.transactionColumns;
+  const columns = resolveColumns(storedColumns);
+  const columnKeys = columns.map((c) => c.key);
 
   const licensesByUser = new Map<string, typeof allLicenses>();
   for (const lic of allLicenses) {
@@ -111,31 +317,73 @@ export default async function TransactionsPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Transactions</h1>
-        <form className="flex items-center gap-2">
-          <select name="status" defaultValue={statusFilter ?? ""} className={input}>
-            <option value="">All statuses</option>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {STATUS_LABEL[s]}
-              </option>
-            ))}
-          </select>
-          <label className="flex items-center gap-1.5 text-sm text-stone-600">
-            <input
-              type="checkbox"
-              name="mine"
-              value="1"
-              defaultChecked={mineFilter}
-              className="accent-brand-600"
-            />
-            Assigned to me
-          </label>
+      {/* Title left, the way into a new file on the right. Creation is its
+          own page — this one's job is reading the pipeline, and a create form
+          folded into the toolbar left "+ Create → Transaction" landing here
+          with nothing visibly open. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-xl font-semibold">Transactions</h1>
+          <span className="text-sm text-stone-500">
+            {transactions.length} {transactions.length === 1 ? "file" : "files"}
+            {filtersActive || view !== "all" ? " matching" : ""}
+          </span>
+        </div>
+        <Link href="/dashboard/transactions/new" className={btn}>
+          New transaction
+        </Link>
+      </div>
+
+      {/* Saved views: the handful of questions a coordinator asks daily, one
+          click each, rather than re-deriving them from dropdowns. */}
+      <div className="flex flex-wrap items-center gap-x-1 gap-y-1 border-b border-stone-200">
+        {TRANSACTION_VIEWS.map((v) => {
+          const active = v.key === view;
+          return (
+            <Link
+              key={v.key}
+              href={v.key === "all" ? "/dashboard/transactions" : `?view=${v.key}`}
+              className={`-mb-px border-b-2 px-3 py-1.5 text-sm transition-colors ${
+                active
+                  ? "border-brand-600 font-medium text-brand-800"
+                  : "border-transparent text-stone-500 hover:border-stone-300 hover:text-stone-800"
+              }`}
+            >
+              {v.label}
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* One toolbar row: find, narrow, and choose columns. Everything that
+          acts on the list lives here so the table below owns the rest. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <form className="flex min-w-64 flex-1 items-center gap-2">
+          <input type="hidden" name="view" value={view} />
+          <input
+            name="q"
+            defaultValue={filters.q ?? ""}
+            placeholder="Search address, city, MLS ID, client or party name"
+            aria-label="Search transactions"
+            className={`${input} flex-1`}
+          />
           <button type="submit" className={btnGhost}>
-            Filter
+            Search
           </button>
         </form>
+        <ColumnPicker
+          all={[...TRANSACTION_COLUMNS]}
+          groups={columnGroups()}
+          selected={columnKeys}
+        />
+        {filtersActive && (
+          <Link
+            href={view === "all" ? "/dashboard/transactions" : `?view=${view}`}
+            className="text-sm text-stone-500 hover:text-stone-800"
+          >
+            Clear filters
+          </Link>
+        )}
       </div>
 
       {licenseError && (
@@ -167,265 +415,137 @@ export default async function TransactionsPage({
         </p>
       )}
 
-      {aiAvailable &&
-        !limit.limited &&
-        (outOfCredits ? (
-          <p className="rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-600">
-            You're out of AI credits.{" "}
-            <Link href="/dashboard/billing" className="font-medium text-brand-700 underline">
-              Buy more
-            </Link>{" "}
-            to start from a contract, or enter a transaction manually below.
-          </p>
-        ) : (
-          <section className={`${card} border-brand-600/25 bg-brand-50/40`}>
-            <h2 className="font-medium text-stone-900">Start from a contract</h2>
-            <p className="mt-1 text-sm text-stone-600">
-              Drop in the signed PDF — the AI reads the parties, price, and every deadline, each one
-              page-cited and confidence-scored. You confirm before anything is saved. No typing.
-            </p>
-            <ContractUploadForm action={createFromContract} />
-            <p className="mt-2 text-xs text-stone-400">
-              PDF, up to 10&nbsp;MB. Extraction takes ~30–90 seconds.
-              {needsCredit && ` Uses 1 of your ${credits} AI credit${credits === 1 ? "" : "s"}.`}
-            </p>
-          </section>
-        ))}
+      {aiAvailable && !limit.limited && outOfCredits && (
+        <p className="rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-600">
+          You're out of AI credits.{" "}
+          <Link href="/dashboard/billing" className="font-medium text-brand-700 underline">
+            Buy more
+          </Link>{" "}
+          to start from a contract, or use “New transaction” above.
+        </p>
+      )}
 
-      <details className={card}>
-        <summary className={summaryLink}>
-          {aiAvailable ? "Or enter details manually" : "New transaction"}
-        </summary>
-        <form action={createTransaction} className="mt-4 flex flex-col gap-4">
-          <div>
-            <p className={fieldGroupLabel}>Property</p>
-            <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-[2fr_1fr_1fr_1fr]">
-              <label className={label}>
-                Address *
-                <input
-                  name="propertyAddress"
-                  required
-                  className={input}
-                  placeholder="412 Maple Avenue"
-                />
-              </label>
-              <label className={label}>
-                City
-                <input name="city" className={input} />
-              </label>
-              <label className={label}>
-                State
-                <input name="state" className={input} maxLength={2} />
-              </label>
-              <label className={label}>
-                ZIP
-                <input name="zip" className={input} />
-              </label>
-            </div>
-          </div>
-
-          <div className="border-t border-stone-100 pt-3">
-            <p className={fieldGroupLabel}>Deal</p>
-            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-3">
-              <label className={label}>
-                Status
-                <select name="status" className={input} defaultValue="UNDER_CONTRACT">
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {STATUS_LABEL[s]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={label}>
-                Side
-                <select name="side" className={input} defaultValue="BUY_SIDE">
-                  {SIDES.map((s) => (
-                    <option key={s} value={s}>
-                      {sideLabel(s, labels)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={label}>
-                Purchase price ($)
-                <input name="purchasePrice" inputMode="numeric" className={input} />
-              </label>
-            </div>
-          </div>
-
-          <div className="border-t border-stone-100 pt-3">
-            <p className={fieldGroupLabel}>Key dates</p>
-            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
-              <label className={label}>
-                Contract date
-                <input name="contractDate" type="date" className={input} />
-              </label>
-              <label className={label}>
-                Close date
-                <input name="closeDate" type="date" className={input} />
-              </label>
-            </div>
-          </div>
-
-          <div className="border-t border-stone-100 pt-3">
-            <p className={fieldGroupLabel}>Client &amp; team</p>
-            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-3">
-              <label className={label}>
-                Client
-                <select name="clientId" className={input} defaultValue="">
-                  <option value="">—</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={label}>
-                Co-agent (managed agent)
-                <select name="coAgentClientId" className={input} defaultValue="">
-                  <option value="">—</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={label}>
-                Assign to
-                <select name="assigneeId" className={input} defaultValue="">
-                  <option value="">—</option>
-                  {members.map((m) => (
-                    <option key={m.user.id} value={m.user.id}>
-                      {m.user.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </div>
-
-          <details className="border-t border-stone-100 pt-3">
-            <summary className={`${summaryLink} text-xs`}>Listing details (optional)</summary>
-            <div className="mt-3 grid gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
-              <label className={label}>
-                List price ($)
-                <input name="listPrice" inputMode="numeric" className={input} />
-              </label>
-              <label className={label}>
-                List date
-                <input name="listDate" type="date" className={input} />
-              </label>
-              <label className={label}>
-                On-market date
-                <input name="onMarketDate" type="date" className={input} />
-              </label>
-              <label className={label}>
-                Expire date
-                <input name="expireDate" type="date" className={input} />
-              </label>
-              <label className={label}>
-                MLS ID
-                <input name="mlsId" className={input} />
-              </label>
-            </div>
-          </details>
-
-          <div className="border-t border-stone-100 pt-3">
-            <button type="submit" className={btn}>
-              Create transaction
-            </button>
-          </div>
-        </form>
-      </details>
-
-      <section className={card}>
-        {transactions.length === 0 ? (
-          statusFilter ? (
-            <EmptyState
-              title={`No ${STATUS_LABEL[statusFilter].toLowerCase()} transactions`}
-              hint="Clear the filter to see everything, or move a deal into this stage from its detail page."
-            >
+      {/* Filters beside the table, not stacked above it: a coordinator
+          narrows the list and reads the result in one glance, instead of
+          scrolling past a panel to see what it did. */}
+      <div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
+        <form className={`${card} flex flex-col gap-4`}>
+          <input type="hidden" name="view" value={view} />
+          {filters.q && <input type="hidden" name="q" value={filters.q} />}
+          <div className="flex items-center justify-between">
+            <h2 className="font-medium text-stone-800">Filters</h2>
+            {filtersActive && (
               <Link
-                href="/dashboard/transactions"
-                className="text-sm font-medium text-brand-700 hover:text-brand-600"
+                href={view === "all" ? "/dashboard/transactions" : `?view=${view}`}
+                className="text-xs text-stone-500 hover:text-stone-800"
               >
-                Show all transactions →
+                Clear
               </Link>
-            </EmptyState>
-          ) : (
-            <EmptyState
-              title="Your pipeline is empty"
-              hint={
-                aiAvailable
-                  ? "Drop a signed contract above and the AI builds the file for you — parties, price, and every deadline, page-cited for you to confirm. Or enter one manually."
-                  : 'Open "New transaction" above to add your first deal — attach the people, apply an action plan, and every deadline computes itself.'
-              }
-            />
-          )
-        ) : (
-          <div className={tableWrap}>
-            <table className="w-full">
-              <thead>
-                <tr>
-                  <th className={th}>Property</th>
-                  <th className={th}>Side</th>
-                  <th className={th}>Buyer / Seller</th>
-                  <th className={th}>Status</th>
-                  <th className={th}>Price</th>
-                  <th className={th}>Closing</th>
-                  <th className={th}>DOM</th>
-                  <th className={th}>MLS ID</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.map((t) => (
-                  <tr key={t.id} className={trHover}>
-                    <td className={td}>
-                      <Link
-                        href={`/dashboard/transactions/${t.id}`}
-                        className="font-medium text-brand-700 hover:text-brand-600"
-                      >
-                        {t.propertyAddress}
-                      </Link>
-                      {gapFor(t) && (
-                        <span
-                          title={`${t.state} requires a licensed coordinator on this file`}
-                          className="ml-2 inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-900"
-                        >
-                          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                          unlicensed
-                        </span>
-                      )}
-                    </td>
-                    <td className={td}>{sideLabel(t.side, labels)}</td>
-                    <td className={td}>{t.parties.map((p) => p.contact.name).join(", ") || "—"}</td>
-                    <td className={td}>
-                      <StatusBadge status={t.status} />
-                    </td>
-                    <td className={td}>{fmtMoney(t.purchasePrice ?? t.listPrice)}</td>
-                    <td className={td}>{fmtDate(t.closeDate)}</td>
-                    <td className={td}>
-                      {(() => {
-                        const start = t.onMarketDate ?? t.listDate;
-                        if (!start) return "—";
-                        const end =
-                          t.status === "CLOSED" || t.status === "CANCELLED"
-                            ? (t.closeDate?.getTime() ?? t.updatedAt.getTime())
-                            : todayMs;
-                        return Math.max(0, Math.round((end - start.getTime()) / 86400000));
-                      })()}
-                    </td>
-                    <td className={td}>{t.mlsId ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            )}
           </div>
-        )}
-      </section>
+
+          <MultiSelect
+            name="status"
+            label="Stage"
+            placeholder="Any stage"
+            defaultValue={filters.statuses}
+            options={STATUSES.map((s) => ({ value: s, label: STATUS_LABEL[s] ?? s }))}
+          />
+
+          <MultiSelect
+            name="assignee"
+            label="Team member"
+            placeholder="Anyone"
+            defaultValue={filters.assigneeIds}
+            options={members.map((m) => ({ value: m.user.id, label: m.user.name }))}
+          />
+
+          <MultiSelect
+            name="client"
+            label="Client"
+            placeholder="Any client"
+            defaultValue={filters.clientIds}
+            options={clients.map((c) => ({ value: c.id, label: c.name }))}
+          />
+
+          <button type="submit" className={btn}>
+            Apply filters
+          </button>
+        </form>
+
+        <section className={card}>
+          {transactions.length === 0 ? (
+            filtersActive || view !== "all" ? (
+              <EmptyState
+                title="Nothing matches"
+                hint="No files fit this view and these filters. Widen the search, or clear it to see the whole pipeline."
+              >
+                <Link
+                  href="/dashboard/transactions"
+                  className="text-sm font-medium text-brand-700 hover:text-brand-600"
+                >
+                  Show all transactions →
+                </Link>
+              </EmptyState>
+            ) : (
+              <EmptyState
+                title="Your pipeline is empty"
+                hint={
+                  aiAvailable
+                    ? "Drop a signed contract above and the AI builds the file for you — parties, price, and every deadline, page-cited for you to confirm. Or enter one manually."
+                    : 'Open "New transaction" above to add your first deal — attach the people, apply an action plan, and every deadline computes itself.'
+                }
+              />
+            )
+          ) : (
+            <div className={tableWrap}>
+              <table className={tableFixed} style={{ minWidth: tableMinWidth(columns) }}>
+                {/* Explicit widths are what make the columns strict: every row
+                  lands on the same grid instead of each one negotiating its
+                  own. Long values truncate rather than widening a column. */}
+                <colgroup>
+                  {columns.map((c) => (
+                    <col key={c.key} style={{ width: c.width }} />
+                  ))}
+                </colgroup>
+                <thead>
+                  <tr>
+                    {columns.map((c) => (
+                      <th
+                        key={c.key}
+                        className={`${th} ${c.align === "right" ? "text-right" : ""}`}
+                      >
+                        {c.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((t) => (
+                    <tr key={t.id} className={trHover}>
+                      {columns.map((c) => (
+                        <td
+                          key={c.key}
+                          className={`${tdFixed} ${
+                            c.align === "right" ? "text-right tabular-nums" : ""
+                          }`}
+                          title={cellTitle(t, c.key, labels)}
+                        >
+                          {renderCell(t, c.key, {
+                            labels,
+                            todayMs,
+                            unlicensed: gapFor(t) !== null,
+                          })}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

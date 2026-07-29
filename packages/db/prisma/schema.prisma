@@ -728,6 +728,13 @@ model Member {
   /// operator/Slack reply newer than this counts as unread, driving the
   /// sidebar's "new message" badge. Null = never opened it.
   supportSeenAt  DateTime?    @map("support_seen_at")
+  /// Per-person table preferences in this workspace, e.g.
+  /// {transactionColumns: ["address","status",...]} — the chosen columns in
+  /// display order. Per member rather than per user because someone who
+  /// coordinates for two workspaces wants different columns in each, the
+  /// same way roles and assignments don't cross tenants. Unset = the
+  /// defaults in lib/transaction-columns.ts.
+  tablePrefs     Json?        @map("table_prefs")
   createdAt      DateTime     @default(now())
 
   @@index([organizationId])
