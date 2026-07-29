@@ -144,7 +144,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 Contact
               </a>
               <a
-                href="/dashboard/contacts?due=1"
+                href="/dashboard/contacts?view=touch"
                 className="px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-50"
               >
                 Contact note

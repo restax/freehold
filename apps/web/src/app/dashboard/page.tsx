@@ -694,7 +694,7 @@ export default async function DashboardPage() {
               ))}
             </ul>
             <Link
-              href="/dashboard/contacts?due=1"
+              href="/dashboard/contacts?view=touch"
               className="mt-2 inline-block text-sm text-brand-700 hover:underline"
             >
               All due contacts →
