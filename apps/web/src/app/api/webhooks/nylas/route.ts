@@ -80,7 +80,10 @@ export async function POST(req: Request) {
     return new Response("Invalid signature", { status: 400 });
   }
 
-  let event: { type?: string; data?: { object?: Record<string, unknown> } };
+  let event: {
+    type?: string;
+    data?: { grant_id?: string; object?: Record<string, unknown> };
+  };
   try {
     event = JSON.parse(payload) as typeof event;
   } catch {
@@ -93,8 +96,16 @@ export async function POST(req: Request) {
   // page's "Needs reconnecting" state, and the compose control disappearing,
   // both depend on status flipping here rather than staying "valid" until
   // the next doomed send attempt fails.
+  //
+  // The grant id sits at object.grant_id here, not object.id — confirmed
+  // against Nylas's own mock-payload endpoint after a first pass assumed the
+  // wrong field and shipped silently broken (this handler never actually
+  // fired). Every field name below is checked the same way, not guessed —
+  // Nylas is not consistent about where a given id lives across trigger
+  // types (message.send_success puts grant_id a level up from here, for
+  // instance), so each one was verified against a real payload individually.
   if (type === "grant.expired") {
-    const grantId = typeof obj.id === "string" ? obj.id : "";
+    const grantId = typeof obj.grant_id === "string" ? obj.grant_id : "";
     if (grantId) {
       await prisma.nylasGrant.updateMany({
         where: { grantId },
@@ -172,6 +183,66 @@ export async function POST(req: Request) {
       );
     }
     adminAlert(`📨 Reply from ${from} landed on a transaction via a coordinator's own mailbox`);
+    return new Response("ok", { status: 200 });
+  }
+
+  // A held schedule was just released as a real message. Closes the gap left
+  // at schedule time: scheduleEmail (lib/outbox.ts) can't create a NylasSend
+  // row when it books the send, because there's no real message/thread id
+  // yet — only Nylas's schedule_id, which isn't one. This is where those ids
+  // finally exist, so this is where the row that makes a reply thread onto
+  // the file actually gets written.
+  if (type === "message.send_success") {
+    const grantId = typeof event.data?.grant_id === "string" ? event.data.grant_id : "";
+    const messageId = typeof obj.id === "string" ? obj.id : "";
+    const scheduleId = typeof obj.schedule_id === "string" ? obj.schedule_id : "";
+    if (!grantId || !messageId || !scheduleId) return new Response("ok", { status: 200 });
+
+    // Unscoped: email_outbox has no RLS (same reasoning as NylasSend), and
+    // this is exactly what resolves the tenant before anything RLS-scoped
+    // can run. Only a row this webhook itself created carries a schedule id,
+    // so a match here is never someone else's data.
+    const outboxRow = await prisma.emailOutbox.findFirst({
+      where: { nylasScheduleId: scheduleId, sentAt: null },
+      select: { tenantId: true, transactionId: true },
+    });
+    if (!outboxRow) return new Response("ok (no matching schedule)", { status: 200 });
+
+    // The object here carries schedule_id and the new message id, but not
+    // thread_id — unlike message.created's payload, confirmed against the
+    // mock endpoint. Still fetched fresh rather than half-trusted: the same
+    // truncation risk applies to any message this size or larger.
+    let full: Awaited<ReturnType<typeof fetchNylasMessage>>;
+    try {
+      full = await fetchNylasMessage(grantId, messageId);
+    } catch {
+      return new Response("ok (fetch failed)", { status: 200 });
+    }
+    if (!full.threadId) return new Response("ok (no thread id)", { status: 200 });
+
+    await withTenant(outboxRow.tenantId, (tx) =>
+      tx.email.updateMany({
+        where: { nylasScheduleId: scheduleId, status: "SCHEDULED" },
+        data: {
+          status: "SENT",
+          providerId: messageId,
+          nylasThreadId: full.threadId,
+          nylasScheduleId: null,
+        },
+      }),
+    );
+    await prisma.emailOutbox.updateMany({
+      where: { nylasScheduleId: scheduleId, sentAt: null },
+      data: { sentAt: new Date() },
+    });
+    await prisma.nylasSend.create({
+      data: {
+        tenantId: outboxRow.tenantId,
+        transactionId: outboxRow.transactionId,
+        providerId: messageId,
+        nylasThreadId: full.threadId,
+      },
+    });
     return new Response("ok", { status: 200 });
   }
 

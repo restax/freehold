@@ -1363,12 +1363,19 @@ model Email {
   /// reply carries, so it's the hook that puts that reply on this file.
   nylasThreadId String?        @map("nylas_thread_id")
   nylasSentBy   String?        @map("nylas_sent_by")
+  /// Set only while status is SCHEDULED on the Nylas path: the schedule Nylas
+  /// is holding hasn't produced a real message/thread id yet, so this is the
+  /// only handle this row has until send completes. Matched by cancelScheduled
+  /// (flips to CANCELLED) and the send-completion webhook (flips to SENT,
+  /// fills in providerId/nylasThreadId, and clears this).
+  nylasScheduleId String?      @map("nylas_schedule_id")
   status        String         @default("SENT")
   createdAt     DateTime       @default(now())
 
   @@index([tenantId, transactionId, createdAt])
   @@index([replyToken])
   @@index([nylasThreadId])
+  @@index([nylasScheduleId])
   @@map("email")
 }
 

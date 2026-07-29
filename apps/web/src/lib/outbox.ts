@@ -195,7 +195,7 @@ export async function scheduleEmail(input: ScheduleInput): Promise<"nylas" | "re
     input.sendAsUserId && nylasEnabled()
       ? await prisma.nylasGrant.findUnique({
           where: { userId: input.sendAsUserId },
-          select: { grantId: true, status: true },
+          select: { grantId: true, status: true, email: true },
         })
       : null;
 
@@ -211,16 +211,6 @@ export async function scheduleEmail(input: ScheduleInput): Promise<"nylas" | "re
     // Recorded even though Nylas owns the delivery, so it shows up in the
     // coordinator's scheduled list and stays cancellable. The flush skips
     // rows carrying a schedule id.
-    //
-    // Known gap: a reply to *this* message won't thread onto the file. The
-    // inbound webhook resolves a reply's transaction via NylasSend, keyed on
-    // the real message/thread id — and a scheduled send doesn't have those
-    // yet (sendViaNylas returns a schedule id in their place; the message
-    // itself doesn't exist until Nylas releases it). Closing this needs the
-    // message.send_success webhook, which fires once the send completes and
-    // can supply the missing ids — not built yet. Nothing breaks either way:
-    // an unmatched reply is silently ignored, same as any other mail in a
-    // connected inbox that isn't about a Freehold transaction.
     await prisma.emailOutbox.create({
       data: {
         tenantId: input.tenantId,
@@ -234,6 +224,27 @@ export async function scheduleEmail(input: ScheduleInput): Promise<"nylas" | "re
         nylasGrantId: grant.grantId,
       },
     });
+    // Also on the thread itself, same as the Resend branch below — a
+    // scheduled send-as-self should be visible on the file the moment it's
+    // booked, not only once it goes out. Keyed on the schedule id: the real
+    // message/thread id doesn't exist yet, so there's nothing else to key on
+    // until the send-completion webhook fills them in and flips this to SENT.
+    await withTenant(input.tenantId, (tx) =>
+      tx.email.create({
+        data: {
+          tenantId: input.tenantId,
+          transactionId: input.transactionId ?? null,
+          direction: "OUTBOUND",
+          fromAddr: grant.email,
+          toAddr: input.to,
+          subject: input.subject,
+          bodyText: input.body,
+          nylasScheduleId: sent.scheduleId,
+          nylasSentBy: input.sendAsUserId,
+          status: "SCHEDULED",
+        },
+      }),
+    );
     return "nylas";
   }
 
@@ -313,6 +324,14 @@ export async function cancelScheduled(id: string, tenantId: string): Promise<boo
   if (row.nylasScheduleId && row.nylasGrantId) {
     const ok = await cancelNylasSchedule(row.nylasGrantId, row.nylasScheduleId).catch(() => false);
     if (!ok) return false;
+    // Same reasoning as the Resend branch below: through withTenant, matched
+    // on the schedule id since this row has no real message id yet.
+    await withTenant(tenantId, (tx) =>
+      tx.email.updateMany({
+        where: { nylasScheduleId: row.nylasScheduleId as string, status: "SCHEDULED" },
+        data: { status: "CANCELLED" },
+      }),
+    ).catch(() => {});
   } else if (row.resendEmailId) {
     const ok = await cancelResendEmail(row.resendEmailId).catch(() => false);
     if (!ok) return false;
