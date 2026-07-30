@@ -44,6 +44,7 @@ import { EmailPortalLinkForm } from "@/components/email-portal-link-form";
 import { EntityPicker } from "@/components/entity-picker";
 import { ExtractButton } from "@/components/extract-button";
 import { HandbookNotes } from "@/components/handbook-notes";
+import { HandbookRecap, type RecapGrade } from "@/components/handbook-recap";
 import { KeyDateRow } from "@/components/key-date-row";
 import { LinkPartyForm } from "@/components/link-party-form";
 import { LiveDictateButton } from "@/components/live-dictate-button";
@@ -132,6 +133,7 @@ import { EMAIL_MERGE_CODES, parseEmailSettings, renderMerge } from "@/lib/email-
 import { suggestForTask } from "@/lib/email-template-library";
 import { fmtDate, fmtDayMonth, fmtMoney, ROLE_LABEL } from "@/lib/format";
 import { isGovernedDateField, KEY_DATE_LABELS } from "@/lib/governed-dates";
+import { poolForTransaction } from "@/lib/handbook";
 import { invoiceLabel, TERM_PRESETS } from "@/lib/invoicing";
 import { gapForTransaction, gapMessage } from "@/lib/licensing";
 import { fmtCents } from "@/lib/pay";
@@ -334,13 +336,81 @@ export default async function TransactionDetailPage({
   // file's own list, so a standing instruction can be recorded where it
   // applies to one deal rather than to every deal that client ever brings.
   const hb = await handbookState(tenantId);
-  const handbookNotes = hb.notes
+
+  // One query for every note that could bear on this file: its own, its
+  // client's, and those of the people who are parties to it. Fetched together
+  // rather than per-subject because the recap needs all of them at once, and
+  // four round trips to render one panel is three too many.
+  const partyContactIds = txn.parties.map((p) => p.contactId);
+  const allHandbookNotes = hb.notes
     ? await withTenant(tenantId, (tx) =>
         tx.handbookNote.findMany({
-          where: { subjectType: "TRANSACTION", subjectId: id },
+          where: {
+            OR: [
+              { subjectType: "TRANSACTION", subjectId: id },
+              ...(txn.clientId
+                ? [{ subjectType: "CLIENT" as const, subjectId: txn.clientId }]
+                : []),
+              ...(partyContactIds.length > 0
+                ? [{ subjectType: "CONTACT" as const, subjectId: { in: partyContactIds } }]
+                : []),
+            ],
+          },
           orderBy: { createdAt: "desc" },
         }),
       )
+    : [];
+
+  const notesFor = (type: string, subjectId: string) =>
+    allHandbookNotes.filter((n) => n.subjectType === type && n.subjectId === subjectId);
+  const handbookNotes = notesFor("TRANSACTION", id);
+
+  // Pooling, expiry and the exclusion of notes about people all live in
+  // lib/handbook.ts so they stay tested — see poolForTransaction.
+  const handbookPool = hb.notes
+    ? poolForTransaction(
+        {
+          transaction: { id, label: txn.propertyAddress ?? "This file", notes: handbookNotes },
+          client: txn.client
+            ? {
+                id: txn.client.id,
+                label: txn.client.name,
+                notes: notesFor("CLIENT", txn.client.id),
+              }
+            : null,
+          contacts: txn.parties.map((p) => ({
+            id: p.contactId,
+            label: p.contact.name,
+            notes: notesFor("CONTACT", p.contactId),
+          })),
+        },
+        new Date(),
+      )
+    : [];
+
+  // Grades ride along with the notes: "do not accept work" is the single most
+  // important thing on the screen when it applies, and it isn't a note.
+  const handbookGrades: RecapGrade[] = hb.notes
+    ? [
+        ...(txn.client?.handbookGrade
+          ? [
+              {
+                label: txn.client.name,
+                grade: txn.client.handbookGrade,
+                reason: txn.client.handbookGradeNote,
+                href: `/dashboard/clients/${txn.client.id}`,
+              },
+            ]
+          : []),
+        ...txn.parties
+          .filter((p) => p.contact.handbookGrade)
+          .map((p) => ({
+            label: p.contact.name,
+            grade: p.contact.handbookGrade as NonNullable<typeof p.contact.handbookGrade>,
+            reason: p.contact.handbookGradeNote,
+            href: `/dashboard/contacts/${p.contactId}`,
+          })),
+      ]
     : [];
 
   // Compliance: the current round drives the tab; older rounds stay as history.
@@ -589,6 +659,11 @@ export default async function TransactionDetailPage({
 
       <div className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
         <aside className="flex flex-col gap-4 xl:order-1">
+          {/* First in the sidebar, above the dates: this is what someone needs
+              to have read *before* they act on the file, and anything further
+              down gets scrolled past. Renders nothing when there is nothing
+              to say, so it never becomes furniture people learn to ignore. */}
+          <HandbookRecap notes={handbookPool} grades={handbookGrades} />
           <SectionCard
             title="Key dates"
             icon={<CalendarBlank size={15} weight="fill" aria-hidden />}
@@ -2638,7 +2713,8 @@ export default async function TransactionDetailPage({
                 notes={handbookNotes}
                 canWrite={hb.notes}
                 locked={hb.locked}
-                hint="Anything specific to this file that someone picking it up would need told."
+                title="Handbook — this file"
+                hint="Anything specific to this file that someone picking it up would need told. Notes on the client or the people involved live on their own records, and show up in Worth knowing."
               />
             </div>
           )}
