@@ -20,6 +20,8 @@ export const PLAN_INFO: Record<
     portalClientLimit: number | null;
     /** Voice-search sessions per month; 0 = not included, null = uncapped. */
     voiceSessionsPerMonth: number | null;
+    /** The Handbook — team notes, grades and the daily summary. */
+    handbook: boolean;
   }
 > = {
   FREE: {
@@ -29,6 +31,7 @@ export const PLAN_INFO: Record<
     activeTransactionLimit: 2,
     portalClientLimit: 15,
     voiceSessionsPerMonth: 0,
+    handbook: false,
   },
   PRO: {
     label: "Pro",
@@ -37,6 +40,7 @@ export const PLAN_INFO: Record<
     activeTransactionLimit: 50,
     portalClientLimit: 50,
     voiceSessionsPerMonth: 100,
+    handbook: true,
   },
   BUSINESS: {
     label: "Business",
@@ -45,6 +49,7 @@ export const PLAN_INFO: Record<
     activeTransactionLimit: 100,
     portalClientLimit: 100,
     voiceSessionsPerMonth: 300,
+    handbook: true,
   },
 };
 
@@ -381,4 +386,46 @@ export async function portalClientLimit(
   }
   const alreadyCounted = clientIdToAdd ? clients.has(clientIdToAdd) : false;
   return { limited: !alreadyCounted && clients.size >= limit, used: clients.size, limit };
+}
+
+/**
+ * What the Handbook is allowed to do in this workspace.
+ *
+ * Three independent gates, resolved together so a caller can't accidentally
+ * honour one and forget another:
+ *   * the plan (paid only on cloud; self-hosted installs get everything, the
+ *     same rule `proAllowed` already applies),
+ *   * the workspace's own switch, for a team that simply doesn't want it,
+ *   * a second switch for the AI summary alone, so someone who dislikes AI
+ *     keeps the notes — which is the half that works with no model call.
+ *
+ * `locked` is the one the UI reads to decide between showing a teaser with an
+ * upgrade link and showing nothing at all: a feature turned off deliberately
+ * should disappear, but a feature the plan withholds should be visible enough
+ * to be worth upgrading for.
+ */
+export interface HandbookState {
+  /** Notes, pooling and grades are usable. */
+  notes: boolean;
+  /** The AI "Today at a glance" summary may be generated. */
+  summary: boolean;
+  /** Withheld by the plan rather than switched off — show the upgrade teaser. */
+  locked: boolean;
+}
+
+export async function handbookState(tenantId: string): Promise<HandbookState> {
+  const org = await prisma.organization.findUnique({
+    where: { id: tenantId },
+    select: { handbookEnabled: true, handbookSummaryEnabled: true },
+  });
+  const { tier } = await getTenantPlan(tenantId);
+  const allowedByPlan = !isCloud() || PLAN_INFO[tier].handbook;
+  const on = org?.handbookEnabled ?? true;
+
+  if (!allowedByPlan) return { notes: false, summary: false, locked: true };
+  return {
+    notes: on,
+    summary: on && (org?.handbookSummaryEnabled ?? true),
+    locked: false,
+  };
 }

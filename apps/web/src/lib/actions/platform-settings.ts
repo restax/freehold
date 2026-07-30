@@ -3,6 +3,7 @@
 import { prisma } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { optStr, str } from "@/lib/forms";
+import { isValidSummaryModel } from "@/lib/handbook/style";
 import { isOperator } from "@/lib/operator";
 import { isValidSttModel, isValidTtsModel } from "@/lib/voice-inference-models";
 
@@ -24,6 +25,15 @@ export async function updatePlatformSettings(formData: FormData) {
   const sttModel = isValidSttModel(sttModelRaw) ? sttModelRaw : undefined;
   const ttsModel = isValidTtsModel(ttsModelRaw) ? ttsModelRaw : undefined;
 
+  // Same reasoning as the voice models: an unrecognised id would fail every
+  // summary quietly, so a bad submission keeps the previous value.
+  const summaryModelRaw = str(formData, "handbookModel");
+  const handbookModel = isValidSummaryModel(summaryModelRaw) ? summaryModelRaw : undefined;
+  const handbookThinking = formData.get("handbookThinking") === "on";
+  // Blank means "use the bundled house style", so it is stored as null rather
+  // than as an empty string that would reach the model as an empty prompt.
+  const handbookStyleGuide = optStr(formData, "handbookStyleGuide") || null;
+
   await prisma.platformSetting.upsert({
     where: { id: "singleton" },
     create: {
@@ -33,6 +43,9 @@ export async function updatePlatformSettings(formData: FormData) {
       founderCallSellingPoints: optStr(formData, "founderCallSellingPoints"),
       ...(sttModel ? { voiceSttModel: sttModel } : {}),
       ...(ttsModel ? { voiceTtsModel: ttsModel } : {}),
+      ...(handbookModel ? { handbookModel } : {}),
+      handbookThinking,
+      handbookStyleGuide,
     },
     update: {
       founderCallsAvailable: formData.get("founderCallsAvailable") === "on",
@@ -42,6 +55,9 @@ export async function updatePlatformSettings(formData: FormData) {
       founderCallSellingPoints: optStr(formData, "founderCallSellingPoints"),
       ...(sttModel ? { voiceSttModel: sttModel } : {}),
       ...(ttsModel ? { voiceTtsModel: ttsModel } : {}),
+      ...(handbookModel ? { handbookModel } : {}),
+      handbookThinking,
+      handbookStyleGuide,
     },
   });
 

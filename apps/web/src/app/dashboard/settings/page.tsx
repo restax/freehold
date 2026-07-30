@@ -14,6 +14,7 @@ import {
 import { saveBillingDefaults } from "@/lib/actions/billing-policy";
 import { setContactVisibilityRestriction } from "@/lib/actions/contacts";
 import { saveDirectoryListing } from "@/lib/actions/directory";
+import { setHandbookEnabled, setHandbookSummaryEnabled } from "@/lib/actions/handbook";
 import { removeSampleData } from "@/lib/actions/sample-data";
 import { addState, removeState, setLicenseEnforcement } from "@/lib/actions/states";
 import { setDailyBriefing, setInvoiceReport } from "@/lib/actions/templates";
@@ -28,6 +29,7 @@ import {
 } from "@/lib/directory";
 import { emailEnabled } from "@/lib/email";
 import { fmtDate } from "@/lib/format";
+import { handbookState } from "@/lib/plans";
 import { listTenants } from "@/lib/session";
 import { tenantSideLabels } from "@/lib/side-labels";
 import { storageStatus } from "@/lib/storage-config";
@@ -168,6 +170,76 @@ async function ApiSection({ tenantId, userId }: { tenantId: string; userId: stri
         </form>
       </SectionCard>
     </>
+  );
+}
+
+/**
+ * The Handbook's two switches.
+ *
+ * Worded without "AI memory", "skills" or any of the vocabulary the feature
+ * is built from — a coordinator recognises "the things you'd tell someone new",
+ * not a retrieval system. See lib/handbook.ts.
+ */
+async function HandbookSection({ tenantId, userId }: { tenantId: string; userId: string }) {
+  const role = await getMemberRole(tenantId, userId);
+  if (role !== "owner" && role !== "admin") return null;
+  const { prisma } = await import("@freehold/db");
+  const [org, state] = await Promise.all([
+    prisma.organization.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { handbookEnabled: true, handbookSummaryEnabled: true },
+    }),
+    handbookState(tenantId),
+  ]);
+
+  if (state.locked) {
+    return (
+      <SectionCard title="Handbook">
+        <p className="mb-3 text-sm text-stone-500">
+          Keep what your team knows — a client who wants a call about date changes, a vendor who
+          only covers one county, the brokerage that reviews documents before payment — beside the
+          work it applies to. Available on a paid plan.
+        </p>
+        <Link href="/pricing" className={btnGhost}>
+          See plans
+        </Link>
+      </SectionCard>
+    );
+  }
+
+  return (
+    <SectionCard title="Handbook">
+      <p className="mb-3 text-sm text-stone-500">
+        {org.handbookEnabled
+          ? "Notes your team keeps about clients, contacts, people and files show up wherever they apply."
+          : "The Handbook is off. Existing notes are kept, and come back if you turn it on again."}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <form action={setHandbookEnabled}>
+          <input type="hidden" name="on" value={org.handbookEnabled ? "0" : "1"} />
+          <button type="submit" className={btnGhost}>
+            {org.handbookEnabled ? "Turn the Handbook off" : "Turn the Handbook on"}
+          </button>
+        </form>
+        {org.handbookEnabled && (
+          <form action={setHandbookSummaryEnabled}>
+            <input type="hidden" name="on" value={org.handbookSummaryEnabled ? "0" : "1"} />
+            <button
+              type="submit"
+              className={btnGhost}
+              title="The short written recap at the top of Today. Notes and grades keep working either way."
+            >
+              {org.handbookSummaryEnabled ? "Turn the daily recap off" : "Turn the daily recap on"}
+            </button>
+          </form>
+        )}
+      </div>
+      {org.handbookEnabled && !org.handbookSummaryEnabled && (
+        <p className="mt-2 text-xs text-stone-400">
+          Notes and grades are still on — only the written recap on Today is off.
+        </p>
+      )}
+    </SectionCard>
   );
 }
 
@@ -786,6 +858,7 @@ export default async function SettingsPage() {
 
         <ApiSection tenantId={tenantId} userId={session.user.id} />
 
+        <HandbookSection tenantId={tenantId} userId={session.user.id} />
         <ContactVisibilitySection tenantId={tenantId} userId={session.user.id} />
 
         <AuditSection tenantId={tenantId} userId={session.user.id} />

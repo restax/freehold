@@ -618,6 +618,15 @@ model Organization {
   aiModelOverride         String?                       @map("ai_model_override")
   /// Admin setting: when true, members only see contacts they own.
   restrictContactsToOwner Boolean                       @default(false) @map("restrict_contacts_to_owner")
+  /// The Handbook: the notes a team keeps about clients, contacts, people and
+  /// files. Two switches, not one, because the halves are separable — someone
+  /// who wants nothing to do with AI can still keep notes, which is the more
+  /// valuable half. Off hides the feature entirely.
+  handbookEnabled         Boolean                       @default(true) @map("handbook_enabled")
+  /// The AI-written "Today at a glance" paragraph. Off leaves notes, pooling
+  /// and grades working exactly as before, with no model call anywhere.
+  handbookSummaryEnabled  Boolean                       @default(true) @map("handbook_summary_enabled")
+  handbookNotes           HandbookNote[]
   /// Per-tenant Follow Up Boss connection: {enc:{...}, importedAt?, importedCount?}.
   /// API key encrypted with VAULT_MASTER_KEY.
   fubConfig               Json?                         @map("fub_config")
@@ -768,6 +777,13 @@ model Member {
   /// same way roles and assignments don't cross tenants. Unset = the
   /// defaults in lib/transaction-columns.ts.
   tablePrefs     Json?        @map("table_prefs")
+  /// Cached "Today at a glance" text, and when it was written. Per member
+  /// rather than per user: it describes this workspace's work, and someone
+  /// coordinating for two tenants needs a separate one in each. Rewritten
+  /// lazily when the Today screen is opened and this is over an hour old,
+  /// which is what makes "once an hour while signed in" true without a cron.
+  handbookSummary   String?   @map("handbook_summary")
+  handbookSummaryAt DateTime? @map("handbook_summary_at")
   createdAt      DateTime     @default(now())
 
   @@index([organizationId])
@@ -872,6 +888,14 @@ model Client {
   formSubmissions       FormSubmission[]
   formAccessLinks       FormAccessLink[]
   reviews               ClientReview[]
+  /// Working-relationship grade, set by hand from the client page. Columns
+  /// rather than a HandbookNote because there is exactly one per client and
+  /// it drives a badge, but it is the same feature to a user.
+  handbookGrade         HandbookGrade?       @map("handbook_grade")
+  /// Why the grade is what it is. The grade alone ages badly: "F" two years
+  /// on tells a new coordinator nothing; "blamed us for a deal falling
+  /// through, do not accept work" tells them everything.
+  handbookGradeNote     String?              @map("handbook_grade_note")
 
   @@index([tenantId])
   @@map("client")
@@ -1279,6 +1303,14 @@ model Contact {
   credentials    VaultCredential[]
   agentOf        ClientAgent[]
   portalLinks    PortalLink[]
+  /// Working-relationship grade — the vendor who never turns up, the
+  /// attorney who always does. Distinct from `grade` directly above, which is
+  /// the A–D prospecting cadence driving how often to make contact. Two
+  /// different questions: "how often should I call them" versus "do we want
+  /// to work with them at all", and a contact can be both worth chasing and
+  /// painful to deal with.
+  handbookGrade     HandbookGrade? @map("handbook_grade")
+  handbookGradeNote String?        @map("handbook_grade_note")
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
@@ -1611,6 +1643,19 @@ model PlatformSetting {
   /// inference catalog) — not editable here on purpose.
   voiceSttModel              String    @default("deepgram/nova-3") @map("voice_stt_model")
   voiceTtsModel              String    @default("elevenlabs/eleven_turbo_v2_5") @map("voice_tts_model")
+  /// Model for the Handbook's "Today at a glance" summary. Deliberately not
+  /// the extraction model: extraction reads a contract nobody has checked and
+  /// its mistakes land on the file, while this restates work already held and
+  /// writes nothing. Haiku is the shipped default; raise it here if the prose
+  /// disappoints.
+  handbookModel              String    @default("claude-haiku-4-5") @map("handbook_model")
+  /// Extended thinking for that summary. Off by default — the task is
+  /// restating supplied facts, not reasoning about them.
+  handbookThinking           Boolean   @default(false) @map("handbook_thinking")
+  /// Overrides the bundled house style for the summary's prose. Null = the
+  /// default in lib/handbook/style.ts, which ships in the repo so a
+  /// self-hosted install always has one.
+  handbookStyleGuide         String?   @map("handbook_style_guide")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
 
   @@map("platform_setting")
@@ -2757,4 +2802,77 @@ model ExtractionField {
   @@index([tenantId])
   @@index([extractionId])
   @@map("extraction_field")
+}
+
+// --- The Handbook: what a team knows, written down ---
+
+/**
+ * What a Handbook note is attached to.
+ *
+ * MEMBER is the one that isn't like the others: a note about a teammate
+ * ("needs to improve phone communication") is a management record, readable
+ * and writable only by owners and admins, and it never reaches a summary
+ * written for the person it describes. lib/handbook.ts enforces that; this
+ * enum only records the shape.
+ */
+enum HandbookSubject {
+  CLIENT
+  CONTACT
+  MEMBER
+  TRANSACTION
+}
+
+/**
+ * The working-relationship grade on a client or contact.
+ *
+ * The familiar A–F school scale, which omits E. Its whole purpose is to
+ * outlive the memory of whoever set it — a client graded F two years ago,
+ * with a note saying why, stops a new coordinator accepting work that the
+ * business already decided it didn't want.
+ */
+enum HandbookGrade {
+  A
+  B
+  C
+  D
+  F
+}
+
+/**
+ * One thing worth knowing, written by a coordinator.
+ *
+ * The examples that shaped this: "wants a phone call if there are contract
+ * date issues"; "installs signs in Plymouth County only"; "broker's office
+ * reviews the document before final payment"; "on holiday April 2027". They
+ * are not structured data and shouldn't be — the value is that a person can
+ * type the thing they'd otherwise have to remember to say out loud.
+ *
+ * Deliberately many-per-subject and freely deletable, so the record can be
+ * corrected as easily as it was made.
+ */
+model HandbookNote {
+  id            String          @id @default(uuid())
+  tenantId      String          @map("tenant_id")
+  tenant        Organization    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subjectType   HandbookSubject @map("subject_type")
+  /// The Client / Contact / Member / Transaction id. Not a foreign key: one
+  /// column serves four different tables, and a note surviving a moment
+  /// longer than a deleted subject is harmless — nothing reads an orphan,
+  /// and every read is already scoped to rows the caller can see.
+  subjectId     String          @map("subject_id")
+  body          String
+  /// Who wrote it, for the "— Priya, March" byline. Null once that person's
+  /// membership is gone; the note itself is the workspace's, not theirs.
+  authorId      String?         @map("author_id")
+  authorName    String?         @map("author_name")
+  /// Optional expiry for a fact with a shelf life ("on holiday April 2027").
+  /// Past this, the note drops out of summaries and pooled recaps but stays
+  /// in the list marked expired, so it can be read and deleted deliberately
+  /// rather than vanishing.
+  relevantUntil DateTime?       @map("relevant_until") @db.Date
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  @@index([tenantId, subjectType, subjectId])
+  @@map("handbook_note")
 }

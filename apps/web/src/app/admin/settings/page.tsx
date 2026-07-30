@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { updatePlatformSettings } from "@/lib/actions/platform-settings";
+import { DEFAULT_SUMMARY_STYLE, SUMMARY_MODELS } from "@/lib/handbook/style";
 import { isOperator } from "@/lib/operator";
 import { getPlatformSettings } from "@/lib/platform-settings";
 import { card } from "@/lib/ui";
@@ -129,6 +130,59 @@ export default async function AdminSettingsPage() {
           <p className="mt-3 text-xs text-stone-400">
             Current per-minute pricing for each model is on LiveKit Cloud's own dashboard — it
             changes over time, so it isn't duplicated here.
+          </p>
+        </section>
+
+        <section className={card}>
+          <h2 className="mb-1 font-medium">Handbook — daily recap</h2>
+          <p className="mb-4 text-sm text-stone-500">
+            The short written recap at the top of a coordinator's Today screen. Deliberately not the
+            contract-extraction model: extraction reads a document nobody has checked and its
+            mistakes land on the file, while this only restates work the workspace already holds and
+            writes nothing. Haiku is enough for that; raise it if the prose disappoints.
+          </p>
+
+          <div className="flex flex-wrap items-end gap-6">
+            <label className="flex max-w-xs flex-col gap-1 text-sm">
+              Model
+              <select name="handbookModel" defaultValue={settings.handbookModel} className={field}>
+                {SUMMARY_MODELS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex items-center gap-2 pb-2 text-sm">
+              <input
+                type="checkbox"
+                name="handbookThinking"
+                defaultChecked={settings.handbookThinking}
+                className="h-4 w-4 accent-brand-600"
+              />
+              Extended thinking
+            </label>
+          </div>
+          <p className="mt-2 text-xs text-stone-400">
+            Thinking is off by default — the task is restating supplied facts, not reasoning about
+            them, so it mostly buys latency.
+          </p>
+
+          <label className="mt-5 flex flex-col gap-1 text-sm">
+            House style
+            <textarea
+              name="handbookStyleGuide"
+              rows={10}
+              defaultValue={settings.handbookStyleGuide ?? ""}
+              placeholder={DEFAULT_SUMMARY_STYLE}
+              className={`${field} font-mono text-xs`}
+            />
+          </label>
+          <p className="mt-2 text-xs text-stone-400">
+            Leave blank to use the bundled default shown above — it bans greetings, praise,
+            exclamation marks and invented facts. It ships as a source file, so a self-hosted
+            install always has one.
           </p>
         </section>
 

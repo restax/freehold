@@ -11,6 +11,7 @@ export type {
   DocTemplate,
   Document,
   ExtractionField,
+  HandbookNote,
   Invitation,
   Member,
   Organization,
@@ -44,6 +45,10 @@ export const ClientType = PrismaPkg.ClientType;
 export type ClientType = PrismaPkg.ClientType;
 export const DateAnchor = PrismaPkg.DateAnchor;
 export type DateAnchor = PrismaPkg.DateAnchor;
+export const HandbookGrade = PrismaPkg.HandbookGrade;
+export type HandbookGrade = PrismaPkg.HandbookGrade;
+export const HandbookSubject = PrismaPkg.HandbookSubject;
+export type HandbookSubject = PrismaPkg.HandbookSubject;
 export const PartyRole = PrismaPkg.PartyRole;
 export type PartyRole = PrismaPkg.PartyRole;
 export const PlanTier = PrismaPkg.PlanTier;
