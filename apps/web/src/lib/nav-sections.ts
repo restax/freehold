@@ -19,6 +19,7 @@ export const ADMIN_PATHS = [
   "/dashboard/engagements",
   "/dashboard/website",
   "/dashboard/integrations",
+  "/dashboard/import",
   "/dashboard/team",
   "/dashboard/billing",
   "/dashboard/support",

@@ -5,8 +5,9 @@ import { buildContacts, buildTransactions, parseCsv } from "@freehold/importers"
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { nextTouchFrom } from "@/lib/crm";
 import { isCloud, transactionLimit } from "@/lib/plans";
-import { requireTenant } from "@/lib/tenant";
+import { requireAdminTenant } from "@/lib/tenant";
 
 const REPORT_COOKIE = "freehold-import-report";
 const MAX_ISSUES = 20;
@@ -40,7 +41,8 @@ export async function readReport(): Promise<ImportReport | null> {
 }
 
 export async function importCsv(formData: FormData) {
-  const { tenantId } = await requireTenant();
+  const { tenantId, userId, isAdmin } = await requireAdminTenant();
+  if (!isAdmin) return;
   const kind = formData.get("kind") === "contacts" ? "contacts" : "transactions";
   const dryRun = formData.get("dryRun") === "on";
   const file = formData.get("file");
@@ -65,16 +67,68 @@ export async function importCsv(formData: FormData) {
     let imported = 0;
     if (!dryRun && records.length > 0) {
       await withTenant(tenantId, async (tx) => {
-        const result = await tx.contact.createMany({
-          data: records.map((r) => ({
-            tenantId,
-            name: r.name,
-            email: r.email,
-            phone: r.phone,
-            category: r.category ?? "Other",
-          })),
-        });
-        imported = result.count;
+        // Prisma's Json input type wants a plain object, not one of our
+        // named interfaces — round-tripping through JSON.stringify is the
+        // same cast `parseContactForm` already uses for the hand-entered
+        // form, so an imported contact and a hand-entered one store the
+        // same shape.
+        type Json = string | number | boolean | null | Json[] | { [k: string]: Json };
+        const asJson = <T>(v: T | null | undefined) =>
+          v == null ? undefined : (JSON.parse(JSON.stringify(v)) as { [k: string]: Json });
+
+        // Created one at a time, not createMany: each contact's real id is
+        // needed right away to attach its owner and any dated notes, and
+        // createMany doesn't hand rows back.
+        for (const r of records) {
+          const secondarySearch =
+            [r.secondary?.first, r.secondary?.last, r.secondary?.email]
+              .filter(Boolean)
+              .join(" ")
+              .toLowerCase()
+              .trim() || null;
+          const created = await tx.contact.create({
+            data: {
+              tenantId,
+              name: r.name,
+              email: r.email,
+              phone: r.phone,
+              workPhone: r.workPhone,
+              fax: r.fax,
+              category: r.category ?? "Other",
+              categories: r.categories,
+              personTitle: r.personTitle,
+              firstName: r.firstName,
+              middleName: r.middleName,
+              lastName: r.lastName,
+              jobTitle: r.jobTitle,
+              company: r.company,
+              website: r.website,
+              grade: r.grade,
+              referralSource: r.referralSource,
+              secondary: asJson(r.secondary),
+              secondarySearch,
+              extraContacts: asJson(r.extraContacts),
+              homeAddress: asJson(r.homeAddress),
+              workAddress: asJson(r.workAddress),
+              touchDates: asJson(r.touchDates),
+              nextTouchAt: nextTouchFrom(r.grade),
+              owners: { create: [{ tenantId, userId }] },
+            },
+            select: { id: true },
+          });
+          if (r.notes.length > 0) {
+            await tx.contactNote.createMany({
+              data: r.notes.map((n) => ({
+                tenantId,
+                contactId: created.id,
+                authorId: userId,
+                body: n.body,
+                ...(n.date ? { createdAt: new Date(`${n.date}T00:00:00Z`) } : {}),
+              })),
+            });
+          }
+          imported++;
+        }
       });
       revalidatePath("/dashboard/contacts");
     }

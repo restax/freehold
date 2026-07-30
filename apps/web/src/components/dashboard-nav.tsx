@@ -73,7 +73,6 @@ const GROUPS: NavGroup[] = [
       { href: "/dashboard/emails", label: "Email settings", icon: EnvelopeSimple },
       { href: "/dashboard/forms", label: "Forms", icon: ListDashes },
       { href: "/dashboard/vault", label: "Vault", icon: LockKey },
-      { href: "/dashboard/import", label: "Import", icon: DownloadSimple },
     ],
   },
 ];
@@ -107,6 +106,7 @@ const ADMIN_GROUPS: NavGroup[] = [
       { href: "/dashboard/team", label: "Team", icon: UsersThree },
       { href: "/dashboard/website", label: "Website", icon: Globe },
       { href: "/dashboard/integrations", label: "Integrations", icon: PlugsConnected },
+      { href: "/dashboard/import", label: "Import", icon: DownloadSimple },
       { href: "/dashboard/support", label: "Support", icon: Lifebuoy },
     ],
   },

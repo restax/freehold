@@ -1,12 +1,21 @@
 import { Badge } from "@/components/badges";
 import { importCsv, readReport } from "@/lib/actions/import";
-import { requireTenant } from "@/lib/tenant";
+import { requireAdminTenant } from "@/lib/tenant";
 import { btn, card, label } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function ImportPage() {
-  await requireTenant();
+  const { isAdmin } = await requireAdminTenant();
+  if (!isAdmin) {
+    return (
+      <div className="max-w-3xl">
+        <p className="text-sm text-stone-500">
+          Only a workspace admin or owner can bulk-import data. Ask one of them to run this.
+        </p>
+      </div>
+    );
+  }
   const report = await readReport();
 
   return (
@@ -16,7 +25,10 @@ export default async function ImportPage() {
         <p className="text-sm text-stone-500">
           Bring your book of business over from a CSV export. Works with exports from most
           transaction platforms and spreadsheets: Freehold reads the column names, matches what it
-          recognizes, and tells you about anything it couldn't read.
+          recognizes, and tells you about anything it couldn't read. Contacts recognize a full
+          CRM-style export too — first/middle/last name, a spouse or partner, home and work
+          addresses, multiple phones and emails, birthdays and anniversaries, a relationship grade,
+          and dated notes.
         </p>
       </div>
 
@@ -55,7 +67,14 @@ export default async function ImportPage() {
               download
               className="text-sm text-brand-700 hover:text-brand-600"
             >
-              No export handy? Download a sample CSV
+              No export handy? Download a sample transactions CSV
+            </a>
+            <a
+              href="/sample-import-contacts.csv"
+              download
+              className="text-sm text-brand-700 hover:text-brand-600"
+            >
+              Sample contacts CSV
             </a>
           </div>
         </form>
