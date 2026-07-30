@@ -36,6 +36,7 @@ export function EntityPicker({
   placeholder = "Type to search…",
   onCreate,
   createHint = "Add",
+  onSelect,
 }: {
   name: string;
   label: string;
@@ -49,6 +50,13 @@ export function EntityPicker({
    */
   onCreate?: (name: string) => Promise<{ id: string; name: string } | null>;
   createHint?: string;
+  /**
+   * Fires whenever a choice lands — picked from the list, or just created.
+   * The picker's own value already reaches the server through its hidden
+   * input; this is for a sibling field in the same form that wants to react
+   * client-side, e.g. prefilling an email from the contact just chosen.
+   */
+  onSelect?: (option: PickerOption) => void;
 }) {
   const byId = useMemo(() => new Map(options.map((o) => [o.id, o])), [options]);
   const [selected, setSelected] = useState<PickerOption | null>(byId.get(defaultId) ?? null);
@@ -93,6 +101,7 @@ export function EntityPicker({
     setSelected(o);
     setQuery("");
     setOpen(false);
+    onSelect?.(o);
   }
 
   async function createNow() {

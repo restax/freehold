@@ -1,4 +1,6 @@
 import { prisma, withTenant } from "@freehold/db";
+import { ContactEmailField } from "@/components/contact-email-field";
+import { PendingButton } from "@/components/pending-button";
 import { VendorOrderThread } from "@/components/vendor-order-thread";
 import { sendOrderMessageTC } from "@/lib/actions/vendor-order-messages";
 import {
@@ -38,27 +40,36 @@ export async function VendorOrderTab({
   tenantId: string;
   transactionId: string;
 }) {
-  const [orders, activeConnections, documents] = await withTenant(tenantId, async (tx) => [
-    await tx.vendorOrder.findMany({
-      where: { transactionId },
-      orderBy: { createdAt: "desc" },
-      include: {
-        events: { orderBy: { createdAt: "asc" } },
-        proposals: { where: { status: "PENDING" }, orderBy: { createdAt: "desc" } },
-        documents: { where: { isCurrent: true }, select: { id: true, filename: true } },
-        messages: { orderBy: { createdAt: "asc" } },
-      },
-    }),
-    await tx.vendorConnection.findMany({
-      where: { status: "ACTIVE" },
-      select: { vendorId: true },
-    }),
-    await tx.document.findMany({
-      where: { transactionId, isCurrent: true },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, filename: true },
-    }),
-  ]);
+  const [orders, activeConnections, documents, contacts] = await withTenant(
+    tenantId,
+    async (tx) => [
+      await tx.vendorOrder.findMany({
+        where: { transactionId },
+        orderBy: { createdAt: "desc" },
+        include: {
+          events: { orderBy: { createdAt: "asc" } },
+          proposals: { where: { status: "PENDING" }, orderBy: { createdAt: "desc" } },
+          documents: { where: { isCurrent: true }, select: { id: true, filename: true } },
+          messages: { orderBy: { createdAt: "asc" } },
+        },
+      }),
+      await tx.vendorConnection.findMany({
+        where: { status: "ACTIVE" },
+        select: { vendorId: true },
+      }),
+      await tx.document.findMany({
+        where: { transactionId, isCurrent: true },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, filename: true },
+      }),
+      // For the "email a vendor not on Freehold" picker — most vendors emailed
+      // this way already exist as a Contact from some earlier file.
+      await tx.contact.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, email: true },
+      }),
+    ],
+  );
 
   // Vendor names (root table, no RLS) for both the order rows and the picker.
   const vendorIds = [
@@ -122,12 +133,12 @@ export async function VendorOrderTab({
                 className={field}
               />
             </label>
-            <button
-              type="submit"
+            <PendingButton
+              pendingLabel="Sending…"
               className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
             >
               Send order
-            </button>
+            </PendingButton>
           </form>
         </section>
       )}
@@ -140,16 +151,9 @@ export async function VendorOrderTab({
         </p>
         <form action={emailVendorOrder} className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="transactionId" value={transactionId} />
-          <label className="flex flex-col gap-1 text-sm">
-            Vendor email
-            <input
-              name="email"
-              type="email"
-              required
-              placeholder="vendor@example.com"
-              className={field}
-            />
-          </label>
+          <ContactEmailField
+            contacts={contacts.map((c) => ({ id: c.id, name: c.name, hint: c.email }))}
+          />
           <label className="flex flex-col gap-1 text-sm">
             What you need
             <input name="type" required placeholder="Home inspection" className={field} />
@@ -175,12 +179,15 @@ export async function VendorOrderTab({
               </div>
             </fieldset>
           )}
-          <button
-            type="submit"
+          {/* Sends a real email (and may attach documents), so the click has
+              to look like it landed — otherwise it gets pressed twice and the
+              vendor gets the order twice. */}
+          <PendingButton
+            pendingLabel="Sending…"
             className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
           >
             Email order
-          </button>
+          </PendingButton>
         </form>
       </section>
 

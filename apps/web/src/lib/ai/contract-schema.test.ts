@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   type ContractExtractionResult,
   flattenExtraction,
+  matchPartyRole,
   parseDateValue,
   parseMoneyValue,
   transactionUpdateFor,
@@ -91,5 +92,51 @@ describe("transactionUpdateFor", () => {
     expect(transactionUpdateFor("purchase_price", "to be determined")).toBeNull();
     expect(transactionUpdateFor("contract_date", "next Tuesday")).toBeNull();
     expect(transactionUpdateFor("unknown_key", "x")).toBeNull();
+  });
+});
+
+describe("matchPartyRole", () => {
+  const ROLES = [
+    "BUYER",
+    "SELLER",
+    "BUYER_AGENT",
+    "LISTING_AGENT",
+    "LENDER",
+    "TITLE_COMPANY",
+    "INSPECTOR",
+    "APPRAISER",
+    "ATTORNEY",
+    "OTHER",
+  ] as const;
+
+  it("uppercases every extraction role that has a real match", () => {
+    // These are the exact keys flattenExtraction produces from party:<role>.
+    for (const [extracted, expected] of [
+      ["buyer", "BUYER"],
+      ["seller", "SELLER"],
+      ["buyer_agent", "BUYER_AGENT"],
+      ["listing_agent", "LISTING_AGENT"],
+      ["lender", "LENDER"],
+      ["title_company", "TITLE_COMPANY"],
+      ["attorney", "ATTORNEY"],
+      ["other", "OTHER"],
+    ] as const) {
+      expect(matchPartyRole(extracted, ROLES, "OTHER")).toBe(expected);
+    }
+  });
+
+  it("falls back rather than storing a role the enum doesn't have", () => {
+    // Extraction output isn't guaranteed against the Prisma enum; a made-up
+    // or future role must degrade instead of failing the whole link.
+    expect(matchPartyRole("escrow_officer", ROLES, "OTHER")).toBe("OTHER");
+    expect(matchPartyRole("", ROLES, "OTHER")).toBe("OTHER");
+  });
+
+  it("is already-uppercase safe", () => {
+    expect(matchPartyRole("BUYER_AGENT", ROLES, "OTHER")).toBe("BUYER_AGENT");
+  });
+
+  it("uses the caller's own fallback, not a hardcoded one", () => {
+    expect(matchPartyRole("nonsense", ROLES, "BUYER")).toBe("BUYER");
   });
 });

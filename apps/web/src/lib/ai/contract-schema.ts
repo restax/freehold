@@ -169,7 +169,36 @@ export function partyLabel(role: string): string {
   return PARTY_LABEL[role] ?? "Other party";
 }
 
-/** One entry in a transaction's locked contract-parties panel. */
+/**
+ * An extraction role ("buyer_agent") → the matching TransactionParty role
+ * ("BUYER_AGENT"), for turning a landing-list entry into a real party.
+ *
+ * The two vocabularies happen to be the same words in different casing —
+ * this checks that rather than assuming it: extraction output isn't
+ * guaranteed against the Prisma enum, so a role the enum doesn't recognize
+ * falls back to `fallback` instead of producing a value the caller can't
+ * actually store. Generic over the valid-roles list so this file doesn't
+ * need to import the Prisma enum to stay pure and DB-free.
+ */
+export function matchPartyRole<T extends string>(
+  role: string,
+  validRoles: readonly T[],
+  fallback: T,
+): T {
+  const upper = role.toUpperCase();
+  return (validRoles as readonly string[]).includes(upper) ? (upper as T) : fallback;
+}
+
+/**
+ * One entry in a transaction's contract-extraction landing list.
+ *
+ * Deliberately plain text with no link to a Contact — a name the extractor
+ * read off a PDF hasn't been matched to any particular record yet. Turning
+ * one into a real party (with an email, a phone, a page that shows every
+ * file they're on) happens through lib/actions/parties.ts's linkExtractedParty,
+ * which creates a proper TransactionParty and removes the entry here — this
+ * array is a queue of suggestions, not the record of who's on the file.
+ */
 export interface ContractParty {
   role: string;
   value: string;
@@ -187,7 +216,7 @@ export function flattenExtraction(result: ContractExtractionResult): FlatField[]
 
   for (const def of SCALAR_DEFS) {
     const cited = result[def.key] as CitedValue | null;
-    if (!cited || !cited.value.trim()) continue;
+    if (!cited?.value.trim()) continue;
     rows.push({
       key: def.key,
       label: def.label,

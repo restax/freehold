@@ -1,5 +1,28 @@
 import { PartyRole, prisma, TransactionSide, withTenant } from "@freehold/db";
-import { Warning } from "@phosphor-icons/react/dist/ssr";
+import {
+  CalendarBlank,
+  CalendarCheck,
+  ChartPieSlice,
+  ChatCircle,
+  CheckSquare,
+  Clock,
+  CurrencyDollar,
+  FilePdf,
+  Link as LinkIcon,
+  ListBullets,
+  ListChecks,
+  NotePencil,
+  PaperPlaneTilt,
+  PlusCircle,
+  Receipt,
+  ShieldCheck,
+  Tag,
+  Textbox,
+  Tray,
+  UserCircle,
+  UsersThree,
+  Warning,
+} from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActivityPanel } from "@/components/activity-panel";
@@ -13,11 +36,18 @@ import {
   type DateMarker,
   type MarkerKind,
 } from "@/components/closing-date-calendar";
+import { ColumnPicker } from "@/components/column-picker";
 import { DangerDelete } from "@/components/danger-delete";
 import { DocumentDropZone } from "@/components/document-drop-zone";
+import { EntityPicker } from "@/components/entity-picker";
+import { ExtractButton } from "@/components/extract-button";
+import { KeyDateRow } from "@/components/key-date-row";
+import { LinkPartyForm } from "@/components/link-party-form";
 import { LiveDictateButton } from "@/components/live-dictate-button";
+import { SectionCard } from "@/components/section-card";
 import { SideFields } from "@/components/side-fields";
 import { StatusSelect } from "@/components/status-select";
+import { TaskTable } from "@/components/task-table";
 import { VendorOrderTab } from "@/components/vendor-order-tab";
 import { VisibilityToggles } from "@/components/visibility-toggles";
 import { assignUser, unassignUser } from "@/lib/actions/assignees";
@@ -27,6 +57,7 @@ import {
   startRound,
   submitForReview,
 } from "@/lib/actions/compliance";
+import { createContactByName } from "@/lib/actions/contacts";
 import { enableProFeatures } from "@/lib/actions/credits";
 import { deleteDocument, replaceDocument, uploadDocument } from "@/lib/actions/documents";
 import { cancelScheduledEmail, sendTransactionEmail } from "@/lib/actions/emails";
@@ -44,9 +75,10 @@ import {
   issueDraftInvoice,
   markInvoicePaid,
 } from "@/lib/actions/invoices";
-import { addParty, removeParty } from "@/lib/actions/parties";
+import { addParty, linkExtractedParty, removeParty } from "@/lib/actions/parties";
 import { setAssigneeFee } from "@/lib/actions/pay";
 import { createPortalLink, deletePortalLink, setPortalLinkActive } from "@/lib/actions/portal";
+import { saveTaskColumns } from "@/lib/actions/table-prefs";
 import {
   applyActionPlan,
   createTask,
@@ -57,7 +89,6 @@ import {
 import { generateDocument } from "@/lib/actions/templates";
 import {
   addRequiredDocument,
-  addTransactionParty,
   confirmDateChange,
   deleteTransaction,
   proposeDateChange,
@@ -66,10 +97,11 @@ import {
   removeTransactionParty,
   setCustomField,
   setRequiredDocument,
+  updateKeyDate,
   updateTransaction,
   withdrawDateChange,
 } from "@/lib/actions/transactions";
-import { type ContractParty, PARTY_LABEL, partyLabel } from "@/lib/ai/contract-schema";
+import { type ContractParty, partyLabel } from "@/lib/ai/contract-schema";
 import { transactionAlert } from "@/lib/alerts";
 import { emailContextForTransaction, transactionMergeContext } from "@/lib/auto-emails";
 import {
@@ -90,19 +122,15 @@ import {
 import { emailEnabled } from "@/lib/email";
 import { EMAIL_MERGE_CODES, parseEmailSettings, renderMerge } from "@/lib/email-template";
 import { suggestForTask } from "@/lib/email-template-library";
-import { fmtDate, fmtMoney, ROLE_LABEL } from "@/lib/format";
+import { fmtDate, fmtDayMonth, fmtMoney, ROLE_LABEL } from "@/lib/format";
+import { isGovernedDateField, KEY_DATE_LABELS } from "@/lib/governed-dates";
 import { invoiceLabel, TERM_PRESETS } from "@/lib/invoicing";
 import { gapForTransaction, gapMessage } from "@/lib/licensing";
 import { fmtCents } from "@/lib/pay";
 import { creditBalance, transactionHasPro } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
-import {
-  PRIORITY_LABEL,
-  priorityBadgeStyle,
-  priorityColorStyle,
-  rowHighlightStyle,
-} from "@/lib/priority";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
+import { resolveTaskColumns, TASK_COLUMNS, taskColumnGroups } from "@/lib/task-columns";
 import {
   getBillingAccess,
   getMemberCompliance,
@@ -110,7 +138,7 @@ import {
   guestMaySeeTransaction,
   requireTenant,
 } from "@/lib/tenant";
-import { btn, btnGhost, card, input, label } from "@/lib/ui";
+import { btn, btnGhost, input, label } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -170,7 +198,15 @@ export default async function TransactionDetailPage({
           orderBy: { sortOrder: "asc" },
           include: { document: { select: { id: true, filename: true } } },
         },
-        tasks: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
+        tasks: {
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          // The assignee and contact are columns the task table can show, so
+          // they're joined here rather than fetched per row.
+          include: {
+            assignee: { select: { id: true, name: true } },
+            contact: { select: { id: true, name: true } },
+          },
+        },
         documents: {
           orderBy: { createdAt: "desc" },
           select: {
@@ -197,7 +233,14 @@ export default async function TransactionDetailPage({
         },
         extractions: {
           orderBy: { createdAt: "desc" },
-          include: { _count: { select: { fields: true } } },
+          include: {
+            _count: { select: { fields: true } },
+            // Which file each run read. Several PDFs on one transaction all
+            // produce runs into the same list, and without the filename the
+            // list is three identical "Needs review" rows with no way to tell
+            // which document any of them came from.
+            document: { select: { filename: true } },
+          },
         },
         envelopes: {
           orderBy: { createdAt: "desc" },
@@ -244,6 +287,39 @@ export default async function TransactionDetailPage({
     }
     return out;
   };
+
+  // Contract-governed dates the coordinator has asked to change but that the
+  // paperwork hasn't caught up with. Shown next to the date they'd replace.
+  const proposedDates = (txn.proposedDates as Record<string, string> | null) ?? {};
+
+  // Workspace contacts as the picker wants them — email as the disambiguating
+  // second line, falling back to phone for a contact with no email on file.
+  // Shared by the Parties card and the Agents & Commissions section further
+  // down, so this is built once rather than per consumer.
+  const contactOptions = contacts.map((c) => ({
+    id: c.id,
+    name: c.name,
+    hint: c.email ?? c.phone,
+  }));
+
+  // The most recent extraction run per document, so a file that has already
+  // been read says so on its own row instead of only appearing in the runs
+  // list further down — where nothing tied a run back to its document.
+  // extractions arrive newest-first, so the first hit per id is the latest.
+  const latestExtractionByDoc = new Map<string, (typeof txn.extractions)[number]>();
+  for (const ex of txn.extractions) {
+    if (!latestExtractionByDoc.has(ex.documentId)) latestExtractionByDoc.set(ex.documentId, ex);
+  }
+
+  // This person's task-table layout for this workspace. One preference across
+  // every transaction — see saveTaskColumns.
+  const myMember = await prisma.member.findFirst({
+    where: { organizationId: tenantId, userId: session.user.id },
+    select: { tablePrefs: true },
+  });
+  const taskColumns = resolveTaskColumns(
+    (myMember?.tablePrefs as { taskColumns?: unknown } | null)?.taskColumns,
+  );
 
   // Compliance: the current round drives the tab; older rounds stay as history.
   const currentRound = txn.compliance.find((c) => c.isCurrent) ?? null;
@@ -491,33 +567,42 @@ export default async function TransactionDetailPage({
 
       <div className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
         <aside className="flex flex-col gap-4 xl:order-1">
-          <section className={card}>
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-400">
-              Key dates
-            </h2>
+          <SectionCard
+            title="Key dates"
+            icon={<CalendarBlank size={15} weight="fill" aria-hidden />}
+            bodyClassName="p-3"
+          >
             <dl className="flex flex-col gap-1.5 text-sm">
               {(
                 [
-                  ["List date", txn.listDate],
-                  ["On market", txn.onMarketDate],
-                  ["Contract", txn.contractDate],
-                  ["Close", txn.closeDate],
-                  ["Mortgage commitment", txn.mortgageCommitmentDate],
-                  ["Inspection deadline", txn.inspectionDeadlineDate],
-                  ["Expires", txn.expireDate],
+                  ["listDate", txn.listDate],
+                  ["onMarketDate", txn.onMarketDate],
+                  ["contractDate", txn.contractDate],
+                  ["closeDate", txn.closeDate],
+                  ["mortgageCommitmentDate", txn.mortgageCommitmentDate],
+                  ["inspectionDeadlineDate", txn.inspectionDeadlineDate],
+                  ["expireDate", txn.expireDate],
                 ] as const
-              ).map(([labelText, d]) => (
-                <div key={labelText} className="flex justify-between gap-2">
-                  <dt className="text-stone-500">{labelText}</dt>
-                  <dd className="tabular-nums font-medium">{fmtDate(d)}</dd>
-                </div>
+              ).map(([field, d]) => (
+                <KeyDateRow
+                  key={field}
+                  action={updateKeyDate}
+                  transactionId={txn.id}
+                  field={field}
+                  label={KEY_DATE_LABELS[field]}
+                  value={d ? d.toISOString().slice(0, 10) : ""}
+                  display={fmtDate(d)}
+                  governed={isGovernedDateField(field)}
+                  proposed={proposedDates[field] ?? null}
+                />
               ))}
             </dl>
-          </section>
-          <section className={card}>
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-400">
-              Next deadlines
-            </h2>
+          </SectionCard>
+          <SectionCard
+            title="Next deadlines"
+            icon={<Clock size={15} weight="fill" aria-hidden />}
+            bodyClassName="p-3"
+          >
             <ul className="flex flex-col gap-1.5 text-sm">
               {txn.tasks
                 .filter((t) => t.status === "OPEN" && t.dueDate)
@@ -526,7 +611,7 @@ export default async function TransactionDetailPage({
                   <li key={t.id} className="flex justify-between gap-2">
                     <span className="truncate">{t.title}</span>
                     <span className="shrink-0 tabular-nums text-stone-400">
-                      {fmtDate(t.dueDate)}
+                      {fmtDayMonth(t.dueDate)}
                     </span>
                   </li>
                 ))}
@@ -534,52 +619,63 @@ export default async function TransactionDetailPage({
                 <li className="text-stone-400">Nothing dated is open.</li>
               )}
             </ul>
-          </section>
-          <section className={card}>
-            <details open>
-              <summary className="cursor-pointer select-none text-sm font-semibold uppercase tracking-wide text-stone-400">
-                Listing details
-              </summary>
-              <dl className="mt-2 flex flex-col gap-1.5 text-sm">
-                <div className="flex justify-between gap-2">
-                  <dt className="text-stone-500">MLS ID</dt>
-                  <dd className="font-medium">{txn.mlsId ?? "—"}</dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt className="text-stone-500">List price</dt>
-                  <dd className="tabular-nums font-medium">{fmtMoney(txn.listPrice)}</dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt className="text-stone-500">Contract price</dt>
-                  <dd className="tabular-nums font-medium">{fmtMoney(txn.purchasePrice)}</dd>
-                </div>
-              </dl>
-            </details>
-          </section>
-          <section className={card}>
-            <h2 className="mb-1 font-medium">Parties</h2>
+          </SectionCard>
+          <SectionCard
+            title="Listing details"
+            icon={<Tag size={15} weight="fill" aria-hidden />}
+            bodyClassName="p-3"
+          >
+            <dl className="flex flex-col gap-1.5 text-sm">
+              <div className="flex justify-between gap-2">
+                <dt className="text-stone-500">MLS ID</dt>
+                <dd className="font-medium">{txn.mlsId ?? "—"}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-stone-500">List price</dt>
+                <dd className="tabular-nums font-medium">{fmtMoney(txn.listPrice)}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-stone-500">Contract price</dt>
+                <dd className="tabular-nums font-medium">{fmtMoney(txn.purchasePrice)}</dd>
+              </div>
+            </dl>
+          </SectionCard>
+          <SectionCard
+            title="Parties"
+            icon={<UsersThree size={15} weight="fill" aria-hidden />}
+            count={txn.parties.length || undefined}
+            bodyClassName="p-3"
+          >
             <p className="mb-3 text-xs text-stone-400">
-              Pulled from the contract, or add your own. Permanent — these won't be dropped like a
-              custom field.
+              Real contacts, not free text — click a name to open their record. Add your own, or
+              link one the contract-reader found below.
             </p>
-            {contractParties.length > 0 ? (
+            {txn.parties.length > 0 ? (
               <ul className="mb-3 flex flex-col divide-y divide-stone-100">
-                {contractParties.map((p) => (
-                  <li
-                    key={`${p.role}:${p.value}`}
-                    className="group flex items-start gap-2 py-1.5 text-sm"
-                  >
+                {txn.parties.map((p) => (
+                  <li key={p.id} className="group flex items-start gap-2 py-1.5 text-sm">
                     <span className="w-24 shrink-0 text-xs font-medium uppercase tracking-wide text-stone-400">
-                      {partyLabel(p.role)}
+                      {ROLE_LABEL[p.role]}
                     </span>
-                    <span className="min-w-0 flex-1 text-stone-800">{p.value}</span>
-                    <form action={removeTransactionParty}>
-                      <input type="hidden" name="id" value={txn.id} />
-                      <input type="hidden" name="role" value={p.role} />
-                      <input type="hidden" name="value" value={p.value} />
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        href={`/dashboard/contacts/${p.contact.id}`}
+                        className="font-medium text-brand-700 hover:underline"
+                      >
+                        {p.contact.name}
+                      </Link>
+                      {(p.contact.email || p.contact.phone) && (
+                        <span className="ml-2 text-xs text-stone-400">
+                          {p.contact.email ?? p.contact.phone}
+                        </span>
+                      )}
+                    </div>
+                    <form action={removeParty}>
+                      <input type="hidden" name="id" value={p.id} />
+                      <input type="hidden" name="transactionId" value={txn.id} />
                       <button
                         type="submit"
-                        aria-label={`Remove ${partyLabel(p.role)}`}
+                        aria-label={`Remove ${p.contact.name}`}
                         className="text-xs text-stone-300 opacity-0 transition hover:text-red-600 group-hover:opacity-100"
                       >
                         ✕
@@ -589,33 +685,79 @@ export default async function TransactionDetailPage({
                 ))}
               </ul>
             ) : (
-              <p className="mb-3 text-sm text-stone-400">
-                No parties yet — they fill in when you apply a contract extraction.
-              </p>
+              <p className="mb-3 text-sm text-stone-400">No parties yet.</p>
             )}
-            <form action={addTransactionParty} className="flex flex-wrap items-end gap-2">
-              <input type="hidden" name="id" value={txn.id} />
+            <form action={addParty} className="flex flex-wrap items-end gap-2">
+              <input type="hidden" name="transactionId" value={txn.id} />
               <label className={label}>
                 Role
-                <select name="role" defaultValue="buyer" className={input}>
-                  {Object.entries(PARTY_LABEL).map(([role, lbl]) => (
-                    <option key={role} value={role}>
-                      {lbl}
+                <select name="role" defaultValue="BUYER" className={input}>
+                  {ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {ROLE_LABEL[r]}
                     </option>
                   ))}
                 </select>
               </label>
-              <label className={label}>
-                Name
-                <input name="value" placeholder="Jane Buyer" className={input} />
-              </label>
+              <div className="min-w-[11rem] flex-1">
+                <EntityPicker
+                  name="contactId"
+                  label="Contact"
+                  options={contactOptions}
+                  onCreate={createContactByName}
+                  createHint="Add contact"
+                  placeholder="Search contacts…"
+                />
+              </div>
               <button type="submit" className={btnGhost}>
                 Add party
               </button>
             </form>
-          </section>
-          <section className={card}>
-            <h2 className="mb-1 font-medium">Custom fields</h2>
+            {contractParties.length > 0 && (
+              <div className="mt-3 border-t border-stone-100 pt-3">
+                <p className="mb-1.5 text-xs font-medium text-stone-500">
+                  From the contract — not yet linked to a contact
+                </p>
+                <ul className="flex flex-col divide-y divide-stone-100">
+                  {contractParties.map((p) => (
+                    <li key={`${p.role}:${p.value}`} className="group py-1.5 text-sm">
+                      <div className="flex items-start gap-2">
+                        <span className="w-24 shrink-0 text-xs font-medium uppercase tracking-wide text-stone-400">
+                          {partyLabel(p.role)}
+                        </span>
+                        <span className="min-w-0 flex-1 text-stone-600">{p.value}</span>
+                        <form action={removeTransactionParty}>
+                          <input type="hidden" name="id" value={txn.id} />
+                          <input type="hidden" name="role" value={p.role} />
+                          <input type="hidden" name="value" value={p.value} />
+                          <button
+                            type="submit"
+                            aria-label={`Dismiss ${p.value}`}
+                            title="Dismiss — not a real party"
+                            className="text-xs text-stone-300 opacity-0 transition hover:text-red-600 group-hover:opacity-100"
+                          >
+                            ✕
+                          </button>
+                        </form>
+                      </div>
+                      <LinkPartyForm
+                        action={linkExtractedParty}
+                        transactionId={txn.id}
+                        role={p.role}
+                        value={p.value}
+                        contacts={contactOptions}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </SectionCard>
+          <SectionCard
+            title="Custom fields"
+            icon={<Textbox size={15} weight="fill" aria-hidden />}
+            bodyClassName="p-3"
+          >
             <p className="mb-3 text-xs text-stone-400">
               Any field works in document templates as{" "}
               <code className="font-mono">{"{{field_key}}"}</code>.
@@ -650,7 +792,7 @@ export default async function TransactionDetailPage({
                 Add field
               </button>
             </form>
-          </section>
+          </SectionCard>
         </aside>
         <div className="flex min-w-0 flex-col gap-3 xl:order-2">
           <nav className="flex flex-wrap gap-1 border-b border-stone-200">
@@ -672,124 +814,57 @@ export default async function TransactionDetailPage({
             )}
           </nav>
           {tab === "tasks" && (
-            <section className={card}>
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="font-medium">
-                  Tasks <span className="text-sm text-stone-400">({openCount} open)</span>
-                </h2>
-                {plans.length > 0 && (
-                  <form action={applyActionPlan} className="flex items-center gap-2">
-                    <input type="hidden" name="transactionId" value={txn.id} />
-                    <select name="planId" className={input} defaultValue={plans[0]?.id}>
-                      {plans.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} ({p._count.tasks})
-                        </option>
-                      ))}
-                    </select>
-                    <button type="submit" className={btnGhost}>
-                      Apply plan
-                    </button>
-                  </form>
-                )}
-              </div>
+            <SectionCard
+              title="Tasks"
+              icon={<CheckSquare size={15} weight="fill" aria-hidden />}
+              count={`${openCount} open`}
+              action={
+                <>
+                  {plans.length > 0 && (
+                    <form action={applyActionPlan} className="flex items-center gap-2">
+                      <input type="hidden" name="transactionId" value={txn.id} />
+                      <select name="planId" className={input} defaultValue={plans[0]?.id}>
+                        {plans.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} ({p._count.tasks})
+                          </option>
+                        ))}
+                      </select>
+                      <button type="submit" className={btnGhost}>
+                        Apply plan
+                      </button>
+                    </form>
+                  )}
+                  <ColumnPicker
+                    all={[...TASK_COLUMNS]}
+                    groups={taskColumnGroups()}
+                    selected={taskColumns.map((c) => c.key)}
+                    action={saveTaskColumns}
+                  />
+                </>
+              }
+            >
               {txn.tasks.length === 0 ? (
                 <p className="mb-3 text-sm text-stone-500">
                   No tasks yet — add one below or apply an action plan.
                 </p>
               ) : (
-                <ul className="mb-4 flex flex-col">
-                  {txn.tasks.map((t) => {
-                    const done = t.status === "DONE";
-                    const overdue = !done && t.dueDate && fmtDate(t.dueDate) < today;
-                    return (
-                      <li
-                        key={t.id}
-                        className="flex items-center gap-3 border-b border-stone-100 px-1 py-2 last:border-0"
-                        style={rowHighlightStyle(t.priority)}
-                      >
-                        <form action={toggleTask}>
-                          <input type="hidden" name="id" value={t.id} />
-                          <input type="hidden" name="transactionId" value={txn.id} />
-                          <button
-                            type="submit"
-                            title={done ? "Reopen" : "Mark done"}
-                            className={`flex h-5 w-5 items-center justify-center rounded border text-xs ${
-                              done
-                                ? "border-brand-600 bg-brand-600 text-white"
-                                : "border-stone-300 hover:border-brand-600"
-                            }`}
-                          >
-                            {done ? "✓" : ""}
-                          </button>
-                        </form>
-                        <span
-                          className={`w-24 shrink-0 text-sm ${overdue ? "font-medium text-red-600" : "text-stone-500"}`}
-                        >
-                          {fmtDate(t.dueDate)}
-                        </span>
-                        <span className={`text-sm ${done ? "text-stone-400 line-through" : ""}`}>
-                          {t.title}
-                        </span>
-                        {PRIORITY_LABEL[t.priority] && (
-                          <span
-                            className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-                            style={priorityBadgeStyle(t.priority)}
-                          >
-                            {PRIORITY_LABEL[t.priority]}
-                          </span>
-                        )}
-                        <span className="ml-auto flex items-center gap-3">
-                          <Link
-                            href={`/dashboard/transactions/${txn.id}?tab=emails&emailTask=${t.id}${t.emailTemplateId ? `&emailTemplate=${t.emailTemplateId}` : ""}`}
-                            title={
-                              t.emailTemplateId
-                                ? "Send this task's email — template ready"
-                                : "Send an email about this task — templates available"
-                            }
-                            className={
-                              t.emailTemplateId
-                                ? "text-brand-600 transition-colors hover:text-brand-700"
-                                : "text-stone-300 transition-colors hover:text-brand-700"
-                            }
-                          >
-                            ✉
-                          </Link>
-                          <form action={cycleTaskPriority}>
-                            <input type="hidden" name="id" value={t.id} />
-                            <input type="hidden" name="transactionId" value={txn.id} />
-                            <button
-                              type="submit"
-                              title={`Priority: ${t.priority.toLowerCase()} — click to change`}
-                              className={
-                                t.priority === "NORMAL" ? "text-stone-300 hover:text-amber-500" : ""
-                              }
-                              style={priorityColorStyle(t.priority)}
-                            >
-                              ⚑
-                            </button>
-                          </form>
-                          <VisibilityToggles
-                            kind="task"
-                            id={t.id}
-                            transactionId={txn.id}
-                            visibleToAgent={t.visibleToAgent}
-                            visibleToClient={t.visibleToClient}
-                          />
-                        </span>
-                        <div>
-                          <DangerDelete
-                            compact
-                            action={deleteTask}
-                            label="Delete"
-                            description="Removes this task from the checklist."
-                            hidden={{ id: t.id, transactionId: txn.id }}
-                          />
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <div className="mb-4">
+                  <TaskTable
+                    tasks={txn.tasks}
+                    columns={taskColumns}
+                    transactionId={txn.id}
+                    today={today}
+                    toggleTask={toggleTask}
+                    cycleTaskPriority={cycleTaskPriority}
+                    deleteTask={deleteTask}
+                    emailHref={(t) =>
+                      `/dashboard/transactions/${txn.id}?tab=emails&emailTask=${t.id}${
+                        t.emailTemplateId ? `&emailTemplate=${t.emailTemplateId}` : ""
+                      }`
+                    }
+                  />
+                </div>
               )}
               <form action={createTask} className="flex flex-wrap items-end gap-2">
                 <input type="hidden" name="transactionId" value={txn.id} />
@@ -805,21 +880,20 @@ export default async function TransactionDetailPage({
                   Add task
                 </button>
               </form>
-            </section>
+            </SectionCard>
           )}
           {tab === "documents" && (
             <div className="flex flex-col gap-4">
               <DocumentDropZone transactionId={txn.id} linkAction={setRequiredDocument} />
-              <section className={card}>
-                <div className="mb-1 flex items-center gap-2">
-                  <h2 className="font-medium">Required documents</h2>
-                  {txn.requiredDocuments.length > 0 && (
-                    <span className="text-sm text-stone-400">
-                      {txn.requiredDocuments.filter((r) => r.document).length} of{" "}
-                      {txn.requiredDocuments.length} received
-                    </span>
-                  )}
-                </div>
+              <SectionCard
+                title="Required documents"
+                icon={<ListChecks size={15} weight="fill" aria-hidden />}
+                count={
+                  txn.requiredDocuments.length > 0
+                    ? `${txn.requiredDocuments.filter((r) => r.document).length} of ${txn.requiredDocuments.length} received`
+                    : undefined
+                }
+              >
                 <p className="mb-3 text-sm text-stone-500">
                   The checklist for this file. Apply an action plan to fill it, or add your own.
                   Attach an uploaded document to mark a slot received.
@@ -930,17 +1004,19 @@ export default async function TransactionDetailPage({
                     Add
                   </button>
                 </form>
-              </section>
+              </SectionCard>
 
-              <section className={card}>
-                <h2 className="mb-1 flex items-center gap-2 font-medium">
-                  Documents &amp; contract extraction
-                  {txn.proFeaturesEnabled && (
+              <SectionCard
+                title="Documents & contract extraction"
+                icon={<FilePdf size={15} weight="fill" aria-hidden />}
+                action={
+                  txn.proFeaturesEnabled ? (
                     <span className="rounded-full bg-brand-600/10 px-2 py-0.5 text-xs font-medium text-brand-700">
                       Pro AI on
                     </span>
-                  )}
-                </h2>
+                  ) : null
+                }
+              >
                 <p className="mb-3 text-sm text-stone-500">
                   Upload the purchase contract and let AI pull every key date and figure —
                   page-cited, and nothing is saved until you confirm it.
@@ -1001,12 +1077,37 @@ export default async function TransactionDetailPage({
                         </span>
                         {doc.contentType === "application/pdf" &&
                           (proActive ? (
-                            <form action={runExtraction} className="flex items-center gap-2">
-                              <input type="hidden" name="documentId" value={doc.id} />
-                              <button type="submit" className={btnGhost}>
-                                Extract contract data
-                              </button>
-                            </form>
+                            <span className="flex flex-wrap items-center gap-2">
+                              <ExtractButton
+                                action={runExtraction}
+                                documentId={doc.id}
+                                label={
+                                  latestExtractionByDoc.has(doc.id)
+                                    ? "Extract again"
+                                    : "Extract contract data"
+                                }
+                              />
+                              {/* Already read once. Says so on the row rather
+                                  than leaving the button looking like the only
+                                  thing that ever happens here — and links
+                                  straight to that run, so re-extracting is a
+                                  deliberate choice, not the only option. */}
+                              {(() => {
+                                const latest = latestExtractionByDoc.get(doc.id);
+                                if (!latest) return null;
+                                return (
+                                  <Link
+                                    href={`/dashboard/transactions/${txn.id}/extractions/${latest.id}`}
+                                    className="inline-flex items-center gap-1.5 text-xs hover:underline"
+                                  >
+                                    <ExtractionBadge status={latest.status} />
+                                    <span className="text-stone-400">
+                                      {fmtDate(latest.createdAt)}
+                                    </span>
+                                  </Link>
+                                );
+                              })()}
+                            </span>
                           ) : (
                             <span className="rounded-lg bg-stone-100 px-2.5 py-1.5 text-xs text-stone-500">
                               Enable pro features to extract
@@ -1216,7 +1317,10 @@ export default async function TransactionDetailPage({
                           className="flex items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
                         >
                           <ExtractionBadge status={ex.status} />
-                          <span className="text-stone-500">
+                          <span className="min-w-0 truncate font-medium text-stone-700">
+                            {ex.document.filename}
+                          </span>
+                          <span className="shrink-0 text-stone-500">
                             {fmtDate(ex.createdAt)} · {ex._count.fields} fields · {ex.model}
                           </span>
                           <Link
@@ -1230,15 +1334,16 @@ export default async function TransactionDetailPage({
                     </ul>
                   </div>
                 )}
-              </section>
+              </SectionCard>
             </div>
           )}
           {tab === "vendors" && <VendorOrderTab tenantId={tenantId} transactionId={id} />}
           {tab === "billing" && billing.view && (
             <div className="flex flex-col gap-3">
-              <section className={card}>
-                <div className="mb-3 flex items-baseline justify-between gap-3">
-                  <h2 className="font-medium">Billing</h2>
+              <SectionCard
+                title="Billing"
+                icon={<CurrencyDollar size={15} weight="fill" aria-hidden />}
+                action={
                   <Link
                     href={`/dashboard/transactions/${txn.id}?tab=dates`}
                     className="text-xs text-brand-700 hover:underline"
@@ -1247,7 +1352,8 @@ export default async function TransactionDetailPage({
                       ? "Set the expected fee →"
                       : "Edit expected fee →"}
                   </Link>
-                </div>
+                }
+              >
                 {/* The ledger strip: the four numbers a TC needs to trust a file. */}
                 <div className="flex flex-wrap gap-x-6 gap-y-2">
                   {(
@@ -1316,10 +1422,12 @@ export default async function TransactionDetailPage({
                     </div>
                   );
                 })()}
-              </section>
+              </SectionCard>
 
-              <section className={card}>
-                <h2 className="mb-1 font-medium">Invoices on this file</h2>
+              <SectionCard
+                title="Invoices on this file"
+                icon={<Receipt size={15} weight="fill" aria-hidden />}
+              >
                 {billingInvoices.length === 0 ? (
                   <p className="text-sm text-stone-500">
                     Nothing billed on this file yet — draft the fee below, or add a charge.
@@ -1483,11 +1591,13 @@ export default async function TransactionDetailPage({
                     on the Invoices page →
                   </Link>
                 </p>
-              </section>
+              </SectionCard>
 
               {billing.comp && (
-                <section className={card}>
-                  <h2 className="mb-1 font-medium">Payout &amp; net</h2>
+                <SectionCard
+                  title="Payout & net"
+                  icon={<ChartPieSlice size={15} weight="fill" aria-hidden />}
+                >
                   {txn.assignees.filter((a) => a.feeCents != null || a.feePercentBp != null)
                     .length === 0 ? (
                     <p className="text-sm text-stone-500">
@@ -1595,12 +1705,14 @@ export default async function TransactionDetailPage({
                       );
                     })()
                   )}
-                </section>
+                </SectionCard>
               )}
 
               {billing.manage && (
-                <section className={card}>
-                  <h2 className="mb-1 font-medium">Add a charge</h2>
+                <SectionCard
+                  title="Add a charge"
+                  icon={<PlusCircle size={15} weight="fill" aria-hidden />}
+                >
                   <p className="mb-3 text-sm text-stone-500">
                     Lands on this file's draft invoice (one is created if none is open) — review and
                     issue when ready. Extra work, deposits, adjustments.
@@ -1659,15 +1771,16 @@ export default async function TransactionDetailPage({
                       Add charge
                     </button>
                   </form>
-                </section>
+                </SectionCard>
               )}
             </div>
           )}
           {tab === "compliance" && (
-            <section className={card}>
-              <div className="mb-3 flex flex-wrap items-center gap-3">
-                <h2 className="font-medium">Compliance</h2>
-                {currentRound && (
+            <SectionCard
+              title="Compliance"
+              icon={<ShieldCheck size={15} weight="fill" aria-hidden />}
+              action={
+                currentRound ? (
                   <>
                     <Badge tone={COMPLIANCE_STATUS_TONE[currentRound.status]}>
                       {COMPLIANCE_STATUS_LABEL[currentRound.status]}
@@ -1678,9 +1791,9 @@ export default async function TransactionDetailPage({
                         ` · ${currentRound.approvalLevels}-level approval`}
                     </span>
                   </>
-                )}
-              </div>
-
+                ) : null
+              }
+            >
               {!currentRound ? (
                 <>
                   <p className="mb-3 text-sm text-stone-500">
@@ -1867,20 +1980,21 @@ export default async function TransactionDetailPage({
                   )}
                 </>
               )}
-            </section>
+            </SectionCard>
           )}
           {tab === "dates" && (
             <>
-              <section className={card}>
-                <h2 className="mb-1 font-medium">Contract-governed dates</h2>
+              <SectionCard
+                title="Contract-governed dates"
+                icon={<CalendarCheck size={15} weight="fill" aria-hidden />}
+              >
                 <p className="mb-3 text-sm text-stone-500">
                   The contract is the source of truth. Changing the contract or closing date creates
                   an amendment to-do; the date only moves — and dependent task deadlines only
                   recompute — once you confirm the amendment is executed.
                 </p>
                 {(() => {
-                  const proposed = (txn.proposedDates as Record<string, string> | null) ?? {};
-                  const entries = Object.entries(proposed) as Array<
+                  const entries = Object.entries(proposedDates) as Array<
                     ["contractDate" | "closeDate", string]
                   >;
                   return entries.length > 0 ? (
@@ -1942,9 +2056,11 @@ export default async function TransactionDetailPage({
                     Propose &amp; create amendment to-do
                   </button>
                 </form>
-              </section>
-              <section className={card}>
-                <h2 className="mb-3 font-medium">Details</h2>
+              </SectionCard>
+              <SectionCard
+                title="Details"
+                icon={<ListBullets size={15} weight="fill" aria-hidden />}
+              >
                 <form
                   action={updateTransaction}
                   className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
@@ -2067,7 +2183,7 @@ export default async function TransactionDetailPage({
                   <div className="sm:col-span-2 lg:col-span-4">
                     <AgentsCommissions
                       includeAssignees={false}
-                      contacts={contacts.map((c) => ({ id: c.id, name: c.name, hint: c.email }))}
+                      contacts={contactOptions}
                       users={[]}
                       clientTypes={Object.fromEntries(clients.map((c) => [c.id, c.type]))}
                       defaults={{
@@ -2094,193 +2210,122 @@ export default async function TransactionDetailPage({
                     </button>
                   </div>
                 </form>
-              </section>
+              </SectionCard>
             </>
           )}
           {tab === "participants" && (
-            <>
-              <section className={card}>
-                <h2 className="mb-1 font-medium">Assigned</h2>
-                <p className="mb-3 text-sm text-stone-500">
-                  Who in the workspace works this file. Filter the transactions list to "Assigned to
-                  me" to see your own.
-                  {canSetFees && " Set what each person is paid; they request it when it's due."}
-                </p>
-                {txn.assignees.length === 0 ? (
-                  <p className="mb-3 text-sm text-stone-400">Nobody assigned yet.</p>
-                ) : (
-                  <ul className="mb-4 flex flex-col gap-1">
-                    {txn.assignees.map((a) => (
-                      <li key={a.id} className="flex items-center gap-3 text-sm">
-                        <Avatar user={a.user} size={28} />
-                        <span className="font-medium">{a.user.name}</span>
-                        {a.roleLabel && <span className="text-stone-500">{a.roleLabel}</span>}
-                        {canSetFees && !a.paymentItem && (
-                          <form action={setAssigneeFee} className="flex items-center gap-1">
-                            <input type="hidden" name="id" value={a.id} />
-                            <input type="hidden" name="transactionId" value={txn.id} />
-                            <select
-                              name="feeMode"
-                              defaultValue={a.feePercentBp != null ? "percent" : "flat"}
-                              className={`${input} px-1.5 py-1 text-xs`}
-                              title="Flat amount, or a share of this file's fee revenue"
-                            >
-                              <option value="flat">fee $</option>
-                              <option value="percent">% of fee</option>
-                            </select>
-                            <input
-                              name="feeCents"
-                              defaultValue={a.feeCents == null ? "" : (a.feeCents / 100).toFixed(2)}
-                              placeholder="350.00"
-                              className={`${input} w-20 px-2 py-1 text-xs`}
-                            />
-                            <input
-                              name="feePercent"
-                              defaultValue={
-                                a.feePercentBp == null ? "" : String(a.feePercentBp / 100)
-                              }
-                              placeholder="70%"
-                              className={`${input} w-14 px-2 py-1 text-xs`}
-                            />
-                            <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
-                              Save
-                            </button>
-                          </form>
-                        )}
-                        {!a.paymentItem && a.feePercentBp != null && (
-                          <span className="text-xs text-stone-500">
-                            {formatPercentBp(a.feePercentBp)} · earned{" "}
-                            {fmtCents(
-                              assigneePayout(a, fileMoney.billedCents, fileMoney.paidCents)
-                                .earnedCents,
-                            )}{" "}
-                            · payable{" "}
-                            {fmtCents(
-                              assigneePayout(a, fileMoney.billedCents, fileMoney.paidCents)
-                                .payableCents,
-                            )}
-                          </span>
-                        )}
-                        {a.paymentItem && (
-                          <span className="text-xs text-stone-500">
-                            {fmtCents(a.paymentItem.feeCents)} ·{" "}
-                            {a.paymentItem.request.status === "PAID" ? "paid" : "payment requested"}
-                          </span>
-                        )}
-                        {!canSetFees && !a.paymentItem && a.feeCents != null && (
-                          <span className="text-xs text-stone-500">{fmtCents(a.feeCents)}</span>
-                        )}
-                        <form action={unassignUser} className="ml-auto">
+            <SectionCard title="Assigned" icon={<UserCircle size={15} weight="fill" aria-hidden />}>
+              <p className="mb-3 text-sm text-stone-500">
+                Who in the workspace works this file. Filter the transactions list to "Assigned to
+                me" to see your own.
+                {canSetFees && " Set what each person is paid; they request it when it's due."}
+              </p>
+              {txn.assignees.length === 0 ? (
+                <p className="mb-3 text-sm text-stone-400">Nobody assigned yet.</p>
+              ) : (
+                <ul className="mb-4 flex flex-col gap-1">
+                  {txn.assignees.map((a) => (
+                    <li key={a.id} className="flex items-center gap-3 text-sm">
+                      <Avatar user={a.user} size={28} />
+                      <span className="font-medium">{a.user.name}</span>
+                      {a.roleLabel && <span className="text-stone-500">{a.roleLabel}</span>}
+                      {canSetFees && !a.paymentItem && (
+                        <form action={setAssigneeFee} className="flex items-center gap-1">
                           <input type="hidden" name="id" value={a.id} />
                           <input type="hidden" name="transactionId" value={txn.id} />
-                          <button
-                            type="submit"
-                            className="text-xs text-stone-400 hover:text-red-600"
+                          <select
+                            name="feeMode"
+                            defaultValue={a.feePercentBp != null ? "percent" : "flat"}
+                            className={`${input} px-1.5 py-1 text-xs`}
+                            title="Flat amount, or a share of this file's fee revenue"
                           >
-                            remove
+                            <option value="flat">fee $</option>
+                            <option value="percent">% of fee</option>
+                          </select>
+                          <input
+                            name="feeCents"
+                            defaultValue={a.feeCents == null ? "" : (a.feeCents / 100).toFixed(2)}
+                            placeholder="350.00"
+                            className={`${input} w-20 px-2 py-1 text-xs`}
+                          />
+                          <input
+                            name="feePercent"
+                            defaultValue={
+                              a.feePercentBp == null ? "" : String(a.feePercentBp / 100)
+                            }
+                            placeholder="70%"
+                            className={`${input} w-14 px-2 py-1 text-xs`}
+                          />
+                          <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                            Save
                           </button>
                         </form>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <form action={assignUser} className="flex flex-wrap items-end gap-2">
-                  <input type="hidden" name="transactionId" value={txn.id} />
-                  <label className={label}>
-                    Member
-                    <select name="userId" className={input} defaultValue="" required>
-                      <option value="" disabled>
-                        Choose…
-                      </option>
-                      {workspaceMembers.map((m) => (
-                        <option key={m.user.id} value={m.user.id}>
-                          {m.user.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className={label}>
-                    Role on this file
-                    <input name="roleLabel" className={input} placeholder="Lead TC" />
-                  </label>
-                  <button type="submit" className={btnGhost}>
-                    Assign
-                  </button>
-                </form>
-              </section>
-
-              <section className={card}>
-                <h2 className="mb-3 font-medium">Parties</h2>
-                {txn.parties.length === 0 ? (
-                  <p className="mb-3 text-sm text-stone-500">No parties attached yet.</p>
-                ) : (
-                  <ul className="mb-4 flex flex-col gap-1">
-                    {txn.parties.map((p) => (
-                      <li key={p.id} className="flex items-center gap-3 text-sm">
-                        <span className="w-36 shrink-0 text-stone-500">{ROLE_LABEL[p.role]}</span>
-                        <span className="font-medium">{p.contact.name}</span>
-                        <span className="text-stone-500">
-                          {p.contact.email ?? p.contact.phone ?? ""}
+                      )}
+                      {!a.paymentItem && a.feePercentBp != null && (
+                        <span className="text-xs text-stone-500">
+                          {formatPercentBp(a.feePercentBp)} · earned{" "}
+                          {fmtCents(
+                            assigneePayout(a, fileMoney.billedCents, fileMoney.paidCents)
+                              .earnedCents,
+                          )}{" "}
+                          · payable{" "}
+                          {fmtCents(
+                            assigneePayout(a, fileMoney.billedCents, fileMoney.paidCents)
+                              .payableCents,
+                          )}
                         </span>
-                        <form action={removeParty} className="ml-auto">
-                          <input type="hidden" name="id" value={p.id} />
-                          <input type="hidden" name="transactionId" value={txn.id} />
-                          <button
-                            type="submit"
-                            className="text-xs text-stone-400 hover:text-red-600"
-                          >
-                            remove
-                          </button>
-                        </form>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <form action={addParty} className="flex flex-wrap items-end gap-2">
-                  <input type="hidden" name="transactionId" value={txn.id} />
-                  <label className={label}>
-                    Contact
-                    <select name="contactId" className={input} defaultValue="">
-                      <option value="" disabled>
-                        Choose…
+                      )}
+                      {a.paymentItem && (
+                        <span className="text-xs text-stone-500">
+                          {fmtCents(a.paymentItem.feeCents)} ·{" "}
+                          {a.paymentItem.request.status === "PAID" ? "paid" : "payment requested"}
+                        </span>
+                      )}
+                      {!canSetFees && !a.paymentItem && a.feeCents != null && (
+                        <span className="text-xs text-stone-500">{fmtCents(a.feeCents)}</span>
+                      )}
+                      <form action={unassignUser} className="ml-auto">
+                        <input type="hidden" name="id" value={a.id} />
+                        <input type="hidden" name="transactionId" value={txn.id} />
+                        <button type="submit" className="text-xs text-stone-400 hover:text-red-600">
+                          remove
+                        </button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <form action={assignUser} className="flex flex-wrap items-end gap-2">
+                <input type="hidden" name="transactionId" value={txn.id} />
+                <label className={label}>
+                  Member
+                  <select name="userId" className={input} defaultValue="" required>
+                    <option value="" disabled>
+                      Choose…
+                    </option>
+                    {workspaceMembers.map((m) => (
+                      <option key={m.user.id} value={m.user.id}>
+                        {m.user.name}
                       </option>
-                      {contacts.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className={label}>
-                    Role
-                    <select name="role" className={input} defaultValue="BUYER">
-                      {ROLES.map((r) => (
-                        <option key={r} value={r}>
-                          {ROLE_LABEL[r]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button type="submit" className={btnGhost}>
-                    Add party
-                  </button>
-                </form>
-                {contacts.length === 0 && (
-                  <p className="mt-2 text-xs text-stone-400">
-                    No contacts yet —{" "}
-                    <Link href="/dashboard/contacts" className="text-brand-600 hover:underline">
-                      add some first
-                    </Link>
-                    .
-                  </p>
-                )}
-              </section>
-            </>
+                    ))}
+                  </select>
+                </label>
+                <label className={label}>
+                  Role on this file
+                  <input name="roleLabel" className={input} placeholder="Lead TC" />
+                </label>
+                <button type="submit" className={btnGhost}>
+                  Assign
+                </button>
+              </form>
+            </SectionCard>
           )}
           {tab === "emails" && (
             <>
-              <section className={card}>
-                <h2 className="mb-1 font-medium">Send an email</h2>
+              <SectionCard
+                title="Send an email"
+                icon={<PaperPlaneTilt size={15} weight="fill" aria-hidden />}
+              >
                 {!emailEnabled() ? (
                   <p className="text-sm text-stone-500">
                     Email isn't configured on this install — set{" "}
@@ -2464,11 +2509,10 @@ export default async function TransactionDetailPage({
                     </form>
                   </>
                 )}
-              </section>
+              </SectionCard>
 
               {scheduledEmails.length > 0 && (
-                <section className={card}>
-                  <h2 className="mb-1 font-medium">Scheduled</h2>
+                <SectionCard title="Scheduled" icon={<Clock size={15} weight="fill" aria-hidden />}>
                   <ul className="flex flex-col gap-1.5 text-sm">
                     {scheduledEmails.map((e) => (
                       <li key={e.id} className="flex flex-wrap items-center gap-3">
@@ -2495,11 +2539,10 @@ export default async function TransactionDetailPage({
                       </li>
                     ))}
                   </ul>
-                </section>
+                </SectionCard>
               )}
 
-              <section className={card}>
-                <h2 className="mb-3 font-medium">Thread</h2>
+              <SectionCard title="Thread" icon={<ChatCircle size={15} weight="fill" aria-hidden />}>
                 {txn.emails.length === 0 ? (
                   <p className="text-sm text-stone-500">No email on this transaction yet.</p>
                 ) : (
@@ -2562,12 +2605,11 @@ export default async function TransactionDetailPage({
                     ))}
                   </ul>
                 )}
-              </section>
+              </SectionCard>
             </>
           )}
           {tab === "notes" && (
-            <section className={card}>
-              <h2 className="mb-1 font-medium">Notes</h2>
+            <SectionCard title="Notes" icon={<NotePencil size={15} weight="fill" aria-hidden />}>
               {txn.notes ? (
                 <p className="max-w-prose whitespace-pre-wrap text-sm leading-relaxed">
                   {txn.notes}
@@ -2582,11 +2624,10 @@ export default async function TransactionDetailPage({
                 </Link>{" "}
                 tab.
               </p>
-            </section>
+            </SectionCard>
           )}
           {tab === "payout" && canSetFees && (
-            <section className={card}>
-              <h2 className="mb-1 font-medium">Invoices</h2>
+            <SectionCard title="Invoices" icon={<Receipt size={15} weight="fill" aria-hidden />}>
               <p className="mb-3 text-sm text-stone-500">
                 Bill the client for this file — they pay however they pay (check, Zelle, wire,
                 closing proceeds). A follow-up task stays open until you mark it paid.
@@ -2685,13 +2726,15 @@ export default async function TransactionDetailPage({
                   Attach a client to this transaction to invoice them.
                 </p>
               )}
-            </section>
+            </SectionCard>
           )}
           {tab === "misc" && (
             <>
               {txn.intakeSubmissions.length > 0 && (
-                <section className={card}>
-                  <h2 className="mb-1 font-medium">Intake submissions</h2>
+                <SectionCard
+                  title="Intake submissions"
+                  icon={<Tray size={15} weight="fill" aria-hidden />}
+                >
                   <p className="mb-3 text-sm text-stone-500">
                     Submitted by your clients through the portal. Uploaded files are on the
                     Documents tab, prefixed “Intake —”.
@@ -2726,10 +2769,12 @@ export default async function TransactionDetailPage({
                       );
                     })}
                   </ul>
-                </section>
+                </SectionCard>
               )}
-              <section className={card}>
-                <h2 className="mb-1 font-medium">Client portal links</h2>
+              <SectionCard
+                title="Client portal links"
+                icon={<LinkIcon size={15} weight="fill" aria-hidden />}
+              >
                 <p className="mb-3 text-sm text-stone-500">
                   Share a read-only view of this transaction — text or email the link to your buyer,
                   seller, or agent. You choose what each link shows; revoke any time.
@@ -2841,7 +2886,7 @@ export default async function TransactionDetailPage({
                     Create link
                   </button>
                 </form>
-              </section>
+              </SectionCard>
             </>
           )}
         </div>

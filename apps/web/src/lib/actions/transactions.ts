@@ -17,6 +17,15 @@ import { ensureAutoDraft } from "@/lib/billing-drafts";
 import { resolveDefaultFee, tenantBillingPolicy } from "@/lib/billing-policy";
 import { parseCommissionPct, parseGrossCents } from "@/lib/commission";
 import { confirmed, dateOnly, intOr, oneOf, optStr, str } from "@/lib/forms";
+import {
+  amendmentTitle,
+  GOVERNED_DATE_FIELDS,
+  type GovernedDateField,
+  governedDateDecision,
+  isGovernedDateField,
+  isKeyDateField,
+  KEY_DATE_LABELS,
+} from "@/lib/governed-dates";
 import { gapForPending, gapMessage, licenseEnforcement } from "@/lib/licensing";
 import { parseFeeCents } from "@/lib/pay";
 import { transactionLimit } from "@/lib/plans";
@@ -190,6 +199,96 @@ export async function createTransaction(formData: FormData) {
   redirect(`/dashboard/transactions/${created.id}`);
 }
 
+/**
+ * Set one date from the Key dates panel, and nothing else.
+ *
+ * Deliberately *not* updateTransaction. That reads the whole edit form —
+ * status, side, prices, MLS id, notes — and a form carrying only one date
+ * would blank every field it didn't send. That exact shape of bug already
+ * cost this codebase months of quietly wiped listing details (see the guards
+ * in commonFields), and a one-field inline editor is the easiest possible way
+ * to reintroduce it. So this touches exactly the column it was given.
+ *
+ * The column name comes off the wire, so it's checked against the map above
+ * rather than trusted — otherwise "field" would be an arbitrary write into
+ * any column on the row.
+ *
+ * Contract and close dates still obey the amendment rule: changing an agreed
+ * date proposes rather than applies. Editing them here is no different from
+ * editing them on the full form, which is the point of sharing the decision.
+ */
+export async function updateKeyDate(formData: FormData) {
+  const { tenantId, session } = await requireTenant();
+  const id = str(formData, "id");
+  const field = str(formData, "field");
+  if (!id || !isKeyDateField(field)) return;
+  const key = field;
+  const next = dateOnly(formData, "value");
+
+  let proposedValue: string | null = null;
+  await withTenant(tenantId, async (tx) => {
+    // Every key date selected by name rather than by a computed key: a
+    // dynamic select loses Prisma's types, and the set is fixed anyway.
+    const existing = await tx.transaction.findUniqueOrThrow({
+      where: { id },
+      select: {
+        listDate: true,
+        onMarketDate: true,
+        contractDate: true,
+        closeDate: true,
+        mortgageCommitmentDate: true,
+        inspectionDeadlineDate: true,
+        expireDate: true,
+        proposedDates: true,
+      },
+    });
+
+    if (isGovernedDateField(key)) {
+      const decision = governedDateDecision(existing[key], next);
+      if (decision.kind === "noop") return;
+      if (decision.kind === "propose") {
+        proposedValue = decision.value;
+        await raiseAmendmentTask(tx, {
+          tenantId,
+          transactionId: id,
+          actorId: session.user.id,
+          field: key,
+          value: decision.value,
+        });
+        await tx.transaction.update({
+          where: { id },
+          data: {
+            proposedDates: {
+              ...((existing.proposedDates as Record<string, string> | null) ?? {}),
+              [key]: decision.value,
+            },
+          },
+        });
+        return;
+      }
+    }
+
+    const updated = await tx.transaction.update({
+      where: { id },
+      data: { [key]: next },
+      select: { contractDate: true, closeDate: true },
+    });
+    // Only the governed dates anchor plan tasks, so only they can move them.
+    if (isGovernedDateField(key)) await recomputeAnchoredTasks(tx, id, updated);
+  });
+
+  logActivity({
+    tenantId,
+    transactionId: id,
+    actor: session.user,
+    action: proposedValue ? "transaction.date_proposed" : "transaction.date_updated",
+    summary: proposedValue
+      ? `Proposed ${KEY_DATE_LABELS[key]} → ${proposedValue} (amendment needed)`
+      : `Set ${KEY_DATE_LABELS[key]} to ${next ? next.toISOString().slice(0, 10) : "—"}`,
+  });
+  revalidatePath(`/dashboard/transactions/${id}`);
+}
+
 export async function updateTransaction(formData: FormData) {
   const { tenantId, session } = await requireTenant();
   const id = str(formData, "id");
@@ -275,39 +374,26 @@ export async function updateTransaction(formData: FormData) {
       data.expectedFeeCents = await resolvedExpectedFee(tx, tenantId, fields.clientId, null);
     }
     const proposed = { ...((existing.proposedDates as Record<string, string> | null) ?? {}) };
-    for (const field of ["contractDate", "closeDate"] as const) {
-      const next = fields[field];
-      const prev = existing[field];
-      if (prev && next && next.getTime() !== prev.getTime()) {
+    for (const field of GOVERNED_DATE_FIELDS) {
+      // The rule itself lives in lib/governed-dates.ts, shared with the
+      // inline Key dates editor so the two can't disagree about whether a
+      // change to a contract date applies or raises an amendment.
+      const decision = governedDateDecision(existing[field], fields[field]);
+      if (decision.kind === "propose") {
         delete data[field];
-        const value = next.toISOString().slice(0, 10);
-        proposed[field] = value;
+        proposed[field] = decision.value;
         redirected.push(field);
-        const open = await tx.task.findFirst({
-          where: { transactionId: id, proposedFor: field, status: "OPEN" },
-          select: { id: true },
+        await raiseAmendmentTask(tx, {
+          tenantId,
+          transactionId: id,
+          actorId: session.user.id,
+          field,
+          value: decision.value,
         });
-        const title = `Amendment needed: ${field === "closeDate" ? "closing date" : "contract date"} → ${value}`;
-        if (open) {
-          await tx.task.update({ where: { id: open.id }, data: { title } });
-        } else {
-          await tx.task.create({
-            data: {
-              tenantId,
-              transactionId: id,
-              title,
-              priority: "HIGH",
-              proposedFor: field,
-              dueDate: new Date(),
-              assigneeId: session.user.id,
-            },
-          });
-        }
-      } else if (!prev && next) {
-        // Initial entry: apply directly; anchored tasks may now get dates.
-      } else {
+      } else if (decision.kind === "noop") {
         delete data[field];
       }
+      // "apply" leaves data[field] in place: anchored tasks get dated below.
     }
     if (redirected.length > 0) data.proposedDates = proposed;
 
@@ -382,33 +468,12 @@ export async function removeCustomField(formData: FormData) {
 }
 
 /**
- * The locked contract-parties panel: an ordered role/value list, separate from
- * customFields so a party can't be casually deleted. Populated by extraction
- * and hand-editable here.
+ * Discard one entry from the extraction landing list — the coordinator
+ * looked at what the contract-reader found and decided it isn't worth
+ * turning into a real party. See lib/actions/parties.ts's linkExtractedParty
+ * for the other outcome, which removes an entry from here the same way but
+ * leaves a real TransactionParty in its place.
  */
-export async function addTransactionParty(formData: FormData) {
-  const { tenantId } = await requireTenant();
-  const id = str(formData, "id");
-  const role = str(formData, "role") || "other";
-  const value = str(formData, "value");
-  if (!id || !value) return;
-  await withTenant(tenantId, async (tx) => {
-    const txn = await tx.transaction.findUniqueOrThrow({
-      where: { id },
-      select: { contractParties: true },
-    });
-    const parties = [...((txn.contractParties as ContractParty[] | null) ?? [])];
-    if (!parties.some((p) => p.role === role && p.value === value)) {
-      parties.push({ role, value });
-    }
-    await tx.transaction.update({
-      where: { id },
-      data: { contractParties: parties as unknown as Record<string, string>[] },
-    });
-  });
-  revalidatePath(`/dashboard/transactions/${id}`);
-}
-
 export async function removeTransactionParty(formData: FormData) {
   const { tenantId } = await requireTenant();
   const id = str(formData, "id");
@@ -506,6 +571,46 @@ export async function deleteTransaction(formData: FormData) {
   });
   revalidatePath("/dashboard/transactions");
   redirect("/dashboard/transactions");
+}
+
+/**
+ * Raise (or re-word) the "Amendment needed" task behind a proposed change to
+ * a contract-governed date.
+ *
+ * Upserts on the open task for that field rather than creating one per edit:
+ * moving a closing three times should leave one task naming the latest date,
+ * not three competing ones.
+ */
+async function raiseAmendmentTask(
+  tx: TenantTx,
+  opts: {
+    tenantId: string;
+    transactionId: string;
+    actorId: string;
+    field: GovernedDateField;
+    value: string;
+  },
+): Promise<void> {
+  const title = amendmentTitle(opts.field, opts.value);
+  const open = await tx.task.findFirst({
+    where: { transactionId: opts.transactionId, proposedFor: opts.field, status: "OPEN" },
+    select: { id: true },
+  });
+  if (open) {
+    await tx.task.update({ where: { id: open.id }, data: { title } });
+    return;
+  }
+  await tx.task.create({
+    data: {
+      tenantId: opts.tenantId,
+      transactionId: opts.transactionId,
+      title,
+      priority: "HIGH",
+      proposedFor: opts.field,
+      dueDate: new Date(),
+      assigneeId: opts.actorId,
+    },
+  });
 }
 
 /**
