@@ -3,14 +3,28 @@ import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { type RailGroup, TemplateGroupRail } from "@/components/template-group-rail";
 import { createPlan } from "@/lib/actions/action-plans";
-import { btn, card, input, label, summaryLink, tableWrap, td, th, trHover } from "@/lib/ui";
+import { restoreStarterLibrary } from "@/lib/actions/templates";
+import {
+  btn,
+  btnGhost,
+  card,
+  input,
+  label,
+  summaryLink,
+  tableWrap,
+  td,
+  th,
+  trHover,
+} from "@/lib/ui";
 
 export async function TemplatesTabTasks({
   tenantId,
   groupParam,
+  restoredLibrary,
 }: {
   tenantId: string;
   groupParam?: string;
+  restoredLibrary?: string;
 }) {
   const [plans, groups] = await withTenant(tenantId, (tx) =>
     Promise.all([
@@ -46,10 +60,24 @@ export async function TemplatesTabTasks({
         activeGroupId={groupParam}
       />
       <div className="flex min-w-0 flex-1 flex-col gap-4">
-        <p className="text-sm text-stone-500">
-          Reusable checklists. Each entry anchors to a transaction date with a day offset — or to
-          another entry's completion — so applying a plan gives every task a real deadline.
-        </p>
+        {restoredLibrary !== undefined && (
+          <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            {Number(restoredLibrary) > 0
+              ? `Restored ${restoredLibrary} starter-library item${restoredLibrary === "1" ? "" : "s"}.`
+              : "You already have the whole starter library."}
+          </p>
+        )}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-stone-500">
+            Reusable checklists. Each entry anchors to a transaction date with a day offset — or to
+            another entry's completion — so applying a plan gives every task a real deadline.
+          </p>
+          <form action={restoreStarterLibrary}>
+            <button type="submit" className={btnGhost}>
+              Restore starter templates
+            </button>
+          </form>
+        </div>
 
         <details className={card}>
           <summary className={summaryLink}>+ New task template</summary>

@@ -7,6 +7,7 @@ import { EMAIL_PHASES } from "@/lib/default-email-templates";
 import { confirmed, optStr, str } from "@/lib/forms";
 import { seedDefaultEmailTemplates } from "@/lib/seed-core";
 import { listTenants } from "@/lib/session";
+import { seedStarterLibrary } from "@/lib/starter-library-seed";
 import { putObject } from "@/lib/storage";
 import { buildMergeContext, renderTemplatePdf, resolveTemplate } from "@/lib/templates";
 import { requireAdminTenant, requireTenant } from "@/lib/tenant";
@@ -157,6 +158,18 @@ export async function seedDefaultTemplatesFor(tenantId: string) {
   });
   if (!membership) return;
   await seedDefaultEmailTemplates(tenantId);
+  await seedStarterLibrary(tenantId);
+}
+
+/** Re-add any missing starter-library templates (idempotent — never touches
+ *  an edited copy, by name, across every template kind at once). */
+export async function restoreStarterLibrary() {
+  const { tenantId } = await requireTenant();
+  const added = await seedStarterLibrary(tenantId);
+  const total =
+    added.emailTemplates + added.attachmentTemplates + added.dateTemplates + added.taskPlans;
+  revalidatePath("/dashboard/templates");
+  redirect(`/dashboard/templates?tab=tasks&restoredLibrary=${total}`);
 }
 
 export async function createEmailTemplateLib(formData: FormData) {

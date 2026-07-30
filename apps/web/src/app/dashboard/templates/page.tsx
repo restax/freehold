@@ -20,10 +20,15 @@ const VALID_TABS: TemplateTab[] = ["tasks", "emails", "attachments", "dates", "d
 export default async function TemplatesHubPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; group?: string; restored?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    group?: string;
+    restored?: string;
+    restoredLibrary?: string;
+  }>;
 }) {
   const { tenantId, isAdmin } = await requireAdminTenant();
-  const { tab: rawTab, group, restored } = await searchParams;
+  const { tab: rawTab, group, restored, restoredLibrary } = await searchParams;
   const tab: TemplateTab = VALID_TABS.includes(rawTab as TemplateTab)
     ? (rawTab as TemplateTab)
     : "tasks";
@@ -40,7 +45,13 @@ export default async function TemplatesHubPage({
 
       <TemplateHubTabs active={tab} />
 
-      {tab === "tasks" && <TemplatesTabTasks tenantId={tenantId} groupParam={group} />}
+      {tab === "tasks" && (
+        <TemplatesTabTasks
+          tenantId={tenantId}
+          groupParam={group}
+          restoredLibrary={restoredLibrary}
+        />
+      )}
       {tab === "emails" && (
         <TemplatesTabEmails
           tenantId={tenantId}
