@@ -176,9 +176,12 @@ export async function createEmailTemplateLib(formData: FormData) {
   const { tenantId } = await requireTenant();
   const f = templateFields(formData);
   if (!f.name || !f.subject || !f.body) return;
-  await withTenant(tenantId, (tx) => tx.emailTemplate.create({ data: { tenantId, ...f } }));
+  const created = await withTenant(tenantId, (tx) =>
+    tx.emailTemplate.create({ data: { tenantId, ...f } }),
+  );
   revalidatePath("/dashboard/emails");
   revalidatePath("/dashboard/templates");
+  redirect(`/dashboard/templates?tab=emails&templateId=${created.id}`);
 }
 
 export async function updateEmailTemplateLib(formData: FormData) {
@@ -200,6 +203,7 @@ export async function deleteEmailTemplateLib(formData: FormData) {
   await withTenant(tenantId, (tx) => tx.emailTemplate.delete({ where: { id } }));
   revalidatePath("/dashboard/emails");
   revalidatePath("/dashboard/templates");
+  redirect("/dashboard/templates?tab=emails");
 }
 
 /**

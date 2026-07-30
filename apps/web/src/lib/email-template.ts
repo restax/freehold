@@ -67,14 +67,21 @@ function contactCell(c: EmailContact, small = false): string {
 /**
  * Markdown-lite → email-safe HTML. Deliberately tiny (an embedded rich-text
  * editor is unreliable across email clients and browsers): **bold**,
- * _italic_, "# " large / "## " medium headings, "- " bullet lists, blank
- * lines for paragraphs. Everything else renders literally.
+ * _italic_, "# " large / "## " medium headings, "- " bullet lists,
+ * "[text](url)" links, "![alt](url)" images (their own block), blank lines
+ * for paragraphs. Everything else renders literally.
  */
 function inline(text: string): string {
   return esc(text)
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/\b_([^_]+)_\b/g, "<em>$1</em>");
+    .replace(/\b_([^_]+)_\b/g, "<em>$1</em>")
+    .replace(
+      /\[([^\]]*)\]\(([^)\s]+)\)/g,
+      '<a href="$2" style="color:#0b7a49;text-decoration:underline;">$1</a>',
+    );
 }
+
+const IMAGE_BLOCK = /^!\[([^\]]*)\]\(([^)\s]+)\)$/;
 
 export function renderLiteMarkdown(body: string): string {
   const blocks = body
@@ -84,6 +91,10 @@ export function renderLiteMarkdown(body: string): string {
   return blocks
     .map((block) => {
       const lines = block.split("\n");
+      const image = block.match(IMAGE_BLOCK);
+      if (image) {
+        return `<img src="${esc(image[2] ?? "")}" alt="${esc(image[1] ?? "")}" style="max-width:100%;height:auto;border-radius:8px;margin:0 0 14px;display:block;" />`;
+      }
       if (lines.every((l) => l.trim().startsWith("- "))) {
         const items = lines
           .map((l) => `<li style="margin:0 0 6px;">${inline(l.trim().slice(2))}</li>`)

@@ -1,6 +1,15 @@
 "use client";
 
-import { Eye, ListBullets, TextB, TextHOne, TextHTwo, TextItalic } from "@phosphor-icons/react";
+import {
+  Eye,
+  Image as ImageIcon,
+  LinkSimple,
+  ListBullets,
+  TextB,
+  TextHOne,
+  TextHTwo,
+  TextItalic,
+} from "@phosphor-icons/react";
 import { useId, useState } from "react";
 import { LiveDictateButton } from "@/components/live-dictate-button";
 import { trackMergeFocus } from "@/components/merge-field-browser";
@@ -55,6 +64,28 @@ export function TemplateEditor({
     requestAnimationFrame(() => area.focus());
   }
 
+  /** Insert a standalone block (an image) on its own blank-line-separated paragraph. */
+  function insertBlock(text: string) {
+    const area = getArea();
+    if (!area) return;
+    const { selectionStart: start, selectionEnd: end } = area;
+    const next = `${area.value.slice(0, start)}\n\n${text}\n\n${area.value.slice(end)}`;
+    setValue(next);
+    requestAnimationFrame(() => area.focus());
+  }
+
+  function addLink() {
+    const url = window.prompt("Link URL");
+    if (!url) return;
+    insert("[", `](${url})`);
+  }
+
+  function addImage() {
+    const url = window.prompt("Image URL");
+    if (!url) return;
+    insertBlock(`![](${url})`);
+  }
+
   const toolBtn =
     "flex h-7 w-7 items-center justify-center rounded border border-stone-200 text-stone-600 transition-colors hover:border-brand-600 hover:text-brand-700";
 
@@ -90,6 +121,12 @@ export function TemplateEditor({
           onClick={() => prefixLine("- ")}
         >
           <ListBullets size={14} />
+        </button>
+        <button type="button" title="Insert link" className={toolBtn} onClick={addLink}>
+          <LinkSimple size={14} />
+        </button>
+        <button type="button" title="Insert image" className={toolBtn} onClick={addImage}>
+          <ImageIcon size={14} />
         </button>
         <span className="mx-1 h-5 w-px bg-stone-200" aria-hidden />
         <select
