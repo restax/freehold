@@ -297,36 +297,52 @@ enum OrderActor {
 /// Same two-sided RLS as vendor_connection: the coordinator side keys off
 /// app.tenant_id, the vendor side off app.vendor_id.
 model VendorOrder {
-  id            String                @id @default(uuid())
-  tenantId      String                @map("tenant_id")
-  tenant        Organization          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  vendorId      String?               @map("vendor_id")
-  vendor        Vendor?               @relation(fields: [vendorId], references: [id], onDelete: SetNull)
-  transactionId String                @map("transaction_id")
-  transaction   Transaction           @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  connectionId  String?               @map("connection_id")
+  id               String                @id @default(uuid())
+  tenantId         String                @map("tenant_id")
+  tenant           Organization          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vendorId         String?               @map("vendor_id")
+  vendor           Vendor?               @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  transactionId    String                @map("transaction_id")
+  transaction      Transaction           @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  connectionId     String?               @map("connection_id")
   /// Free-text order type ("Title commitment", "Home inspection", "Listing photos").
-  type          String
-  status        VendorOrderStatus     @default(SENT)
-  details       String?
-  dueDate       DateTime?             @map("due_date") @db.Date
+  type             String
+  status           VendorOrderStatus     @default(SENT)
+  details          String?
+  dueDate          DateTime?             @map("due_date") @db.Date
   /// The appointment, once set — the thing TCs re-type today.
-  scheduledAt   DateTime?             @map("scheduled_at")
-  completedAt   DateTime?             @map("completed_at")
+  scheduledAt      DateTime?             @map("scheduled_at")
+  completedAt      DateTime?             @map("completed_at")
   /// Recorded, never overwritten, when an appointment is missed.
-  missedAt      DateTime?             @map("missed_at")
-  placedBy      OrderPlacedBy         @default(TC) @map("placed_by")
+  missedAt         DateTime?             @map("missed_at")
+  placedBy         OrderPlacedBy         @default(TC) @map("placed_by")
   /// Set when the order was emailed to an as-yet-unregistered vendor (vendorId
   /// null). Kept so a reply's sender can be checked against it, and so past
   /// orders can be claimed by that address on registration.
-  emailTo       String?               @map("email_to")
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
-  events        VendorOrderEvent[]
-  proposals     VendorOrderProposal[]
-  messages      VendorOrderMessage[]
-  link          VendorOrderLink?
-  documents     Document[]            @relation("OrderDocuments")
+  emailTo          String?               @map("email_to")
+  /// Who this order is for — the TC's client, or the buyer/seller they
+  /// represent on this side ("Jane Doe (Seller)"). Shown to the vendor so
+  /// they know who to expect on site; the relationship to the TC's client
+  /// is internal bookkeeping the vendor doesn't need explained.
+  onBehalfOf       String?               @map("on_behalf_of")
+  /// The name/email of whoever placed the order, captured at creation so an
+  /// unregistered vendor's page can show a real person without a join back
+  /// through Member/User (which the bare-token page never has a session for).
+  requestedByName  String?               @map("requested_by_name")
+  requestedByEmail String?               @map("requested_by_email")
+  /// A callback number for the person placing the order — a vendor on a
+  /// jobsite needs someone reachable by phone, not just an email thread.
+  requesterPhone   String?               @map("requester_phone")
+  /// Who to bill and how to reach them, captured at order time so an
+  /// unregistered vendor never has to guess. {name?, email?, phone?}.
+  billingContact   Json?                 @map("billing_contact")
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  events           VendorOrderEvent[]
+  proposals        VendorOrderProposal[]
+  messages         VendorOrderMessage[]
+  link             VendorOrderLink?
+  documents        Document[]            @relation("OrderDocuments")
 
   @@index([tenantId, transactionId])
   @@index([vendorId])
@@ -745,46 +761,46 @@ model Organization {
 }
 
 model Member {
-  id             String       @id
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId         String
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role           String       @default("member")
+  id                String       @id
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role              String       @default("member")
   /// Compliance review authority, assigned from the Team page. null = default
   /// by role (owner/admin hold top authority, member submits only); 0 =
   /// submitter only even for an admin; 1..N = approves at levels up to N.
-  complianceTier Int?         @map("compliance_tier")
+  complianceTier    Int?         @map("compliance_tier")
   /// Billing authority, assigned from the Team page. null = default by role
   /// (owner/admin see and manage everything incl. team comp; member sees
   /// nothing). "view" reads invoices and revenue; "manage" also records
   /// money; "full" additionally sees team payout/comp data. Resolved by
   /// lib/billing-access.ts.
-  billingRole    String?      @map("billing_role")
+  billingRole       String?      @map("billing_role")
   /// Capability token for this person's subscribe-once personal calendar feed
   /// in this workspace (a user in two tenants gets a separate feed per one,
   /// same as everything else here — roles and assignments don't cross tenants).
   /// Generated lazily on first request for the link; null until then.
-  calendarToken  String?      @unique @map("calendar_token")
+  calendarToken     String?      @unique @map("calendar_token")
   /// When this person last looked at the Support page in this workspace. Any
   /// operator/Slack reply newer than this counts as unread, driving the
   /// sidebar's "new message" badge. Null = never opened it.
-  supportSeenAt  DateTime?    @map("support_seen_at")
+  supportSeenAt     DateTime?    @map("support_seen_at")
   /// Per-person table preferences in this workspace, e.g.
   /// {transactionColumns: ["address","status",...]} — the chosen columns in
   /// display order. Per member rather than per user because someone who
   /// coordinates for two workspaces wants different columns in each, the
   /// same way roles and assignments don't cross tenants. Unset = the
   /// defaults in lib/transaction-columns.ts.
-  tablePrefs     Json?        @map("table_prefs")
+  tablePrefs        Json?        @map("table_prefs")
   /// Cached "Today at a glance" text, and when it was written. Per member
   /// rather than per user: it describes this workspace's work, and someone
   /// coordinating for two tenants needs a separate one in each. Rewritten
   /// lazily when the Today screen is opened and this is over an hour old,
   /// which is what makes "once an hour while signed in" true without a cron.
-  handbookSummary   String?   @map("handbook_summary")
-  handbookSummaryAt DateTime? @map("handbook_summary_at")
-  createdAt      DateTime     @default(now())
+  handbookSummary   String?      @map("handbook_summary")
+  handbookSummaryAt DateTime?    @map("handbook_summary_at")
+  createdAt         DateTime     @default(now())
 
   @@index([organizationId])
   @@index([userId])
@@ -1230,89 +1246,89 @@ model ClientAgent {
 }
 
 model Contact {
-  id             String             @id @default(uuid())
-  tenantId       String             @map("tenant_id")
-  tenant         Organization       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id                 String             @id @default(uuid())
+  tenantId           String             @map("tenant_id")
+  tenant             Organization       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   /// Many-to-many: a contact can be covered by more than one coordinator, and
   /// pretending otherwise made one of them wrong every time somebody shared a
   /// brokerage or went on holiday.
-  owners         ContactOwner[]
-  name           String
-  email          String?
-  phone          String?
-  category       String             @default("Other")
-  rating         Int?
-  touchDate      DateTime?          @map("touch_date") @db.Date
-  notes          String?
+  owners             ContactOwner[]
+  name               String
+  email              String?
+  phone              String?
+  category           String             @default("Other")
+  rating             Int?
+  touchDate          DateTime?          @map("touch_date") @db.Date
+  notes              String?
   // --- dual-person CRM fields ---
-  personTitle    String?            @map("person_title")
-  firstName      String?            @map("first_name")
-  middleName     String?            @map("middle_name")
-  lastName       String?            @map("last_name")
-  jobTitle       String?            @map("job_title")
-  company        String?
+  personTitle        String?            @map("person_title")
+  firstName          String?            @map("first_name")
+  middleName         String?            @map("middle_name")
+  lastName           String?            @map("last_name")
+  jobTitle           String?            @map("job_title")
+  company            String?
   /// An agent's team is a different thing from their brokerage, and a
   /// mail-merge addresses one or the other.
-  teamName       String?            @map("team_name")
-  website        String?
-  workPhone      String?            @map("work_phone")
-  fax            String?
+  teamName           String?            @map("team_name")
+  website            String?
+  workPhone          String?            @map("work_phone")
+  fax                String?
   /// Secondary person (spouse/assistant): {title,first,middle,last,jobTitle,cell,workPhone,email}
-  secondary      Json?
+  secondary          Json?
   /// Overflow contact points: {phones: string[], emails: string[]}
-  extraContacts  Json?              @map("extra_contacts")
-  categories     String[]           @default([])
+  extraContacts      Json?              @map("extra_contacts")
+  categories         String[]           @default([])
   /// Relationship grade A-D; drives the auto-prospecting cadence.
-  grade          String?
+  grade              String?
   /// When this contact is next due in the prospecting queue.
-  nextTouchAt    DateTime?          @map("next_touch_at") @db.Date
-  homeAddress    Json?              @map("home_address")
-  workAddress    Json?              @map("work_address")
-  referredById   String?            @map("referred_by_id")
-  referredBy     Contact?           @relation("ContactReferrals", fields: [referredById], references: [id], onDelete: SetNull)
-  referrals      Contact[]          @relation("ContactReferrals")
+  nextTouchAt        DateTime?          @map("next_touch_at") @db.Date
+  homeAddress        Json?              @map("home_address")
+  workAddress        Json?              @map("work_address")
+  referredById       String?            @map("referred_by_id")
+  referredBy         Contact?           @relation("ContactReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals          Contact[]          @relation("ContactReferrals")
   /// Licence numbers a coordinator copies off a contract constantly.
-  brokerageLicense   String?        @map("brokerage_license")
-  salespersonLicense String?        @map("salesperson_license")
+  brokerageLicense   String?            @map("brokerage_license")
+  salespersonLicense String?            @map("salesperson_license")
   /// Which address post actually goes to: "home" or "work". Storing both
   /// and guessing is how a mailer reaches an office that closed.
-  mailingAddress String             @default("work") @map("mailing_address")
+  mailingAddress     String             @default("work") @map("mailing_address")
   /// The second person's name and email, lowercased, so looking them up is an
   /// indexed match rather than a scan through a JSON blob. Maintained by
   /// parseContactForm — the only thing that writes `secondary`.
-  secondarySearch String?           @map("secondary_search")
-  referralSource String?            @map("referral_source")
-  referralDate   DateTime?          @map("referral_date") @db.Date
+  secondarySearch    String?            @map("secondary_search")
+  referralSource     String?            @map("referral_source")
+  referralDate       DateTime?          @map("referral_date") @db.Date
   /// BUYER | SELLER | NONE
-  leadType       String?            @map("lead_type")
+  leadType           String?            @map("lead_type")
   /// Buyer: {cultivating,location,range,income}; Seller: {cultivating,address,listPrice,netProceeds}
-  leadDetails    Json?              @map("lead_details")
+  leadDetails        Json?              @map("lead_details")
   /// {birthday:{m,d,y?}, birthdayAlt, weddingAnniversary, purchaseAnniversary}
-  touchDates     Json?              @map("touch_dates")
-  photoUrl       String?            @map("photo_url")
+  touchDates         Json?              @map("touch_dates")
+  photoUrl           String?            @map("photo_url")
   /// {facebook, instagram, linkedin, x, youtube, other}
-  socialLinks    Json?              @map("social_links")
-  isSample       Boolean            @default(false)
-  parties        TransactionParty[]
+  socialLinks        Json?              @map("social_links")
+  isSample           Boolean            @default(false)
+  parties            TransactionParty[]
   /// Files where this contact is our side's agent (see Transaction).
-  primaryAgentFor Transaction[]     @relation("TxnPrimaryAgent")
-  coAgentFor      Transaction[]     @relation("TxnCoAgent")
-  contactNotes   ContactNote[]
-  emails         Email[]
-  tasks          Task[]
-  credentials    VaultCredential[]
-  agentOf        ClientAgent[]
-  portalLinks    PortalLink[]
+  primaryAgentFor    Transaction[]      @relation("TxnPrimaryAgent")
+  coAgentFor         Transaction[]      @relation("TxnCoAgent")
+  contactNotes       ContactNote[]
+  emails             Email[]
+  tasks              Task[]
+  credentials        VaultCredential[]
+  agentOf            ClientAgent[]
+  portalLinks        PortalLink[]
   /// Working-relationship grade — the vendor who never turns up, the
   /// attorney who always does. Distinct from `grade` directly above, which is
   /// the A–D prospecting cadence driving how often to make contact. Two
   /// different questions: "how often should I call them" versus "do we want
   /// to work with them at all", and a contact can be both worth chasing and
   /// painful to deal with.
-  handbookGrade     HandbookGrade? @map("handbook_grade")
-  handbookGradeNote String?        @map("handbook_grade_note")
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  handbookGrade      HandbookGrade?     @map("handbook_grade")
+  handbookGradeNote  String?            @map("handbook_grade_note")
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   @@index([tenantId, category])
   @@index([tenantId, nextTouchAt])
@@ -1372,37 +1388,37 @@ model NylasSend {
 }
 
 model Email {
-  id            String         @id @default(uuid())
-  tenantId      String         @map("tenant_id")
-  tenant        Organization   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  transactionId String?
-  transaction   Transaction?   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  contactId     String?        @map("contact_id")
-  contact       Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  direction     EmailDirection
-  fromAddr      String         @map("from_addr")
-  toAddr        String         @map("to_addr")
-  subject       String
-  bodyText      String         @map("body_text")
+  id              String         @id @default(uuid())
+  tenantId        String         @map("tenant_id")
+  tenant          Organization   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactionId   String?
+  transaction     Transaction?   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  contactId       String?        @map("contact_id")
+  contact         Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  direction       EmailDirection
+  fromAddr        String         @map("from_addr")
+  toAddr          String         @map("to_addr")
+  subject         String
+  bodyText        String         @map("body_text")
   /// Reply capture token; inbound mail to reply+<token>@ matches the thread.
   /// Null on mail sent from a coordinator's own mailbox — that path doesn't
   /// rewrite Reply-To (the whole point is that the recipient replies to a
   /// real person), so replies come back through the Nylas ids below instead.
-  replyToken    String?        @map("reply_token")
-  providerId    String?        @map("provider_id")
+  replyToken      String?        @map("reply_token")
+  providerId      String?        @map("provider_id")
   /// Set when this went out through a coordinator's connected mailbox rather
   /// than the workspace's shared address. The thread id is what an inbound
   /// reply carries, so it's the hook that puts that reply on this file.
-  nylasThreadId String?        @map("nylas_thread_id")
-  nylasSentBy   String?        @map("nylas_sent_by")
+  nylasThreadId   String?        @map("nylas_thread_id")
+  nylasSentBy     String?        @map("nylas_sent_by")
   /// Set only while status is SCHEDULED on the Nylas path: the schedule Nylas
   /// is holding hasn't produced a real message/thread id yet, so this is the
   /// only handle this row has until send completes. Matched by cancelScheduled
   /// (flips to CANCELLED) and the send-completion webhook (flips to SENT,
   /// fills in providerId/nylasThreadId, and clears this).
-  nylasScheduleId String?      @map("nylas_schedule_id")
-  status        String         @default("SENT")
-  createdAt     DateTime       @default(now())
+  nylasScheduleId String?        @map("nylas_schedule_id")
+  status          String         @default("SENT")
+  createdAt       DateTime       @default(now())
 
   @@index([tenantId, transactionId, createdAt])
   @@index([replyToken])
@@ -2712,32 +2728,32 @@ model CreditCouponRedemption {
 /// flushes due rows across tenants (CRON_SECRET-guarded route); rows are
 /// created only by tenant-scoped actions that stamp tenantId themselves.
 model EmailOutbox {
-  id            String    @id @default(uuid())
-  tenantId      String    @map("tenant_id")
-  transactionId String?   @map("transaction_id")
-  toAddr        String    @map("to_addr")
-  subject       String
-  body          String
-  sendAt        DateTime  @map("send_at")
-  sentAt        DateTime? @map("sent_at")
-  canceledAt    DateTime? @map("canceled_at")
-  attempts      Int       @default(0)
-  lastError     String?   @map("last_error")
-  createdAt     DateTime  @default(now())
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  transactionId   String?   @map("transaction_id")
+  toAddr          String    @map("to_addr")
+  subject         String
+  body            String
+  sendAt          DateTime  @map("send_at")
+  sentAt          DateTime? @map("sent_at")
+  canceledAt      DateTime? @map("canceled_at")
+  attempts        Int       @default(0)
+  lastError       String?   @map("last_error")
+  createdAt       DateTime  @default(now())
   /// Who it goes out as, when that's a coordinator's own mailbox.
-  sendAsUserId  String?   @map("send_as_user_id")
+  sendAsUserId    String?   @map("send_as_user_id")
   /// Set when Nylas holds the schedule itself rather than our cron. Those
   /// rows exist only so the coordinator can see and cancel the send — the
   /// flush deliberately skips them, or the mail would go out twice.
   /// The grant is pinned alongside the id because cancelling addresses the
   /// grant that scheduled it, and a reconnect can replace a user's grant.
-  nylasScheduleId String? @map("nylas_schedule_id")
-  nylasGrantId    String? @map("nylas_grant_id")
+  nylasScheduleId String?   @map("nylas_schedule_id")
+  nylasGrantId    String?   @map("nylas_grant_id")
   /// Set when Resend holds the schedule itself — the shared-address
   /// equivalent of nylasScheduleId above, and skipped by the flush for the
   /// same reason. No grant to pin alongside it: cancelling only needs the
   /// message id and the workspace's own API key.
-  resendEmailId   String? @map("resend_email_id")
+  resendEmailId   String?   @map("resend_email_id")
 
   @@index([sendAt, sentAt])
   @@map("email_outbox")
@@ -2814,7 +2830,6 @@ model ExtractionField {
 
 /**
  * What a Handbook note is attached to.
- *
  * MEMBER is the one that isn't like the others: a note about a teammate
  * ("needs to improve phone communication") is a management record, readable
  * and writable only by owners and admins, and it never reaches a summary
@@ -2830,7 +2845,6 @@ enum HandbookSubject {
 
 /**
  * The working-relationship grade on a client or contact.
- *
  * The familiar A–F school scale, which omits E. Its whole purpose is to
  * outlive the memory of whoever set it — a client graded F two years ago,
  * with a note saying why, stops a new coordinator accepting work that the
@@ -2846,13 +2860,11 @@ enum HandbookGrade {
 
 /**
  * One thing worth knowing, written by a coordinator.
- *
  * The examples that shaped this: "wants a phone call if there are contract
  * date issues"; "installs signs in Plymouth County only"; "broker's office
  * reviews the document before final payment"; "on holiday April 2027". They
  * are not structured data and shouldn't be — the value is that a person can
  * type the thing they'd otherwise have to remember to say out loud.
- *
  * Deliberately many-per-subject and freely deletable, so the record can be
  * corrected as easily as it was made.
  */

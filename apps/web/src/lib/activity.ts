@@ -40,3 +40,33 @@ export function activityTitle(s: string, max = 60): string {
   const t = s.trim();
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
+
+export interface ActivityEntry {
+  id: string;
+  at: Date;
+  actorName: string;
+  summary: string;
+}
+
+/**
+ * The last N things that happened on a file, newest first — the recap shown
+ * on the transaction page. A single "last touched" line answers "is this
+ * file stale"; this answers "what actually happened here", which is the
+ * question a coordinator has after being away for a day.
+ */
+export async function recentActivity(
+  tenantId: string,
+  transactionId: string,
+  limit = 6,
+): Promise<ActivityEntry[]> {
+  return withTenant(tenantId, (tx) =>
+    tx.transactionActivity.findMany({
+      where: { transactionId },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: { id: true, createdAt: true, actorName: true, summary: true },
+    }),
+  ).then((rows) =>
+    rows.map((r) => ({ id: r.id, at: r.createdAt, actorName: r.actorName, summary: r.summary })),
+  );
+}

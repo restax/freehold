@@ -56,6 +56,11 @@ export interface ResolvedOrderLink {
     dueDate: Date | null;
     scheduledAt: Date | null;
     missedAt: Date | null;
+    onBehalfOf: string | null;
+    requestedByName: string | null;
+    requestedByEmail: string | null;
+    requesterPhone: string | null;
+    billingContact: unknown;
   };
   tenantName: string;
   property: string | null;
@@ -88,6 +93,11 @@ export async function resolveOrderLink(token: string): Promise<ResolvedOrderLink
         dueDate: true,
         scheduledAt: true,
         missedAt: true,
+        onBehalfOf: true,
+        requestedByName: true,
+        requestedByEmail: true,
+        requesterPhone: true,
+        billingContact: true,
         transaction: { select: { propertyAddress: true } },
       },
     }),

@@ -2,6 +2,7 @@
 
 import { OrderActor, VendorOrderStatus, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
+import { logActivity } from "@/lib/activity";
 import { str } from "@/lib/forms";
 import { adminAlert } from "@/lib/notify";
 import { putObject } from "@/lib/storage";
@@ -24,7 +25,7 @@ async function actOnLink(
   gate: (s: VendorOrderStatus) => boolean,
   kind: string,
   data: Record<string, unknown>,
-  extra: { at?: Date | null; detail?: string | null } = {},
+  extra: { at?: Date | null; detail?: string | null; activitySummary?: string } = {},
 ) {
   const resolved = await resolveOrderLink(token);
   if (!resolved) return null;
@@ -45,6 +46,15 @@ async function actOnLink(
       },
     });
   });
+  if (extra.activitySummary) {
+    logActivity({
+      tenantId: order.tenantId,
+      transactionId: order.transactionId,
+      actor: { name: resolved.email },
+      action: `vendor.order_${kind}`,
+      summary: extra.activitySummary,
+    });
+  }
   emitWebhook(order.tenantId, "vendor.order.updated", { orderId: order.id, via: "link", kind });
   revalidatePath(`/vendor-order/${token}`);
   return resolved;
@@ -52,9 +62,14 @@ async function actOnLink(
 
 export async function linkAcceptOrder(formData: FormData) {
   const token = str(formData, "token");
-  const r = await actOnLink(token, canAcceptOrder, "accepted", {
-    status: VendorOrderStatus.ACCEPTED,
-  });
+  const resolved = await resolveOrderLink(token);
+  const r = await actOnLink(
+    token,
+    canAcceptOrder,
+    "accepted",
+    { status: VendorOrderStatus.ACCEPTED },
+    { activitySummary: `${resolved?.order.type ?? "Order"} accepted by the vendor` },
+  );
   if (r) adminAlert(`✅ ${r.email} accepted the ${r.order.type} order`);
 }
 
@@ -66,34 +81,53 @@ export async function linkScheduleOrder(formData: FormData) {
   if (Number.isNaN(at.getTime())) return;
   const resolved = await resolveOrderLink(token);
   const rescheduling = resolved?.order.scheduledAt != null;
+  const whenFmt = at.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
   const r = await actOnLink(
     token,
     canSchedule,
     rescheduling ? "rescheduled" : "scheduled",
     { status: VendorOrderStatus.SCHEDULED, scheduledAt: at, missedAt: null },
-    { at },
+    {
+      at,
+      activitySummary: `${resolved?.order.type ?? "Order"} appointment ${rescheduling ? "moved" : "set"} for ${whenFmt} (vendor)`,
+    },
   );
   if (r) adminAlert(`📅 ${r.email} scheduled the ${r.order.type} order`);
 }
 
 export async function linkCompleteOrder(formData: FormData) {
   const token = str(formData, "token");
-  const r = await actOnLink(token, canComplete, "completed", {
-    status: VendorOrderStatus.COMPLETED,
-    completedAt: new Date(),
-  });
+  const resolved = await resolveOrderLink(token);
+  const r = await actOnLink(
+    token,
+    canComplete,
+    "completed",
+    { status: VendorOrderStatus.COMPLETED, completedAt: new Date() },
+    { activitySummary: `${resolved?.order.type ?? "Order"} marked complete by the vendor` },
+  );
   if (r) adminAlert(`🎉 ${r.email} marked the ${r.order.type} order complete`);
 }
 
 export async function linkDeclineOrder(formData: FormData) {
   const token = str(formData, "token");
   const reason = str(formData, "reason").trim() || null;
+  const resolved = await resolveOrderLink(token);
   const r = await actOnLink(
     token,
     canDeclineOrder,
     "declined",
     { status: VendorOrderStatus.DECLINED },
-    { detail: reason },
+    {
+      detail: reason,
+      activitySummary: reason
+        ? `${resolved?.order.type ?? "Order"} declined by the vendor — ${reason}`
+        : `${resolved?.order.type ?? "Order"} declined by the vendor`,
+    },
   );
   if (r) adminAlert(`🚫 ${r.email} declined the ${r.order.type} order`);
 }

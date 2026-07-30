@@ -11,6 +11,7 @@ import { HandbookGlance } from "@/components/handbook-glance";
 import { HubNews } from "@/components/hub-news";
 import { SectionCard } from "@/components/section-card";
 import { toggleTask } from "@/lib/actions/tasks";
+import { activityTitle } from "@/lib/activity";
 import { rankAlerts, transactionAlerts } from "@/lib/alerts";
 import { billingExceptions, invoiceMoney, transactionBilling } from "@/lib/billing";
 import { bucketByDay, parseRange, topClients } from "@/lib/dashboard-charts";
@@ -481,7 +482,8 @@ export default async function DashboardPage({
           className="border-amber-300/70"
         >
           <p className="mb-3 text-sm text-stone-500">
-            Quiet files, and files with a critical date close enough that a quiet day matters.
+            Open tasks the weekend is about to catch, quiet files, and files with a critical date
+            close enough that a quiet day matters.
           </p>
           <ul className="flex flex-col divide-y divide-stone-100">
             {needsAttention.slice(0, 8).map((a) => (
@@ -489,6 +491,26 @@ export default async function DashboardPage({
                 <AddressPill href={`/dashboard/transactions/${a.id}`}>
                   {a.propertyAddress}
                 </AddressPill>
+                {a.urgentTasks[0] &&
+                  (() => {
+                    const t = a.urgentTasks[0];
+                    // The highlight gets more pronounced as the weekend
+                    // closes in: still amber with two business days to go,
+                    // solid red once it's down to the wire.
+                    const critical = t.businessDaysAway <= 1;
+                    return (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                          critical
+                            ? "bg-red-600 text-white animate-pulse"
+                            : "bg-amber-200 text-amber-900"
+                        }`}
+                      >
+                        {activityTitle(t.title, 24)} ·{" "}
+                        {t.calendarDaysAway === 0 ? "due today" : `due in ${t.calendarDaysAway}d`}
+                      </span>
+                    );
+                  })()}
                 {a.staleness.stale && (
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
                     {a.staleness.quietDays}d quiet

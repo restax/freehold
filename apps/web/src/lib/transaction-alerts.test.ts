@@ -7,6 +7,7 @@ import {
   staleness,
   stalenessMessage,
   upcomingCriticalDates,
+  urgentOpenTasks,
 } from "./transaction-alerts";
 
 /** Local-midnight date, matching how the module normalizes everything. */
@@ -273,5 +274,54 @@ describe("stalenessMessage", () => {
       dates: { closeDate: d("2026-07-22") },
     });
     expect(stalenessMessage(tomorrowS)).toContain("closing tomorrow");
+  });
+});
+
+// 2026-07-23 is a Thursday, 07-24 Friday, 07-27 the following Monday.
+describe("urgentOpenTasks", () => {
+  const task = (over: Partial<Parameters<typeof urgentOpenTasks>[0][number]> = {}) => ({
+    id: "t1",
+    title: "Mortgage commitment",
+    dueDate: d("2026-07-27"),
+    status: "OPEN",
+    ...over,
+  });
+
+  it("flags a Monday due date starting Thursday — two business days out", () => {
+    expect(urgentOpenTasks([task()], d("2026-07-23"))).toHaveLength(1);
+  });
+
+  it("does not flag it yet on Wednesday — three business days out", () => {
+    expect(urgentOpenTasks([task()], d("2026-07-22"))).toHaveLength(0);
+  });
+
+  it("keeps flagging it on Friday and on the day itself", () => {
+    expect(urgentOpenTasks([task()], d("2026-07-24"))).toHaveLength(1);
+    expect(urgentOpenTasks([task()], d("2026-07-27"))).toHaveLength(1);
+  });
+
+  it("drops off once the due date has passed — that's the overdue list's job", () => {
+    expect(urgentOpenTasks([task()], d("2026-07-28"))).toHaveLength(0);
+  });
+
+  it("ignores completed tasks — a finished task isn't a risk", () => {
+    expect(urgentOpenTasks([task({ status: "DONE" })], d("2026-07-23"))).toHaveLength(0);
+  });
+
+  it("ignores tasks with no due date", () => {
+    expect(urgentOpenTasks([task({ dueDate: null })], d("2026-07-23"))).toHaveLength(0);
+  });
+
+  it("sorts soonest first", () => {
+    const soon = task({ id: "a", title: "Soon", dueDate: d("2026-07-24") });
+    const later = task({ id: "b", title: "Later", dueDate: d("2026-07-27") });
+    const result = urgentOpenTasks([later, soon], d("2026-07-23"));
+    expect(result.map((t) => t.taskId)).toEqual(["a", "b"]);
+  });
+
+  it("reports both business and calendar days away", () => {
+    const [t] = urgentOpenTasks([task()], d("2026-07-23"));
+    expect(t.businessDaysAway).toBe(2);
+    expect(t.calendarDaysAway).toBe(4);
   });
 });

@@ -10,6 +10,7 @@ import {
   emailVendorOrder,
   placeVendorOrder,
 } from "@/lib/actions/vendor-orders";
+import { billingContactFrom } from "@/lib/client-profile";
 import { fmtDate } from "@/lib/format";
 import { currentNotes } from "@/lib/handbook";
 import { card } from "@/lib/ui";
@@ -41,7 +42,7 @@ export async function VendorOrderTab({
   tenantId: string;
   transactionId: string;
 }) {
-  const [orders, activeConnections, documents, contacts] = await withTenant(
+  const [orders, activeConnections, documents, contacts, txnWithClient] = await withTenant(
     tenantId,
     async (tx) => [
       await tx.vendorOrder.findMany({
@@ -69,8 +70,27 @@ export async function VendorOrderTab({
         orderBy: { name: "asc" },
         select: { id: true, name: true, email: true },
       }),
+      // To prefill "on behalf of" and billing contact — the TC still owns the
+      // final say (both fields stay editable), but most orders bill the same
+      // client every time, so guessing right by default saves a re-type.
+      await tx.transaction.findUnique({
+        where: { id: transactionId },
+        select: {
+          side: true,
+          client: { select: { name: true, email: true, phone: true, billingContact: true } },
+        },
+      }),
     ],
   );
+
+  const sideLabel = txnWithClient?.side === "SELL_SIDE" ? "Seller" : "Buyer";
+  const client = txnWithClient?.client ?? null;
+  const onBehalfDefault = client ? `${client.name} (${sideLabel})` : "";
+  const clientBilling = billingContactFrom(client?.billingContact) ?? {
+    name: client?.name ?? null,
+    email: client?.email ?? null,
+    phone: client?.phone ?? null,
+  };
 
   // Handbook notes for those contacts, so picking a vendor surfaces what the
   // team already knows about them. Only the current ones — an instruction that
@@ -150,6 +170,7 @@ export async function VendorOrderTab({
                 className={field}
               />
             </label>
+            <OrderContextFields onBehalfDefault={onBehalfDefault} billing={clientBilling} />
             <PendingButton
               pendingLabel="Sending…"
               className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
@@ -184,6 +205,7 @@ export async function VendorOrderTab({
             Details
             <input name="details" placeholder="Address, access, what to bring" className={field} />
           </label>
+          <OrderContextFields onBehalfDefault={onBehalfDefault} billing={clientBilling} />
           {documents.length > 0 && (
             <fieldset className="flex w-full flex-col gap-1 text-sm">
               <span className="text-stone-500">Attach documents</span>
@@ -361,5 +383,65 @@ export async function VendorOrderTab({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Who this is for, and who to bill — the fields a vendor otherwise has to
+ * chase down by reply. Prefilled from the file's client so the common case
+ * ("bill the client who hired us") needs no typing, but every field stays
+ * editable for the case it isn't ("bill the seller", "buyer's agent is the
+ * contact, not us").
+ */
+function OrderContextFields({
+  onBehalfDefault,
+  billing,
+}: {
+  onBehalfDefault: string;
+  billing: { name: string | null; email: string | null; phone: string | null };
+}) {
+  return (
+    <fieldset className="flex w-full flex-wrap items-end gap-3 border-t border-stone-100 pt-3">
+      <label className="flex flex-col gap-1 text-sm">
+        On behalf of
+        <input
+          name="onBehalfOf"
+          defaultValue={onBehalfDefault}
+          placeholder="Client or party this is for"
+          className={field}
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        Your callback number
+        <input name="requesterPhone" type="tel" placeholder="(555) 555-1234" className={field} />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        Bill to
+        <input
+          name="billingName"
+          defaultValue={billing.name ?? ""}
+          placeholder="Name"
+          className={field}
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        Billing email
+        <input
+          name="billingEmail"
+          type="email"
+          defaultValue={billing.email ?? ""}
+          className={field}
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        Billing phone
+        <input
+          name="billingPhone"
+          type="tel"
+          defaultValue={billing.phone ?? ""}
+          className={field}
+        />
+      </label>
+    </fieldset>
   );
 }

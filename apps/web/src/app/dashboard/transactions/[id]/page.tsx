@@ -110,7 +110,13 @@ import {
   updateTransaction,
   withdrawDateChange,
 } from "@/lib/actions/transactions";
-import { type ContractParty, partyLabel } from "@/lib/ai/contract-schema";
+import { recentActivity } from "@/lib/activity";
+import {
+  type ContractParty,
+  type ExecutionCheck,
+  executionNotice,
+  partyLabel,
+} from "@/lib/ai/contract-schema";
 import { transactionAlert } from "@/lib/alerts";
 import { emailContextForTransaction, transactionMergeContext } from "@/lib/auto-emails";
 import {
@@ -437,6 +443,7 @@ export default async function TransactionDetailPage({
   // Last-touched record + staleness verdict, computed by the same helper the
   // dashboard and the daily briefing use.
   const alert = await transactionAlert(tenantId, txn.id);
+  const recentActivityLog = alert ? await recentActivity(tenantId, txn.id) : [];
 
   // Money on this file: every invoice touching it (directly or via a line on
   // a consolidated invoice), and the attributed billed/paid totals. Hidden
@@ -573,6 +580,19 @@ export default async function TransactionDetailPage({
     }
   }
 
+  // Two things a coordinator needs flagged the moment they open a file: a
+  // side with nobody recorded (buyer or seller — real estate contracts always
+  // have both), and a contract that isn't actually signed yet, which makes
+  // every date and dollar figure on the file provisional.
+  const missingSides = (["BUYER", "SELLER"] as const).filter(
+    (role) => !txn.parties.some((p) => p.role === role),
+  );
+  const latestExtraction = txn.extractions[0] ?? null;
+  const execNotice = latestExtraction
+    ? executionNotice((latestExtraction.execution as ExecutionCheck | null) ?? null)
+    : null;
+  const showExecNotice = execNotice && execNotice.tone !== "success";
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -637,7 +657,36 @@ export default async function TransactionDetailPage({
         </div>
       </div>
 
-      {alert && <ActivityPanel alert={alert} />}
+      {(missingSides.length > 0 || showExecNotice) && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm">
+          {missingSides.map((role) => (
+            <Link
+              key={role}
+              href={`/dashboard/transactions/${txn.id}?tab=participants`}
+              className="flex items-center gap-1.5 font-medium text-red-700 hover:underline"
+            >
+              <Warning size={14} weight="fill" className="text-red-600" aria-hidden />
+              No {ROLE_LABEL[role]} Participants
+            </Link>
+          ))}
+          {showExecNotice && execNotice && (
+            <Link
+              href={
+                latestExtraction
+                  ? `/dashboard/transactions/${txn.id}/extractions/${latestExtraction.id}`
+                  : `/dashboard/transactions/${txn.id}`
+              }
+              className="flex items-center gap-1.5 font-medium text-red-700 hover:underline"
+            >
+              <Warning size={14} weight="fill" className="text-red-600" aria-hidden />
+              {execNotice.headline}
+              {execNotice.missing.length > 0 && ` — missing: ${execNotice.missing.join(", ")}`}
+            </Link>
+          )}
+        </div>
+      )}
+
+      {alert && <ActivityPanel alert={alert} recent={recentActivityLog} />}
 
       {licenseError && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
@@ -3017,19 +3066,19 @@ export default async function TransactionDetailPage({
                   </button>
                 </form>
               </SectionCard>
+
+              {isAdmin && (
+                <DangerDelete
+                  action={deleteTransaction}
+                  label="Delete this transaction"
+                  description={`Removes ${txn.propertyAddress} with its tasks, documents, parties, and portal links. This cannot be undone.`}
+                  hidden={{ id: txn.id }}
+                />
+              )}
             </>
           )}
         </div>
       </div>
-
-      {isAdmin && (
-        <DangerDelete
-          action={deleteTransaction}
-          label="Delete this transaction"
-          description={`Removes ${txn.propertyAddress} with its tasks, documents, parties, and portal links. This cannot be undone.`}
-          hidden={{ id: txn.id }}
-        />
-      )}
     </div>
   );
 }

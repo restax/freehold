@@ -3,12 +3,14 @@
 import {
   OrderActor,
   ProposalStatus,
+  prisma,
   type TenantTx,
   VendorOrderStatus,
   withTenant,
   withVendor,
 } from "@freehold/db";
 import { revalidatePath } from "next/cache";
+import { logActivity } from "@/lib/activity";
 import { logAudit } from "@/lib/audit";
 import { emailEnabled, sendTenantEmail } from "@/lib/email";
 import { dateOnly, optStr, str } from "@/lib/forms";
@@ -34,6 +36,13 @@ import { emitWebhook } from "@/lib/webhook-emit";
  * sides scope through their own session var (withTenant / withVendor).
  */
 
+const PROPOSAL_ACTIVITY: Record<string, string> = {
+  ACCEPT: "accepted",
+  DECLINE: "declined",
+  SCHEDULE: "scheduled",
+  COMPLETE: "marked complete",
+};
+
 /** Append one history row. Runs inside whichever transaction the caller opened. */
 async function recordEvent(
   tx: TenantTx,
@@ -57,6 +66,27 @@ async function recordEvent(
 
 // ---- Coordinator side --------------------------------------------------------
 
+/**
+ * The context fields every order form collects beyond "what and by when": who
+ * it's for, who placed it, and who to bill. A cold vendor — someone who has
+ * never heard of this TC — needs all of it in the same place the order lands,
+ * not buried in a reply thread later.
+ */
+function orderContext(formData: FormData, session: { user: { name: string; email: string } }) {
+  const billing: Record<string, string | null> = {
+    name: optStr(formData, "billingName"),
+    email: optStr(formData, "billingEmail"),
+    phone: optStr(formData, "billingPhone"),
+  };
+  return {
+    onBehalfOf: optStr(formData, "onBehalfOf"),
+    requestedByName: session.user.name || null,
+    requestedByEmail: session.user.email,
+    requesterPhone: optStr(formData, "requesterPhone"),
+    billingContact: billing.name || billing.email || billing.phone ? billing : undefined,
+  };
+}
+
 /** Place an order with a connected vendor on a transaction. */
 export async function placeVendorOrder(formData: FormData) {
   const { tenantId, session } = await requireTenant();
@@ -64,6 +94,7 @@ export async function placeVendorOrder(formData: FormData) {
   const vendorId = str(formData, "vendorId");
   const type = str(formData, "type");
   if (!transactionId || !vendorId || !type) return;
+  const context = orderContext(formData, session);
 
   await withTenant(tenantId, async (tx) => {
     // The order may only go to a vendor this workspace is actively connected to.
@@ -92,6 +123,7 @@ export async function placeVendorOrder(formData: FormData) {
         dueDate: dateOnly(formData, "dueDate"),
         status: VendorOrderStatus.SENT,
         placedBy: "TC",
+        ...context,
       },
     });
     await recordEvent(tx, order, "created", OrderActor.TC, {
@@ -106,6 +138,17 @@ export async function placeVendorOrder(formData: FormData) {
     action: "vendor.order_placed",
     summary: `Placed a ${type} order with a vendor`,
     subjectType: "VendorOrder",
+  });
+  const vendor = await prisma.vendor.findUnique({
+    where: { id: vendorId },
+    select: { name: true },
+  });
+  logActivity({
+    tenantId,
+    transactionId,
+    actor: { id: session.user.id, name: session.user.name },
+    action: "vendor.order_placed",
+    summary: `Ordered ${type} from ${vendor?.name ?? "a vendor"}`,
   });
   emitWebhook(tenantId, "vendor.order.placed", { transactionId, type });
   revalidatePath(`/dashboard/transactions/${transactionId}`);
@@ -155,6 +198,7 @@ export async function emailVendorOrder(formData: FormData) {
   const email = str(formData, "email").trim().toLowerCase();
   const type = str(formData, "type");
   if (!transactionId || !email.includes("@") || !type) return;
+  const context = orderContext(formData, session);
 
   // Gather selected transaction documents to attach (decrypted, capped 15 MB) —
   // the same loop the Emails tab uses.
@@ -177,6 +221,7 @@ export async function emailVendorOrder(formData: FormData) {
         status: VendorOrderStatus.SENT,
         placedBy: "TC",
         emailTo: email,
+        ...context,
       },
     });
     await recordEvent(tx, o, "created", OrderActor.TC, {
@@ -216,21 +261,49 @@ export async function emailVendorOrder(formData: FormData) {
         }
       }
 
-      const registerUrl = `${(process.env.BETTER_AUTH_URL ?? "http://localhost:3000").replace(/\/$/, "")}/vendor/register`;
+      const org = await prisma.organization.findUnique({
+        where: { id: tenantId },
+        select: { name: true },
+      });
+      const billing = context.billingContact;
+
+      const base = (process.env.BETTER_AUTH_URL ?? "http://localhost:3000").replace(/\/$/, "");
+      const registerUrl = `${base}/vendor/register`;
+
+      // A cold vendor has never heard of this TC, so the opening line has to
+      // do three things at once: who is asking, who it's for, and where. The
+      // "on whose behalf" framing (TC's client vs. the buyer/seller they
+      // represent) is internal bookkeeping the vendor doesn't need explained —
+      // they just need a name and a property.
+      const forWhom = context.onBehalfOf ? ` for ${context.onBehalfOf}` : "";
       const lines = [
-        `${session.user.name || "A transaction coordinator"} at ${session.user.email.split("@")[0]} sent you an order through Freehold.`,
+        `${session.user.name || "A transaction coordinator"} at ${org?.name ?? "a Freehold Cloud workspace"} is requesting a ${type}${forWhom}.`,
         "",
-        `Order: ${type}`,
-        order.property ? `Property: ${order.property}` : "",
-        order.details ? `Details: ${order.details}` : "",
+        `Property: ${order.property ?? "—"}`,
         order.dueDate ? `Needed by: ${order.dueDate.toISOString().slice(0, 10)}` : "",
+        order.details ? `Details: ${order.details}` : "",
         "",
-        "Accept, schedule, or update this order — no account needed:",
+        "Contact for this order:",
+        session.user.name || session.user.email,
+        session.user.email,
+        context.requesterPhone ?? "",
+        "",
+        billing
+          ? [
+              "Send the invoice to:",
+              billing.name ?? "",
+              billing.email ?? "",
+              billing.phone ?? "",
+              "",
+            ].join("\n")
+          : "",
+        "Accept, schedule, or send an update — built for your phone, no account needed:",
         orderLinkUrl(token),
         "",
-        "Or just reply to this email and we'll turn your message into an update for the coordinator to confirm.",
+        "Questions? Just reply to this email, or use the link above.",
         "",
-        `Want every coordinator's orders in one place? Register your business (free): ${registerUrl}`,
+        "—",
+        `This request came through Freehold Cloud, the practice-management platform ${org?.name ?? "this coordinator"} uses to run their files. Work with lots of coordinators? Register your business (free) to see every order in one place: ${registerUrl}`,
       ].filter((l) => l !== "");
 
       await sendTenantEmail({
@@ -238,7 +311,7 @@ export async function emailVendorOrder(formData: FormData) {
         transactionId,
         orderId: order.id,
         to: email,
-        subject: `${type} — order from your transaction coordinator`,
+        subject: `${type} needed at ${order.property ?? "your next job"}`,
         body: lines.join("\n"),
         attachments,
       });
@@ -256,6 +329,13 @@ export async function emailVendorOrder(formData: FormData) {
     summary: `Emailed a ${type} order to ${email}${sent ? "" : " (send pending — email not configured)"}`,
     subjectType: "VendorOrder",
     subjectId: order.id,
+  });
+  logActivity({
+    tenantId,
+    transactionId,
+    actor: { id: session.user.id, name: session.user.name },
+    action: "vendor.order_emailed",
+    summary: sent ? `Emailed ${type} order to ${email}` : `Drafted a ${type} order for ${email}`,
   });
   emitWebhook(tenantId, "vendor.order.placed", { transactionId, type, emailTo: email });
   revalidatePath(`/dashboard/transactions/${transactionId}`);
@@ -334,6 +414,13 @@ export async function applyVendorProposal(formData: FormData) {
   });
   if (!applied) return;
 
+  logActivity({
+    tenantId,
+    transactionId,
+    actor: { name: "A vendor" },
+    action: "vendor.order_reply_applied",
+    summary: `${applied.order.type} order: ${PROPOSAL_ACTIVITY[applied.kind] ?? "updated"} (from an email reply)`,
+  });
   emitWebhook(tenantId, "vendor.order.updated", {
     orderId: applied.order.id,
     via: "email_reply",
@@ -366,18 +453,37 @@ async function vendorMove(
   gate: (s: VendorOrderStatus) => boolean,
   apply: (
     tx: TenantTx,
-    order: { id: string; tenantId: string; vendorId: string | null; type: string },
+    order: {
+      id: string;
+      tenantId: string;
+      vendorId: string | null;
+      type: string;
+      transactionId: string;
+    },
   ) => Promise<void>,
 ) {
   return withVendor(vendorId, async (tx) => {
     const order = await tx.vendorOrder.findUnique({
       where: { id },
-      select: { id: true, tenantId: true, vendorId: true, status: true, type: true },
+      select: {
+        id: true,
+        tenantId: true,
+        vendorId: true,
+        status: true,
+        type: true,
+        transactionId: true,
+      },
     });
     if (!order || order.vendorId !== vendorId || !gate(order.status)) return null;
     await apply(tx, order);
     return order;
   });
+}
+
+/** The connected vendor's own name, for activity summaries on the TC side. */
+async function vendorName(vendorId: string): Promise<string> {
+  const v = await prisma.vendor.findUnique({ where: { id: vendorId }, select: { name: true } });
+  return v?.name ?? "The vendor";
 }
 
 export async function vendorAcceptOrder(formData: FormData) {
@@ -393,6 +499,13 @@ export async function vendorAcceptOrder(formData: FormData) {
       tenantId: order.tenantId,
       action: "vendor.order_accepted",
       summary: `A vendor accepted the ${order.type} order`,
+    });
+    logActivity({
+      tenantId: order.tenantId,
+      transactionId: order.transactionId,
+      actor: { name: await vendorName(vendorId) },
+      action: "vendor.order_accepted",
+      summary: `Accepted the ${order.type} order`,
     });
     emitWebhook(order.tenantId, "vendor.order.updated", { orderId: id, status: "ACCEPTED" });
   }
@@ -413,6 +526,15 @@ export async function vendorDeclineOrder(formData: FormData) {
       tenantId: order.tenantId,
       action: "vendor.order_declined",
       summary: `A vendor declined the ${order.type} order`,
+    });
+    logActivity({
+      tenantId: order.tenantId,
+      transactionId: order.transactionId,
+      actor: { name: await vendorName(vendorId) },
+      action: "vendor.order_declined",
+      summary: detail
+        ? `Declined the ${order.type} order — ${detail}`
+        : `Declined the ${order.type} order`,
     });
     emitWebhook(order.tenantId, "vendor.order.updated", { orderId: id, status: "DECLINED" });
   }
@@ -446,6 +568,13 @@ export async function vendorScheduleOrder(formData: FormData) {
       action: "vendor.order_scheduled",
       summary: `A vendor scheduled the ${order.type} order`,
     });
+    logActivity({
+      tenantId: order.tenantId,
+      transactionId: order.transactionId,
+      actor: { name: await vendorName(vendorId) },
+      action: "vendor.order_scheduled",
+      summary: `Scheduled the ${order.type} appointment for ${at.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`,
+    });
     emitWebhook(order.tenantId, "vendor.order.updated", {
       orderId: id,
       status: "SCHEDULED",
@@ -475,6 +604,13 @@ export async function vendorMarkMissed(formData: FormData) {
       action: "vendor.order_missed",
       summary: `A ${order.type} appointment was missed`,
     });
+    logActivity({
+      tenantId: order.tenantId,
+      transactionId: order.transactionId,
+      actor: { name: await vendorName(vendorId) },
+      action: "vendor.order_missed",
+      summary: `Missed the ${order.type} appointment`,
+    });
     emitWebhook(order.tenantId, "vendor.order.updated", { orderId: id, status: "MISSED" });
   }
   revalidatePath("/vendor/dashboard");
@@ -496,6 +632,13 @@ export async function vendorCompleteOrder(formData: FormData) {
       tenantId: order.tenantId,
       action: "vendor.order_completed",
       summary: `A vendor completed the ${order.type} order`,
+    });
+    logActivity({
+      tenantId: order.tenantId,
+      transactionId: order.transactionId,
+      actor: { name: await vendorName(vendorId) },
+      action: "vendor.order_completed",
+      summary: `Completed the ${order.type} order`,
     });
     emitWebhook(order.tenantId, "vendor.order.completed", { orderId: id });
     adminAlert(`✅ Vendor completed a ${order.type} order`);

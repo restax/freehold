@@ -172,6 +172,48 @@ export function staleness(input: StalenessInput): Staleness {
   return { quietDays, threshold, stale: quietDays >= threshold, escalatedBy, upcoming };
 }
 
+export interface UrgentTask {
+  taskId: string;
+  title: string;
+  dueDate: Date;
+  /** 0 = due today. Weekends don't count, so a Friday task and a Monday task
+   *  two calendar days later can both read "1". */
+  businessDaysAway: number;
+  calendarDaysAway: number;
+}
+
+/**
+ * Open tasks close enough to their due date that the weekend threatens to eat
+ * the remaining lead time — independent of whether the file has been
+ * "touched" recently.
+ *
+ * The gap this closes: staleness resets the moment *anyone* touches the file
+ * for *anything* — uploading an unrelated document silences the flag even
+ * though the mortgage-commitment task is still open and due Monday. A
+ * coordinator's own rule of thumb is business days, not calendar ones: a
+ * task due Monday needs to be *starting* Thursday, because Friday is the
+ * last business day before the weekend closes the window. `businessDaysAway
+ * <= 2` is exactly that rule — for a Monday due date that's Thursday (Thu,
+ * Fri); for a Tuesday due date it's the preceding Friday (Mon, Tue) — the
+ * weekend is what shifts the trigger day, not a fixed calendar offset.
+ */
+export function urgentOpenTasks(
+  tasks: Array<{ id: string; title: string; dueDate: Date | null; status: string }>,
+  today: Date,
+): UrgentTask[] {
+  return tasks
+    .filter((t): t is typeof t & { dueDate: Date } => t.status === "OPEN" && t.dueDate != null)
+    .map((t) => ({
+      taskId: t.id,
+      title: t.title,
+      dueDate: t.dueDate,
+      businessDaysAway: businessDaysBetween(today, t.dueDate),
+      calendarDaysAway: calendarDaysBetween(today, t.dueDate),
+    }))
+    .filter((t) => t.calendarDaysAway >= 0 && t.businessDaysAway <= 2)
+    .sort((a, b) => a.calendarDaysAway - b.calendarDaysAway);
+}
+
 /** One-line reason for the flag, shared by every surface that renders it. */
 export function stalenessMessage(s: Staleness): string {
   const days = `${s.quietDays} business day${s.quietDays === 1 ? "" : "s"}`;

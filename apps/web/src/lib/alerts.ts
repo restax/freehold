@@ -5,6 +5,8 @@ import {
   type Staleness,
   staleness,
   startOfDay,
+  type UrgentTask,
+  urgentOpenTasks,
 } from "@/lib/transaction-alerts";
 
 /**
@@ -30,6 +32,9 @@ export interface TransactionAlert {
   lastActivity: LastActivity | null;
   staleness: Staleness;
   config: AlertConfig;
+  /** Open tasks near their due date with the weekend closing in — see
+   *  urgentOpenTasks. Fires regardless of staleness. */
+  urgentTasks: UrgentTask[];
 }
 
 /** Latest activity row per transaction, in one index-friendly pass. */
@@ -78,6 +83,7 @@ export async function transactionAlerts(
         mortgageCommitmentDate: true,
         inspectionDeadlineDate: true,
         client: { select: { name: true, alertConfig: true } },
+        tasks: { where: { status: "OPEN" }, select: { id: true, title: true, dueDate: true } },
       },
     });
     const activity = await latestActivityByTransaction(
@@ -104,20 +110,30 @@ export async function transactionAlerts(
           config,
           today,
         }),
+        urgentTasks: urgentOpenTasks(
+          t.tasks.map((task) => ({ ...task, status: "OPEN" })),
+          today,
+        ),
       };
     });
   });
 }
 
 /**
- * Alerts worth showing, worst first: flagged files ahead of merely-approaching
- * ones, then by how close the critical date is, then by how long it's been
- * quiet. This is the order the dashboard and the briefing both present.
+ * Alerts worth showing, worst first: a task whose due date is closing in on
+ * the weekend outranks everything else — it's the one case that isn't
+ * silenced by the file having been touched for something unrelated — then
+ * flagged files, then merely-approaching ones, then by how close the
+ * critical date is, then by how long it's been quiet. This is the order the
+ * dashboard and the briefing both present.
  */
 export function rankAlerts(alerts: TransactionAlert[]): TransactionAlert[] {
   return alerts
-    .filter((a) => a.staleness.stale || a.staleness.escalatedBy)
+    .filter((a) => a.staleness.stale || a.staleness.escalatedBy || a.urgentTasks.length > 0)
     .sort((a, b) => {
+      const aUrgent = a.urgentTasks[0]?.businessDaysAway ?? Number.POSITIVE_INFINITY;
+      const bUrgent = b.urgentTasks[0]?.businessDaysAway ?? Number.POSITIVE_INFINITY;
+      if (aUrgent !== bUrgent) return aUrgent - bUrgent;
       if (a.staleness.stale !== b.staleness.stale) return a.staleness.stale ? -1 : 1;
       const aDays = a.staleness.escalatedBy?.daysAway ?? Number.POSITIVE_INFINITY;
       const bDays = b.staleness.escalatedBy?.daysAway ?? Number.POSITIVE_INFINITY;
