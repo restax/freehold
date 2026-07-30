@@ -1,18 +1,23 @@
-import { TaskStatus, TransactionStatus, withTenant } from "@freehold/db";
+import { prisma, TaskStatus, TransactionStatus, withTenant } from "@freehold/db";
 import { CalendarCheck, CheckCircle, Sun, Warning } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { after } from "next/server";
 import { AddressPill } from "@/components/address-pill";
 import { StatusBadge, statusDot } from "@/components/badges";
 import { DemoWelcome } from "@/components/demo-welcome";
 import { EmptyState } from "@/components/empty-state";
+import { HandbookGlance } from "@/components/handbook-glance";
 import { HubNews } from "@/components/hub-news";
 import { SectionCard } from "@/components/section-card";
 import { toggleTask } from "@/lib/actions/tasks";
 import { rankAlerts, transactionAlerts } from "@/lib/alerts";
 import { billingExceptions, invoiceMoney, transactionBilling } from "@/lib/billing";
 import { fmtDate, fmtDayMonth, STATUS_LABEL } from "@/lib/format";
+import { summaryNotesFor } from "@/lib/handbook";
+import { isStale } from "@/lib/handbook/summary-context";
 import { agingBucket } from "@/lib/invoicing";
 import { fmtCents } from "@/lib/pay";
+import { handbookState } from "@/lib/plans";
 import {
   byPriorityThenDate,
   effectivePriority,
@@ -309,6 +314,66 @@ export default async function DashboardPage() {
     }
   }
   const todayClosings = closings.filter((c) => c.closeDate && dayKey(c.closeDate) === todayKey);
+
+  // "Today at a glance": rendered from cache, rewritten in the background when
+  // it goes off. after() means opening the dashboard never waits on a model —
+  // the cost is that a first-ever briefing appears on the next visit rather
+  // than this one, which beats a spinner every morning.
+  const hb = await handbookState(tenantId);
+  const me = hb.summary
+    ? await prisma.member.findFirst({
+        where: { organizationId: tenantId, userId },
+        select: {
+          id: true,
+          role: true,
+          handbookSummary: true,
+          handbookSummaryAt: true,
+          user: { select: { name: true } },
+        },
+      })
+    : null;
+  const glanceStale = me ? isStale(me.handbookSummaryAt, now) : false;
+  const myName = me?.user.name ?? null;
+
+  if (me && glanceStale) {
+    const viewer = { memberId: me.id, role: me.role as "owner" | "admin" | "member" };
+    const notes = await withTenant(tenantId, (tx) =>
+      tx.handbookNote.findMany({ orderBy: { createdAt: "desc" }, take: 200 }),
+    );
+    const summaryInput = {
+      viewer,
+      personName: myName,
+      overdue: overdue.map((t) => ({
+        title: t.title,
+        due: fmtDayMonth(t.dueDate, now),
+        property: t.transaction?.propertyAddress ?? null,
+      })),
+      dueToday: dueToday.map((t) => ({
+        title: t.title,
+        property: t.transaction?.propertyAddress ?? null,
+      })),
+      closingSoon: closings
+        .filter((c) => c.closeDate)
+        .map((c) => ({
+          property: c.propertyAddress ?? "A file",
+          date: fmtDayMonth(c.closeDate, now),
+        })),
+      alerts: needsAttention
+        .slice(0, 8)
+        .map((a) =>
+          a.staleness.stale
+            ? `${a.propertyAddress} has been quiet for ${a.staleness.quietDays} days`
+            : `${a.propertyAddress}: ${a.staleness.escalatedBy?.label ?? "needs attention"}`,
+        ),
+      // Filtered here as well as inside buildSummaryContext — the rows
+      // shouldn't sit in this scope at all for someone who may not read them.
+      notes: summaryNotesFor(viewer, notes, now),
+    };
+    after(async () => {
+      const { refreshSummary } = await import("@/lib/handbook/summary");
+      await refreshSummary(tenantId, me.id, summaryInput, now).catch(() => {});
+    });
+  }
   const doneToday = doneThisWeek.filter((t) => t.completedAt && dayKey(t.completedAt) === todayKey);
   const doneEarlier = doneThisWeek.filter(
     (t) => !(t.completedAt && dayKey(t.completedAt) === todayKey),
@@ -361,6 +426,8 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-4">
       <DemoWelcome />
+
+      {hb.summary && <HandbookGlance text={me?.handbookSummary ?? null} pending={glanceStale} />}
 
       {licenseAlerts.length > 0 && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
