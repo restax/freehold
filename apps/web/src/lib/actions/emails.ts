@@ -18,6 +18,7 @@ export async function sendTransactionEmail(formData: FormData) {
   if (!emailEnabled()) return;
   const transactionId = str(formData, "transactionId");
   const to = str(formData, "to").trim();
+  const cc = optStr(formData, "cc");
   const subject = str(formData, "subject").trim();
   const body = str(formData, "body").trim();
   const contactId = optStr(formData, "contactId");
@@ -113,6 +114,7 @@ export async function sendTransactionEmail(formData: FormData) {
     transactionId,
     contactId,
     to,
+    ...(cc ? { extraCc: cc } : {}),
     subject,
     body,
     attachments,

@@ -15,11 +15,13 @@ import { saveBillingDefaults } from "@/lib/actions/billing-policy";
 import { setContactVisibilityRestriction } from "@/lib/actions/contacts";
 import { saveDirectoryListing } from "@/lib/actions/directory";
 import { setHandbookEnabled, setHandbookSummaryEnabled } from "@/lib/actions/handbook";
+import { saveHolidaySchedule } from "@/lib/actions/holidays";
 import { removeSampleData } from "@/lib/actions/sample-data";
 import { addState, removeState, setLicenseEnforcement } from "@/lib/actions/states";
 import { setDailyBriefing, setInvoiceReport } from "@/lib/actions/templates";
 import { saveSideLabels } from "@/lib/actions/website";
 import { BILLING_MODES, tenantBillingPolicy } from "@/lib/billing-policy";
+import { enabledHolidayKeys, FEDERAL_HOLIDAYS } from "@/lib/date-calculators";
 import {
   AVAILABILITY,
   PRICING_MODELS,
@@ -376,6 +378,45 @@ async function OperatingStatesSection({ tenantId, userId }: { tenantId: string; 
         </label>
         <button type="submit" className={btnGhost}>
           Save enforcement
+        </button>
+      </form>
+    </SectionCard>
+  );
+}
+
+async function HolidayScheduleSection({ tenantId, userId }: { tenantId: string; userId: string }) {
+  const role = await getMemberRole(tenantId, userId);
+  if (role !== "owner" && role !== "admin") return null;
+  const { prisma } = await import("@freehold/db");
+  const org = await prisma.organization.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: { holidaySchedule: true },
+  });
+  const enabled = enabledHolidayKeys(org.holidaySchedule);
+
+  return (
+    <SectionCard title="Holiday schedule">
+      <p className="mb-3 text-sm text-stone-500">
+        Which US federal holidays a key-dates template's business-day math skips. All eleven are on
+        by default — uncheck any your workspace doesn't observe.
+      </p>
+      <form action={saveHolidaySchedule} className="flex flex-col gap-2">
+        <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+          {FEDERAL_HOLIDAYS.map((h) => (
+            <label key={h.key} className="flex items-center gap-1.5 text-sm text-stone-700">
+              <input
+                type="checkbox"
+                name="holiday"
+                value={h.key}
+                defaultChecked={enabled.has(h.key)}
+                className="accent-brand-600"
+              />
+              {h.label}
+            </label>
+          ))}
+        </div>
+        <button type="submit" className={`${btnGhost} self-start`}>
+          Save holiday schedule
         </button>
       </form>
     </SectionCard>
@@ -818,6 +859,8 @@ export default async function SettingsPage() {
         </SectionCard>
 
         <OperatingStatesSection tenantId={tenantId} userId={session.user.id} />
+
+        <HolidayScheduleSection tenantId={tenantId} userId={session.user.id} />
 
         <DirectorySection tenantId={tenantId} userId={session.user.id} />
 

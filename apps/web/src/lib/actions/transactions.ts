@@ -7,6 +7,7 @@ import {
   TransactionStatus,
   withTenant,
 } from "@freehold/db";
+import { type AnchorDates, anchorDate } from "@freehold/workflows";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logActivity } from "@/lib/activity";
@@ -25,6 +26,7 @@ import {
   isGovernedDateField,
   isKeyDateField,
   KEY_DATE_LABELS,
+  type KeyDateField,
 } from "@/lib/governed-dates";
 import { gapForPending, gapMessage, licenseEnforcement } from "@/lib/licensing";
 import { parseFeeCents } from "@/lib/pay";
@@ -217,6 +219,80 @@ export async function createTransaction(formData: FormData) {
  * date proposes rather than applies. Editing them here is no different from
  * editing them on the full form, which is the point of sharing the decision.
  */
+/**
+ * The core of `updateKeyDate`, factored out so a bulk caller (applying a
+ * date template) can write several fields in one transaction without
+ * re-deriving the governed-date branching per field — the amendment rule
+ * has to hold identically everywhere a key date can be written, and a
+ * second copy of it is a second place to forget to update.
+ */
+export async function writeKeyDate(
+  tx: TenantTx,
+  tenantId: string,
+  actorId: string,
+  transactionId: string,
+  key: KeyDateField,
+  next: Date | null,
+): Promise<{ proposedValue: string | null }> {
+  const existing = await tx.transaction.findUniqueOrThrow({
+    where: { id: transactionId },
+    select: { ...ANCHOR_DATE_SELECT, onMarketDate: true, proposedDates: true },
+  });
+
+  if (isGovernedDateField(key)) {
+    const decision = governedDateDecision(existing[key], next);
+    if (decision.kind === "noop") return { proposedValue: null };
+    if (decision.kind === "propose") {
+      await raiseAmendmentTask(tx, {
+        tenantId,
+        transactionId,
+        actorId,
+        field: key,
+        value: decision.value,
+      });
+      await tx.transaction.update({
+        where: { id: transactionId },
+        data: {
+          proposedDates: {
+            ...((existing.proposedDates as Record<string, string> | null) ?? {}),
+            [key]: decision.value,
+          },
+        },
+      });
+      return { proposedValue: decision.value };
+    }
+  }
+
+  const updated = await tx.transaction.update({
+    where: { id: transactionId },
+    data: { [key]: next },
+    select: ANCHOR_DATE_SELECT,
+  });
+  // Any date a plan task can anchor to moves those tasks — not just the
+  // two contract-governed ones. Editing the inspection deadline re-dates
+  // the tasks that follow it, the same way changing the closing does.
+  if (isAnchorDateField(key)) await recomputeAnchoredTasks(tx, transactionId, updated);
+  return { proposedValue: null };
+}
+
+/**
+ * Set one date from the Key dates panel, and nothing else.
+ *
+ * Deliberately *not* updateTransaction. That reads the whole edit form —
+ * status, side, prices, MLS id, notes — and a form carrying only one date
+ * would blank every field it didn't send. That exact shape of bug already
+ * cost this codebase months of quietly wiped listing details (see the guards
+ * in commonFields), and a one-field inline editor is the easiest possible way
+ * to reintroduce it. So this touches exactly the column it was given.
+ *
+ * The column name comes off the wire, so it's checked against the map above
+ * rather than trusted — otherwise "field" would be an arbitrary write into
+ * any column on the row.
+ *
+ * Contract and close dates still obey the amendment rule: changing an agreed
+ * date proposes rather than applies. Editing them here is no different from
+ * editing them on the full form, which is the point of sharing the decision.
+ */
 export async function updateKeyDate(formData: FormData) {
   const { tenantId, session } = await requireTenant();
   const id = str(formData, "id");
@@ -225,57 +301,9 @@ export async function updateKeyDate(formData: FormData) {
   const key = field;
   const next = dateOnly(formData, "value");
 
-  let proposedValue: string | null = null;
-  await withTenant(tenantId, async (tx) => {
-    // Every key date selected by name rather than by a computed key: a
-    // dynamic select loses Prisma's types, and the set is fixed anyway.
-    const existing = await tx.transaction.findUniqueOrThrow({
-      where: { id },
-      select: {
-        listDate: true,
-        onMarketDate: true,
-        contractDate: true,
-        closeDate: true,
-        mortgageCommitmentDate: true,
-        inspectionDeadlineDate: true,
-        expireDate: true,
-        proposedDates: true,
-      },
-    });
-
-    if (isGovernedDateField(key)) {
-      const decision = governedDateDecision(existing[key], next);
-      if (decision.kind === "noop") return;
-      if (decision.kind === "propose") {
-        proposedValue = decision.value;
-        await raiseAmendmentTask(tx, {
-          tenantId,
-          transactionId: id,
-          actorId: session.user.id,
-          field: key,
-          value: decision.value,
-        });
-        await tx.transaction.update({
-          where: { id },
-          data: {
-            proposedDates: {
-              ...((existing.proposedDates as Record<string, string> | null) ?? {}),
-              [key]: decision.value,
-            },
-          },
-        });
-        return;
-      }
-    }
-
-    const updated = await tx.transaction.update({
-      where: { id },
-      data: { [key]: next },
-      select: { contractDate: true, closeDate: true },
-    });
-    // Only the governed dates anchor plan tasks, so only they can move them.
-    if (isGovernedDateField(key)) await recomputeAnchoredTasks(tx, id, updated);
-  });
+  const { proposedValue } = await withTenant(tenantId, (tx) =>
+    writeKeyDate(tx, tenantId, session.user.id, id, key, next),
+  );
 
   logActivity({
     tenantId,
@@ -400,7 +428,7 @@ export async function updateTransaction(formData: FormData) {
     const updated = await tx.transaction.update({
       where: { id },
       data,
-      select: { contractDate: true, closeDate: true },
+      select: ANCHOR_DATE_SELECT,
     });
     await recomputeAnchoredTasks(tx, id, updated);
   });
@@ -614,28 +642,62 @@ async function raiseAmendmentTask(
 }
 
 /**
- * Domino recomputation: after a contract-governed date actually changes,
- * re-date every open plan task that still follows its anchor. Manually
- * re-dated tasks (dueDateEdited) and completed tasks are left alone.
+ * The transaction columns a plan task can be anchored to. Selecting exactly
+ * this shape everywhere a recompute is triggered keeps the two in step: an
+ * anchor added to the enum without a column here would silently stop
+ * re-dating its tasks.
+ */
+const ANCHOR_DATE_SELECT = {
+  contractDate: true,
+  closeDate: true,
+  listDate: true,
+  expireDate: true,
+  mortgageCommitmentDate: true,
+  inspectionDeadlineDate: true,
+  earnestMoneyDueDate: true,
+} as const;
+
+/** Whether a changed column is one that dates plan tasks. */
+function isAnchorDateField(field: string): boolean {
+  return Object.hasOwn(ANCHOR_DATE_SELECT, field);
+}
+
+/**
+ * Domino recomputation: after an anchoring date actually changes, re-date
+ * every open plan task that still follows its anchor. Manually re-dated
+ * tasks (dueDateEdited) and completed tasks are left alone.
+ *
+ * Two anchors are deliberately never touched here:
+ * - **DEPENDENCY** tasks are dated by the completion of the task they wait
+ *   on. Moving the closing date must not reach in and re-date them — they
+ *   were never following a transaction date in the first place.
+ * - **TEMPLATE_START** was resolved once, from the day the plan was applied.
+ *   That day doesn't change, so neither should the tasks that followed it.
+ *
+ * Both fall out of `anchorDate` returning undefined for an anchor with no
+ * entry in what we pass it, but they're worth stating: before the extended
+ * anchors existed this function treated "not CONTRACT_DATE" as "must be
+ * CLOSE_DATE", which would have quietly dated dependency tasks off closing.
  */
 async function recomputeAnchoredTasks(
   tx: TenantTx,
   transactionId: string,
-  anchors: { contractDate: Date | null; closeDate: Date | null },
+  anchors: AnchorDates,
 ): Promise<number> {
   const tasks = await tx.task.findMany({
     where: {
       transactionId,
       status: "OPEN",
       dueDateEdited: false,
-      anchor: { not: null },
+      anchor: { not: null, notIn: ["DEPENDENCY", "TEMPLATE_START"] },
     },
     select: { id: true, anchor: true, offsetDays: true },
   });
   let moved = 0;
   for (const t of tasks) {
-    const base = t.anchor === "CONTRACT_DATE" ? anchors.contractDate : anchors.closeDate;
-    if (!base || t.offsetDays == null) continue;
+    if (!t.anchor || t.offsetDays == null) continue;
+    const base = anchorDate(t.anchor, anchors);
+    if (!base) continue;
     const due = new Date(base.getTime());
     due.setUTCDate(due.getUTCDate() + t.offsetDays);
     await tx.task.update({ where: { id: t.id }, data: { dueDate: due } });
@@ -730,7 +792,7 @@ export async function confirmDateChange(formData: FormData) {
     const updated = await tx.transaction.update({
       where: { id },
       data: { [field]: newDate, proposedDates: rest },
-      select: { contractDate: true, closeDate: true },
+      select: ANCHOR_DATE_SELECT,
     });
     const moved = await recomputeAnchoredTasks(tx, id, updated);
     await tx.task.updateMany({

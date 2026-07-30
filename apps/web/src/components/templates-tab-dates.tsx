@@ -7,7 +7,30 @@ import {
   deleteDateTemplate,
   deleteDateTemplateItem,
 } from "@/lib/actions/date-templates";
+import { DATE_CALCULATORS } from "@/lib/date-calculators";
+import { KEY_DATE_LABELS } from "@/lib/governed-dates";
 import { btn, btnGhost, card, input, label, summaryLink } from "@/lib/ui";
+
+const CALCULATOR_LABEL: Record<string, string> = {
+  BUSINESS_DAYS: "business days",
+  CALENDAR_NEXT_BUSINESS_DAY: "days, rolled to the next business day",
+  CALENDAR_PREV_BUSINESS_DAY: "days, rolled to the previous business day",
+};
+
+/** How one date-template item's rule reads, e.g. "10 business days after contract date". */
+function itemRuleText(item: {
+  anchor: string | null;
+  offsetDays: number | null;
+  calculator: string | null;
+}): string | null {
+  if (!item.anchor) return null;
+  const anchorLabel = ANCHOR_LABEL[item.anchor] ?? item.anchor.toLowerCase();
+  if (!item.offsetDays) return `On ${anchorLabel}`;
+  const n = Math.abs(item.offsetDays);
+  const unit = CALCULATOR_LABEL[item.calculator ?? ""] ?? (n === 1 ? "day" : "days");
+  const direction = item.offsetDays < 0 ? "before" : "after";
+  return `${n} ${unit} ${direction} ${anchorLabel}`;
+}
 
 const ANCHOR_LABEL: Record<string, string> = {
   CONTRACT_DATE: "contract date",
@@ -117,13 +140,9 @@ export async function TemplatesTabDates({
                       >
                         <span>
                           <span className="font-medium">{item.label}</span>
-                          {item.anchor && (
-                            <span className="text-stone-400">
-                              {" "}
-                              — {item.offsetDays ? `${Math.abs(item.offsetDays)} days ` : ""}
-                              {item.offsetDays ? (item.offsetDays < 0 ? "before " : "after ") : ""}
-                              {ANCHOR_LABEL[item.anchor] ?? item.anchor.toLowerCase()}
-                            </span>
+                          <span className="text-stone-400"> → {item.dateKey}</span>
+                          {itemRuleText(item) && (
+                            <span className="text-stone-400"> — {itemRuleText(item)}</span>
                           )}
                         </span>
                         <form action={deleteDateTemplateItem}>
@@ -155,12 +174,16 @@ export async function TemplatesTabDates({
                   </label>
                   <label className={label}>
                     Transaction field *
-                    <input
-                      name="dateKey"
-                      required
-                      placeholder="earnestMoneyDueDate"
-                      className={input}
-                    />
+                    <select name="dateKey" required className={input} defaultValue="">
+                      <option value="" disabled>
+                        Choose a field…
+                      </option>
+                      {Object.entries(KEY_DATE_LABELS).map(([key, keyLabel]) => (
+                        <option key={key} value={key}>
+                          {keyLabel}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label className={label}>
                     Suggested from
@@ -176,6 +199,17 @@ export async function TemplatesTabDates({
                   <label className={label}>
                     Offset (days)
                     <input name="offsetDays" type="number" placeholder="3" className={input} />
+                  </label>
+                  <label className={label}>
+                    Counted in
+                    <select name="calculator" className={input} defaultValue="">
+                      <option value="">Calendar days</option>
+                      {DATE_CALCULATORS.map((c) => (
+                        <option key={c} value={c}>
+                          {CALCULATOR_LABEL[c]}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <button type="submit" className={btnGhost}>
                     Add date

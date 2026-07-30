@@ -3,6 +3,7 @@
 import { Eye, ListBullets, TextB, TextHOne, TextHTwo, TextItalic } from "@phosphor-icons/react";
 import { useId, useState } from "react";
 import { LiveDictateButton } from "@/components/live-dictate-button";
+import { trackMergeFocus } from "@/components/merge-field-browser";
 import { EMAIL_MERGE_CODES, renderLiteMarkdown } from "@/lib/email-template";
 
 /**
@@ -128,6 +129,7 @@ export function TemplateEditor({
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onInput={(e) => setValue((e.target as HTMLTextAreaElement).value)}
+        onFocus={trackMergeFocus}
         required
         className="w-full rounded-lg border border-stone-300 px-3 py-2 font-mono text-sm leading-relaxed focus:border-brand-600 focus:outline-none"
       />

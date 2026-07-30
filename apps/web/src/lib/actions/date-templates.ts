@@ -1,9 +1,18 @@
 "use server";
 
 import { DateAnchor, withTenant } from "@freehold/db";
+import { anchorDate } from "@freehold/workflows";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { confirmed, intOr, optStr, str } from "@/lib/forms";
+import { writeKeyDate } from "@/lib/actions/transactions";
+import { logActivity } from "@/lib/activity";
+import {
+  enabledHolidayKeys,
+  holidaySetAround,
+  resolveCalculatedDate,
+} from "@/lib/date-calculators";
+import { confirmed, dateOnly, intOr, optStr, str } from "@/lib/forms";
+import { isKeyDateField, type KeyDateField } from "@/lib/governed-dates";
 import { requireAdminTenant, requireTenant } from "@/lib/tenant";
 
 const ANCHORS = new Set(Object.values(DateAnchor));
@@ -80,4 +89,103 @@ export async function deleteDateTemplate(formData: FormData) {
   if (!id || !isAdmin || !confirmed(formData)) return;
   await withTenant(tenantId, (tx) => tx.dateTemplate.delete({ where: { id } }));
   revalidatePath("/dashboard/templates");
+}
+
+/**
+ * Every item's suggested value for one transaction, so the transaction page
+ * can show a confirm-and-edit form rather than writing dates unseen. Nothing
+ * here touches the database — an item whose `dateKey` isn't a real Key dates
+ * field, or whose anchor has no date on this file yet, just comes back
+ * without a suggestion, and the TC fills it in by hand.
+ */
+export async function previewDateTemplate(
+  tenantId: string,
+  transactionId: string,
+  dateTemplateId: string,
+): Promise<Array<{ id: string; dateKey: string; label: string; suggested: string | null }>> {
+  const [template, txn, org] = await withTenant(tenantId, (tx) =>
+    Promise.all([
+      tx.dateTemplate.findUniqueOrThrow({
+        where: { id: dateTemplateId },
+        include: { items: { orderBy: { sortOrder: "asc" } } },
+      }),
+      tx.transaction.findUniqueOrThrow({
+        where: { id: transactionId },
+        select: {
+          contractDate: true,
+          closeDate: true,
+          listDate: true,
+          expireDate: true,
+          mortgageCommitmentDate: true,
+          inspectionDeadlineDate: true,
+          earnestMoneyDueDate: true,
+        },
+      }),
+      tx.organization.findUniqueOrThrow({
+        where: { id: tenantId },
+        select: { holidaySchedule: true },
+      }),
+    ]),
+  );
+  const holidays = holidaySetAround(new Date(), enabledHolidayKeys(org.holidaySchedule));
+
+  return template.items.map((item) => {
+    if (!item.anchor || item.offsetDays == null) {
+      return { id: item.id, dateKey: item.dateKey, label: item.label, suggested: null };
+    }
+    const base = anchorDate(item.anchor, { ...txn, templateStart: new Date() });
+    if (!base) return { id: item.id, dateKey: item.dateKey, label: item.label, suggested: null };
+    const suggested = resolveCalculatedDate(base, item.offsetDays, item.calculator, holidays);
+    return {
+      id: item.id,
+      dateKey: item.dateKey,
+      label: item.label,
+      suggested: suggested.toISOString().slice(0, 10),
+    };
+  });
+}
+
+/**
+ * Write the confirmed (possibly hand-edited) values back onto the
+ * transaction, one column each, through the exact rule the Key dates panel
+ * uses — a contract-governed field still proposes rather than applies.
+ */
+export async function applyDateTemplateValues(formData: FormData) {
+  const { tenantId, session } = await requireTenant();
+  const transactionId = str(formData, "transactionId");
+  const dateTemplateId = str(formData, "dateTemplateId");
+  if (!transactionId || !dateTemplateId) return;
+
+  const dateKeys = formData.getAll("dateKey").map(String);
+  let written = 0;
+  let proposed = 0;
+  await withTenant(tenantId, async (tx) => {
+    for (const key of dateKeys) {
+      if (!isKeyDateField(key)) continue;
+      const value = dateOnly(formData, `value:${key}`);
+      if (!value) continue;
+      const { proposedValue } = await writeKeyDate(
+        tx,
+        tenantId,
+        session.user.id,
+        transactionId,
+        key as KeyDateField,
+        value,
+      );
+      if (proposedValue) proposed++;
+      else written++;
+    }
+  });
+
+  const template = await withTenant(tenantId, (tx) =>
+    tx.dateTemplate.findUnique({ where: { id: dateTemplateId }, select: { name: true } }),
+  );
+  logActivity({
+    tenantId,
+    transactionId,
+    actor: session.user,
+    action: "date_template.applied",
+    summary: `Applied "${template?.name ?? "a key-dates template"}" — ${written} date${written === 1 ? "" : "s"} set${proposed > 0 ? `, ${proposed} proposed as amendment${proposed === 1 ? "" : "s"}` : ""}`,
+  });
+  revalidatePath(`/dashboard/transactions/${transactionId}`);
 }

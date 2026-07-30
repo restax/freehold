@@ -2798,34 +2798,39 @@ enum EnvelopeStatus {
 /// any transaction's compose (and from task rows). Distinct from the two
 /// automated lifecycle templates on the organization row.
 model EmailTemplate {
-  id          String         @id @default(uuid())
-  tenantId    String         @map("tenant_id")
-  tenant      Organization   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  groupId     String?        @map("group_id")
-  group       TemplateGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  name        String
-  subject     String
-  body        String
+  id               String         @id @default(uuid())
+  tenantId         String         @map("tenant_id")
+  tenant           Organization   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  groupId          String?        @map("group_id")
+  group            TemplateGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  name             String
+  subject          String
+  body             String
   /// STATUS | INTRO | PORTAL | MILESTONE | LISTING | POST_CLOSE | OTHER
-  category    String         @default("OTHER")
+  category         String         @default("OTHER")
   /// Prefilled To/Cc when composing from this template — merge codes allowed
   /// (e.g. "{{buyer_emails}}"). Null = the compose screen starts blank.
-  toDefault   String?        @map("to_default")
-  ccDefault   String?        @map("cc_default")
+  toDefault        String?        @map("to_default")
+  ccDefault        String?        @map("cc_default")
   /// Comma-separated keywords matched against task titles to suggest this
   /// template when emailing from a task (e.g. "inspection" or "earnest,emd").
-  taskMatch   String?        @map("task_match")
+  taskMatch        String?        @map("task_match")
   /// Comma-separated keywords: transaction documents whose filename matches
   /// get pre-checked as attachments when this template is selected.
-  attachMatch String?        @map("attach_match")
+  attachMatch      String?        @map("attach_match")
   /// Shown to the sender at compose time, never in the email itself — "check
   /// the fees before sending", "attach the executed contract".
-  composeNote String?        @map("compose_note")
+  composeNote      String?        @map("compose_note")
+  /// Named attachment slots this template expects, comma-separated (e.g.
+  /// "Executed Contract, Third-Party Financing Addendum") — shown as chips
+  /// on the compose screen so the sender remembers what to attach even
+  /// before `attachMatch` finds a matching document.
+  filePlaceholders String?        @map("file_placeholders")
   /// Times this template has been used to send an email.
-  usageCount  Int            @default(0) @map("usage_count")
-  isSample    Boolean        @default(false)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  usageCount       Int            @default(0) @map("usage_count")
+  isSample         Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   @@index([tenantId])
   @@index([tenantId, groupId])

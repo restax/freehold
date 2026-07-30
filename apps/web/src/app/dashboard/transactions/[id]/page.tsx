@@ -55,6 +55,7 @@ import { TaskTable } from "@/components/task-table";
 import { VendorOrderTab } from "@/components/vendor-order-tab";
 import { VisibilityToggles } from "@/components/visibility-toggles";
 import { assignUser, unassignUser } from "@/lib/actions/assignees";
+import { applyAttachmentTemplate } from "@/lib/actions/attachment-templates";
 import {
   attachSlotDocument,
   reviewSlot,
@@ -63,6 +64,7 @@ import {
 } from "@/lib/actions/compliance";
 import { createContactByName } from "@/lib/actions/contacts";
 import { enableProFeatures } from "@/lib/actions/credits";
+import { applyDateTemplateValues, previewDateTemplate } from "@/lib/actions/date-templates";
 import { deleteDocument, replaceDocument, uploadDocument } from "@/lib/actions/documents";
 import { cancelScheduledEmail, sendTransactionEmail } from "@/lib/actions/emails";
 import {
@@ -118,7 +120,6 @@ import {
   partyLabel,
 } from "@/lib/ai/contract-schema";
 import { transactionAlert } from "@/lib/alerts";
-import { emailContextForTransaction, transactionMergeContext } from "@/lib/auto-emails";
 import {
   displayState,
   type InvoiceDisplayState,
@@ -147,6 +148,7 @@ import { creditBalance, handbookState, transactionHasPro } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
 import { resolveTaskColumns, TASK_COLUMNS, taskColumnGroups } from "@/lib/task-columns";
+import { buildTemplateMergeContext } from "@/lib/template-merge";
 import {
   getBillingAccess,
   getMemberCompliance,
@@ -186,6 +188,7 @@ export default async function TransactionDetailPage({
     emailTemplate?: string;
     emailTask?: string;
     licenseError?: string;
+    dateTemplate?: string;
   }>;
 }) {
   const { tenantId, session } = await requireTenant({ allowGuest: true });
@@ -199,7 +202,7 @@ export default async function TransactionDetailPage({
   // A guest reaches only the files they were handed; anything else doesn't
   // exist as far as they're concerned.
   if (!(await guestMaySeeTransaction(tenantId, session.user.id, id))) notFound();
-  const { tab: tabRaw, emailTemplate, emailTask, licenseError } = await searchParams;
+  const { tab: tabRaw, emailTemplate, emailTask, licenseError, dateTemplate } = await searchParams;
   const tab: TxnTab = (TXN_TABS.some(([t]) => t === tabRaw) ? tabRaw : "tasks") as TxnTab;
 
   const data = await withTenant(tenantId, async (tx) => {
@@ -275,20 +278,54 @@ export default async function TransactionDetailPage({
       },
     });
     if (!txn) return null;
-    const [contacts, clients, plans, templates] = await Promise.all([
-      tx.contact.findMany({ orderBy: { name: "asc" } }),
-      tx.client.findMany({ orderBy: { name: "asc" } }),
-      tx.actionPlan.findMany({
-        orderBy: { name: "asc" },
-        include: { _count: { select: { tasks: true } } },
-      }),
-      tx.docTemplate.findMany({ orderBy: { name: "asc" } }),
-    ]);
+    const [contacts, clients, plans, templates, attachmentTemplates, dateTemplates] =
+      await Promise.all([
+        tx.contact.findMany({ orderBy: { name: "asc" } }),
+        tx.client.findMany({ orderBy: { name: "asc" } }),
+        tx.actionPlan.findMany({
+          orderBy: { name: "asc" },
+          include: { _count: { select: { tasks: true } } },
+        }),
+        tx.docTemplate.findMany({ orderBy: { name: "asc" } }),
+        tx.attachmentTemplate.findMany({
+          orderBy: { name: "asc" },
+          include: { _count: { select: { items: true } } },
+        }),
+        tx.dateTemplate.findMany({ orderBy: { name: "asc" } }),
+      ]);
     const emailTemplates = await tx.emailTemplate.findMany({ orderBy: { name: "asc" } });
-    return { txn, contacts, clients, plans, templates, emailTemplates };
+    return {
+      txn,
+      contacts,
+      clients,
+      plans,
+      templates,
+      emailTemplates,
+      attachmentTemplates,
+      dateTemplates,
+    };
   });
   if (!data) notFound();
-  const { txn, contacts, clients, plans, templates, emailTemplates } = data;
+  const {
+    txn,
+    contacts,
+    clients,
+    plans,
+    templates,
+    emailTemplates,
+    attachmentTemplates,
+    dateTemplates,
+  } = data;
+
+  // A date template selected from the picker below: computed suggestions for
+  // its items, so the confirm form shows a proposed value per date instead
+  // of asking the TC to type every one from scratch.
+  const selectedDateTemplate = dateTemplate
+    ? dateTemplates.find((t) => t.id === dateTemplate)
+    : undefined;
+  const dateTemplatePreview = selectedDateTemplate
+    ? await previewDateTemplate(tenantId, txn.id, selectedDateTemplate.id)
+    : [];
 
   // Versioning: lists show current files only; each keeps a chain of the prior
   // versions it superseded (newest prior first), reached via replacesId.
@@ -520,19 +557,18 @@ export default async function TransactionDetailPage({
   const attachPrechecked = new Set<string>();
   let composeSubject = "";
   let composeBody = "";
+  let composeTo = "";
+  let composeCc = "";
   const selectedEmailTemplate = emailTemplate
     ? emailTemplates.find((t) => t.id === emailTemplate)
     : undefined;
   if (selectedEmailTemplate) {
-    const ctx = await emailContextForTransaction(tenantId, txn.id, session.user);
     const task = emailTask ? txn.tasks.find((t) => t.id === emailTask) : undefined;
-    const merge = ctx
-      ? {
-          ...transactionMergeContext(ctx, session.user),
-          task_title: task?.title ?? "",
-          task_due: task?.dueDate ? fmtDate(task.dueDate) : "",
-        }
-      : {};
+    const merge = {
+      ...(await buildTemplateMergeContext(tenantId, txn.id, session.user)),
+      task_title: task?.title ?? "",
+      task_due: task?.dueDate ? fmtDate(task.dueDate) : "",
+    };
     for (const d of currentDocs) {
       const keywords = (selectedEmailTemplate.attachMatch ?? "")
         .split(",")
@@ -544,6 +580,8 @@ export default async function TransactionDetailPage({
     }
     composeSubject = renderMerge(selectedEmailTemplate.subject, merge);
     composeBody = renderMerge(selectedEmailTemplate.body, merge);
+    composeTo = renderMerge(selectedEmailTemplate.toDefault ?? "", merge);
+    composeCc = renderMerge(selectedEmailTemplate.ccDefault ?? "", merge);
   }
 
   const customFields = (txn.customFields as Record<string, string> | null) ?? {};
@@ -727,6 +765,7 @@ export default async function TransactionDetailPage({
                   ["closeDate", txn.closeDate],
                   ["mortgageCommitmentDate", txn.mortgageCommitmentDate],
                   ["inspectionDeadlineDate", txn.inspectionDeadlineDate],
+                  ["earnestMoneyDueDate", txn.earnestMoneyDueDate],
                   ["expireDate", txn.expireDate],
                 ] as const
               ).map(([field, d]) => (
@@ -1150,6 +1189,35 @@ export default async function TransactionDetailPage({
                     Add
                   </button>
                 </form>
+                {attachmentTemplates.length > 0 && (
+                  <form
+                    action={applyAttachmentTemplate}
+                    className="mt-3 flex flex-wrap items-end gap-2 border-t border-stone-100 pt-3"
+                  >
+                    <input type="hidden" name="transactionId" value={txn.id} />
+                    <label className={`${label} min-w-56 flex-1`}>
+                      Apply an attachment template
+                      <select
+                        name="attachmentTemplateId"
+                        required
+                        className={input}
+                        defaultValue=""
+                      >
+                        <option value="" disabled>
+                          Choose a checklist…
+                        </option>
+                        {attachmentTemplates.map((at) => (
+                          <option key={at.id} value={at.id}>
+                            {at.name} ({at._count.items})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button type="submit" className={btnGhost}>
+                      Apply
+                    </button>
+                  </form>
+                )}
               </SectionCard>
 
               <SectionCard
@@ -2203,6 +2271,67 @@ export default async function TransactionDetailPage({
                   </button>
                 </form>
               </SectionCard>
+
+              {dateTemplates.length > 0 && (
+                <SectionCard
+                  title="Apply a key-dates template"
+                  icon={<CalendarBlank size={15} weight="fill" aria-hidden />}
+                >
+                  <p className="mb-3 text-sm text-stone-500">
+                    Choose a template to see its suggested dates for this file — nothing is written
+                    until you confirm each one below. A governed date (contract or close) still
+                    follows the amendment rule rather than applying directly.
+                  </p>
+                  <form
+                    action={`/dashboard/transactions/${txn.id}`}
+                    className="mb-3 flex flex-wrap items-end gap-2"
+                  >
+                    <input type="hidden" name="tab" value="dates" />
+                    <label className={label}>
+                      Template
+                      <select
+                        name="dateTemplate"
+                        className={input}
+                        defaultValue={selectedDateTemplate?.id ?? ""}
+                      >
+                        <option value="">Choose a template…</option>
+                        {dateTemplates.map((dt) => (
+                          <option key={dt.id} value={dt.id}>
+                            {dt.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button type="submit" className={btnGhost}>
+                      Preview
+                    </button>
+                  </form>
+                  {selectedDateTemplate && dateTemplatePreview.length > 0 && (
+                    <form action={applyDateTemplateValues} className="flex flex-col gap-3">
+                      <input type="hidden" name="transactionId" value={txn.id} />
+                      <input type="hidden" name="dateTemplateId" value={selectedDateTemplate.id} />
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {dateTemplatePreview.map((item) => (
+                          <label key={item.id} className={label}>
+                            <input type="hidden" name="dateKey" value={item.dateKey} />
+                            {item.label}
+                            <input
+                              type="date"
+                              name={`value:${item.dateKey}`}
+                              defaultValue={item.suggested ?? ""}
+                              className={input}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <button type="submit" className={`${btn} self-start`}>
+                        Apply these dates
+                      </button>
+                    </form>
+                  )}
+                </SectionCard>
+              )}
+
               <SectionCard
                 title="Details"
                 icon={<ListBullets size={15} weight="fill" aria-hidden />}
@@ -2556,6 +2685,7 @@ export default async function TransactionDetailPage({
                           <input
                             name="to"
                             required
+                            defaultValue={composeTo}
                             list={`party-emails-${txn.id}`}
                             placeholder="name@example.com"
                             className={input}
@@ -2571,6 +2701,16 @@ export default async function TransactionDetailPage({
                             ))}
                         </datalist>
                         <label className={label}>
+                          Cc
+                          <input
+                            name="cc"
+                            defaultValue={composeCc}
+                            list={`party-emails-${txn.id}`}
+                            placeholder="name@example.com"
+                            className={input}
+                          />
+                        </label>
+                        <label className={label}>
                           Subject
                           <input
                             name="subject"
@@ -2580,6 +2720,27 @@ export default async function TransactionDetailPage({
                           />
                         </label>
                       </div>
+                      {selectedEmailTemplate?.composeNote && (
+                        <p className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs text-brand-800">
+                          {selectedEmailTemplate.composeNote}
+                        </p>
+                      )}
+                      {selectedEmailTemplate?.filePlaceholders && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {selectedEmailTemplate.filePlaceholders
+                            .split(",")
+                            .map((f) => f.trim())
+                            .filter(Boolean)
+                            .map((f) => (
+                              <span
+                                key={f}
+                                className="rounded-full border border-stone-300 bg-stone-50 px-2.5 py-0.5 text-xs text-stone-600"
+                              >
+                                {f}
+                              </span>
+                            ))}
+                        </div>
+                      )}
                       <label className={label}>
                         Message
                         <textarea

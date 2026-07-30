@@ -38,6 +38,7 @@ export const KEY_DATE_LABELS = {
   closeDate: "Close",
   mortgageCommitmentDate: "Mortgage commitment",
   inspectionDeadlineDate: "Inspection deadline",
+  earnestMoneyDueDate: "Earnest money due",
   expireDate: "Expires",
 } as const;
 

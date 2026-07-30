@@ -132,6 +132,7 @@ function templateFields(formData: FormData) {
     toDefault: optStr(formData, "toDefault"),
     ccDefault: optStr(formData, "ccDefault"),
     composeNote: optStr(formData, "composeNote"),
+    filePlaceholders: optStr(formData, "filePlaceholders"),
   };
 }
 
@@ -186,6 +187,32 @@ export async function deleteEmailTemplateLib(formData: FormData) {
   await withTenant(tenantId, (tx) => tx.emailTemplate.delete({ where: { id } }));
   revalidatePath("/dashboard/emails");
   revalidatePath("/dashboard/templates");
+}
+
+/**
+ * Send the form's *current* subject/body to the signed-in user, rendered
+ * against sample data — so a template can be checked before it's saved, or
+ * before it's ever been attached to a real transaction. `renderMerge`
+ * leaves unknown codes blank, same as a real send, so a typo in a merge
+ * code shows up here rather than in front of a client.
+ */
+export async function testSendEmailTemplate(formData: FormData) {
+  const { tenantId, session } = await requireTenant();
+  const subject = str(formData, "subject");
+  const body = str(formData, "body");
+  if (!subject || !body) return;
+  const { emailEnabled, sendTenantEmail } = await import("@/lib/email");
+  if (!emailEnabled()) return;
+  const { renderMerge } = await import("@/lib/email-template");
+  const { sampleMergeContext, tenantName: getTenantName } = await import("@/lib/template-merge");
+  const name = await getTenantName(tenantId);
+  const merge = sampleMergeContext(name);
+  await sendTenantEmail({
+    tenantId,
+    to: session.user.email,
+    subject: `[Test] ${renderMerge(subject, merge)}`,
+    body: renderMerge(body, merge),
+  });
 }
 
 type EmailSettingsValue = string | number | boolean;

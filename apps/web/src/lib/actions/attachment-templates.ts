@@ -3,7 +3,9 @@
 import { withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { logActivity } from "@/lib/activity";
 import { confirmed, optStr, str } from "@/lib/forms";
+import { seedRequiredDocuments } from "@/lib/required-documents";
 import { requireAdminTenant, requireTenant } from "@/lib/tenant";
 
 /**
@@ -62,4 +64,35 @@ export async function deleteAttachmentTemplate(formData: FormData) {
   if (!id || !isAdmin || !confirmed(formData)) return;
   await withTenant(tenantId, (tx) => tx.attachmentTemplate.delete({ where: { id } }));
   revalidatePath("/dashboard/templates");
+}
+
+/** Apply a standalone checklist directly to a transaction — the same seeding
+ *  a task-template entry's attachment reference does, just triggered by
+ *  hand from the Attachments tab instead of by applying a task plan. */
+export async function applyAttachmentTemplate(formData: FormData) {
+  const { tenantId, session } = await requireTenant();
+  const transactionId = str(formData, "transactionId");
+  const attachmentTemplateId = str(formData, "attachmentTemplateId");
+  if (!transactionId || !attachmentTemplateId) return;
+  const { name, added } = await withTenant(tenantId, async (tx) => {
+    const template = await tx.attachmentTemplate.findUniqueOrThrow({
+      where: { id: attachmentTemplateId },
+      include: { items: { orderBy: { sortOrder: "asc" } } },
+    });
+    const added = await seedRequiredDocuments(
+      tx,
+      tenantId,
+      transactionId,
+      template.items.map((i) => i.label),
+    );
+    return { name: template.name, added };
+  });
+  logActivity({
+    tenantId,
+    transactionId,
+    actor: session.user,
+    action: "attachment_template.applied",
+    summary: `Applied "${name}" — ${added} document${added === 1 ? "" : "s"} added to the checklist`,
+  });
+  revalidatePath(`/dashboard/transactions/${transactionId}`);
 }

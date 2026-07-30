@@ -30,6 +30,9 @@ export interface SendEmailInput {
    *  routes to the AI-proposal path instead of plain thread capture. */
   orderId?: string | null;
   to: string;
+  /** Additional Cc addresses (semicolon or comma separated), on top of the
+   *  workspace's automatic transaction Cc and a contact's partner address. */
+  extraCc?: string;
   subject: string;
   body: string;
   /** Optional branded HTML rendering; `body` remains the text fallback. */
@@ -116,7 +119,8 @@ export async function sendTenantEmail(input: SendEmailInput): Promise<SentEmail>
     : "";
 
   const already = new Set([input.to.trim().toLowerCase()]);
-  const cc = [ccAddr, partner]
+  const extraCcAddrs = (input.extraCc ?? "").split(/[;,]/);
+  const cc = [ccAddr, partner, ...extraCcAddrs]
     .map((a) => a.trim())
     .filter((a) => {
       if (!a || already.has(a.toLowerCase())) return false;

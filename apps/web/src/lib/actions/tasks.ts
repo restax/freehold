@@ -1,12 +1,13 @@
 "use server";
 
 import { TaskStatus, withTenant } from "@freehold/db";
-import { instantiatePlan, type PlanTaskTemplate } from "@freehold/workflows";
+import { dependentDueDate, instantiatePlan, type PlanTaskTemplate } from "@freehold/workflows";
 import { revalidatePath } from "next/cache";
 import { activityTitle, logActivity } from "@/lib/activity";
 import { resolveAssigneeRole } from "@/lib/assignee-roles";
 import { fireTaskTemplateEmail } from "@/lib/auto-emails";
 import { confirmed, dateOnly, str } from "@/lib/forms";
+import { seedRequiredDocuments } from "@/lib/required-documents";
 import { guestMaySeeTransaction, requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
 
@@ -51,20 +52,43 @@ export async function toggleTask(formData: FormData) {
   if (transactionId && !(await guestMaySeeTransaction(tenantId, session.user.id, transactionId))) {
     return;
   }
-  const { title, nowDone } = await withTenant(tenantId, async (tx) => {
+  const { title, nowDone, dated } = await withTenant(tenantId, async (tx) => {
     const task = await tx.task.findUniqueOrThrow({
       where: { id },
       select: { status: true, title: true, emailTemplateId: true, autoSendEmail: true },
     });
     const done = task.status !== TaskStatus.DONE;
+    const completedAt = done ? new Date() : null;
     await tx.task.update({
       where: { id },
-      data: {
-        status: done ? TaskStatus.DONE : TaskStatus.OPEN,
-        completedAt: done ? new Date() : null,
-      },
+      data: { status: done ? TaskStatus.DONE : TaskStatus.OPEN, completedAt },
     });
-    return { title: task.title, nowDone: done };
+
+    // Dependency dating: a task waiting on this one has had no due date up
+    // to now — "thank-you note, one day after closing is confirmed" can't be
+    // dated before the confirmation lands. Finishing this task is the event
+    // that dates them.
+    //
+    // Reopening clears those dates again rather than leaving them behind: a
+    // mis-click that gets undone shouldn't leave a chain of tasks claiming
+    // deadlines derived from a completion that no longer exists. Only
+    // untouched ones — a due date someone typed by hand is theirs to keep.
+    const waiting = await tx.task.findMany({
+      where: {
+        dependsOnTaskId: id,
+        status: TaskStatus.OPEN,
+        dueDateEdited: false,
+        anchor: "DEPENDENCY",
+      },
+      select: { id: true, offsetDays: true },
+    });
+    for (const w of waiting) {
+      await tx.task.update({
+        where: { id: w.id },
+        data: { dueDate: completedAt ? dependentDueDate(completedAt, w.offsetDays ?? 0) : null },
+      });
+    }
+    return { title: task.title, nowDone: done, dated: waiting.length };
   });
   if (nowDone && transactionId) {
     // Optional automation: the task's email, merged and sent to the client
@@ -75,12 +99,16 @@ export async function toggleTask(formData: FormData) {
     await emitWebhook(tenantId, "task.completed", { id, title, transactionId });
   }
   // Reopening is activity too — it means someone looked at the file.
+  const knockOn =
+    dated > 0
+      ? ` — ${dated} waiting task${dated === 1 ? "" : "s"} ${nowDone ? "dated" : "un-dated"}`
+      : "";
   logActivity({
     tenantId,
     transactionId,
     actor: session.user,
     action: nowDone ? "task.completed" : "task.reopened",
-    summary: `${nowDone ? "Completed" : "Reopened"} task “${activityTitle(title)}”`,
+    summary: `${nowDone ? "Completed" : "Reopened"} task “${activityTitle(title)}”${knockOn}`,
   });
   revalidateTaskViews(transactionId);
 }
@@ -194,30 +222,44 @@ export async function applyActionPlan(formData: FormData) {
       })),
     });
 
+    // Dependency chains have to survive instantiation: template entries point
+    // at each other, so the tasks they became must point at each other too.
+    // createMany doesn't hand back ids, so the rows are read back by the
+    // sortOrder band they were just given — `base` sits above every existing
+    // task on the file, so that band is exclusively this plan's.
+    const withDeps = sortedPlanTasks.filter((t) => t.dependsOnId);
+    if (withDeps.length > 0) {
+      const created = await tx.task.findMany({
+        where: { transactionId, sortOrder: { gte: base, lt: base + tasks.length } },
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, sortOrder: true },
+      });
+      const taskIdByEntry = new Map<string, string>();
+      for (const row of created) {
+        const entry = sortedPlanTasks[row.sortOrder - base];
+        if (entry) taskIdByEntry.set(entry.id, row.id);
+      }
+      for (const entry of withDeps) {
+        const self = taskIdByEntry.get(entry.id);
+        const target = entry.dependsOnId ? taskIdByEntry.get(entry.dependsOnId) : undefined;
+        // A dependency on an entry this file's side filtered out has nothing
+        // to wait for. The task still lands — undated, and visibly so — which
+        // is the honest outcome; silently dating it off the wrong thing isn't.
+        if (self && target) {
+          await tx.task.update({ where: { id: self }, data: { dependsOnTaskId: target } });
+        }
+      }
+    }
+
     // Seed the required-documents checklist from the plan, skipping labels the
     // file already lists (applying twice, or overlapping plans, shouldn't
     // duplicate a slot).
-    if (plan.documents.length > 0) {
-      const existing = await tx.transactionRequiredDocument.findMany({
-        where: { transactionId },
-        select: { label: true, sortOrder: true },
-      });
-      const seen = new Set(existing.map((d) => d.label.toLowerCase()));
-      const docBase = Math.max(0, ...existing.map((d) => d.sortOrder)) + 1;
-      const toAdd = [...plan.documents]
-        .sort((a, b) => a.sortOrder - b.sortOrder)
-        .filter((d) => !seen.has(d.label.toLowerCase()));
-      if (toAdd.length > 0) {
-        await tx.transactionRequiredDocument.createMany({
-          data: toAdd.map((d, i) => ({
-            tenantId,
-            transactionId,
-            label: d.label,
-            sortOrder: docBase + i,
-          })),
-        });
-      }
-    }
+    await seedRequiredDocuments(
+      tx,
+      tenantId,
+      transactionId,
+      [...plan.documents].sort((a, b) => a.sortOrder - b.sortOrder).map((d) => d.label),
+    );
     return plan.name;
   });
   logActivity({

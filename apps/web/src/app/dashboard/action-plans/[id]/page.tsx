@@ -1,6 +1,7 @@
 import { withTenant } from "@freehold/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ActionPlanDependencyTree } from "@/components/action-plan-dependency-tree";
 import { ActionPlanTaskGrid } from "@/components/action-plan-task-grid";
 import { DangerDelete } from "@/components/danger-delete";
 import { SectionCard } from "@/components/section-card";
@@ -21,19 +22,26 @@ export default async function ActionPlanDetailPage({
 }) {
   const { tenantId, isAdmin } = await requireAdminTenant();
   const { id } = await params;
-  const { plan, emailTemplates } = await withTenant(tenantId, async (tx) => ({
-    plan: await tx.actionPlan.findUnique({
-      where: { id },
-      include: {
-        tasks: { orderBy: { sortOrder: "asc" } },
-        documents: { orderBy: { sortOrder: "asc" } },
-      },
-    }),
-    emailTemplates: await tx.emailTemplate.findMany({
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
-    }),
-  }));
+  const [plan, emailTemplates, attachmentTemplates, dateTemplates, docTemplates] = await withTenant(
+    tenantId,
+    (tx) =>
+      Promise.all([
+        tx.actionPlan.findUnique({
+          where: { id },
+          include: {
+            tasks: { orderBy: { sortOrder: "asc" } },
+            documents: { orderBy: { sortOrder: "asc" } },
+          },
+        }),
+        tx.emailTemplate.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+        tx.attachmentTemplate.findMany({
+          orderBy: { name: "asc" },
+          select: { id: true, name: true },
+        }),
+        tx.dateTemplate.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+        tx.docTemplate.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+      ]),
+  );
   if (!plan) notFound();
 
   return (
@@ -61,8 +69,24 @@ export default async function ActionPlanDetailPage({
       </div>
 
       <section className={card}>
-        <ActionPlanTaskGrid planId={plan.id} tasks={plan.tasks} emailTemplates={emailTemplates} />
+        <ActionPlanTaskGrid
+          planId={plan.id}
+          tasks={plan.tasks}
+          emailTemplates={emailTemplates}
+          attachmentTemplates={attachmentTemplates}
+          dateTemplates={dateTemplates}
+          docTemplates={docTemplates}
+        />
       </section>
+
+      <SectionCard title="Dependency chains">
+        <p className="mb-3 text-sm text-stone-500">
+          Tasks that wait on another task finishing rather than on a date from the file. They land
+          undated when the plan is applied, and get their due date the moment the task above them is
+          completed.
+        </p>
+        <ActionPlanDependencyTree tasks={plan.tasks} />
+      </SectionCard>
 
       <SectionCard title="Required documents">
         <p className="mb-3 text-sm text-stone-500">

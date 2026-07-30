@@ -1,14 +1,17 @@
 import { withTenant } from "@freehold/db";
 import { DangerDelete } from "@/components/danger-delete";
+import { MergeFieldBrowser, TrackedInput } from "@/components/merge-field-browser";
 import { TemplateEditor } from "@/components/template-editor";
 import { type RailGroup, TemplateGroupRail } from "@/components/template-group-rail";
 import {
   createEmailTemplateLib,
   deleteEmailTemplateLib,
   restoreDefaultTemplates,
+  testSendEmailTemplate,
   updateEmailTemplateLib,
 } from "@/lib/actions/templates";
 import { EMAIL_PHASES } from "@/lib/default-email-templates";
+import { MERGE_FIELD_GROUPS } from "@/lib/template-merge";
 import { btn, btnGhost, card, input, label as labelCls, summaryLink } from "@/lib/ui";
 
 export async function TemplatesTabEmails({
@@ -84,69 +87,101 @@ export async function TemplatesTabEmails({
 
         <details className={card}>
           <summary className={summaryLink}>+ New email template</summary>
-          <form action={createEmailTemplateLib} className="mt-4 flex flex-col gap-3">
-            <input type="hidden" name="groupId" value={groupParam !== "none" ? groupParam : ""} />
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <label className={labelCls}>
-                Name *
-                <input name="name" required placeholder="Appraisal came in low" className={input} />
-              </label>
-              <label className={labelCls}>
-                Category
-                <select name="category" className={input} defaultValue="GENERAL">
-                  {EMAIL_PHASES.map((p) => (
-                    <option key={p.key} value={p.key}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={labelCls}>
-                To (merge codes allowed)
-                <input name="toDefault" placeholder="{{buyer_emails}}" className={input} />
-              </label>
-              <label className={labelCls}>
-                Cc (merge codes allowed)
-                <input name="ccDefault" placeholder="{{agent_email}}" className={input} />
-              </label>
-              <label className={labelCls}>
-                Subject *
-                <input
-                  name="subject"
-                  required
-                  placeholder="About the appraisal — {{property_address}}"
-                  className={input}
-                />
-              </label>
-              <label className={labelCls}>
-                Suggest on tasks containing
-                <input name="taskMatch" placeholder="appraisal, valuation" className={input} />
-              </label>
-              <label className={labelCls}>
-                Pre-attach documents matching
-                <input
-                  name="attachMatch"
-                  placeholder="pre-approval, inspection"
-                  className={input}
-                />
-              </label>
-              <label className={`${labelCls} sm:col-span-2 lg:col-span-4`}>
-                Note shown at compose time (never sent)
-                <input
-                  name="composeNote"
-                  placeholder="Check the fees before sending"
-                  className={input}
-                />
-              </label>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-sm font-medium text-stone-700">Body *</span>
-              <TemplateEditor name="body" rows={8} />
-            </div>
-            <button type="submit" className={`${btn} self-start`}>
-              Create template
-            </button>
-          </form>
+          <div className="mt-4 flex gap-6">
+            <form action={createEmailTemplateLib} className="flex min-w-0 flex-1 flex-col gap-3">
+              <input type="hidden" name="groupId" value={groupParam !== "none" ? groupParam : ""} />
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <label className={labelCls}>
+                  Name *
+                  <input
+                    name="name"
+                    required
+                    placeholder="Appraisal came in low"
+                    className={input}
+                  />
+                </label>
+                <label className={labelCls}>
+                  Category
+                  <select name="category" className={input} defaultValue="GENERAL">
+                    {EMAIL_PHASES.map((p) => (
+                      <option key={p.key} value={p.key}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={labelCls} htmlFor="new-email-to">
+                  To (merge codes allowed)
+                  <TrackedInput
+                    id="new-email-to"
+                    name="toDefault"
+                    placeholder="{{buyer_emails}}"
+                    className={input}
+                  />
+                </label>
+                <label className={labelCls} htmlFor="new-email-cc">
+                  Cc (merge codes allowed)
+                  <TrackedInput
+                    id="new-email-cc"
+                    name="ccDefault"
+                    placeholder="{{agent_email}}"
+                    className={input}
+                  />
+                </label>
+                <label className={labelCls} htmlFor="new-email-subject">
+                  Subject *
+                  <TrackedInput
+                    id="new-email-subject"
+                    name="subject"
+                    required
+                    placeholder="About the appraisal — {{property_address}}"
+                    className={input}
+                  />
+                </label>
+                <label className={labelCls}>
+                  Suggest on tasks containing
+                  <input name="taskMatch" placeholder="appraisal, valuation" className={input} />
+                </label>
+                <label className={labelCls}>
+                  Pre-attach documents matching
+                  <input
+                    name="attachMatch"
+                    placeholder="pre-approval, inspection"
+                    className={input}
+                  />
+                </label>
+                <label className={labelCls}>
+                  Files to remember to attach
+                  <input
+                    name="filePlaceholders"
+                    placeholder="Executed Contract, Financing Addendum"
+                    className={input}
+                  />
+                </label>
+                <label className={`${labelCls} sm:col-span-2 lg:col-span-4`}>
+                  Note shown at compose time (never sent)
+                  <input
+                    name="composeNote"
+                    placeholder="Check the fees before sending"
+                    className={input}
+                  />
+                </label>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-sm font-medium text-stone-700">Body *</span>
+                <TemplateEditor name="body" rows={8} />
+              </div>
+              <div className="flex items-center gap-2">
+                <button type="submit" className={`${btn} self-start`}>
+                  Create template
+                </button>
+                <button type="submit" formAction={testSendEmailTemplate} className={btnGhost}>
+                  Send test to me
+                </button>
+              </div>
+            </form>
+            <MergeFieldBrowser groups={MERGE_FIELD_GROUPS} />
+          </div>
         </details>
 
         <section className={card}>
@@ -178,81 +213,113 @@ export async function TemplatesTabEmails({
                         </span>
                       </summary>
                       <div className="border-t border-stone-100 p-4">
-                        <form action={updateEmailTemplateLib} className="flex flex-col gap-3">
-                          <input type="hidden" name="id" value={t.id} />
-                          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                            <label className={labelCls}>
-                              Name
-                              <input name="name" defaultValue={t.name} required className={input} />
-                            </label>
-                            <label className={labelCls}>
-                              Category
-                              <select name="category" defaultValue={t.category} className={input}>
-                                {EMAIL_PHASES.map((p) => (
-                                  <option key={p.key} value={p.key}>
-                                    {p.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label className={labelCls}>
-                              To
-                              <input
-                                name="toDefault"
-                                defaultValue={t.toDefault ?? ""}
-                                className={input}
-                              />
-                            </label>
-                            <label className={labelCls}>
-                              Cc
-                              <input
-                                name="ccDefault"
-                                defaultValue={t.ccDefault ?? ""}
-                                className={input}
-                              />
-                            </label>
-                            <label className={labelCls}>
-                              Subject
-                              <input
-                                name="subject"
-                                defaultValue={t.subject}
-                                required
-                                className={input}
-                              />
-                            </label>
-                            <label className={labelCls}>
-                              Suggest on tasks containing
-                              <input
-                                name="taskMatch"
-                                defaultValue={t.taskMatch ?? ""}
-                                className={input}
-                              />
-                            </label>
-                            <label className={labelCls}>
-                              Pre-attach documents matching
-                              <input
-                                name="attachMatch"
-                                defaultValue={t.attachMatch ?? ""}
-                                className={input}
-                              />
-                            </label>
-                            <label className={`${labelCls} sm:col-span-2 lg:col-span-4`}>
-                              Note shown at compose time
-                              <input
-                                name="composeNote"
-                                defaultValue={t.composeNote ?? ""}
-                                className={input}
-                              />
-                            </label>
-                          </div>
-                          <div className="flex flex-col gap-1">
-                            <span className="text-sm font-medium text-stone-700">Body</span>
-                            <TemplateEditor name="body" defaultValue={t.body} rows={10} />
-                          </div>
-                          <button type="submit" className={`${btn} self-start`}>
-                            Save
-                          </button>
-                        </form>
+                        <div className="flex gap-6">
+                          <form
+                            action={updateEmailTemplateLib}
+                            className="flex min-w-0 flex-1 flex-col gap-3"
+                          >
+                            <input type="hidden" name="id" value={t.id} />
+                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                              <label className={labelCls}>
+                                Name
+                                <input
+                                  name="name"
+                                  defaultValue={t.name}
+                                  required
+                                  className={input}
+                                />
+                              </label>
+                              <label className={labelCls}>
+                                Category
+                                <select name="category" defaultValue={t.category} className={input}>
+                                  {EMAIL_PHASES.map((p) => (
+                                    <option key={p.key} value={p.key}>
+                                      {p.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className={labelCls} htmlFor={`${t.id}-to`}>
+                                To
+                                <TrackedInput
+                                  id={`${t.id}-to`}
+                                  name="toDefault"
+                                  defaultValue={t.toDefault ?? ""}
+                                  className={input}
+                                />
+                              </label>
+                              <label className={labelCls} htmlFor={`${t.id}-cc`}>
+                                Cc
+                                <TrackedInput
+                                  id={`${t.id}-cc`}
+                                  name="ccDefault"
+                                  defaultValue={t.ccDefault ?? ""}
+                                  className={input}
+                                />
+                              </label>
+                              <label className={labelCls} htmlFor={`${t.id}-subject`}>
+                                Subject
+                                <TrackedInput
+                                  id={`${t.id}-subject`}
+                                  name="subject"
+                                  defaultValue={t.subject}
+                                  required
+                                  className={input}
+                                />
+                              </label>
+                              <label className={labelCls}>
+                                Suggest on tasks containing
+                                <input
+                                  name="taskMatch"
+                                  defaultValue={t.taskMatch ?? ""}
+                                  className={input}
+                                />
+                              </label>
+                              <label className={labelCls}>
+                                Pre-attach documents matching
+                                <input
+                                  name="attachMatch"
+                                  defaultValue={t.attachMatch ?? ""}
+                                  className={input}
+                                />
+                              </label>
+                              <label className={labelCls}>
+                                Files to remember to attach
+                                <input
+                                  name="filePlaceholders"
+                                  defaultValue={t.filePlaceholders ?? ""}
+                                  placeholder="Executed Contract, Financing Addendum"
+                                  className={input}
+                                />
+                              </label>
+                              <label className={`${labelCls} sm:col-span-2 lg:col-span-4`}>
+                                Note shown at compose time
+                                <input
+                                  name="composeNote"
+                                  defaultValue={t.composeNote ?? ""}
+                                  className={input}
+                                />
+                              </label>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-sm font-medium text-stone-700">Body</span>
+                              <TemplateEditor name="body" defaultValue={t.body} rows={10} />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button type="submit" className={`${btn} self-start`}>
+                                Save
+                              </button>
+                              <button
+                                type="submit"
+                                formAction={testSendEmailTemplate}
+                                className={btnGhost}
+                              >
+                                Send test to me
+                              </button>
+                            </div>
+                          </form>
+                          <MergeFieldBrowser groups={MERGE_FIELD_GROUPS} />
+                        </div>
                         <div className="mt-3">
                           <DangerDelete
                             action={deleteEmailTemplateLib}
