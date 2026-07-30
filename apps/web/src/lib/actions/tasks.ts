@@ -4,6 +4,7 @@ import { TaskStatus, withTenant } from "@freehold/db";
 import { instantiatePlan, type PlanTaskTemplate } from "@freehold/workflows";
 import { revalidatePath } from "next/cache";
 import { activityTitle, logActivity } from "@/lib/activity";
+import { resolveAssigneeRole } from "@/lib/assignee-roles";
 import { fireTaskTemplateEmail } from "@/lib/auto-emails";
 import { confirmed, dateOnly, str } from "@/lib/forms";
 import { guestMaySeeTransaction, requireTenant } from "@/lib/tenant";
@@ -108,10 +109,19 @@ export async function applyActionPlan(formData: FormData) {
   if (!transactionId || !planId) return;
 
   const planName = await withTenant(tenantId, async (tx) => {
-    const [txn, plan, maxSort] = await Promise.all([
+    const [txn, plan, maxSort, assignees] = await Promise.all([
       tx.transaction.findUniqueOrThrow({
         where: { id: transactionId },
-        select: { contractDate: true, closeDate: true },
+        select: {
+          side: true,
+          contractDate: true,
+          closeDate: true,
+          listDate: true,
+          expireDate: true,
+          mortgageCommitmentDate: true,
+          inspectionDeadlineDate: true,
+          earnestMoneyDueDate: true,
+        },
       }),
       tx.actionPlan.findUniqueOrThrow({
         where: { id: planId },
@@ -121,11 +131,19 @@ export async function applyActionPlan(formData: FormData) {
         where: { transactionId },
         _max: { sortOrder: true },
       }),
+      tx.transactionAssignee.findMany({
+        where: { transactionId },
+        select: { userId: true, slot: true },
+      }),
     ]);
 
     // instantiatePlan sorts by sortOrder internally; sort our copy the same
-    // way so tasks[i] and sortedPlanTasks[i] stay aligned.
-    const sortedPlanTasks = [...plan.tasks].sort((a, b) => a.sortOrder - b.sortOrder);
+    // way so tasks[i] and sortedPlanTasks[i] stay aligned. Entries scoped to
+    // a side that doesn't match this file are dropped before instantiation —
+    // a buy-side file never gets the seller's under-contract welcome email.
+    const sortedPlanTasks = [...plan.tasks]
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .filter((t) => t.sides.length === 0 || t.sides.includes(txn.side));
     const sortedTemplates: PlanTaskTemplate[] = sortedPlanTasks.map((t) => ({
       title: t.title,
       anchor: t.anchor,
@@ -137,6 +155,12 @@ export async function applyActionPlan(formData: FormData) {
     const tasks = instantiatePlan(sortedTemplates, {
       contractDate: txn.contractDate,
       closeDate: txn.closeDate,
+      listDate: txn.listDate,
+      expireDate: txn.expireDate,
+      mortgageCommitmentDate: txn.mortgageCommitmentDate,
+      inspectionDeadlineDate: txn.inspectionDeadlineDate,
+      earnestMoneyDueDate: txn.earnestMoneyDueDate,
+      templateStart: new Date(),
     });
 
     await tx.task.createMany({
@@ -144,7 +168,13 @@ export async function applyActionPlan(formData: FormData) {
         tenantId,
         transactionId,
         title: t.title,
+        notes: sortedPlanTasks[i]?.notes ?? null,
         dueDate: t.dueDate,
+        kind: sortedPlanTasks[i]?.kind ?? "TODO",
+        milestone: sortedPlanTasks[i]?.milestone ?? false,
+        onCalendar: sortedPlanTasks[i]?.onCalendar ?? true,
+        visibleToAgent: sortedPlanTasks[i]?.visibleToAgent ?? true,
+        visibleToClient: sortedPlanTasks[i]?.visibleToClient ?? true,
         // Provenance for domino recomputation on confirmed date changes.
         anchor: sortedTemplates[i]?.anchor ?? null,
         offsetDays: sortedTemplates[i]?.offsetDays ?? null,
@@ -152,9 +182,15 @@ export async function applyActionPlan(formData: FormData) {
         autoSendEmail: sortedPlanTasks[i]?.autoSendEmail ?? false,
         priority: sortedPlanTasks[i]?.priority ?? "NORMAL",
         sortOrder: base + i,
-        // Role-based auto-assignment lands with multi-user teams; for now the
-        // applying user owns every instantiated task.
-        assigneeId: userId,
+        // TC1/TC2 resolve to whoever holds that seat on this file; AGENT and
+        // an unfilled seat both leave the task unassigned (see
+        // resolveAssigneeRole) — the role still shows on the row. A template
+        // entry with no role at all (the common case today) keeps the old
+        // behavior of defaulting to whoever applied the plan.
+        assigneeRole: sortedPlanTasks[i]?.assigneeRole ?? null,
+        assigneeId: sortedPlanTasks[i]?.assigneeRole
+          ? resolveAssigneeRole(sortedPlanTasks[i]?.assigneeRole, assignees)
+          : userId,
       })),
     });
 

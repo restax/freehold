@@ -20,7 +20,10 @@ export default async function TemplateEditPage({ params }: { params: Promise<{ i
     <div className="flex max-w-4xl flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <Link href="/dashboard/templates" className="text-sm text-stone-500 hover:underline">
+          <Link
+            href="/dashboard/templates?tab=docs"
+            className="text-sm text-stone-500 hover:underline"
+          >
             ← Templates
           </Link>
           <h1 className="text-xl font-semibold">{template.name}</h1>

@@ -15,10 +15,15 @@ export async function createPlan(formData: FormData) {
   if (!name) return;
   const created = await withTenant(tenantId, (tx) =>
     tx.actionPlan.create({
-      data: { tenantId, name, description: optStr(formData, "description") },
+      data: {
+        tenantId,
+        name,
+        description: optStr(formData, "description"),
+        groupId: optStr(formData, "groupId"),
+      },
     }),
   );
-  revalidatePath("/dashboard/action-plans");
+  revalidatePath("/dashboard/templates");
   redirect(`/dashboard/action-plans/${created.id}`);
 }
 
@@ -27,8 +32,19 @@ export async function deletePlan(formData: FormData) {
   const id = str(formData, "id");
   if (!id || !isAdmin || !confirmed(formData)) return;
   await withTenant(tenantId, (tx) => tx.actionPlan.delete({ where: { id } }));
-  revalidatePath("/dashboard/action-plans");
-  redirect("/dashboard/action-plans");
+  revalidatePath("/dashboard/templates");
+  redirect("/dashboard/templates?tab=tasks");
+}
+
+/** Move a plan into a different group (or ungroup it). */
+export async function movePlanGroup(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  if (!id) return;
+  await withTenant(tenantId, (tx) =>
+    tx.actionPlan.update({ where: { id }, data: { groupId: optStr(formData, "groupId") } }),
+  );
+  revalidatePath("/dashboard/templates");
 }
 
 export async function addTemplateTask(formData: FormData) {

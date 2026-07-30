@@ -1,22 +1,12 @@
-import { prisma, withTenant } from "@freehold/db";
+import { prisma } from "@freehold/db";
 import Link from "next/link";
-import { DangerDelete } from "@/components/danger-delete";
 import { SectionCard } from "@/components/section-card";
 import { TemplateEditor } from "@/components/template-editor";
-import {
-  createEmailTemplateLib,
-  deleteEmailTemplateLib,
-  restoreDefaultTemplates,
-  saveEmailSettings,
-  saveEmailTemplates,
-  saveReviewDelay,
-  updateEmailTemplateLib,
-} from "@/lib/actions/templates";
-import { EMAIL_PHASES, phaseOf } from "@/lib/default-email-templates";
+import { saveEmailSettings, saveEmailTemplates, saveReviewDelay } from "@/lib/actions/templates";
 import { EMAIL_MERGE_CODES, parseEmailSettings, parseEmailTemplates } from "@/lib/email-template";
 import { parseQuietHours } from "@/lib/outbox";
 import { requireAdminTenant } from "@/lib/tenant";
-import { btn, btnGhost, card, input, label as labelCls, summaryLink } from "@/lib/ui";
+import { btn, btnGhost, input, label as labelCls } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -25,16 +15,8 @@ const HOURS: Array<[number, string]> = Array.from({ length: 24 }, (_, h) => [
   `${((h + 11) % 12) + 1} ${h < 12 ? "AM" : "PM"}`,
 ]);
 
-export default async function EmailTemplatesPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ restored?: string }>;
-}) {
+export default async function EmailTemplatesPage() {
   const { tenantId, isAdmin } = await requireAdminTenant();
-  const { restored } = await searchParams;
-  const templates = await withTenant(tenantId, (tx) =>
-    tx.emailTemplate.findMany({ orderBy: [{ name: "asc" }] }),
-  );
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: tenantId },
     select: { emailTemplates: true, emailSettings: true },
@@ -42,11 +24,6 @@ export default async function EmailTemplatesPage({
   const automated = parseEmailTemplates(org.emailTemplates);
   const settings = parseEmailSettings(org.emailSettings);
   const quiet = parseQuietHours(org.emailSettings);
-
-  // Group by transaction phase; anything with a legacy category falls into General.
-  const grouped = EMAIL_PHASES.map(
-    (phase) => [phase, templates.filter((t) => phaseOf(t.category) === phase.key)] as const,
-  ).filter(([, list]) => list.length > 0);
 
   return (
     <div className="flex flex-col gap-4">
@@ -56,7 +33,7 @@ export default async function EmailTemplatesPage({
           Every email your workspace sends starts here: reusable templates (one click away from any
           task), the automated lifecycle emails, and your signature and footer. Looking for PDF
           letters?{" "}
-          <Link href="/dashboard/templates" className="text-brand-700 hover:underline">
+          <Link href="/dashboard/templates?tab=docs" className="text-brand-700 hover:underline">
             Doc templates →
           </Link>
         </p>
@@ -138,170 +115,15 @@ export default async function EmailTemplatesPage({
         </form>
       </SectionCard>
 
-      {restored !== undefined && (
-        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          {Number(restored) > 0
-            ? `Restored ${restored} default template${restored === "1" ? "" : "s"}.`
-            : "You already have every default template."}
-        </p>
-      )}
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <SectionCard title="Template library">
         <p className="text-sm text-stone-500">
-          Reusable templates, grouped by transaction phase. One click from any task; edit or delete
-          any of them.
+          Reusable email templates now live in the Templates hub, grouped and one click from any
+          task.{" "}
+          <Link href="/dashboard/templates?tab=emails" className="text-brand-700 hover:underline">
+            Manage email templates →
+          </Link>
         </p>
-        {isAdmin && (
-          <form action={restoreDefaultTemplates}>
-            <button type="submit" className={btnGhost}>
-              Restore default templates
-            </button>
-          </form>
-        )}
-      </div>
-
-      <details className={card}>
-        <summary className={summaryLink}>+ New email template</summary>
-        <form action={createEmailTemplateLib} className="mt-4 flex flex-col gap-3">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <label className={labelCls}>
-              Name *
-              <input name="name" required placeholder="Appraisal came in low" className={input} />
-            </label>
-            <label className={labelCls}>
-              Category
-              <select name="category" className={input} defaultValue="CONTRACT">
-                {EMAIL_PHASES.map((p) => (
-                  <option key={p.key} value={p.key}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={labelCls}>
-              Suggest on tasks containing
-              <input name="taskMatch" placeholder="appraisal, valuation" className={input} />
-            </label>
-            <label className={labelCls}>
-              Pre-attach documents matching
-              <input name="attachMatch" placeholder="pre-approval, inspection" className={input} />
-            </label>
-            <label className={labelCls}>
-              Subject *
-              <input
-                name="subject"
-                required
-                placeholder="About the appraisal — {{property_address}}"
-                className={input}
-              />
-            </label>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-sm font-medium text-stone-700">Body *</span>
-            <TemplateEditor name="body" rows={8} />
-          </div>
-          <button type="submit" className={`${btn} self-start`}>
-            Create template
-          </button>
-        </form>
-      </details>
-
-      {grouped.map(([phase, list]) => (
-        <section key={phase.key} className={card}>
-          <div className="mb-3 flex items-baseline gap-2">
-            <h2 className="font-medium">{phase.label}</h2>
-            <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
-              {list.length}
-            </span>
-            <span className="text-xs text-stone-400">{phase.blurb}</span>
-          </div>
-          <ul className="flex flex-col gap-2">
-            {list.map((t) => (
-              <li key={t.id} className="rounded-lg border border-stone-200/70">
-                <details>
-                  <summary className="flex cursor-pointer select-none flex-wrap items-baseline gap-x-3 px-4 py-2 text-sm hover:bg-stone-50">
-                    <span className="font-medium">{t.name.replace(" (Sample)", "")}</span>
-                    <span className="text-stone-400">{t.subject}</span>
-                    <span className="ml-auto flex items-center gap-3 text-xs text-stone-400">
-                      {t.usageCount > 0 && (
-                        <span className="rounded-full bg-stone-100 px-2 py-0.5">
-                          used {t.usageCount}×
-                        </span>
-                      )}
-                      {t.taskMatch && <span>suggested on: {t.taskMatch}</span>}
-                    </span>
-                  </summary>
-                  <div className="border-t border-stone-100 p-4">
-                    <form action={updateEmailTemplateLib} className="flex flex-col gap-3">
-                      <input type="hidden" name="id" value={t.id} />
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        <label className={labelCls}>
-                          Name
-                          <input name="name" defaultValue={t.name} required className={input} />
-                        </label>
-                        <label className={labelCls}>
-                          Category
-                          <select
-                            name="category"
-                            defaultValue={phaseOf(t.category)}
-                            className={input}
-                          >
-                            {EMAIL_PHASES.map((p) => (
-                              <option key={p.key} value={p.key}>
-                                {p.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className={labelCls}>
-                          Suggest on tasks containing
-                          <input
-                            name="taskMatch"
-                            defaultValue={t.taskMatch ?? ""}
-                            className={input}
-                          />
-                        </label>
-                        <label className={labelCls}>
-                          Pre-attach documents matching
-                          <input
-                            name="attachMatch"
-                            defaultValue={t.attachMatch ?? ""}
-                            className={input}
-                          />
-                        </label>
-                        <label className={labelCls}>
-                          Subject
-                          <input
-                            name="subject"
-                            defaultValue={t.subject}
-                            required
-                            className={input}
-                          />
-                        </label>
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-sm font-medium text-stone-700">Body</span>
-                        <TemplateEditor name="body" defaultValue={t.body} rows={10} />
-                      </div>
-                      <button type="submit" className={`${btn} self-start`}>
-                        Save
-                      </button>
-                    </form>
-                    <div className="mt-3">
-                      <DangerDelete
-                        action={deleteEmailTemplateLib}
-                        label="Delete this email template"
-                        description={`Removes "${t.name}". Sent emails are unaffected. This cannot be undone.`}
-                        hidden={{ id: t.id }}
-                      />
-                    </div>
-                  </div>
-                </details>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      </SectionCard>
 
       <SectionCard title="Automated emails">
         <p className="mb-4 text-sm text-stone-500">

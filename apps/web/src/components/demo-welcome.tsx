@@ -26,14 +26,9 @@ const TOUR: TourStep[] = [
     body: "Every file you're working — status, deadlines, parties, documents, and emails in one place. Open one to see the whole story.",
   },
   {
-    selector: 'a[href="/dashboard/action-plans"]',
-    title: "Action plans",
-    body: "Apply a checklist to any file and every deadline becomes a dated task, computed from the contract and close dates.",
-  },
-  {
-    selector: 'a[href="/dashboard/emails"]',
-    title: "Email templates",
-    body: "A full email studio: starter templates with merge fields, automated sends, quiet hours, even voice dictation.",
+    selector: 'a[href="/dashboard/templates"]',
+    title: "Templates",
+    body: "Task checklists, email templates, document lists, and key dates — the whole starter library lives here, and every deadline computes from the contract or close date.",
   },
   {
     selector: 'a[href="/dashboard/clients"]',

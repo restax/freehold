@@ -1,86 +1,57 @@
-import { withTenant } from "@freehold/db";
-import Link from "next/link";
-import { EmptyState } from "@/components/empty-state";
-import { createTemplate } from "@/lib/actions/templates";
-import { fmtDate } from "@/lib/format";
-import { requireTenant } from "@/lib/tenant";
-import { btn, card, input, label, summaryLink, tableWrap, td, th, trHover } from "@/lib/ui";
+import { TemplateHubTabs, type TemplateTab } from "@/components/template-hub-tabs";
+import { TemplatesTabAttachments } from "@/components/templates-tab-attachments";
+import { TemplatesTabDates } from "@/components/templates-tab-dates";
+import { TemplatesTabDocs } from "@/components/templates-tab-docs";
+import { TemplatesTabEmails } from "@/components/templates-tab-emails";
+import { TemplatesTabTasks } from "@/components/templates-tab-tasks";
+import { requireAdminTenant } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
-export default async function TemplatesPage() {
-  const { tenantId } = await requireTenant();
-  const templates = await withTenant(tenantId, (tx) =>
-    tx.docTemplate.findMany({ orderBy: { name: "asc" } }),
-  );
+const VALID_TABS: TemplateTab[] = ["tasks", "emails", "attachments", "dates", "docs"];
+
+/**
+ * The Templates hub: task templates (checklists), email templates, document
+ * checklists, key-date sets, and PDF/letter templates, in one place — five
+ * tabs sharing one groups-and-counts navigation pattern. Replaces the three
+ * previously separate pages (action plans, emails, doc templates); the old
+ * action-plans list route redirects here.
+ */
+export default async function TemplatesHubPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; group?: string; restored?: string }>;
+}) {
+  const { tenantId, isAdmin } = await requireAdminTenant();
+  const { tab: rawTab, group, restored } = await searchParams;
+  const tab: TemplateTab = VALID_TABS.includes(rawTab as TemplateTab)
+    ? (rawTab as TemplateTab)
+    : "tasks";
 
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold">Doc templates</h1>
+        <h1 className="text-xl font-semibold">Templates</h1>
         <p className="text-sm text-stone-500">
-          Reusable letters and forms with merge fields like{" "}
-          <code>{"{{transaction.closeDate}}"}</code> — generate a filled PDF on any transaction.
-          Looking for emails?{" "}
-          <Link href="/dashboard/emails" className="text-brand-700 hover:underline">
-            Email templates →
-          </Link>
+          Everything reusable in one place — the starter library for a new workspace, and everything
+          you build on top of it.
         </p>
       </div>
 
-      <details className={card}>
-        <summary className={summaryLink}>New template</summary>
-        <form action={createTemplate} className="mt-4 flex flex-wrap items-end gap-3">
-          <label className={label}>
-            Name *
-            <input name="name" required className={input} placeholder="Closing intro letter" />
-          </label>
-          <label className={`${label} min-w-64 flex-1`}>
-            Description
-            <input name="description" className={input} />
-          </label>
-          <button type="submit" className={btn}>
-            Create & edit
-          </button>
-        </form>
-      </details>
+      <TemplateHubTabs active={tab} />
 
-      <section className={card}>
-        {templates.length === 0 ? (
-          <EmptyState
-            title="No templates yet"
-            hint="Write a letter or form once with merge fields, then generate a filled PDF from any transaction in one click."
-          />
-        ) : (
-          <div className={tableWrap}>
-            <table className="w-full">
-              <thead>
-                <tr>
-                  <th className={th}>Name</th>
-                  <th className={th}>Description</th>
-                  <th className={th}>Updated</th>
-                </tr>
-              </thead>
-              <tbody>
-                {templates.map((t) => (
-                  <tr key={t.id} className={trHover}>
-                    <td className={td}>
-                      <Link
-                        href={`/dashboard/templates/${t.id}`}
-                        className="font-medium text-brand-700 hover:text-brand-600"
-                      >
-                        {t.name}
-                      </Link>
-                    </td>
-                    <td className={td}>{t.description ?? "—"}</td>
-                    <td className={td}>{fmtDate(t.updatedAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      {tab === "tasks" && <TemplatesTabTasks tenantId={tenantId} groupParam={group} />}
+      {tab === "emails" && (
+        <TemplatesTabEmails
+          tenantId={tenantId}
+          groupParam={group}
+          isAdmin={isAdmin}
+          restored={restored}
+        />
+      )}
+      {tab === "attachments" && <TemplatesTabAttachments tenantId={tenantId} groupParam={group} />}
+      {tab === "dates" && <TemplatesTabDates tenantId={tenantId} groupParam={group} />}
+      {tab === "docs" && <TemplatesTabDocs tenantId={tenantId} groupParam={group} />}
     </div>
   );
 }

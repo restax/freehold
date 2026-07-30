@@ -40,8 +40,11 @@ export default async function ActionPlanDetailPage({
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <Link href="/dashboard/action-plans" className="text-sm text-stone-500 hover:underline">
-            ← Action plans
+          <Link
+            href="/dashboard/templates?tab=tasks"
+            className="text-sm text-stone-500 hover:underline"
+          >
+            ← Templates
           </Link>
           <h1 className="text-xl font-semibold">{plan.name}</h1>
           {plan.description && <p className="text-sm text-stone-500">{plan.description}</p>}

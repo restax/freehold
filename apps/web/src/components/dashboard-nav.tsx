@@ -17,7 +17,6 @@ import {
   House,
   type Icon,
   Lifebuoy,
-  ListChecks,
   ListDashes,
   LockKey,
   Microphone,
@@ -69,10 +68,9 @@ const GROUPS: NavGroup[] = [
   {
     label: "Library",
     items: [
-      { href: "/dashboard/action-plans", label: "Action plans", icon: ListChecks },
+      { href: "/dashboard/templates", label: "Templates", icon: FileText },
       { href: "/dashboard/compliance", label: "Compliance", icon: ShieldCheck },
-      { href: "/dashboard/templates", label: "Doc templates", icon: FileText },
-      { href: "/dashboard/emails", label: "Email templates", icon: EnvelopeSimple },
+      { href: "/dashboard/emails", label: "Email settings", icon: EnvelopeSimple },
       { href: "/dashboard/forms", label: "Forms", icon: ListDashes },
       { href: "/dashboard/vault", label: "Vault", icon: LockKey },
       { href: "/dashboard/import", label: "Import", icon: DownloadSimple },

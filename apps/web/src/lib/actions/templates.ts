@@ -128,6 +128,10 @@ function templateFields(formData: FormData) {
     category: EMAIL_CATEGORIES.includes(cat) ? cat : "GENERAL",
     taskMatch: optStr(formData, "taskMatch"),
     attachMatch: optStr(formData, "attachMatch"),
+    groupId: optStr(formData, "groupId"),
+    toDefault: optStr(formData, "toDefault"),
+    ccDefault: optStr(formData, "ccDefault"),
+    composeNote: optStr(formData, "composeNote"),
   };
 }
 
@@ -135,8 +139,8 @@ function templateFields(formData: FormData) {
 export async function restoreDefaultTemplates() {
   const { tenantId } = await requireTenant();
   const added = await seedDefaultEmailTemplates(tenantId);
-  revalidatePath("/dashboard/emails");
-  redirect(`/dashboard/emails?restored=${added}`);
+  revalidatePath("/dashboard/templates");
+  redirect(`/dashboard/templates?tab=emails&restored=${added}`);
 }
 
 /**
@@ -160,6 +164,7 @@ export async function createEmailTemplateLib(formData: FormData) {
   if (!f.name || !f.subject || !f.body) return;
   await withTenant(tenantId, (tx) => tx.emailTemplate.create({ data: { tenantId, ...f } }));
   revalidatePath("/dashboard/emails");
+  revalidatePath("/dashboard/templates");
 }
 
 export async function updateEmailTemplateLib(formData: FormData) {
@@ -171,6 +176,7 @@ export async function updateEmailTemplateLib(formData: FormData) {
     tx.emailTemplate.update({ where: { id }, data: { ...f, isSample: false } }),
   );
   revalidatePath("/dashboard/emails");
+  revalidatePath("/dashboard/templates");
 }
 
 export async function deleteEmailTemplateLib(formData: FormData) {
@@ -179,6 +185,7 @@ export async function deleteEmailTemplateLib(formData: FormData) {
   if (!id || !confirmed(formData)) return;
   await withTenant(tenantId, (tx) => tx.emailTemplate.delete({ where: { id } }));
   revalidatePath("/dashboard/emails");
+  revalidatePath("/dashboard/templates");
 }
 
 type EmailSettingsValue = string | number | boolean;

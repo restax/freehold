@@ -694,6 +694,11 @@ model Organization {
   actionPlans             ActionPlan[]
   actionPlanTasks         ActionPlanTask[]
   actionPlanDocuments     ActionPlanDocument[]
+  templateGroups          TemplateGroup[]
+  attachmentTemplates     AttachmentTemplate[]
+  attachmentTemplateItems AttachmentTemplateItem[]
+  dateTemplates           DateTemplate[]
+  dateTemplateItems       DateTemplateItem[]
   requiredDocuments       TransactionRequiredDocument[]
   complianceChecklists    ComplianceChecklist[]
   complianceItems         ComplianceItem[]
@@ -728,6 +733,10 @@ model Organization {
   /// defaultFeeCents}. Every key overridable per client (Client.billingConfig).
   /// Parsed/validated by lib/billing-policy.ts; unset keys fall back there.
   billingDefaults         Json?                         @map("billing_defaults")
+  /// Which US federal holidays count as non-business days for date-template
+  /// calculators — array of the holiday keys in lib/date-calculators.ts.
+  /// Null = the full default US federal set.
+  holidaySchedule         Json?                         @map("holiday_schedule")
   documents               Document[]
   extractions             ContractExtraction[]
   extractionFields        ExtractionField[]
@@ -956,15 +965,63 @@ enum TaskStatus {
   SKIPPED
 }
 
+/// What a template task (or the task it produced) is dated from. The two
+/// original anchors were the only *governed* dates — the ones an amendment
+/// can move — everything after is a plain transaction date column, the
+/// template's own start day, or another task's completion.
 enum DateAnchor {
   CONTRACT_DATE
   CLOSE_DATE
+  LIST_DATE
+  EXPIRE_DATE
+  MORTGAGE_COMMITMENT_DATE
+  INSPECTION_DEADLINE_DATE
+  EARNEST_MONEY_DUE_DATE
+  /// The day the template itself was applied to the transaction.
+  TEMPLATE_START
+  /// Dated off another task template entry's completion — see `dependsOnId`.
+  DEPENDENCY
 }
 
 enum TaskPriority {
   NORMAL
   HIGH
   CRITICAL
+}
+
+/// What a template task actually is, beyond a checkbox.
+enum TaskKind {
+  TODO
+  EMAIL
+  CALL
+}
+
+/// The formal slots a task template (or live task) can be assigned to.
+/// Resolved per-transaction: TC1/TC2 look up whichever TransactionAssignee
+/// holds that slot on the file; AGENT has no user account to assign to (the
+/// primary agent is a Contact, not a workspace User) and is shown as a label
+/// only. An unfilled slot leaves the task/entry unassigned but still labeled.
+enum AssigneeRole {
+  TC1
+  TC2
+  AGENT
+}
+
+/// The two formal coordinator seats on a transaction. At most one
+/// TransactionAssignee per seat per file (@@unique below) — a third or
+/// fourth person on the file just has no slot and isn't a template target.
+enum AssigneeSlot {
+  TC1
+  TC2
+}
+
+/// Which of the five Templates-hub tabs a group belongs to.
+enum TemplateGroupKind {
+  TASK
+  EMAIL
+  ATTACHMENT
+  DATE
+  DOC
 }
 
 /// CRM record — buyers, sellers, agents, lenders, vendors. Category is free
@@ -1529,6 +1586,12 @@ model Transaction {
   /// the alert query never depends on task titles matching a phrase.
   mortgageCommitmentDate DateTime?                     @map("mortgage_commitment_date") @db.Date
   inspectionDeadlineDate DateTime?                     @map("inspection_deadline_date") @db.Date
+  /// When the earnest money / due-diligence fee is owed — usually a few
+  /// business days after the contract date. A real column, not a task, for
+  /// the same reason as the two above: it needs to be a date-template
+  /// anchor and show on the key-dates calendar without depending on a task
+  /// title.
+  earnestMoneyDueDate    DateTime?                     @map("earnest_money_due_date") @db.Date
   /// What the tenant expects to charge for this file — the anchor the trust
   /// surface compares actual billing against. Auto-filled from the client's
   /// default fee (else the workspace default) when the file is created;
@@ -1969,39 +2032,57 @@ model TransactionParty {
 }
 
 model Task {
-  id               String       @id @default(uuid())
-  tenantId         String       @map("tenant_id")
-  tenant           Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id               String        @id @default(uuid())
+  tenantId         String        @map("tenant_id")
+  tenant           Organization  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   transactionId    String?
-  transaction      Transaction? @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  transaction      Transaction?  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   title            String
   notes            String?
-  dueDate          DateTime?    @map("due_date") @db.Date
-  status           TaskStatus   @default(OPEN)
-  priority         TaskPriority @default(NORMAL)
+  dueDate          DateTime?     @map("due_date") @db.Date
+  status           TaskStatus    @default(OPEN)
+  priority         TaskPriority  @default(NORMAL)
+  kind             TaskKind      @default(TODO)
+  /// A milestone reads as a bigger deal on the calendar/timeline views —
+  /// "closed & funded", not "update MLS status".
+  milestone        Boolean       @default(false)
+  /// Off hides a dated task from the calendar without deleting it — a
+  /// reminder-only entry that would otherwise clutter the month view.
+  onCalendar       Boolean       @default(true) @map("on_calendar")
+  /// The formal seat this task was assigned to, independent of whether that
+  /// seat is currently filled (see AssigneeRole). AGENT tasks never get an
+  /// `assigneeId` — there's no User to point at — this is what the row
+  /// label reads instead.
+  assigneeRole     AssigneeRole? @map("assignee_role")
   /// Provenance for domino recomputation: tasks instantiated from an action
   /// plan keep their anchor + offset so a confirmed date change re-dates them.
   anchor           DateAnchor?
-  offsetDays       Int?         @map("offset_days")
+  offsetDays       Int?          @map("offset_days")
+  /// Dated off another task's completion instead of a transaction date
+  /// (anchor = DEPENDENCY). Self-referencing so a chain of thank-you/invoice
+  /// tasks can each depend on the one before it.
+  dependsOnTaskId  String?       @map("depends_on_task_id")
+  dependsOnTask    Task?         @relation("TaskDependency", fields: [dependsOnTaskId], references: [id], onDelete: SetNull)
+  dependents       Task[]        @relation("TaskDependency")
   /// Manually re-dated tasks opt out of recomputation.
-  dueDateEdited    Boolean      @default(false) @map("due_date_edited")
+  dueDateEdited    Boolean       @default(false) @map("due_date_edited")
   /// Set when this task exists to get a date amendment executed ("closeDate"/"contractDate").
-  proposedFor      String?      @map("proposed_for")
+  proposedFor      String?       @map("proposed_for")
   /// Carried from the action-plan template task: default email template.
-  emailTemplateId  String?      @map("email_template_id")
-  autoSendEmail    Boolean      @default(false) @map("auto_send_email")
-  completedAt      DateTime?    @map("completed_at")
-  contactId        String?      @map("contact_id")
-  contact          Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  emailTemplateId  String?       @map("email_template_id")
+  autoSendEmail    Boolean       @default(false) @map("auto_send_email")
+  completedAt      DateTime?     @map("completed_at")
+  contactId        String?       @map("contact_id")
+  contact          Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
   /// Per-audience portal visibility, toggled from the transaction screen.
-  visibleToAgent   Boolean      @default(true) @map("visible_to_agent")
-  visibleToClient  Boolean      @default(true) @map("visible_to_client")
+  visibleToAgent   Boolean       @default(true) @map("visible_to_agent")
+  visibleToClient  Boolean       @default(true) @map("visible_to_client")
   assigneeId       String?
-  assignee         User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  sortOrder        Int          @default(0) @map("sort_order")
-  isSample         Boolean      @default(false)
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  assignee         User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  sortOrder        Int           @default(0) @map("sort_order")
+  isSample         Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
   invoiceFollowUps Invoice[]
 
   @@index([tenantId, status, dueDate])
@@ -2013,6 +2094,8 @@ model ActionPlan {
   id          String               @id @default(uuid())
   tenantId    String               @map("tenant_id")
   tenant      Organization         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  groupId     String?              @map("group_id")
+  group       TemplateGroup?       @relation(fields: [groupId], references: [id], onDelete: SetNull)
   name        String
   description String?
   isSample    Boolean              @default(false)
@@ -2022,6 +2105,7 @@ model ActionPlan {
   updatedAt   DateTime             @updatedAt
 
   @@index([tenantId])
+  @@index([tenantId, groupId])
   @@map("action_plan")
 }
 
@@ -2041,26 +2125,150 @@ model ActionPlanDocument {
 }
 
 model ActionPlanTask {
-  id              String       @id @default(uuid())
-  tenantId        String       @map("tenant_id")
-  tenant          Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  actionPlanId    String
-  actionPlan      ActionPlan   @relation(fields: [actionPlanId], references: [id], onDelete: Cascade)
-  title           String
-  anchor          DateAnchor   @default(CLOSE_DATE)
-  offsetDays      Int          @default(0) @map("offset_days")
-  assigneeRole    String?      @map("assignee_role")
+  id                   String              @id @default(uuid())
+  tenantId             String              @map("tenant_id")
+  tenant               Organization        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actionPlanId         String
+  actionPlan           ActionPlan          @relation(fields: [actionPlanId], references: [id], onDelete: Cascade)
+  title                String
+  notes                String?
+  kind                 TaskKind            @default(TODO)
+  anchor               DateAnchor          @default(CLOSE_DATE)
+  offsetDays           Int                 @default(0) @map("offset_days")
+  /// Dated off another entry in the same plan finishing, instead of a
+  /// transaction date (anchor = DEPENDENCY).
+  dependsOnId          String?             @map("depends_on_id")
+  dependsOn            ActionPlanTask?     @relation("ActionPlanTaskDependency", fields: [dependsOnId], references: [id], onDelete: SetNull)
+  dependents           ActionPlanTask[]    @relation("ActionPlanTaskDependency")
+  /// Which side(s) of a transaction this entry applies to. Empty = every
+  /// side — applying the plan never filters on an entry nobody scoped.
+  sides                TransactionSide[]   @default([])
+  assigneeRole         AssigneeRole?       @map("assignee_role")
+  milestone            Boolean             @default(false)
+  onCalendar           Boolean             @default(true) @map("on_calendar")
+  visibleToAgent       Boolean             @default(true) @map("visible_to_agent")
+  visibleToClient      Boolean             @default(true) @map("visible_to_client")
   /// Default email template: instantiated tasks open compose with it ready.
-  emailTemplateId String?      @map("email_template_id")
+  emailTemplateId      String?             @map("email_template_id")
   /// Auto-send the template to the client when the task is completed.
-  autoSendEmail   Boolean      @default(false) @map("auto_send_email")
-  priority        TaskPriority @default(NORMAL)
+  autoSendEmail        Boolean             @default(false) @map("auto_send_email")
+  attachmentTemplateId String?             @map("attachment_template_id")
+  attachmentTemplate   AttachmentTemplate? @relation(fields: [attachmentTemplateId], references: [id], onDelete: SetNull)
+  dateTemplateId       String?             @map("date_template_id")
+  dateTemplate         DateTemplate?       @relation(fields: [dateTemplateId], references: [id], onDelete: SetNull)
+  docTemplateId        String?             @map("doc_template_id")
+  docTemplate          DocTemplate?        @relation(fields: [docTemplateId], references: [id], onDelete: SetNull)
+  priority             TaskPriority        @default(NORMAL)
   /// Days before the due date to remind the assignee; null disables the reminder.
-  reminderDays    Int?         @map("reminder_days")
-  sortOrder       Int          @default(0) @map("sort_order")
+  reminderDays         Int?                @map("reminder_days")
+  sortOrder            Int                 @default(0) @map("sort_order")
 
   @@index([tenantId])
+  @@index([tenantId, actionPlanId])
   @@map("action_plan_task")
+}
+
+/// Groups within one Templates-hub tab ("Marketing", "TC Version - Buyer
+/// Side"). Scoped by `kind` to the tab it belongs to — a group never spans
+/// tabs, matching the hub's own navigation.
+model TemplateGroup {
+  id                  String               @id @default(uuid())
+  tenantId            String               @map("tenant_id")
+  tenant              Organization         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  kind                TemplateGroupKind
+  name                String
+  sortOrder           Int                  @default(0) @map("sort_order")
+  createdAt           DateTime             @default(now())
+  actionPlans         ActionPlan[]
+  emailTemplates      EmailTemplate[]
+  docTemplates        DocTemplate[]
+  attachmentTemplates AttachmentTemplate[]
+  dateTemplates       DateTemplate[]
+
+  @@index([tenantId, kind])
+  @@map("template_group")
+}
+
+/// A named, reusable list of documents a transaction should carry — the
+/// standalone version of what ActionPlanDocument seeds inline. Applying one
+/// (directly, or via a task template entry) seeds TransactionRequiredDocument
+/// rows the same way.
+model AttachmentTemplate {
+  id          String                   @id @default(uuid())
+  tenantId    String                   @map("tenant_id")
+  tenant      Organization             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  groupId     String?                  @map("group_id")
+  group       TemplateGroup?           @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  name        String
+  description String?
+  isSample    Boolean                  @default(false)
+  items       AttachmentTemplateItem[]
+  planTasks   ActionPlanTask[]
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, groupId])
+  @@map("attachment_template")
+}
+
+model AttachmentTemplateItem {
+  id                   String             @id @default(uuid())
+  tenantId             String             @map("tenant_id")
+  tenant               Organization       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  attachmentTemplateId String             @map("attachment_template_id")
+  attachmentTemplate   AttachmentTemplate @relation(fields: [attachmentTemplateId], references: [id], onDelete: Cascade)
+  label                String
+  sortOrder            Int                @default(0) @map("sort_order")
+
+  @@index([tenantId])
+  @@map("attachment_template_item")
+}
+
+/// A named set of key dates ("Contract dates") with a suggested calculator
+/// per date — applying one to a transaction proposes computed values the TC
+/// confirms or overrides, rather than writing them directly.
+model DateTemplate {
+  id          String             @id @default(uuid())
+  tenantId    String             @map("tenant_id")
+  tenant      Organization       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  groupId     String?            @map("group_id")
+  group       TemplateGroup?     @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  name        String
+  description String?
+  isSample    Boolean            @default(false)
+  items       DateTemplateItem[]
+  planTasks   ActionPlanTask[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, groupId])
+  @@map("date_template")
+}
+
+model DateTemplateItem {
+  id             String       @id @default(uuid())
+  tenantId       String       @map("tenant_id")
+  tenant         Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dateTemplateId String       @map("date_template_id")
+  dateTemplate   DateTemplate @relation(fields: [dateTemplateId], references: [id], onDelete: Cascade)
+  /// Which Transaction date column this proposes a value for
+  /// ("contractDate", "earnestMoneyDueDate", ...) — matched against the
+  /// transaction's own field names, not a free label.
+  dateKey        String       @map("date_key")
+  label          String
+  /// What the suggestion is computed from; null = entered manually with no
+  /// suggestion.
+  anchor         DateAnchor?
+  offsetDays     Int?         @map("offset_days")
+  /// Which calculator resolves the offset — see lib/date-calculators.ts.
+  /// Null with a non-null anchor = plain calendar-day addition.
+  calculator     String?
+  sortOrder      Int          @default(0) @map("sort_order")
+
+  @@index([tenantId])
+  @@map("date_template_item")
 }
 
 /// A named set of documents a transaction must carry to pass compliance
@@ -2367,6 +2575,11 @@ model TransactionAssignee {
   userId        String              @map("user_id")
   user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   roleLabel     String?             @map("role_label")
+  /// The formal seat this person fills on the file, if any — what a task
+  /// template's AssigneeRole resolves against. Most assignees (support staff
+  /// cc'd on a file, outside coverage) hold no slot at all; only the one or
+  /// two people doing the actual coordinating are TC1/TC2.
+  slot          AssigneeSlot?
   /// What the tenant pays this user for this file, in cents. Admin-set; the
   /// user submits it through a PaymentRequest when it's due. Exactly one of
   /// feeCents / feePercentBp is set (the action clears the other).
@@ -2381,6 +2594,9 @@ model TransactionAssignee {
   createdAt     DateTime            @default(now())
 
   @@unique([transactionId, userId])
+  /// At most one person per seat per file. Postgres treats multiple NULLs as
+  /// distinct, so this only constrains the rows that actually claim a slot.
+  @@unique([transactionId, slot])
   @@index([tenantId])
   @@index([tenantId, userId])
   @@map("transaction_assignee")
@@ -2582,27 +2798,37 @@ enum EnvelopeStatus {
 /// any transaction's compose (and from task rows). Distinct from the two
 /// automated lifecycle templates on the organization row.
 model EmailTemplate {
-  id          String       @id @default(uuid())
-  tenantId    String       @map("tenant_id")
-  tenant      Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id          String         @id @default(uuid())
+  tenantId    String         @map("tenant_id")
+  tenant      Organization   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  groupId     String?        @map("group_id")
+  group       TemplateGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
   name        String
   subject     String
   body        String
   /// STATUS | INTRO | PORTAL | MILESTONE | LISTING | POST_CLOSE | OTHER
-  category    String       @default("OTHER")
+  category    String         @default("OTHER")
+  /// Prefilled To/Cc when composing from this template — merge codes allowed
+  /// (e.g. "{{buyer_emails}}"). Null = the compose screen starts blank.
+  toDefault   String?        @map("to_default")
+  ccDefault   String?        @map("cc_default")
   /// Comma-separated keywords matched against task titles to suggest this
   /// template when emailing from a task (e.g. "inspection" or "earnest,emd").
-  taskMatch   String?      @map("task_match")
+  taskMatch   String?        @map("task_match")
   /// Comma-separated keywords: transaction documents whose filename matches
   /// get pre-checked as attachments when this template is selected.
-  attachMatch String?      @map("attach_match")
+  attachMatch String?        @map("attach_match")
+  /// Shown to the sender at compose time, never in the email itself — "check
+  /// the fees before sending", "attach the executed contract".
+  composeNote String?        @map("compose_note")
   /// Times this template has been used to send an email.
-  usageCount  Int          @default(0) @map("usage_count")
-  isSample    Boolean      @default(false)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  usageCount  Int            @default(0) @map("usage_count")
+  isSample    Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   @@index([tenantId])
+  @@index([tenantId, groupId])
   @@map("email_template")
 }
 
@@ -2760,17 +2986,21 @@ model EmailOutbox {
 }
 
 model DocTemplate {
-  id          String       @id @default(uuid())
-  tenantId    String       @map("tenant_id")
-  tenant      Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id          String           @id @default(uuid())
+  tenantId    String           @map("tenant_id")
+  tenant      Organization     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  groupId     String?          @map("group_id")
+  group       TemplateGroup?   @relation(fields: [groupId], references: [id], onDelete: SetNull)
   name        String
   description String?
   body        String
-  isSample    Boolean      @default(false)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  isSample    Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  planTasks   ActionPlanTask[]
 
   @@index([tenantId])
+  @@index([tenantId, groupId])
   @@map("doc_template")
 }
 
