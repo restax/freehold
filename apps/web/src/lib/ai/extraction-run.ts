@@ -58,7 +58,12 @@ export async function completeExtraction(
       });
       await tx.contractExtraction.update({
         where: { id: extractionId },
-        data: { status: ExtractionStatus.READY },
+        data: {
+          status: ExtractionStatus.READY,
+          // Stored whole rather than flattened into fields: it isn't a value
+          // to apply to the transaction, it's the caveat on all of them.
+          execution: (result.execution ?? undefined) as never,
+        },
       });
     });
     // Record token usage for operator cost visibility (best-effort).

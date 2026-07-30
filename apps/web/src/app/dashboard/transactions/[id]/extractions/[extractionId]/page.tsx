@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ExtractionReview } from "@/components/extraction-review";
 import { SectionCard } from "@/components/section-card";
 import { applyExtraction, discardExtraction } from "@/lib/actions/extractions";
+import { type ExecutionCheck, executionNotice } from "@/lib/ai/contract-schema";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
 import { btnDanger } from "@/lib/ui";
@@ -79,6 +80,7 @@ export default async function ExtractionReviewPage({
           extractionId={extraction.id}
           transactionId={extraction.transactionId}
           lowCount={lowCount}
+          execution={executionNotice((extraction.execution as ExecutionCheck | null) ?? null)}
           applyAction={applyExtraction}
           discardAction={discardExtraction}
           fields={extraction.fields.map((f) => ({

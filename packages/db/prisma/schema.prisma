@@ -2479,6 +2479,12 @@ model ContractExtraction {
   status        ExtractionStatus  @default(RUNNING)
   model         String
   error         String?
+  /// The signature check: whether the PDF is executed, and who still owes a
+  /// signature. Not an ExtractionField because it isn't a value applied to
+  /// the transaction — it qualifies every field that is. Null on extractions
+  /// that ran before the check existed, which the UI reads as "unverified"
+  /// rather than "signed".
+  execution     Json?
   fields        ExtractionField[]
   createdAt     DateTime          @default(now())
 

@@ -31,6 +31,29 @@ export interface PartyItem {
   confidence: Confidence;
 }
 
+/** Whether the PDF is a signed contract or an unsigned draft. */
+export type ExecutionStatus = "executed" | "partially_signed" | "unsigned" | "unclear";
+
+/**
+ * The signature check.
+ *
+ * Separate from the extracted fields because it isn't a value to apply to the
+ * transaction — it qualifies every *other* value. Dates read off an unsigned
+ * draft aren't binding on anyone, and a coordinator who builds a deadline
+ * schedule from one is working from a document that may never be signed, or
+ * may be signed later with different terms.
+ */
+export interface ExecutionCheck {
+  status: ExecutionStatus;
+  /** Parties whose signature is present. */
+  signed_by: string[];
+  /** Parties the contract expects to sign who haven't — the actionable half. */
+  missing_signatures: string[];
+  page: number | null;
+  quote: string;
+  confidence: Confidence;
+}
+
 export interface ContractExtractionResult {
   property_address: CitedValue | null;
   city: CitedValue | null;
@@ -41,6 +64,7 @@ export interface ContractExtractionResult {
   close_date: CitedValue | null;
   deadlines: DeadlineItem[];
   parties: PartyItem[];
+  execution: ExecutionCheck | null;
 }
 
 /** JSON schema for structured outputs (additionalProperties: false throughout). */
@@ -57,6 +81,7 @@ export const CONTRACT_SCHEMA = {
     "close_date",
     "deadlines",
     "parties",
+    "execution",
   ],
   $defs: {
     cited: {
@@ -120,6 +145,38 @@ export const CONTRACT_SCHEMA = {
           confidence: { type: "string", enum: ["high", "medium", "low"] },
         },
       },
+    },
+    execution: {
+      anyOf: [
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["status", "signed_by", "missing_signatures", "page", "quote", "confidence"],
+          properties: {
+            status: {
+              type: "string",
+              enum: ["executed", "partially_signed", "unsigned", "unclear"],
+              description:
+                "executed = every expected party has signed; partially_signed = at least one has and at least one has not; unsigned = a blank draft with no signatures; unclear = signature pages are missing from the PDF or illegible",
+            },
+            signed_by: {
+              type: "array",
+              items: { type: "string" },
+              description: "Names of parties whose signature is present, as written",
+            },
+            missing_signatures: {
+              type: "array",
+              items: { type: "string" },
+              description:
+                "Named parties the contract expects to sign whose signature is absent, e.g. 'Can Chen (Buyer)'",
+            },
+            page: { type: "integer" },
+            quote: { type: "string" },
+            confidence: { type: "string", enum: ["high", "medium", "low"] },
+          },
+        },
+        { type: "null" },
+      ],
     },
   },
 } as const;
@@ -312,4 +369,81 @@ export function transactionUpdateFor(key: string, value: string): Record<string,
     default:
       return null;
   }
+}
+
+// --- The signature check, as the reviewer sees it ---
+
+export interface ExecutionNotice {
+  /** Drives the banner's colour. "danger" is reserved for a document nobody
+   *  has signed — the case where every date below it is provisional. */
+  tone: "success" | "warning" | "danger";
+  headline: string;
+  /** One line saying what to do about it, empty when there's nothing to do. */
+  action: string;
+  /** Names still owing a signature, for listing under the headline. */
+  missing: string[];
+  page: number | null;
+  quote: string;
+}
+
+/**
+ * Turn the raw execution check into the banner shown above the extracted
+ * fields.
+ *
+ * This is deliberately loud. A coordinator who builds a deadline schedule off
+ * an unsigned draft has a file full of dates nobody is bound to, and the
+ * failure is silent — the extraction looks exactly as confident either way.
+ * Saying "5 fields found" without saying "nobody has signed this" is the
+ * dangerous half of being helpful.
+ */
+export function executionNotice(execution: ExecutionCheck | null): ExecutionNotice {
+  const missing = execution?.missing_signatures?.filter((s) => s.trim()) ?? [];
+  const page = execution?.page ?? null;
+  const quote = execution?.quote ?? "";
+
+  if (!execution || execution.status === "unclear") {
+    return {
+      tone: "warning",
+      headline: "Can't tell whether this is signed",
+      action:
+        "The signature pages are missing or unreadable. Ask for a complete copy before relying on these dates.",
+      missing,
+      page,
+      quote,
+    };
+  }
+
+  if (execution.status === "unsigned") {
+    return {
+      tone: "danger",
+      headline: "This is a draft — nobody has signed it",
+      action: "Nothing here is binding yet. Ask for the executed copy before working these dates.",
+      missing,
+      page,
+      quote,
+    };
+  }
+
+  if (execution.status === "partially_signed") {
+    return {
+      tone: "danger",
+      headline:
+        missing.length === 1
+          ? "Not fully executed — one signature still needed"
+          : `Not fully executed — ${missing.length || "some"} signatures still needed`,
+      action: "Chase the outstanding signatures, or ask for the fully executed copy.",
+      missing,
+      page,
+      quote,
+    };
+  }
+
+  return {
+    tone: "success",
+    headline: "Signed by all parties",
+    action: "",
+    missing: [],
+    page,
+    quote,
+  };
 }

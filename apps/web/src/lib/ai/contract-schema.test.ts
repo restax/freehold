@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type ContractExtractionResult,
+  executionNotice,
   flattenExtraction,
   matchPartyRole,
   parseDateValue,
@@ -41,6 +42,7 @@ const RESULT: ContractExtractionResult = {
       confidence: "high",
     },
   ],
+  execution: null,
 };
 
 describe("flattenExtraction", () => {
@@ -138,5 +140,76 @@ describe("matchPartyRole", () => {
 
   it("uses the caller's own fallback, not a hardcoded one", () => {
     expect(matchPartyRole("nonsense", ROLES, "BUYER")).toBe("BUYER");
+  });
+});
+
+describe("executionNotice", () => {
+  const base = {
+    signed_by: [] as string[],
+    missing_signatures: [] as string[],
+    page: 12,
+    quote: "signature block",
+    confidence: "high" as const,
+  };
+
+  it("treats an unsigned draft as the loudest case", () => {
+    // The whole point: a coordinator building deadlines off a draft has a
+    // file full of dates nobody is bound to, and nothing else on the screen
+    // says so.
+    const n = executionNotice({ ...base, status: "unsigned" });
+    expect(n.tone).toBe("danger");
+    expect(n.headline).toMatch(/draft/i);
+    expect(n.action).toMatch(/executed copy/i);
+  });
+
+  it("flags a partly-signed contract and names who still has to sign", () => {
+    const n = executionNotice({
+      ...base,
+      status: "partially_signed",
+      signed_by: ["Charles M. Caputo (Seller)"],
+      missing_signatures: ["Can Chen (Buyer)", "Annie Chen (Buyer)"],
+    });
+    expect(n.tone).toBe("danger");
+    expect(n.headline).toContain("2");
+    expect(n.missing).toEqual(["Can Chen (Buyer)", "Annie Chen (Buyer)"]);
+  });
+
+  it("uses the singular when exactly one signature is outstanding", () => {
+    const n = executionNotice({
+      ...base,
+      status: "partially_signed",
+      missing_signatures: ["Can Chen (Buyer)"],
+    });
+    expect(n.headline).toMatch(/one signature/i);
+  });
+
+  it("asks for a complete copy when the signature pages are missing", () => {
+    const n = executionNotice({ ...base, status: "unclear" });
+    expect(n.tone).toBe("warning");
+    expect(n.action).toMatch(/complete copy/i);
+  });
+
+  it("says nothing alarming about a fully executed contract", () => {
+    const n = executionNotice({ ...base, status: "executed", signed_by: ["A", "B"] });
+    expect(n.tone).toBe("success");
+    expect(n.action).toBe("");
+    expect(n.missing).toEqual([]);
+  });
+
+  it("treats a missing check as unverified rather than fine", () => {
+    // An older extraction, or a model that omitted the field, must not read
+    // as "signed" — absence of evidence isn't evidence of a signature.
+    const n = executionNotice(null);
+    expect(n.tone).not.toBe("success");
+    expect(n.headline).toMatch(/can't tell/i);
+  });
+
+  it("ignores blank entries in the missing list", () => {
+    const n = executionNotice({
+      ...base,
+      status: "partially_signed",
+      missing_signatures: ["Can Chen (Buyer)", "  ", ""],
+    });
+    expect(n.missing).toEqual(["Can Chen (Buyer)"]);
   });
 });

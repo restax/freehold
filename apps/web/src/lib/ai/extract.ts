@@ -17,7 +17,8 @@ Rules:
 - Dates must be formatted YYYY-MM-DD. When the contract expresses a deadline relatively ("within 10 days of the Effective Date"), compute the calendar date from the effective date, quote the clause, and mark confidence "medium" (or "low" if the anchor date itself is uncertain).
 - purchase_price value must be digits only (no currency symbols or commas).
 - deadlines: report every deadline-bearing obligation — earnest money due date, inspection/option period end, financing and appraisal deadlines, title objection deadlines, possession date. The closing date belongs in close_date, not in deadlines.
-- confidence: "high" = stated explicitly and unambiguously; "medium" = requires interpretation or computation; "low" = uncertain.`;
+- confidence: "high" = stated explicitly and unambiguously; "medium" = requires interpretation or computation; "low" = uncertain.
+- execution: decide whether this document is actually signed, and report it even when everything else is clear. Inspect the signature blocks: a handwritten or electronic signature, an e-sign certificate page, or initials on each page mean signed; empty signature lines, "DRAFT"/"UNEXECUTED" markings, or blanks left for names and dates mean unsigned. List every party the contract expects to sign — buyers and sellers individually, not as a couple — separating those who have from those who have not. Use "unclear" only when the signature pages are missing from the PDF or too poor to read, and say which in the quote. This is the one field to be conservative about in the other direction: if you cannot see a signature, do not assume one exists.`;
 
 export interface ExtractionRun {
   result: ContractExtractionResult;
