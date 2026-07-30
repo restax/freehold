@@ -1,20 +1,34 @@
 import { DateAnchor, withTenant } from "@freehold/db";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DangerDelete } from "@/components/danger-delete";
-import { type RailGroup, TemplateGroupRail } from "@/components/template-group-rail";
+import { TemplateTree } from "@/components/template-tree";
 import {
   addDateTemplateItem,
   createDateTemplate,
   deleteDateTemplate,
   deleteDateTemplateItem,
+  updateDateTemplate,
 } from "@/lib/actions/date-templates";
 import { DATE_CALCULATORS } from "@/lib/date-calculators";
 import { KEY_DATE_LABELS } from "@/lib/governed-dates";
-import { btn, btnGhost, card, input, label, summaryLink } from "@/lib/ui";
+import { btn, btnGhost, card, input, label } from "@/lib/ui";
 
 const CALCULATOR_LABEL: Record<string, string> = {
   BUSINESS_DAYS: "business days",
   CALENDAR_NEXT_BUSINESS_DAY: "days, rolled to the next business day",
   CALENDAR_PREV_BUSINESS_DAY: "days, rolled to the previous business day",
+};
+
+const ANCHOR_LABEL: Record<string, string> = {
+  CONTRACT_DATE: "contract date",
+  CLOSE_DATE: "close date",
+  LIST_DATE: "list date",
+  EXPIRE_DATE: "listing expiration",
+  MORTGAGE_COMMITMENT_DATE: "mortgage commitment",
+  INSPECTION_DEADLINE_DATE: "inspection deadline",
+  EARNEST_MONEY_DUE_DATE: "earnest money due",
+  TEMPLATE_START: "the day applied",
+  DEPENDENCY: "another entry's completion",
 };
 
 /** How one date-template item's rule reads, e.g. "10 business days after contract date". */
@@ -32,24 +46,16 @@ function itemRuleText(item: {
   return `${n} ${unit} ${direction} ${anchorLabel}`;
 }
 
-const ANCHOR_LABEL: Record<string, string> = {
-  CONTRACT_DATE: "contract date",
-  CLOSE_DATE: "close date",
-  LIST_DATE: "list date",
-  EXPIRE_DATE: "listing expiration",
-  MORTGAGE_COMMITMENT_DATE: "mortgage commitment",
-  INSPECTION_DEADLINE_DATE: "inspection deadline",
-  EARNEST_MONEY_DUE_DATE: "earnest money due",
-  TEMPLATE_START: "the day applied",
-  DEPENDENCY: "another entry's completion",
-};
-
 export async function TemplatesTabDates({
   tenantId,
-  groupParam,
+  isAdmin,
+  dateId,
+  folderParam,
 }: {
   tenantId: string;
-  groupParam?: string;
+  isAdmin: boolean;
+  dateId?: string;
+  folderParam?: string;
 }) {
   const [templates, groups] = await withTenant(tenantId, (tx) =>
     Promise.all([
@@ -61,162 +67,196 @@ export async function TemplatesTabDates({
     ]),
   );
 
-  const railGroups: RailGroup[] = groups.map((g) => ({
-    id: g.id,
-    name: g.name,
-    count: templates.filter((t) => t.groupId === g.id).length,
-  }));
-  const noGroupCount = templates.filter((t) => !t.groupId).length;
-  const visible =
-    !groupParam || groupParam === "all"
-      ? templates
-      : groupParam === "none"
-        ? templates.filter((t) => !t.groupId)
-        : templates.filter((t) => t.groupId === groupParam);
+  const isNew = dateId === "new";
+  const template = !isNew ? templates.find((t) => t.id === dateId) : undefined;
+  const newGroupId = folderParam && folderParam !== "none" ? folderParam : "";
+  const groupName = (id: string | null) =>
+    id ? (groups.find((g) => g.id === id)?.name ?? "No folder") : "No folder";
 
   return (
     <div className="flex gap-6">
-      <TemplateGroupRail
+      <TemplateTree
         kind="DATE"
         tab="dates"
-        groups={railGroups}
-        noGroupCount={noGroupCount}
-        totalCount={templates.length}
-        activeGroupId={groupParam}
+        idParam="dateId"
+        label="Key-dates templates"
+        newLabel="New key-dates template"
+        items={templates.map((t) => ({ id: t.id, name: t.name, groupId: t.groupId }))}
+        groups={groups}
+        selectedId={isNew ? "new" : template?.id}
+        selectedGroupId={isNew ? (folderParam ?? null) : (template?.groupId ?? null)}
       />
-      <div className="flex min-w-0 flex-1 flex-col gap-4">
-        <p className="text-sm text-stone-500">
-          Named sets of key dates with a suggested calculator per date. Applying one proposes
-          computed values on a transaction — you confirm or override every one.
-        </p>
 
-        <details className={card}>
-          <summary className={summaryLink}>+ New key-dates template</summary>
-          <form action={createDateTemplate} className="mt-4 flex flex-wrap items-end gap-3">
-            <input type="hidden" name="groupId" value={groupParam !== "none" ? groupParam : ""} />
-            <label className={label}>
-              Name *
-              <input name="name" required className={input} placeholder="Contract dates" />
-            </label>
-            <label className={`${label} min-w-64 flex-1`}>
-              Description
-              <input name="description" className={input} />
-            </label>
-            <button type="submit" className={btn}>
-              Create
-            </button>
-          </form>
-        </details>
+      <div className="min-w-0 flex-1">
+        {!isNew && !template && (
+          <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-stone-200 text-center text-sm text-stone-400">
+            <p>Select a key-dates template on the left, or create a new one.</p>
+          </div>
+        )}
 
-        {visible.length === 0 ? (
-          <section className={card}>
-            <p className="py-6 text-center text-sm text-stone-400">
-              No key-dates templates {groupParam && groupParam !== "all" ? "in this group" : "yet"}.
-            </p>
-          </section>
-        ) : (
+        {isNew && (
           <div className="flex flex-col gap-4">
-            {visible.map((t) => (
-              <section key={t.id} className={card}>
-                <div className="mb-2 flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium">{t.name}</h3>
-                    {t.description && <p className="text-sm text-stone-500">{t.description}</p>}
-                  </div>
-                  <DangerDelete
-                    compact
-                    action={deleteDateTemplate}
-                    label="Delete"
-                    description={`Removes "${t.name}" and its ${t.items.length} date${t.items.length === 1 ? "" : "s"}.`}
-                    hidden={{ id: t.id }}
+            <Breadcrumbs
+              items={[
+                { label: "Templates", href: "/dashboard/templates?tab=dates" },
+                { label: "Key dates", href: "/dashboard/templates?tab=dates" },
+                { label: groupName(newGroupId || null) },
+                { label: "New key-dates template" },
+              ]}
+            />
+            <p className="text-sm text-stone-500">
+              Named sets of key dates with a suggested calculator per date. Applying one proposes
+              computed values on a transaction — you confirm or override every one.
+            </p>
+            <section className={card}>
+              <form action={createDateTemplate} className="flex flex-wrap items-end gap-3">
+                <input type="hidden" name="groupId" value={newGroupId} />
+                <label className={label}>
+                  Name *
+                  <input name="name" required className={input} placeholder="Contract dates" />
+                </label>
+                <label className={`${label} min-w-64 flex-1`}>
+                  Description
+                  <input name="description" className={input} />
+                </label>
+                <button type="submit" className={btn}>
+                  Create
+                </button>
+              </form>
+            </section>
+          </div>
+        )}
+
+        {template && (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Breadcrumbs
+                items={[
+                  { label: "Templates", href: "/dashboard/templates?tab=dates" },
+                  { label: "Key dates", href: "/dashboard/templates?tab=dates" },
+                  { label: groupName(template.groupId) },
+                  { label: template.name },
+                ]}
+              />
+              {isAdmin && (
+                <DangerDelete
+                  compact
+                  action={deleteDateTemplate}
+                  label="Delete"
+                  description={`Removes "${template.name}" and its ${template.items.length} date${template.items.length === 1 ? "" : "s"}.`}
+                  hidden={{ id: template.id }}
+                />
+              )}
+            </div>
+
+            <section className={card}>
+              <form action={updateDateTemplate} className="mb-4 flex flex-wrap items-end gap-3">
+                <input type="hidden" name="id" value={template.id} />
+                <label className={label}>
+                  Name
+                  <input name="name" defaultValue={template.name} className={input} />
+                </label>
+                <label className={`${label} min-w-64 flex-1`}>
+                  Description
+                  <input
+                    name="description"
+                    defaultValue={template.description ?? ""}
+                    className={input}
                   />
-                </div>
-                {t.items.length > 0 && (
-                  <ul className="mb-3 flex flex-col divide-y divide-stone-100">
-                    {t.items.map((item) => (
-                      <li
-                        key={item.id}
-                        className="flex items-center justify-between gap-2 py-1.5 text-sm"
-                      >
-                        <span>
-                          <span className="font-medium">{item.label}</span>
-                          <span className="text-stone-400"> → {item.dateKey}</span>
-                          {itemRuleText(item) && (
-                            <span className="text-stone-400"> — {itemRuleText(item)}</span>
-                          )}
-                        </span>
-                        <form action={deleteDateTemplateItem}>
-                          <input type="hidden" name="id" value={item.id} />
-                          <button
-                            type="submit"
-                            className="text-xs text-stone-400 hover:text-red-700"
-                          >
-                            Remove
-                          </button>
-                        </form>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <form
-                  action={addDateTemplateItem}
-                  className="flex flex-wrap items-end gap-2 border-t border-stone-100 pt-3"
-                >
-                  <input type="hidden" name="dateTemplateId" value={t.id} />
-                  <label className={label}>
-                    Date *
-                    <input
-                      name="label"
-                      required
-                      placeholder="Earnest money due"
-                      className={input}
-                    />
-                  </label>
-                  <label className={label}>
-                    Transaction field *
-                    <select name="dateKey" required className={input} defaultValue="">
-                      <option value="" disabled>
-                        Choose a field…
+                </label>
+                <label className={label}>
+                  Folder
+                  <select name="groupId" defaultValue={template.groupId ?? ""} className={input}>
+                    <option value="">No folder</option>
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
                       </option>
-                      {Object.entries(KEY_DATE_LABELS).map(([key, keyLabel]) => (
-                        <option key={key} value={key}>
-                          {keyLabel}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className={label}>
-                    Suggested from
-                    <select name="anchor" className={input} defaultValue="">
-                      <option value="">Manual entry</option>
-                      {Object.values(DateAnchor).map((a) => (
-                        <option key={a} value={a}>
-                          {ANCHOR_LABEL[a] ?? a}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className={label}>
-                    Offset (days)
-                    <input name="offsetDays" type="number" placeholder="3" className={input} />
-                  </label>
-                  <label className={label}>
-                    Counted in
-                    <select name="calculator" className={input} defaultValue="">
-                      <option value="">Calendar days</option>
-                      {DATE_CALCULATORS.map((c) => (
-                        <option key={c} value={c}>
-                          {CALCULATOR_LABEL[c]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button type="submit" className={btnGhost}>
-                    Add date
-                  </button>
-                </form>
-              </section>
-            ))}
+                    ))}
+                  </select>
+                </label>
+                <button type="submit" className={btnGhost}>
+                  Save
+                </button>
+              </form>
+
+              {template.items.length > 0 && (
+                <ul className="mb-3 flex flex-col divide-y divide-stone-100">
+                  {template.items.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex items-center justify-between gap-2 py-1.5 text-sm"
+                    >
+                      <span>
+                        <span className="font-medium">{item.label}</span>
+                        <span className="text-stone-400"> → {item.dateKey}</span>
+                        {itemRuleText(item) && (
+                          <span className="text-stone-400"> — {itemRuleText(item)}</span>
+                        )}
+                      </span>
+                      <form action={deleteDateTemplateItem}>
+                        <input type="hidden" name="id" value={item.id} />
+                        <button type="submit" className="text-xs text-stone-400 hover:text-red-700">
+                          Remove
+                        </button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <form
+                action={addDateTemplateItem}
+                className="flex flex-wrap items-end gap-2 border-t border-stone-100 pt-3"
+              >
+                <input type="hidden" name="dateTemplateId" value={template.id} />
+                <label className={label}>
+                  Date *
+                  <input name="label" required placeholder="Earnest money due" className={input} />
+                </label>
+                <label className={label}>
+                  Transaction field *
+                  <select name="dateKey" required className={input} defaultValue="">
+                    <option value="" disabled>
+                      Choose a field…
+                    </option>
+                    {Object.entries(KEY_DATE_LABELS).map(([key, keyLabel]) => (
+                      <option key={key} value={key}>
+                        {keyLabel}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={label}>
+                  Suggested from
+                  <select name="anchor" className={input} defaultValue="">
+                    <option value="">Manual entry</option>
+                    {Object.values(DateAnchor).map((a) => (
+                      <option key={a} value={a}>
+                        {ANCHOR_LABEL[a] ?? a}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={label}>
+                  Offset (days)
+                  <input name="offsetDays" type="number" placeholder="3" className={input} />
+                </label>
+                <label className={label}>
+                  Counted in
+                  <select name="calculator" className={input} defaultValue="">
+                    <option value="">Calendar days</option>
+                    {DATE_CALCULATORS.map((c) => (
+                      <option key={c} value={c}>
+                        {CALCULATOR_LABEL[c]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button type="submit" className={btnGhost}>
+                  Add date
+                </button>
+              </form>
+            </section>
           </div>
         )}
       </div>

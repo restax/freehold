@@ -1,9 +1,9 @@
 import { Plus } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { createTemplateGroup, deleteTemplateGroup } from "@/lib/actions/template-groups";
-import { btnGhost, input } from "@/lib/ui";
+import { input } from "@/lib/ui";
 
-export interface TreeTemplate {
+export interface TreeItem {
   id: string;
   name: string;
   groupId: string | null;
@@ -16,47 +16,58 @@ export interface TreeGroup {
 
 const NO_FOLDER = "none";
 
-function hrefFor(templateId: string) {
-  return `/dashboard/templates?tab=emails&templateId=${templateId}`;
-}
-
-function hrefForNew(folderId: string) {
-  return `/dashboard/templates?tab=emails&templateId=new&folder=${folderId}`;
-}
-
 /**
- * The left pane for the email templates editor: every template listed under
- * its folder, not a filter that hides everything else — clicking a name
- * opens it in the compose pane on the right via `?templateId=`. Replaces the
- * old "pick a group to filter the flat list" rail plus per-row accordion.
+ * The left pane shared by every Templates-hub tab: every item listed under
+ * its folder — not a filter that hides the rest — so clicking a name opens
+ * it in the detail pane via `?<idParam>=`. One component so a folder, a
+ * "+ New" affordance, and a selected row look and behave identically whether
+ * you're looking at emails, task plans, doc templates, attachment
+ * checklists, or key-date sets.
  */
-export function EmailTemplateTree({
-  templates,
+export function TemplateTree({
+  kind,
+  tab,
+  idParam,
+  label,
+  newLabel = "New template",
+  items,
   groups,
   selectedId,
   selectedGroupId,
 }: {
-  templates: TreeTemplate[];
+  /** TemplateGroup.kind this tree's folders belong to. */
+  kind: "EMAIL" | "TASK" | "DOC" | "ATTACHMENT" | "DATE";
+  /** The hub tab query value, e.g. "emails". */
+  tab: string;
+  /** The query-string key selection is carried in, e.g. "templateId". */
+  idParam: string;
+  label: string;
+  newLabel?: string;
+  items: TreeItem[];
   groups: TreeGroup[];
-  /** The open template's id, or "new" while composing an unsaved one. */
+  /** The open item's id, or "new" while composing an unsaved one. */
   selectedId?: string;
-  /** Which folder to default-open — the selected template's, or a "new in this folder" target. */
+  /** Which folder to default-open — the selected item's, or a "new in this folder" target. */
   selectedGroupId?: string | null;
 }) {
-  const byGroup = (groupId: string | null) => templates.filter((t) => t.groupId === groupId);
+  const base = `/dashboard/templates?tab=${tab}`;
+  const hrefFor = (id: string) => `${base}&${idParam}=${id}`;
+  const hrefForNew = (folderId: string) => `${base}&${idParam}=new&folder=${folderId}`;
+
+  const byGroup = (groupId: string | null) => items.filter((t) => t.groupId === groupId);
   const unfiled = byGroup(null);
 
-  const folderRow = (folderId: string, name: string, items: TreeTemplate[]) => {
-    const isOpenByDefault = items.some((t) => t.id === selectedId) || selectedGroupId === folderId;
+  const folderRow = (folderId: string, name: string, rows: TreeItem[]) => {
+    const isOpenByDefault = rows.some((t) => t.id === selectedId) || selectedGroupId === folderId;
     return (
-      <details key={folderId} className="group" open={isOpenByDefault || items.length === 0}>
+      <details key={folderId} className="group" open={isOpenByDefault || rows.length === 0}>
         <summary className="flex cursor-pointer select-none items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide text-stone-400 hover:text-stone-600">
           <span className="inline-block transition-transform group-open:rotate-90">▸</span>
           <span className="truncate">{name}</span>
-          <span className="ml-auto font-normal normal-case text-stone-300">{items.length}</span>
+          <span className="ml-auto font-normal normal-case text-stone-300">{rows.length}</span>
         </summary>
         <div className="ml-2.5 mt-0.5 flex flex-col gap-0.5 border-l border-stone-100 pl-2.5">
-          {items.map((t) => (
+          {rows.map((t) => (
             <Link
               key={t.id}
               href={hrefFor(t.id)}
@@ -84,7 +95,7 @@ export function EmailTemplateTree({
     <div className="flex w-64 shrink-0 flex-col gap-3">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-wide text-stone-400">
-          Email templates
+          {label}
         </span>
         <details className="relative">
           <summary className="cursor-pointer list-none rounded-md px-1.5 py-0.5 text-stone-400 hover:bg-stone-100 hover:text-stone-600">
@@ -94,24 +105,29 @@ export function EmailTemplateTree({
             action={createTemplateGroup}
             className="absolute right-0 z-10 mt-1 flex w-48 flex-col gap-2 rounded-lg border border-stone-200 bg-white p-2 shadow-md"
           >
-            <input type="hidden" name="kind" value="EMAIL" />
+            <input type="hidden" name="kind" value={kind} />
             <input name="name" required placeholder="Folder name" className={input} />
-            <button type="submit" className={btnGhost}>
+            <button
+              type="submit"
+              className="rounded-md border border-stone-300 bg-white px-2.5 py-1 text-sm text-stone-700 shadow-xs transition hover:border-stone-400 hover:bg-stone-50"
+            >
               Add folder
             </button>
           </form>
         </details>
       </div>
 
+      {/* Styled to match the global "+ Create" button in the top bar — the
+          same affordance for starting something new, wherever it appears. */}
       <Link
-        href="/dashboard/templates?tab=emails&templateId=new"
-        className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
+        href={`${base}&${idParam}=new`}
+        className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-white transition ${
           selectedId === "new" && !selectedGroupId
-            ? "border-brand-600 bg-brand-50 text-brand-800"
-            : "border-stone-300 text-stone-600 hover:border-brand-600 hover:text-brand-700"
+            ? "bg-brand-500"
+            : "bg-brand-600 hover:bg-brand-500"
         }`}
       >
-        <Plus size={14} weight="bold" /> New template
+        <Plus size={14} weight="bold" /> {newLabel}
       </Link>
 
       <nav className="flex max-h-[65vh] flex-col gap-1 overflow-y-auto">

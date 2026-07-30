@@ -13,34 +13,38 @@ const VALID_TABS: TemplateTab[] = ["tasks", "emails", "attachments", "dates", "d
 /**
  * The Templates hub: task templates (checklists), email templates, document
  * checklists, key-date sets, and PDF/letter templates, in one place — five
- * tabs sharing one groups-and-counts navigation pattern. Replaces the three
- * previously separate pages (action plans, emails, doc templates); the old
- * action-plans list route redirects here.
+ * tabs sharing one folder-tree-plus-detail-pane pattern. Every tab keeps the
+ * same shell (this header, the tabs, the tree) in place and only swaps the
+ * detail pane when an item is selected — no tab ever navigates off this
+ * page. Replaces the three previously separate pages (action plans, emails,
+ * doc templates); the old action-plans list route redirects here.
  */
 export default async function TemplatesHubPage({
   searchParams,
 }: {
   searchParams: Promise<{
     tab?: string;
-    group?: string;
     restored?: string;
     restoredLibrary?: string;
-    templateId?: string;
     folder?: string;
+    templateId?: string;
     planId?: string;
     docId?: string;
+    attachmentId?: string;
+    dateId?: string;
   }>;
 }) {
   const { tenantId, isAdmin } = await requireAdminTenant();
   const {
     tab: rawTab,
-    group,
     restored,
     restoredLibrary,
-    templateId,
     folder,
+    templateId,
     planId,
     docId,
+    attachmentId,
+    dateId,
   } = await searchParams;
   const tab: TemplateTab = VALID_TABS.includes(rawTab as TemplateTab)
     ? (rawTab as TemplateTab)
@@ -62,9 +66,9 @@ export default async function TemplatesHubPage({
         <TemplatesTabTasks
           tenantId={tenantId}
           isAdmin={isAdmin}
-          groupParam={group}
           restoredLibrary={restoredLibrary}
           planId={planId}
+          folderParam={folder}
         />
       )}
       {tab === "emails" && (
@@ -76,10 +80,29 @@ export default async function TemplatesHubPage({
           folderParam={folder}
         />
       )}
-      {tab === "attachments" && <TemplatesTabAttachments tenantId={tenantId} groupParam={group} />}
-      {tab === "dates" && <TemplatesTabDates tenantId={tenantId} groupParam={group} />}
+      {tab === "attachments" && (
+        <TemplatesTabAttachments
+          tenantId={tenantId}
+          isAdmin={isAdmin}
+          attachmentId={attachmentId}
+          folderParam={folder}
+        />
+      )}
+      {tab === "dates" && (
+        <TemplatesTabDates
+          tenantId={tenantId}
+          isAdmin={isAdmin}
+          dateId={dateId}
+          folderParam={folder}
+        />
+      )}
       {tab === "docs" && (
-        <TemplatesTabDocs tenantId={tenantId} isAdmin={isAdmin} groupParam={group} docId={docId} />
+        <TemplatesTabDocs
+          tenantId={tenantId}
+          isAdmin={isAdmin}
+          docId={docId}
+          folderParam={folder}
+        />
       )}
     </div>
   );

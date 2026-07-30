@@ -30,7 +30,24 @@ export async function createAttachmentTemplate(formData: FormData) {
     }),
   );
   revalidatePath("/dashboard/templates");
-  redirect(`/dashboard/templates?tab=attachments&open=${created.id}`);
+  redirect(`/dashboard/templates?tab=attachments&attachmentId=${created.id}`);
+}
+
+export async function updateAttachmentTemplate(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  if (!id) return;
+  await withTenant(tenantId, (tx) =>
+    tx.attachmentTemplate.update({
+      where: { id },
+      data: {
+        name: str(formData, "name") || undefined,
+        description: optStr(formData, "description"),
+        groupId: optStr(formData, "groupId"),
+      },
+    }),
+  );
+  revalidatePath("/dashboard/templates");
 }
 
 export async function addAttachmentTemplateItem(formData: FormData) {
@@ -50,6 +67,34 @@ export async function addAttachmentTemplateItem(formData: FormData) {
   revalidatePath("/dashboard/templates");
 }
 
+/** Flips whether a missing item blocks/nags at all. */
+export async function toggleAttachmentItemRequired(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  if (!id) return;
+  await withTenant(tenantId, async (tx) => {
+    const item = await tx.attachmentTemplateItem.findUniqueOrThrow({ where: { id } });
+    await tx.attachmentTemplateItem.update({ where: { id }, data: { required: !item.required } });
+  });
+  revalidatePath("/dashboard/templates");
+}
+
+/** Flips whether this item's transaction slot gets auto-reminded on a
+ *  cadence until satisfied, once the template is applied. */
+export async function toggleAttachmentItemRemind(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  if (!id) return;
+  await withTenant(tenantId, async (tx) => {
+    const item = await tx.attachmentTemplateItem.findUniqueOrThrow({ where: { id } });
+    await tx.attachmentTemplateItem.update({
+      where: { id },
+      data: { remindEnabled: !item.remindEnabled },
+    });
+  });
+  revalidatePath("/dashboard/templates");
+}
+
 export async function deleteAttachmentTemplateItem(formData: FormData) {
   const { tenantId } = await requireTenant();
   const id = str(formData, "id");
@@ -64,6 +109,7 @@ export async function deleteAttachmentTemplate(formData: FormData) {
   if (!id || !isAdmin || !confirmed(formData)) return;
   await withTenant(tenantId, (tx) => tx.attachmentTemplate.delete({ where: { id } }));
   revalidatePath("/dashboard/templates");
+  redirect("/dashboard/templates?tab=attachments");
 }
 
 /** Apply a standalone checklist directly to a transaction — the same seeding

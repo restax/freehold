@@ -1,9 +1,9 @@
 import { withTenant } from "@freehold/db";
 import { Breadcrumbs } from "@/components/breadcrumbs";
-import { EmailTemplateTree } from "@/components/email-template-tree";
 import { MergeFieldBrowser, TrackedInput } from "@/components/merge-field-browser";
 import { SaveMenu } from "@/components/save-menu";
 import { TemplateEditor } from "@/components/template-editor";
+import { TemplateTree } from "@/components/template-tree";
 import {
   createEmailTemplateLib,
   deleteEmailTemplateLib,
@@ -78,8 +78,12 @@ export async function TemplatesTabEmails({
       </div>
 
       <div className="flex gap-6">
-        <EmailTemplateTree
-          templates={templates.map((t) => ({ id: t.id, name: t.name, groupId: t.groupId }))}
+        <TemplateTree
+          kind="EMAIL"
+          tab="emails"
+          idParam="templateId"
+          label="Email templates"
+          items={templates.map((t) => ({ id: t.id, name: t.name, groupId: t.groupId }))}
           groups={groups}
           selectedId={isNew ? "new" : selected?.id}
           selectedGroupId={isNew ? (folderParam ?? null) : (selected?.groupId ?? null)}

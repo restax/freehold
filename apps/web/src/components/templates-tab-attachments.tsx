@@ -1,20 +1,34 @@
 import { withTenant } from "@freehold/db";
+import { Bell, Flag } from "@phosphor-icons/react/dist/ssr";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DangerDelete } from "@/components/danger-delete";
-import { type RailGroup, TemplateGroupRail } from "@/components/template-group-rail";
+import { TemplateTree } from "@/components/template-tree";
 import {
   addAttachmentTemplateItem,
   createAttachmentTemplate,
   deleteAttachmentTemplate,
   deleteAttachmentTemplateItem,
+  toggleAttachmentItemRemind,
+  toggleAttachmentItemRequired,
+  updateAttachmentTemplate,
 } from "@/lib/actions/attachment-templates";
-import { btn, btnGhost, card, input, label, summaryLink } from "@/lib/ui";
+import { btn, btnGhost, card, input, label } from "@/lib/ui";
+
+const iconToggleBtn = (active: boolean) =>
+  `flex h-6 w-6 items-center justify-center rounded transition-colors ${
+    active ? "text-brand-700 hover:text-brand-800" : "text-stone-300 hover:text-stone-500"
+  }`;
 
 export async function TemplatesTabAttachments({
   tenantId,
-  groupParam,
+  isAdmin,
+  attachmentId,
+  folderParam,
 }: {
   tenantId: string;
-  groupParam?: string;
+  isAdmin: boolean;
+  attachmentId?: string;
+  folderParam?: string;
 }) {
   const [templates, groups] = await withTenant(tenantId, (tx) =>
     Promise.all([
@@ -26,85 +40,162 @@ export async function TemplatesTabAttachments({
     ]),
   );
 
-  const railGroups: RailGroup[] = groups.map((g) => ({
-    id: g.id,
-    name: g.name,
-    count: templates.filter((t) => t.groupId === g.id).length,
-  }));
-  const noGroupCount = templates.filter((t) => !t.groupId).length;
-  const visible =
-    !groupParam || groupParam === "all"
-      ? templates
-      : groupParam === "none"
-        ? templates.filter((t) => !t.groupId)
-        : templates.filter((t) => t.groupId === groupParam);
+  const isNew = attachmentId === "new";
+  const template = !isNew ? templates.find((t) => t.id === attachmentId) : undefined;
+  const newGroupId = folderParam && folderParam !== "none" ? folderParam : "";
+  const groupName = (id: string | null) =>
+    id ? (groups.find((g) => g.id === id)?.name ?? "No folder") : "No folder";
 
   return (
     <div className="flex gap-6">
-      <TemplateGroupRail
+      <TemplateTree
         kind="ATTACHMENT"
         tab="attachments"
-        groups={railGroups}
-        noGroupCount={noGroupCount}
-        totalCount={templates.length}
-        activeGroupId={groupParam}
+        idParam="attachmentId"
+        label="Attachment templates"
+        newLabel="New attachment template"
+        items={templates.map((t) => ({ id: t.id, name: t.name, groupId: t.groupId }))}
+        groups={groups}
+        selectedId={isNew ? "new" : template?.id}
+        selectedGroupId={isNew ? (folderParam ?? null) : (template?.groupId ?? null)}
       />
-      <div className="flex min-w-0 flex-1 flex-col gap-4">
-        <p className="text-sm text-stone-500">
-          Named document checklists a task template entry can attach — applying one seeds the
-          transaction's required-documents list.
-        </p>
 
-        <details className={card}>
-          <summary className={summaryLink}>+ New attachment template</summary>
-          <form action={createAttachmentTemplate} className="mt-4 flex flex-wrap items-end gap-3">
-            <input type="hidden" name="groupId" value={groupParam !== "none" ? groupParam : ""} />
-            <label className={label}>
-              Name *
-              <input name="name" required className={input} placeholder="Under contract file" />
-            </label>
-            <label className={`${label} min-w-64 flex-1`}>
-              Description
-              <input name="description" className={input} />
-            </label>
-            <button type="submit" className={btn}>
-              Create
-            </button>
-          </form>
-        </details>
+      <div className="min-w-0 flex-1">
+        {!isNew && !template && (
+          <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-stone-200 text-center text-sm text-stone-400">
+            <p>Select an attachment template on the left, or create a new one.</p>
+          </div>
+        )}
 
-        {visible.length === 0 ? (
-          <section className={card}>
-            <p className="py-6 text-center text-sm text-stone-400">
-              No attachment templates {groupParam && groupParam !== "all" ? "in this group" : "yet"}
-              .
-            </p>
-          </section>
-        ) : (
+        {isNew && (
           <div className="flex flex-col gap-4">
-            {visible.map((t) => (
-              <section key={t.id} className={card}>
-                <div className="mb-2 flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium">{t.name}</h3>
-                    {t.description && <p className="text-sm text-stone-500">{t.description}</p>}
-                  </div>
-                  <DangerDelete
-                    compact
-                    action={deleteAttachmentTemplate}
-                    label="Delete"
-                    description={`Removes "${t.name}" and its ${t.items.length} document label${t.items.length === 1 ? "" : "s"}.`}
-                    hidden={{ id: t.id }}
+            <Breadcrumbs
+              items={[
+                { label: "Templates", href: "/dashboard/templates?tab=attachments" },
+                { label: "Attachments", href: "/dashboard/templates?tab=attachments" },
+                { label: groupName(newGroupId || null) },
+                { label: "New attachment template" },
+              ]}
+            />
+            <p className="text-sm text-stone-500">
+              Named document checklists a task template entry can attach — applying one seeds the
+              transaction's required-documents list.
+            </p>
+            <section className={card}>
+              <form action={createAttachmentTemplate} className="flex flex-wrap items-end gap-3">
+                <input type="hidden" name="groupId" value={newGroupId} />
+                <label className={label}>
+                  Name *
+                  <input name="name" required className={input} placeholder="Under contract file" />
+                </label>
+                <label className={`${label} min-w-64 flex-1`}>
+                  Description
+                  <input name="description" className={input} />
+                </label>
+                <button type="submit" className={btn}>
+                  Create
+                </button>
+              </form>
+            </section>
+          </div>
+        )}
+
+        {template && (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Breadcrumbs
+                items={[
+                  { label: "Templates", href: "/dashboard/templates?tab=attachments" },
+                  { label: "Attachments", href: "/dashboard/templates?tab=attachments" },
+                  { label: groupName(template.groupId) },
+                  { label: template.name },
+                ]}
+              />
+              {isAdmin && (
+                <DangerDelete
+                  compact
+                  action={deleteAttachmentTemplate}
+                  label="Delete"
+                  description={`Removes "${template.name}" and its ${template.items.length} document label${template.items.length === 1 ? "" : "s"}.`}
+                  hidden={{ id: template.id }}
+                />
+              )}
+            </div>
+
+            <section className={card}>
+              <form
+                action={updateAttachmentTemplate}
+                className="mb-4 flex flex-wrap items-end gap-3"
+              >
+                <input type="hidden" name="id" value={template.id} />
+                <label className={label}>
+                  Name
+                  <input name="name" defaultValue={template.name} className={input} />
+                </label>
+                <label className={`${label} min-w-64 flex-1`}>
+                  Description
+                  <input
+                    name="description"
+                    defaultValue={template.description ?? ""}
+                    className={input}
                   />
-                </div>
-                {t.items.length > 0 && (
-                  <ul className="mb-3 flex flex-col divide-y divide-stone-100">
-                    {t.items.map((item) => (
-                      <li
-                        key={item.id}
-                        className="flex items-center justify-between py-1.5 text-sm"
-                      >
+                </label>
+                <label className={label}>
+                  Folder
+                  <select name="groupId" defaultValue={template.groupId ?? ""} className={input}>
+                    <option value="">No folder</option>
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button type="submit" className={btnGhost}>
+                  Save
+                </button>
+              </form>
+
+              {template.items.length > 0 && (
+                <ul className="mb-3 flex flex-col divide-y divide-stone-100">
+                  {template.items.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex items-center justify-between gap-2 py-1.5 text-sm"
+                    >
+                      <span className={item.required ? "" : "text-stone-400"}>
                         {item.label}
+                        {!item.required && <span className="ml-1.5 text-xs">(optional)</span>}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <form action={toggleAttachmentItemRequired}>
+                          <input type="hidden" name="id" value={item.id} />
+                          <button
+                            type="submit"
+                            title={
+                              item.required
+                                ? "Mandatory — click to make optional"
+                                : "Optional — click to make mandatory"
+                            }
+                            className={iconToggleBtn(item.required)}
+                          >
+                            <Flag size={14} weight={item.required ? "fill" : "regular"} />
+                          </button>
+                        </form>
+                        <form action={toggleAttachmentItemRemind}>
+                          <input type="hidden" name="id" value={item.id} />
+                          <button
+                            type="submit"
+                            title={
+                              item.remindEnabled
+                                ? "Auto-reminders on — click to turn off"
+                                : "Auto-reminders off — click to turn on until this is received"
+                            }
+                            className={iconToggleBtn(item.remindEnabled)}
+                          >
+                            <Bell size={14} weight={item.remindEnabled ? "fill" : "regular"} />
+                          </button>
+                        </form>
                         <form action={deleteAttachmentTemplateItem}>
                           <input type="hidden" name="id" value={item.id} />
                           <button
@@ -114,27 +205,30 @@ export async function TemplatesTabAttachments({
                             Remove
                           </button>
                         </form>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <form action={addAttachmentTemplateItem} className="flex items-end gap-2">
-                  <input type="hidden" name="attachmentTemplateId" value={t.id} />
-                  <label className={`${label} flex-1`}>
-                    Add a document
-                    <input
-                      name="label"
-                      required
-                      placeholder="Executed contract"
-                      className={input}
-                    />
-                  </label>
-                  <button type="submit" className={btnGhost}>
-                    Add
-                  </button>
-                </form>
-              </section>
-            ))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <form action={addAttachmentTemplateItem} className="flex items-end gap-2">
+                <input type="hidden" name="attachmentTemplateId" value={template.id} />
+                <label className={`${label} flex-1`}>
+                  Add a document
+                  <input name="label" required placeholder="Executed contract" className={input} />
+                </label>
+                <button type="submit" className={btnGhost}>
+                  Add
+                </button>
+              </form>
+              <p className="mt-3 flex items-center gap-3 text-xs text-stone-400">
+                <span className="flex items-center gap-1">
+                  <Flag size={12} weight="fill" /> mandatory
+                </span>
+                <span className="flex items-center gap-1">
+                  <Bell size={12} weight="fill" /> auto-reminders on
+                </span>
+              </p>
+            </section>
           </div>
         )}
       </div>

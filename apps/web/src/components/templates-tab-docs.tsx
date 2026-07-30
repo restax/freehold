@@ -1,24 +1,22 @@
 import { withTenant } from "@freehold/db";
-import Link from "next/link";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DangerDelete } from "@/components/danger-delete";
-import { EmptyState } from "@/components/empty-state";
 import { SectionCard } from "@/components/section-card";
-import { type RailGroup, TemplateGroupRail } from "@/components/template-group-rail";
+import { TemplateTree } from "@/components/template-tree";
 import { createTemplate, deleteTemplate, updateTemplate } from "@/lib/actions/templates";
 import { MERGE_FIELD_REFERENCE } from "@/lib/templates";
-import { btn, card, input, label, summaryLink, tableWrap, td, th, trHover } from "@/lib/ui";
+import { btn, card, input, label } from "@/lib/ui";
 
 export async function TemplatesTabDocs({
   tenantId,
   isAdmin,
-  groupParam,
   docId,
+  folderParam,
 }: {
   tenantId: string;
   isAdmin: boolean;
-  groupParam?: string;
   docId?: string;
+  folderParam?: string;
 }) {
   const [templates, groups] = await withTenant(tenantId, (tx) =>
     Promise.all([
@@ -27,53 +25,51 @@ export async function TemplatesTabDocs({
     ]),
   );
 
-  const railGroups: RailGroup[] = groups.map((g) => ({
-    id: g.id,
-    name: g.name,
-    count: templates.filter((t) => t.groupId === g.id).length,
-  }));
-  const noGroupCount = templates.filter((t) => !t.groupId).length;
-  const visible =
-    !groupParam || groupParam === "all"
-      ? templates
-      : groupParam === "none"
-        ? templates.filter((t) => !t.groupId)
-        : templates.filter((t) => t.groupId === groupParam);
-
-  const template = docId ? templates.find((t) => t.id === docId) : undefined;
+  const isNew = docId === "new";
+  const template = !isNew ? templates.find((t) => t.id === docId) : undefined;
+  const newGroupId = folderParam && folderParam !== "none" ? folderParam : "";
   const groupName = (id: string | null) =>
-    id ? (groups.find((g) => g.id === id)?.name ?? "No group") : "No group";
-  const listHref = (id?: string) => `/dashboard/templates?tab=docs${id ? `&group=${id}` : ""}`;
-  const docHref = (id: string) =>
-    `/dashboard/templates?tab=docs${groupParam ? `&group=${groupParam}` : ""}&docId=${id}`;
+    id ? (groups.find((g) => g.id === id)?.name ?? "No folder") : "No folder";
 
   return (
     <div className="flex gap-6">
-      <TemplateGroupRail
+      <TemplateTree
         kind="DOC"
         tab="docs"
-        groups={railGroups}
-        noGroupCount={noGroupCount}
-        totalCount={templates.length}
-        activeGroupId={groupParam}
+        idParam="docId"
+        label="Doc templates"
+        newLabel="New doc template"
+        items={templates.map((t) => ({ id: t.id, name: t.name, groupId: t.groupId }))}
+        groups={groups}
+        selectedId={isNew ? "new" : template?.id}
+        selectedGroupId={isNew ? (folderParam ?? null) : (template?.groupId ?? null)}
       />
-      <div className="flex min-w-0 flex-1 flex-col gap-4">
-        {!docId && (
-          <>
+
+      <div className="min-w-0 flex-1">
+        {!isNew && !template && (
+          <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-stone-200 text-center text-sm text-stone-400">
+            <p>Select a doc template on the left, or create a new one.</p>
+          </div>
+        )}
+
+        {isNew && (
+          <div className="flex flex-col gap-4">
+            <Breadcrumbs
+              items={[
+                { label: "Templates", href: "/dashboard/templates?tab=docs" },
+                { label: "Docs", href: "/dashboard/templates?tab=docs" },
+                { label: groupName(newGroupId || null) },
+                { label: "New doc template" },
+              ]}
+            />
             <p className="text-sm text-stone-500">
               Reusable letters and forms with merge fields like{" "}
               <code>{"{{transaction.propertyAddress}}"}</code> — generate a filled PDF on any
               transaction.
             </p>
-
-            <details className={card}>
-              <summary className={summaryLink}>+ New doc template</summary>
-              <form action={createTemplate} className="mt-4 flex flex-wrap items-end gap-3">
-                <input
-                  type="hidden"
-                  name="groupId"
-                  value={groupParam !== "none" ? groupParam : ""}
-                />
+            <section className={card}>
+              <form action={createTemplate} className="flex flex-wrap items-end gap-3">
+                <input type="hidden" name="groupId" value={newGroupId} />
                 <label className={label}>
                   Name *
                   <input name="name" required className={input} placeholder="Listing Summary" />
@@ -86,61 +82,17 @@ export async function TemplatesTabDocs({
                   Create
                 </button>
               </form>
-            </details>
-
-            <section className={card}>
-              {visible.length === 0 ? (
-                <EmptyState
-                  title="No doc templates yet"
-                  hint="Build a letter or summary once with merge fields, then generate a filled PDF on any transaction in one click."
-                />
-              ) : (
-                <div className={tableWrap}>
-                  <table className="w-full">
-                    <thead>
-                      <tr>
-                        <th className={th}>Name</th>
-                        <th className={th}>Description</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visible.map((t) => (
-                        <tr key={t.id} className={trHover}>
-                          <td className={td}>
-                            <Link
-                              href={docHref(t.id)}
-                              className="font-medium text-brand-700 hover:text-brand-600"
-                            >
-                              {t.name}
-                            </Link>
-                          </td>
-                          <td className={td}>{t.description ?? "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
             </section>
-          </>
-        )}
-
-        {docId && !template && (
-          <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-stone-200 text-center text-sm text-stone-400">
-            <p>That doc template wasn't found — it may have been deleted.</p>
-            <Link href={listHref()} className="text-brand-700 hover:underline">
-              Back to doc templates
-            </Link>
           </div>
         )}
 
         {template && (
-          <>
+          <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <Breadcrumbs
                 items={[
-                  { label: "Templates", href: listHref() },
-                  { label: "Docs", href: listHref() },
+                  { label: "Templates", href: "/dashboard/templates?tab=docs" },
+                  { label: "Docs", href: "/dashboard/templates?tab=docs" },
                   { label: groupName(template.groupId) },
                   { label: template.name },
                 ]}
@@ -175,7 +127,7 @@ export async function TemplatesTabDocs({
                   <label className={label}>
                     Folder
                     <select name="groupId" defaultValue={template.groupId ?? ""} className={input}>
-                      <option value="">No group</option>
+                      <option value="">No folder</option>
                       {groups.map((g) => (
                         <option key={g.id} value={g.id}>
                           {g.name}
@@ -220,7 +172,7 @@ export async function TemplatesTabDocs({
                 ))}
               </div>
             </SectionCard>
-          </>
+          </div>
         )}
       </div>
     </div>

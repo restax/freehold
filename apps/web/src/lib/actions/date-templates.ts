@@ -45,7 +45,24 @@ export async function createDateTemplate(formData: FormData) {
     }),
   );
   revalidatePath("/dashboard/templates");
-  redirect(`/dashboard/templates?tab=dates&open=${created.id}`);
+  redirect(`/dashboard/templates?tab=dates&dateId=${created.id}`);
+}
+
+export async function updateDateTemplate(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  if (!id) return;
+  await withTenant(tenantId, (tx) =>
+    tx.dateTemplate.update({
+      where: { id },
+      data: {
+        name: str(formData, "name") || undefined,
+        description: optStr(formData, "description"),
+        groupId: optStr(formData, "groupId"),
+      },
+    }),
+  );
+  revalidatePath("/dashboard/templates");
 }
 
 export async function addDateTemplateItem(formData: FormData) {
@@ -89,6 +106,7 @@ export async function deleteDateTemplate(formData: FormData) {
   if (!id || !isAdmin || !confirmed(formData)) return;
   await withTenant(tenantId, (tx) => tx.dateTemplate.delete({ where: { id } }));
   revalidatePath("/dashboard/templates");
+  redirect("/dashboard/templates?tab=dates");
 }
 
 /**

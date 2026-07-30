@@ -2219,6 +2219,11 @@ model AttachmentTemplateItem {
   attachmentTemplateId String             @map("attachment_template_id")
   attachmentTemplate   AttachmentTemplate @relation(fields: [attachmentTemplateId], references: [id], onDelete: Cascade)
   label                String
+  /// Optional items still ride along on the checklist but never block or nag.
+  required             Boolean            @default(true)
+  /// Carries forward to the transaction's checklist slot when the template is
+  /// applied — auto-reminders fire on a cadence until the slot is satisfied.
+  remindEnabled        Boolean            @default(false) @map("remind_enabled")
   sortOrder            Int                @default(0) @map("sort_order")
 
   @@index([tenantId])
