@@ -3,7 +3,9 @@
 import { randomBytes } from "node:crypto";
 import { withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
+import { logActivity } from "@/lib/activity";
 import { logAudit } from "@/lib/audit";
+import { emailEnabled, sendTenantEmail } from "@/lib/email";
 import { confirmed, optStr, str } from "@/lib/forms";
 import { portalClientLimit } from "@/lib/plans";
 import { requireTenant } from "@/lib/tenant";
@@ -34,6 +36,61 @@ export async function createPortalLink(formData: FormData) {
     }),
   );
   revalidatePath(`/dashboard/transactions/${transactionId}`);
+}
+
+/**
+ * Emails a portal link straight from the workspace, instead of the TC
+ * copying the URL out to their own mail client. `url` comes from the form
+ * rather than being rebuilt here — the page already has it (it needs the
+ * request's own origin to build the readonly field next to this button),
+ * and reconstructing it here would risk a second, possibly-diverging
+ * source of truth for the portal's base URL.
+ */
+export async function emailPortalLink(formData: FormData) {
+  const { tenantId, session } = await requireTenant();
+  if (!emailEnabled()) return;
+  const transactionId = str(formData, "transactionId");
+  const portalLinkId = str(formData, "id");
+  const url = str(formData, "url");
+  const to = str(formData, "email").trim();
+  const contactId = optStr(formData, "contactId");
+  const message = str(formData, "message").trim();
+  if (!transactionId || !portalLinkId || !url || !to.includes("@")) return;
+
+  const [link, txn] = await withTenant(tenantId, (tx) =>
+    Promise.all([
+      tx.portalLink.findUnique({
+        where: { id: portalLinkId },
+        select: { label: true, revokedAt: true },
+      }),
+      tx.transaction.findUnique({
+        where: { id: transactionId },
+        select: { propertyAddress: true },
+      }),
+    ]),
+  );
+  if (!link || link.revokedAt) return;
+
+  const subject = `Your link to ${txn?.propertyAddress ?? link.label}`;
+  const body = message ? `${message}\n\n${url}` : `Here's your link: ${url}`;
+
+  await sendTenantEmail({ tenantId, transactionId, contactId, to, subject, body });
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "portal.emailed",
+    summary: `Emailed portal link "${link.label}" to ${to}`,
+    subjectType: "portal_link",
+    subjectId: portalLinkId,
+  });
+  logActivity({
+    tenantId,
+    transactionId,
+    actor: session.user,
+    action: "portal.emailed",
+    summary: `Emailed the "${link.label}" portal link to ${to}`,
+  });
 }
 
 /**

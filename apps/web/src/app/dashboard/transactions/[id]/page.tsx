@@ -1,5 +1,6 @@
 import { PartyRole, prisma, TransactionSide, withTenant } from "@freehold/db";
 import {
+  ArrowSquareOut,
   CalendarBlank,
   CalendarCheck,
   ChartPieSlice,
@@ -39,6 +40,7 @@ import {
 import { ColumnPicker } from "@/components/column-picker";
 import { DangerDelete } from "@/components/danger-delete";
 import { DocumentDropZone } from "@/components/document-drop-zone";
+import { EmailPortalLinkForm } from "@/components/email-portal-link-form";
 import { EntityPicker } from "@/components/entity-picker";
 import { ExtractButton } from "@/components/extract-button";
 import { KeyDateRow } from "@/components/key-date-row";
@@ -77,7 +79,12 @@ import {
 } from "@/lib/actions/invoices";
 import { addParty, linkExtractedParty, removeParty } from "@/lib/actions/parties";
 import { setAssigneeFee } from "@/lib/actions/pay";
-import { createPortalLink, deletePortalLink, setPortalLinkActive } from "@/lib/actions/portal";
+import {
+  createPortalLink,
+  deletePortalLink,
+  emailPortalLink,
+  setPortalLinkActive,
+} from "@/lib/actions/portal";
 import { saveTaskColumns } from "@/lib/actions/table-prefs";
 import {
   applyActionPlan,
@@ -147,7 +154,7 @@ const ROLES = Object.values(PartyRole);
 
 const TXN_TABS = [
   ["tasks", "Tasks"],
-  ["documents", "Documents"],
+  ["documents", "Attachments"],
   ["vendors", "Vendors"],
   ["billing", "Billing"],
   ["compliance", "Compliance"],
@@ -1007,7 +1014,7 @@ export default async function TransactionDetailPage({
               </SectionCard>
 
               <SectionCard
-                title="Documents & contract extraction"
+                title="Attachments & contract extraction"
                 icon={<FilePdf size={15} weight="fill" aria-hidden />}
                 action={
                   txn.proFeaturesEnabled ? (
@@ -2737,7 +2744,7 @@ export default async function TransactionDetailPage({
                 >
                   <p className="mb-3 text-sm text-stone-500">
                     Submitted by your clients through the portal. Uploaded files are on the
-                    Documents tab, prefixed “Intake —”.
+                    Attachments tab, prefixed “Intake —”.
                   </p>
                   <ul className="flex flex-col gap-4">
                     {txn.intakeSubmissions.map((sub) => {
@@ -2807,6 +2814,17 @@ export default async function TransactionDetailPage({
                               </span>
                             )}
                             <span className="ml-auto flex items-center gap-3">
+                              {!pl.revokedAt && (
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs font-medium text-stone-500 hover:text-brand-700"
+                                >
+                                  <ArrowSquareOut size={13} aria-hidden />
+                                  Open
+                                </a>
+                              )}
                               <form action={setPortalLinkActive}>
                                 <input type="hidden" name="id" value={pl.id} />
                                 <input
@@ -2831,11 +2849,20 @@ export default async function TransactionDetailPage({
                             </span>
                           </div>
                           {!pl.revokedAt && (
-                            <input
-                              readOnly
-                              value={url}
-                              className="mt-1 w-full rounded border border-stone-200 bg-stone-50 px-2 py-1 font-mono text-xs text-stone-600"
-                            />
+                            <>
+                              <input
+                                readOnly
+                                value={url}
+                                className="mt-1 w-full rounded border border-stone-200 bg-stone-50 px-2 py-1 font-mono text-xs text-stone-600"
+                              />
+                              <EmailPortalLinkForm
+                                action={emailPortalLink}
+                                transactionId={txn.id}
+                                portalLinkId={pl.id}
+                                url={url}
+                                contacts={contactOptions}
+                              />
+                            </>
                           )}
                         </li>
                       );
@@ -2872,7 +2899,7 @@ export default async function TransactionDetailPage({
                       name="showDocuments"
                       className="h-4 w-4 accent-brand-600"
                     />
-                    Documents
+                    Attachments
                   </label>
                   <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
                     <input

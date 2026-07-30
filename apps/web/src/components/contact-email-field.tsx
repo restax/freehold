@@ -21,11 +21,13 @@ export function ContactEmailField({
   pickerLabel = "Vendor",
   emailLabel = "Vendor email",
   emailFieldName = "email",
+  emailPlaceholder = "vendor@example.com",
 }: {
   contacts: PickerOption[];
   pickerLabel?: string;
   emailLabel?: string;
   emailFieldName?: string;
+  emailPlaceholder?: string;
 }) {
   const [email, setEmail] = useState("");
   const byId = useMemo(() => new Map(contacts.map((c) => [c.id, c])), [contacts]);
@@ -54,7 +56,7 @@ export function ContactEmailField({
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="vendor@example.com"
+          placeholder={emailPlaceholder}
           className={inputCls}
         />
       </label>
