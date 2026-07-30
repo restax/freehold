@@ -7,20 +7,22 @@ import { cancelNylasSchedule, nylasEnabled, scheduleFitsNylas, sendViaNylas } fr
  * The outbox: scheduled and quiet-hours-deferred email. Automated sends route
  * through enqueueOrSend so a 2am task completion becomes an 8am email.
  *
- * **Rows here are only as punctual as whatever drains them**, and what drains
- * them is the nightly cron. /api/outbox/run exists but is not registered in
- * vercel.json, and can't be: Vercel's Hobby plan allows a project two cron
- * jobs on daily schedules only, and both slots are spoken for. A row parked
- * here waits for the next nightly run — up to the best part of a day.
+ * **Rows here are only as punctual as whatever drains them** — /api/outbox/run
+ * runs hourly (registered in vercel.json; the project moved to Pro, which is
+ * what made an hourly schedule possible — Hobby caps crons at daily). Nightly
+ * also still calls flushOutbox directly as a cheap safety net in case the
+ * hourly one is ever removed or fails silently, so the worst case never
+ * quietly regresses to "whenever someone notices."
  *
- * So a time the coordinator actually picked is never left to this table.
- * Both scheduleEmail and enqueueOrSend hand the schedule to a provider that
- * will hold it and release it on the minute — Nylas when the message is going
- * out from someone's own mailbox, Resend when it's going out from the
- * workspace address. The rows they leave behind are records for the UI (see
- * it, cancel it), and the flush skips them. What still lands in this table as
- * real work is only what neither provider would take: a schedule past thirty
- * days, or a send-as-self whose mailbox is currently unlinked.
+ * Still, a time the coordinator actually picked is never left to this table
+ * in the first place. Both scheduleEmail and enqueueOrSend hand the schedule
+ * to a provider that will hold it and release it on the minute — Nylas when
+ * the message is going out from someone's own mailbox, Resend when it's going
+ * out from the workspace address. The rows they leave behind are records for
+ * the UI (see it, cancel it), and the flush skips them. What still lands in
+ * this table as real work is only what neither provider would take: a
+ * schedule past thirty days, or a send-as-self whose mailbox is currently
+ * unlinked.
  */
 
 export interface QuietHours {

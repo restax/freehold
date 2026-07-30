@@ -4,19 +4,18 @@ import { flushOutbox } from "@/lib/outbox";
 export const dynamic = "force-dynamic";
 
 /**
- * Manual drain of the outbox, for when someone wants it emptied now.
+ * Hourly cron: drain the outbox. Registered in vercel.json now that the
+ * project is on Pro — Hobby caps cron jobs at daily schedules, which is what
+ * kept this a callable-but-unregistered endpoint for a while (see git
+ * history for that era; nightly's own flushOutbox call was the only
+ * scheduled caller in production).
  *
- * **Not a registered cron, and can't be**: Vercel's Hobby plan allows two
- * cron jobs per project on daily schedules only, and vercel.json spends both
- * on /api/demo/reset and /api/cron/nightly. The nightly run is the only
- * scheduled caller of flushOutbox in production.
- *
- * That is survivable because nothing time-sensitive waits here any more —
- * scheduled mail is held by Resend or Nylas and released on the minute (see
- * lib/outbox.ts). What this drains is the leftovers: schedules past thirty
- * days, and send-as-self mail whose mailbox was unlinked when it was booked.
- * Still CRON_SECRET-gated, so it's safe to point a cron at it if the project
- * ever moves onto a plan that allows one.
+ * Hourly is generous for what actually lands here: scheduled mail is held by
+ * Resend or Nylas and released on the minute (see lib/outbox.ts), so this
+ * only drains the leftovers those providers wouldn't take — schedules past
+ * thirty days, and send-as-self mail whose mailbox was unlinked when it was
+ * booked. Neither is time-critical; hourly beats the old daily worst case
+ * without needing to be tighter than that.
  */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;

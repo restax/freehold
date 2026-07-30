@@ -12,11 +12,13 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 /**
- * The single nightly cron (one slot on Vercel Hobby): flush the email outbox,
- * push client-owned exports to each opted-in workspace's own storage, sweep
- * yesterday's on-demand "Download everything" artifacts out of the platform
- * bucket, and email the daily briefing. The standalone /api/outbox/run and
- * /api/exports/run routes stay for manual or self-hosted triggering.
+ * The nightly cron: push client-owned exports to each opted-in workspace's
+ * own storage, sweep yesterday's on-demand "Download everything" artifacts
+ * out of the platform bucket, and email the daily briefing. None of these
+ * are time-sensitive the way outbox mail is, so daily suits them fine —
+ * that one now runs on its own hourly schedule instead (/api/outbox/run in
+ * vercel.json); this still calls flushOutbox too, cheaply, as a safety net
+ * in case the hourly one is ever removed or fails silently.
  */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
