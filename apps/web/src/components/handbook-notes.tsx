@@ -1,6 +1,5 @@
 import { NotePencil } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
-import { DangerDelete } from "@/components/danger-delete";
 import { SectionCard } from "@/components/section-card";
 import { addHandbookNote, deleteHandbookNote } from "@/lib/actions/handbook-notes";
 import { fmtDayMonth } from "@/lib/format";

@@ -450,6 +450,79 @@ export default function FeaturesPage() {
           </span>
         </div>
 
+        {/* The Handbook. Sold as the problem it solves — the knowledge that
+            currently lives in one person's head — with no mention of how it
+            works. Nobody buys "persistent context". */}
+        <div className="mt-14 overflow-hidden rounded-2xl border border-brand-600/20 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_10px_rgb(41_37_36/0.05)]">
+          <div className="grid gap-0 md:grid-cols-[1.1fr_1fr]">
+            <div className="p-6 sm:p-8">
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">
+                Handbook
+              </p>
+              <h2 className="mt-2 font-display text-2xl font-bold tracking-tight">
+                Everything your team knows, where they need it
+              </h2>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-stone-600">
+                The things you'd tell someone new on their first day — which client wants a phone
+                call when a date moves, which vendor only covers one county, whose broker reviews
+                documents before payment. Write it down once, on the client or the contact it
+                belongs to, and Freehold puts it in front of whoever opens the file.
+              </p>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-stone-600">
+                Grade the people you work with A–F and say why. A note like{" "}
+                <em>"blamed us for a deal falling through — don't take their work"</em> is still
+                there two years later, when the person who wrote it has forgotten and someone new is
+                about to say yes.
+              </p>
+              <p className="mt-4 text-xs leading-relaxed text-stone-500">
+                Internal only. None of it appears in a client portal or an email. Switch it off
+                entirely if it isn't for you — and switch off just the daily summary if you want the
+                notes without the AI.
+              </p>
+            </div>
+
+            <div className="border-t border-stone-200/70 bg-stone-50 p-6 sm:p-8 md:border-l md:border-t-0">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
+                On the file
+              </p>
+              <div className="mt-2 overflow-hidden rounded-xl border border-stone-200 bg-white">
+                <div className="border-b border-stone-200/80 bg-[var(--section-header)] px-3 py-2">
+                  <p className="text-sm font-semibold text-stone-800">Worth knowing</p>
+                </div>
+                <div className="flex flex-col gap-3 p-3">
+                  <div>
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
+                      Sunrise Realty · their client
+                    </p>
+                    <p className="text-sm leading-snug text-stone-700">
+                      Wants a phone call if any contract date moves — never just an email
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
+                      Alexis Chen · on this file
+                    </p>
+                    <p className="text-sm leading-snug text-stone-700">
+                      Best reached by email; never returns calls
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
+                      412 Maple Avenue · this file
+                    </p>
+                    <p className="text-sm leading-snug text-stone-700">
+                      Broker's office reviews the file before final payment
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-stone-500">
+                Written on three different records. Gathered onto one file.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Interactive proof of the portal-theming feature: recolors this page live. */}
         <div className="mt-10">
           <LiveThemeSwitcher />

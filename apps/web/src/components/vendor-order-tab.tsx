@@ -11,6 +11,7 @@ import {
   placeVendorOrder,
 } from "@/lib/actions/vendor-orders";
 import { fmtDate } from "@/lib/format";
+import { currentNotes } from "@/lib/handbook";
 import { card } from "@/lib/ui";
 import { fmtDateTime, ORDER_EVENT_LABEL, ORDER_STATUS_STYLE } from "@/lib/vendor-order-labels";
 
@@ -70,6 +71,22 @@ export async function VendorOrderTab({
       }),
     ],
   );
+
+  // Handbook notes for those contacts, so picking a vendor surfaces what the
+  // team already knows about them. Only the current ones — an instruction that
+  // expired last month must not be presented as if it still holds.
+  const contactNotes = await withTenant(tenantId, (tx) =>
+    tx.handbookNote.findMany({
+      where: { subjectType: "CONTACT", subjectId: { in: contacts.map((c) => c.id) } },
+      orderBy: { createdAt: "desc" },
+    }),
+  );
+  const handbookByContact: Record<string, string[]> = {};
+  for (const n of currentNotes(contactNotes, new Date())) {
+    const list = handbookByContact[n.subjectId] ?? [];
+    list.push(n.body);
+    handbookByContact[n.subjectId] = list;
+  }
 
   // Vendor names (root table, no RLS) for both the order rows and the picker.
   const vendorIds = [
@@ -153,6 +170,7 @@ export async function VendorOrderTab({
           <input type="hidden" name="transactionId" value={transactionId} />
           <ContactEmailField
             contacts={contacts.map((c) => ({ id: c.id, name: c.name, hint: c.email }))}
+            notesById={handbookByContact}
           />
           <label className="flex flex-col gap-1 text-sm">
             What you need

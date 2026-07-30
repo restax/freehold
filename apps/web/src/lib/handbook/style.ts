@@ -42,15 +42,20 @@ export function resolveSummaryStyle(override: string | null | undefined): string
  * Models offered for the summary in /admin.
  *
  * A short list rather than a free-text box: a typo in a model id would fail
- * every summary silently. Haiku is the default because the task is restating
- * facts already supplied — the ceiling on quality here is the prose, not the
- * reasoning — and the summary never writes to a file, so a weaker model
- * produces a duller briefing rather than a wrong one.
+ * every summary silently.
+ *
+ * Sonnet is the default, chosen by comparing them on a real day rather than
+ * by reasoning about the task. Both obeyed the style guide; the difference
+ * was that Sonnet connected a client's standing "ring me if a date moves"
+ * note to a file whose dates had just slipped, and Haiku listed the slipped
+ * dates without it. Nothing here writes to a file, so a weaker model costs
+ * you a duller briefing rather than a wrong one — but a briefing that misses
+ * the connection is most of the value gone.
  */
 export const SUMMARY_MODELS = [
-  { value: "claude-haiku-4-5", label: "Haiku 4.5 — cheapest, the default" },
-  { value: "claude-sonnet-5", label: "Sonnet 5 — better prose, ~5x the cost" },
-  { value: "claude-opus-5", label: "Opus 5 — best prose, ~15x the cost" },
+  { value: "claude-sonnet-5", label: "Sonnet 5 — the default (~$1/person/month)" },
+  { value: "claude-haiku-4-5", label: "Haiku 4.5 — a fifth of the cost, blunter" },
+  { value: "claude-opus-5", label: "Opus 5 — dearer, little gain for this task" },
 ] as const;
 
 export function isValidSummaryModel(value: string): boolean {

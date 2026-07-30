@@ -1646,9 +1646,15 @@ model PlatformSetting {
   /// Model for the Handbook's "Today at a glance" summary. Deliberately not
   /// the extraction model: extraction reads a contract nobody has checked and
   /// its mistakes land on the file, while this restates work already held and
-  /// writes nothing. Haiku is the shipped default; raise it here if the prose
-  /// disappoints.
-  handbookModel              String    @default("claude-haiku-4-5") @map("handbook_model")
+  /// writes nothing.
+  ///
+  /// Sonnet rather than Haiku, decided by comparing both on real data. The
+  /// gap wasn't prose quality: Sonnet noticed that a file full of slipping
+  /// dates was exactly the situation a client's "phone call if a date moves"
+  /// note was written for, and said so. Haiku restated the same facts without
+  /// connecting them. Applying a note to today's circumstances is the whole
+  /// point of the feature, and it costs about half a cent a briefing.
+  handbookModel              String    @default("claude-sonnet-5") @map("handbook_model")
   /// Extended thinking for that summary. Off by default — the task is
   /// restating supplied facts, not reasoning about them.
   handbookThinking           Boolean   @default(false) @map("handbook_thinking")

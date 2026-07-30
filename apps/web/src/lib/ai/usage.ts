@@ -81,3 +81,36 @@ export async function usageByTenant(sinceDays = 30): Promise<Map<string, TenantU
   }
   return map;
 }
+
+export interface FeatureUsage {
+  feature: string;
+  inputTokens: number;
+  outputTokens: number;
+  calls: number;
+}
+
+/**
+ * Usage split by feature, newest window first.
+ *
+ * Added when the Handbook briefing landed, because it changed the shape of
+ * the bill: extraction is a spike when someone uploads a contract, whereas a
+ * briefing recurs per person per hour whether or not anyone does anything.
+ * A single total hides which of those is growing.
+ */
+export async function usageByFeature(sinceDays = 30): Promise<FeatureUsage[]> {
+  const since = new Date(Date.now() - sinceDays * 24 * 3600 * 1000);
+  const rows = await prisma.aiUsageEvent.groupBy({
+    by: ["feature"],
+    where: { createdAt: { gte: since } },
+    _sum: { inputTokens: true, outputTokens: true },
+    _count: { _all: true },
+  });
+  return rows
+    .map((r) => ({
+      feature: r.feature,
+      inputTokens: r._sum.inputTokens ?? 0,
+      outputTokens: r._sum.outputTokens ?? 0,
+      calls: r._count._all,
+    }))
+    .sort((a, b) => b.calls - a.calls);
+}

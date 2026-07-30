@@ -22,15 +22,20 @@ export function ContactEmailField({
   emailLabel = "Vendor email",
   emailFieldName = "email",
   emailPlaceholder = "vendor@example.com",
+  notesById,
 }: {
   contacts: PickerOption[];
   pickerLabel?: string;
   emailLabel?: string;
   emailFieldName?: string;
   emailPlaceholder?: string;
+  /** Handbook notes per contact id, shown once one is picked. */
+  notesById?: Record<string, string[]>;
 }) {
   const [email, setEmail] = useState("");
+  const [picked, setPicked] = useState<string | null>(null);
   const byId = useMemo(() => new Map(contacts.map((c) => [c.id, c])), [contacts]);
+  const notes = picked ? (notesById?.[picked] ?? []) : [];
 
   return (
     <>
@@ -45,6 +50,7 @@ export function ContactEmailField({
           onSelect={(o) => {
             const hint = byId.get(o.id)?.hint;
             if (hint) setEmail(hint);
+            setPicked(o.id);
           }}
         />
       </div>
@@ -60,6 +66,15 @@ export function ContactEmailField({
           className={inputCls}
         />
       </label>
+      {/* Shown at the moment it can still change what you do. A vendor you
+          order here needn't be a party to the file, so their notes appear in
+          no recap — this is the only place "Plymouth County only" can stop a
+          wasted order. */}
+      {notes.length > 0 && (
+        <p className="w-full text-xs text-stone-500">
+          <span className="font-medium text-stone-600">Worth knowing:</span> {notes.join(" · ")}
+        </p>
+      )}
     </>
   );
 }

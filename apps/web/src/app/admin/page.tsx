@@ -12,7 +12,7 @@ import {
   adminSetAiModel,
   adminUnlockWorkspace,
 } from "@/lib/actions/admin";
-import { usageByTenant } from "@/lib/ai/usage";
+import { usageByFeature, usageByTenant } from "@/lib/ai/usage";
 import { listCreditCoupons } from "@/lib/credit-coupons";
 import { fmtDate } from "@/lib/format";
 import { isOperator } from "@/lib/operator";
@@ -24,6 +24,16 @@ const PROBLEM_STATUSES = new Set(["past_due", "unpaid"]);
 const STRIPE_BASE = "https://dashboard.stripe.com";
 
 export const dynamic = "force-dynamic";
+
+/** Friendly names for the AI features that log usage. The Handbook briefing
+ *  is the one that recurs per person rather than per upload, so it is worth
+ *  being able to see it on its own. */
+const AI_FEATURE_LABEL: Record<string, string> = {
+  extract: "Contract extraction",
+  classify: "Document classify",
+  handbook_summary: "Handbook briefing",
+  vendor_reply: "Vendor reply reading",
+};
 
 /**
  * Operator panel: every workspace on this deployment, read-only. Org and
@@ -67,6 +77,7 @@ export default async function AdminPage() {
 
   // AI token usage (last 30 days), per tenant + rolled up by plan.
   const aiUsage = await usageByTenant(30);
+  const featureUsage = await usageByFeature(30);
   const planUsage: Record<string, { input: number; output: number; calls: number }> = {
     FREE: { input: 0, output: 0, calls: 0 },
     PRO: { input: 0, output: 0, calls: 0 },
@@ -526,10 +537,22 @@ export default async function AdminPage() {
       <section className={card}>
         <h2 className="mb-1 font-medium">AI usage &amp; model overrides</h2>
         <p className="mb-3 text-xs text-stone-400">
-          Anthropic token usage over the last 30 days (contract extraction + document classify). Set
-          a model override to move a heavy or costly workspace to a cheaper extraction model; blank
-          = platform default.
+          Anthropic token usage over the last 30 days. Set a model override to move a heavy or
+          costly workspace to a cheaper extraction model; blank = platform default.
         </p>
+        {featureUsage.length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            {featureUsage.map((f) => (
+              <div key={f.feature} className="rounded-lg border border-stone-200 px-3 py-2">
+                <p className="text-sm font-medium">{AI_FEATURE_LABEL[f.feature] ?? f.feature}</p>
+                <p className="text-xs text-stone-500">
+                  {f.calls.toLocaleString()} call{f.calls === 1 ? "" : "s"} ·{" "}
+                  {f.inputTokens.toLocaleString()} in · {f.outputTokens.toLocaleString()} out
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="mb-4 grid gap-2 sm:grid-cols-3">
           {(["FREE", "PRO", "BUSINESS"] as const).map((t) => (
             <div key={t} className="rounded-lg bg-stone-50 px-3 py-2">
