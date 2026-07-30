@@ -1,13 +1,15 @@
 "use client";
 
-import { CircleNotch, Warning } from "@phosphor-icons/react";
+import { CircleNotch, SealCheck, Warning } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/TextLayer.css";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { Badge, type BadgeTone } from "@/components/badges";
+import type { ExecutionNotice } from "@/lib/ai/contract-schema";
 import { SIDE_LABEL } from "@/lib/format";
+import { matchQuoteItems } from "@/lib/pdf-quote-match";
 import { btn, btnDanger, card } from "@/lib/ui";
 
 // The pdf.js worker is vendored into /public (copied from pdfjs-dist, kept in
@@ -56,20 +58,18 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * A text renderer for react-pdf that paints a highlight behind any text item
- * whose words appear in the cited quote. The match is fuzzy on purpose — the
- * model's quote rarely lines up with pdf.js's text spans exactly, so we
- * highlight the overlapping fragments rather than nothing.
+ * A text renderer for react-pdf that highlights the fragments making up the
+ * cited quote, identified by index.
+ *
+ * Which fragments those are is worked out once per page against the whole
+ * text layer (see lib/pdf-quote-match.ts) rather than per fragment here —
+ * a fragment on its own carries no idea of where it sits, so judging it
+ * alone meant every "the" and "and" on the page matched any quote that
+ * contained the word once.
  */
-function makeHighlighter(quote: string) {
-  const normQuote = quote.toLowerCase().replace(/\s+/g, " ").trim();
-  return ({ str }: { str: string }) => {
-    const frag = str.trim().toLowerCase();
-    if (frag.length > 2 && normQuote.includes(frag)) {
-      return `<mark class="fh-pdf-hit">${escapeHtml(str)}</mark>`;
-    }
-    return escapeHtml(str);
-  };
+function makeHighlighter(hits: Set<number>) {
+  return ({ str, itemIndex }: { str: string; itemIndex: number }) =>
+    hits.has(itemIndex) ? `<mark class="fh-pdf-hit">${escapeHtml(str)}</mark>` : escapeHtml(str);
 }
 
 /**
@@ -86,6 +86,7 @@ export function ExtractionReview({
   transactionId,
   fields,
   lowCount,
+  execution,
   applyAction,
   discardAction,
 }: {
@@ -95,6 +96,7 @@ export function ExtractionReview({
   transactionId: string;
   fields: ReviewField[];
   lowCount: number;
+  execution: ExecutionNotice;
   applyAction: (formData: FormData) => Promise<void>;
   discardAction: (formData: FormData) => Promise<void>;
 }) {
@@ -122,10 +124,19 @@ export function ExtractionReview({
     return () => ro.disconnect();
   }, []);
 
+  // The text layer per page, captured as each renders. Needed because a quote
+  // can only be located against the page's full text, not one fragment at a
+  // time — see makeHighlighter.
+  const [pageText, setPageText] = useState<Record<number, string[]>>({});
+
   const highlighter = useCallback(
-    (page: number) =>
-      activePage === page && activeQuote ? makeHighlighter(activeQuote) : undefined,
-    [activePage, activeQuote],
+    (page: number) => {
+      if (activePage !== page || !activeQuote) return undefined;
+      const items = pageText[page];
+      if (!items) return undefined;
+      return makeHighlighter(matchQuoteItems(items, activeQuote));
+    },
+    [activePage, activeQuote, pageText],
   );
 
   const focusField = (f: ReviewField) => {
@@ -141,6 +152,12 @@ export function ExtractionReview({
     }
   };
 
+  /** Same jump-and-highlight as a field row, for the signature banner. */
+  const focusQuote = (n: ExecutionNotice) => {
+    if (!n.page) return;
+    focusField({ page: n.page, quote: n.quote } as ReviewField);
+  };
+
   const readOnly = status !== "READY";
 
   return (
@@ -148,6 +165,12 @@ export function ExtractionReview({
       {/* Fields — a fixed, comfortable reading column; the PDF takes the rest. */}
       <form action={applyAction} className="flex min-w-0 flex-col gap-4 lg:w-[440px] lg:shrink-0">
         <input type="hidden" name="extractionId" value={extractionId} />
+
+        {/* Above the fields, not among them: it isn't a value to apply, it's
+            the caveat on every value below. An unsigned draft yields dates
+            that read exactly like binding ones. */}
+        <ExecutionBanner notice={execution} onLocate={() => focusQuote(execution)} />
+
         <section className={card}>
           <div className="mb-1 flex items-center justify-between">
             <h2 className="font-medium">
@@ -314,6 +337,16 @@ export function ExtractionReview({
                     pageNumber={p}
                     width={pdfWidth}
                     customTextRenderer={highlighter(p)}
+                    onGetTextSuccess={({ items }) =>
+                      setPageText((prev) =>
+                        prev[p]
+                          ? prev
+                          : {
+                              ...prev,
+                              [p]: items.map((it) => ("str" in it ? it.str : "")),
+                            },
+                      )
+                    }
                     renderAnnotationLayer={false}
                   />
                 </div>
@@ -323,5 +356,59 @@ export function ExtractionReview({
         </div>
       </div>
     </div>
+  );
+}
+
+const BANNER_STYLE: Record<ExecutionNotice["tone"], { box: string; icon: string }> = {
+  danger: { box: "border-red-300 bg-red-50 text-red-900", icon: "text-red-600" },
+  warning: { box: "border-amber-300 bg-amber-50 text-amber-900", icon: "text-amber-600" },
+  success: { box: "border-stone-200 bg-white text-stone-700", icon: "text-brand-600" },
+};
+
+/**
+ * The signature check, above everything else on the review screen.
+ *
+ * An unsigned draft extracts exactly as cleanly as an executed contract — same
+ * dates, same confidence badges — so nothing else here distinguishes the two.
+ * A coordinator who misses it schedules a file against dates nobody has agreed
+ * to. That's why this is a banner and not another row in the list, and why the
+ * unsigned case is styled as an error rather than a note.
+ */
+function ExecutionBanner({ notice, onLocate }: { notice: ExecutionNotice; onLocate: () => void }) {
+  const style = BANNER_STYLE[notice.tone];
+  const Icon = notice.tone === "success" ? SealCheck : Warning;
+  return (
+    <section className={`rounded-xl border px-4 py-3 ${style.box}`}>
+      <div className="flex items-start gap-2.5">
+        <Icon size={18} weight="fill" className={`mt-0.5 shrink-0 ${style.icon}`} aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">{notice.headline}</p>
+          {notice.action && <p className="mt-0.5 text-sm">{notice.action}</p>}
+          {notice.missing.length > 0 && (
+            <div className="mt-2">
+              <p className="text-xs font-medium uppercase tracking-wide opacity-70">
+                Still to sign
+              </p>
+              <ul className="mt-1 flex flex-col gap-0.5">
+                {notice.missing.map((who) => (
+                  <li key={who} className="text-sm">
+                    {who}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {notice.page && (
+            <button
+              type="button"
+              onClick={onLocate}
+              className="mt-2 text-xs font-medium underline underline-offset-2 opacity-80 hover:opacity-100"
+            >
+              Show me on page {notice.page}
+            </button>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
