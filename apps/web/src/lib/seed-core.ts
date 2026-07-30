@@ -1,33 +1,61 @@
 import { ClientType, DateAnchor, PartyRole, withTenant } from "@freehold/db";
 import { instantiatePlan } from "@freehold/workflows";
-import { DEFAULT_EMAIL_TEMPLATES } from "@/lib/default-email-templates";
+import { DEFAULT_EMAIL_TEMPLATES, EMAIL_PHASES, phaseOf } from "@/lib/default-email-templates";
 import { EMAIL_TEMPLATE_LIBRARY } from "@/lib/email-template-library";
+import { ensureGroup } from "@/lib/starter-library-seed";
+
+const PHASE_LABEL = new Map(EMAIL_PHASES.map((p) => [p.key, p.label]));
 
 /**
  * Seed the built-in phase templates as permanent (non-sample) defaults, so
  * "remove sample data" leaves them. Idempotent by name — re-running restores
- * any a tenant deleted without duplicating the rest. Returns how many were
+ * any a tenant deleted without duplicating the rest. A pre-existing row
+ * missing its folder (from before templates were foldered) is backfilled
+ * rather than skipped, so re-running the restore button is also how an
+ * older workspace picks up folders it never had. Returns how many were
  * newly added.
  */
 export async function seedDefaultEmailTemplates(tenantId: string): Promise<number> {
   return withTenant(tenantId, async (tx) => {
-    const existing = await tx.emailTemplate.findMany({ select: { name: true } });
-    const have = new Set(existing.map((t) => t.name));
-    const missing = DEFAULT_EMAIL_TEMPLATES.filter((t) => !have.has(t.name));
-    if (missing.length === 0) return 0;
-    await tx.emailTemplate.createMany({
-      data: missing.map((t) => ({
-        tenantId,
-        name: t.name,
-        subject: t.subject,
-        body: t.body,
-        category: t.category,
-        taskMatch: t.taskMatch ?? null,
-        attachMatch: t.attachMatch ?? null,
-        isSample: false,
-      })),
+    const groupCache = new Map<string, string>();
+    const existing = await tx.emailTemplate.findMany({
+      where: { name: { in: DEFAULT_EMAIL_TEMPLATES.map((t) => t.name) } },
+      select: { id: true, name: true, groupId: true },
     });
-    return missing.length;
+    const existingByName = new Map(existing.map((t) => [t.name, t]));
+
+    let added = 0;
+    for (const t of DEFAULT_EMAIL_TEMPLATES) {
+      const groupId = await ensureGroup(
+        tx,
+        tenantId,
+        "EMAIL",
+        PHASE_LABEL.get(phaseOf(t.category)) ?? "General",
+        groupCache,
+      );
+      const found = existingByName.get(t.name);
+      if (found) {
+        if (!found.groupId) {
+          await tx.emailTemplate.update({ where: { id: found.id }, data: { groupId } });
+        }
+        continue;
+      }
+      await tx.emailTemplate.create({
+        data: {
+          tenantId,
+          groupId,
+          name: t.name,
+          subject: t.subject,
+          body: t.body,
+          category: t.category,
+          taskMatch: t.taskMatch ?? null,
+          attachMatch: t.attachMatch ?? null,
+          isSample: false,
+        },
+      });
+      added++;
+    }
+    return added;
   });
 }
 

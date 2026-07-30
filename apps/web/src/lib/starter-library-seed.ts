@@ -27,7 +27,7 @@ interface SeedCounts {
   taskPlans: number;
 }
 
-async function ensureGroup(
+export async function ensureGroup(
   tx: TenantTx,
   tenantId: string,
   kind: "TASK" | "EMAIL" | "ATTACHMENT" | "DATE",
