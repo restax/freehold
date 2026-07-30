@@ -124,7 +124,6 @@ export default async function ContactDetailPage({
   const transactions = Array.from(
     new Map(contact.parties.map((p) => [p.transaction.id, p.transaction])).values(),
   );
-  const openTasks = contact.tasks.filter((t) => t.status === "OPEN");
   const dueForTouch = contact.nextTouchAt && fmtDate(contact.nextTouchAt) <= fmtDate(new Date());
 
   const recent = [

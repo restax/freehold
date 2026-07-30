@@ -1,4 +1,5 @@
 import { billingEnabled, creditsEnabled } from "@freehold/ee-billing";
+import { SectionCard } from "@/components/section-card";
 import {
   openBillingPortal,
   redeemCode,
@@ -141,8 +142,7 @@ export default async function BillingPage({
       </section>
 
       {isAdmin && freeMetered && billingEnabled() && creditsEnabled() && !PAYMENTS_PAUSED && (
-        <section className={card}>
-          <h2 className="mb-1 font-medium">Buy AI credits</h2>
+        <SectionCard title="Buy AI credits">
           <p className="mb-3 text-sm text-stone-500">
             Each credit permanently unlocks pro AI — contract extraction, document classify, and
             dictation — on one transaction. You have{" "}
@@ -174,12 +174,11 @@ export default async function BillingPage({
             ))}
           </div>
           <p className="mt-2 text-xs text-stone-400">One-time purchase. Credits never expire.</p>
-        </section>
+        </SectionCard>
       )}
 
       {isAdmin && freeMetered && (
-        <section className={card}>
-          <h2 className="mb-1 font-medium">Have a credit code?</h2>
+        <SectionCard title="Have a credit code?">
           <p className="mb-3 text-sm text-stone-500">
             Redeem a coupon for free AI credits — no charge.
           </p>
@@ -194,7 +193,7 @@ export default async function BillingPage({
               Redeem
             </button>
           </form>
-        </section>
+        </SectionCard>
       )}
 
       {!billingEnabled() ? (
@@ -248,8 +247,7 @@ export default async function BillingPage({
       )}
 
       {isAdmin && !plan.comped && (
-        <section className={card}>
-          <h2 className="mb-1 font-medium">Have a code?</h2>
+        <SectionCard title="Have a code?">
           <p className="mb-3 text-sm text-stone-500">
             Enter a complimentary-plan code to unlock a full plan — no credit card, no checkout.
           </p>
@@ -264,7 +262,7 @@ export default async function BillingPage({
               Redeem
             </button>
           </form>
-        </section>
+        </SectionCard>
       )}
     </div>
   );

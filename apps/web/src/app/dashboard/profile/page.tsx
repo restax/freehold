@@ -14,7 +14,7 @@ import { fmtDate, STATUS_LABEL } from "@/lib/format";
 import { HEALTH_LABEL, licenseHealth } from "@/lib/licenses";
 import { fmtCents } from "@/lib/pay";
 import { requireTenant } from "@/lib/tenant";
-import { btn, btnGhost, card, input, label, td, th, trHover } from "@/lib/ui";
+import { btn, btnGhost, input, label, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -120,8 +120,7 @@ export default async function ProfilePage({
         </p>
       </div>
 
-      <section className={card}>
-        <h2 className="mb-3 font-medium">Photo & name</h2>
+      <SectionCard title="Photo & name">
         <div className="flex flex-wrap items-start gap-6">
           <div className="flex flex-col items-center gap-2">
             <Avatar user={user} size={96} />
@@ -156,7 +155,7 @@ export default async function ProfilePage({
             <p className="w-full text-xs text-stone-400">Signed in as {user.email}</p>
           </form>
         </div>
-      </section>
+      </SectionCard>
 
       <SectionCard
         title="Your email"
@@ -218,8 +217,7 @@ export default async function ProfilePage({
       </SectionCard>
 
       {(unbilled.length > 0 || payRequests.length > 0) && (
-        <section className={card}>
-          <h2 className="mb-1 font-medium">Your pay</h2>
+        <SectionCard title="Your pay">
           <p className="mb-3 text-sm text-stone-500">
             What you're owed for the files you're assigned to. Submit them whenever your workspace's
             policy says they're due — on assignment, at closing, or anywhere in between.
@@ -322,11 +320,10 @@ export default async function ProfilePage({
               </ul>
             </div>
           )}
-        </section>
+        </SectionCard>
       )}
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Your licenses</h2>
+      <SectionCard title="Your licenses">
         <p className="mb-3 text-sm text-stone-500">
           States where you hold a license, with an optional uploaded copy. Some states require a
           licensed coordinator on every file — your workspace's rules live in Settings.
@@ -442,7 +439,7 @@ export default async function ProfilePage({
             Add license
           </button>
         </form>
-      </section>
+      </SectionCard>
     </div>
   );
 }

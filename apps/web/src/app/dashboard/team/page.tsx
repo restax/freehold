@@ -1,6 +1,7 @@
 import { prisma, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { Avatar } from "@/components/avatar";
+import { SectionCard } from "@/components/section-card";
 import { addLicense, deleteLicense } from "@/lib/actions/licenses";
 import {
   cancelInvitation,
@@ -15,7 +16,7 @@ import { fmtDate } from "@/lib/format";
 import { licenseHealth } from "@/lib/licenses";
 import { seatState } from "@/lib/plans";
 import { requireAdminTenant } from "@/lib/tenant";
-import { btn, btnGhost, card, input, label, tableWrap, td, th, trHover } from "@/lib/ui";
+import { btn, btnGhost, input, label, tableWrap, td, th, trHover } from "@/lib/ui";
 
 /** Dot color for a license chip: current / expiring / expired. */
 const HEALTH_DOT = {
@@ -91,8 +92,7 @@ export default async function TeamPage() {
         </p>
       )}
 
-      <section className={card}>
-        <h2 className="mb-3 font-medium">Members</h2>
+      <SectionCard title="Members">
         <div className={tableWrap}>
           <table className="w-full">
             <thead>
@@ -241,11 +241,10 @@ export default async function TeamPage() {
             </tbody>
           </table>
         </div>
-      </section>
+      </SectionCard>
 
       {isAdmin && (
-        <section className={card}>
-          <h2 className="mb-1 font-medium">Team licenses</h2>
+        <SectionCard title="Team licenses">
           <p className="mb-3 text-sm text-stone-500">
             The workspace's record of who is licensed where — some states require a licensed
             coordinator on every file. Each person can also manage their own from their profile.
@@ -343,12 +342,11 @@ export default async function TeamPage() {
               })}
             </ul>
           )}
-        </section>
+        </SectionCard>
       )}
 
       {isAdmin && (
-        <section className={card}>
-          <h2 className="mb-3 font-medium">Invite a teammate</h2>
+        <SectionCard title="Invite a teammate">
           <form action={inviteMember} className="flex flex-wrap items-end gap-3">
             <label className={label}>
               Email *
@@ -396,7 +394,7 @@ export default async function TeamPage() {
               ))}
             </ul>
           )}
-        </section>
+        </SectionCard>
       )}
     </div>
   );

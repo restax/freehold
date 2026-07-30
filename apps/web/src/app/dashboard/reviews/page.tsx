@@ -2,6 +2,7 @@ import { withTenant } from "@freehold/db";
 import { Star } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { Badge } from "@/components/badges";
+import { SectionCard } from "@/components/section-card";
 import { businessAverage, coordinatorStandings } from "@/lib/reviews";
 import { requireAdminTenant } from "@/lib/tenant";
 import { card } from "@/lib/ui";
@@ -100,8 +101,7 @@ export default async function ReviewsPage() {
         className={`grid gap-4 lg:items-start ${standings.length > 0 ? "lg:grid-cols-[20rem_1fr]" : ""}`}
       >
         {standings.length > 0 && (
-          <section className={card}>
-            <h2 className="mb-3 font-medium">By coordinator</h2>
+          <SectionCard title="By coordinator">
             <div className="flex flex-col divide-y divide-stone-100">
               {standings.map((s) => (
                 <div
@@ -117,11 +117,10 @@ export default async function ReviewsPage() {
                 </div>
               ))}
             </div>
-          </section>
+          </SectionCard>
         )}
 
-        <section className={card}>
-          <h2 className="mb-3 font-medium">Recent answers</h2>
+        <SectionCard title="Recent answers">
           {answered.length === 0 ? (
             <p className="text-sm text-stone-400">Nothing answered yet.</p>
           ) : (
@@ -143,7 +142,7 @@ export default async function ReviewsPage() {
               ))}
             </ul>
           )}
-        </section>
+        </SectionCard>
       </div>
     </div>
   );

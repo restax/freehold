@@ -2,6 +2,7 @@ import { withTenant } from "@freehold/db";
 import {
   type Buildings,
   FileDashed,
+  FilePlus,
   Globe,
   House,
   UsersThree,
@@ -10,6 +11,7 @@ import Link from "next/link";
 import { Fragment } from "react";
 import { Badge } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
+import { SectionCard } from "@/components/section-card";
 import { createForm } from "@/lib/actions/forms";
 import {
   FORM_KIND_LABEL,
@@ -65,10 +67,7 @@ export default async function FormsPage() {
         </Link>
       </div>
 
-      <section className={card}>
-        <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-stone-400">
-          New form
-        </p>
+      <SectionCard title="New form" icon={<FilePlus size={15} weight="fill" aria-hidden />}>
         <div className="flex flex-wrap gap-2">
           {FORM_KINDS.map((kind: FormKind) => {
             const Icon = KIND_ICON[kind] ?? FileDashed;
@@ -96,7 +95,7 @@ export default async function FormsPage() {
         <p className="mt-2 text-xs text-stone-400">
           Starts from a sensible default you can rearrange — not a blank page.
         </p>
-      </section>
+      </SectionCard>
 
       <section className={card}>
         {forms.length === 0 ? (

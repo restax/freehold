@@ -1,5 +1,6 @@
 import { prisma, withTenant } from "@freehold/db";
 import { Badge } from "@/components/badges";
+import { SectionCard } from "@/components/section-card";
 import { SponsoredAds } from "@/components/sponsored-ads";
 import {
   requestConnection,
@@ -8,7 +9,7 @@ import {
 } from "@/lib/actions/vendor-connections";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
-import { btn, btnGhost, card } from "@/lib/ui";
+import { btn, btnGhost } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -75,8 +76,7 @@ export default async function VendorsPage() {
       <SponsoredAds />
 
       {incoming.length > 0 && (
-        <section className={card}>
-          <h2 className="mb-3 font-medium">Requests to connect</h2>
+        <SectionCard title="Requests to connect">
           <ul className="flex flex-col gap-2">
             {incoming.map((c) => (
               <li
@@ -102,12 +102,11 @@ export default async function VendorsPage() {
               </li>
             ))}
           </ul>
-        </section>
+        </SectionCard>
       )}
 
       {active.length > 0 && (
-        <section className={card}>
-          <h2 className="mb-3 font-medium">Connected</h2>
+        <SectionCard title="Connected">
           <ul className="flex flex-col divide-y divide-stone-100">
             {active.map((c) => (
               <li key={c.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
@@ -122,11 +121,10 @@ export default async function VendorsPage() {
               </li>
             ))}
           </ul>
-        </section>
+        </SectionCard>
       )}
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Find a vendor</h2>
+      <SectionCard title="Find a vendor">
         <p className="mb-4 text-xs text-stone-400">
           Vendors who've listed themselves. Not seeing yours? Ordering from a vendor by email — even
           before they register — is coming next; the connection forms below cover vendors already on
@@ -168,7 +166,7 @@ export default async function VendorsPage() {
             })}
           </ul>
         )}
-      </section>
+      </SectionCard>
 
       {pendingOut.length > 0 && (
         <p className="text-xs text-stone-400">

@@ -1,10 +1,11 @@
 import { prisma } from "@freehold/db";
 import Link from "next/link";
 import QRCode from "qrcode";
+import { SectionCard } from "@/components/section-card";
 import { saveSiteConfig } from "@/lib/actions/website";
 import { parseSiteConfig, tenantSiteUrl } from "@/lib/site-config";
 import { requireAdminTenant } from "@/lib/tenant";
-import { btn, card, input, label as labelCls } from "@/lib/ui";
+import { btn, input, label as labelCls } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -39,8 +40,7 @@ export default async function WebsitePage() {
         </p>
       </div>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Page content</h2>
+      <SectionCard title="Page content">
         <p className="mb-4 text-sm text-stone-500">
           Until you publish, the address shows a plain client-portal entry page.
         </p>
@@ -149,10 +149,9 @@ export default async function WebsitePage() {
             <p className="text-sm text-stone-400">Only workspace admins can edit the website.</p>
           )}
         </form>
-      </section>
+      </SectionCard>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">QR code</h2>
+      <SectionCard title="QR code">
         <p className="mb-4 text-sm text-stone-500">
           Points at your site — put it on business cards, yard signs, open-house flyers, or listing
           one-pagers. New clients scan, register, and land in your contacts as a lead with a
@@ -185,7 +184,7 @@ export default async function WebsitePage() {
             </p>
           </div>
         </div>
-      </section>
+      </SectionCard>
 
       <p className="text-xs text-stone-400">
         Leads arrive under Contacts with the "Website Lead" category and a same-day follow-up task

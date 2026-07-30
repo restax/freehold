@@ -1,10 +1,11 @@
 import { ClientType, EsignProvider, withTenant } from "@freehold/db";
-import { Buildings, Storefront, User, UsersThree } from "@phosphor-icons/react/dist/ssr";
+import { Buildings, Storefront, User, UserPlus, UsersThree } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { Fragment } from "react";
 import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { Badge } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
+import { SectionCard } from "@/components/section-card";
 import { createClient, updateClientEsign } from "@/lib/actions/clients";
 import {
   brokerageInfoFrom,
@@ -130,14 +131,16 @@ export default async function ClientsPage({
       </div>
 
       {path && (
-        <section className={card}>
-          <div className="flex items-baseline justify-between">
-            <h2 className="font-medium text-stone-900">New client</h2>
-            <Link href="/dashboard/clients" className="text-xs text-stone-400 hover:text-stone-600">
+        <SectionCard
+          title="New client"
+          icon={<UserPlus size={15} weight="fill" aria-hidden />}
+          action={
+            <Link href="/dashboard/clients" className="text-xs text-stone-500 hover:text-stone-800">
               Cancel
             </Link>
-          </div>
-          <p className="mb-3 mt-0.5 text-sm text-stone-500">Who is this client?</p>
+          }
+        >
+          <p className="mb-3 text-sm text-stone-500">Who is this client?</p>
 
           <div className="grid gap-2 sm:grid-cols-3">
             {PATHS.map((p) => {
@@ -313,7 +316,7 @@ export default async function ClientsPage({
               </div>
             </form>
           )}
-        </section>
+        </SectionCard>
       )}
 
       <section className={card}>

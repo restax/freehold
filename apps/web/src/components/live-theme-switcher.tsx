@@ -2,9 +2,10 @@
 
 import { ArrowsClockwise, PaintBrushBroad } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
-import { brandRamp, THEMES, type ThemeKey } from "@/lib/appearance";
+import { PRESET_THEMES, THEMES, type ThemeKey, themeTokens } from "@/lib/theme";
 
-const ORDER: ThemeKey[] = ["forest", "cobalt", "slate", "clay"];
+const ORDER: ThemeKey[] = PRESET_THEMES;
+const vars = (theme: ThemeKey) => themeTokens({ theme, customAccent: THEMES.custom.accent });
 
 /**
  * Marketing demo of the portal-theming feature: the four theme swatches
@@ -21,11 +22,11 @@ export function LiveThemeSwitcher({ targetId = "features-root" }: { targetId?: s
     const el = document.getElementById(targetId);
     if (!el) return;
     if (theme === "forest") {
-      // Forest is the site's native palette — clear the overrides so the page
+      // Moss is the site's native palette — clear the overrides so the page
       // returns to its exact loaded state rather than a near-identical ramp.
-      for (const k of Object.keys(brandRamp("forest"))) el.style.removeProperty(k);
+      for (const k of Object.keys(vars("forest"))) el.style.removeProperty(k);
     } else {
-      for (const [k, v] of Object.entries(brandRamp(theme))) el.style.setProperty(k, v);
+      for (const [k, v] of Object.entries(vars(theme))) el.style.setProperty(k, v);
     }
     setActive(theme);
   }
@@ -34,7 +35,7 @@ export function LiveThemeSwitcher({ targetId = "features-root" }: { targetId?: s
     return () => {
       const el = document.getElementById(targetId);
       if (!el) return;
-      for (const k of Object.keys(brandRamp("forest"))) el.style.removeProperty(k);
+      for (const k of Object.keys(vars("forest"))) el.style.removeProperty(k);
     };
   }, [targetId]);
 

@@ -2,10 +2,11 @@ import { withTenant } from "@freehold/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ExtractionReview } from "@/components/extraction-review";
+import { SectionCard } from "@/components/section-card";
 import { applyExtraction, discardExtraction } from "@/lib/actions/extractions";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
-import { btnDanger, card } from "@/lib/ui";
+import { btnDanger } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -55,8 +56,7 @@ export default async function ExtractionReviewPage({
       </div>
 
       {extraction.status === "FAILED" && (
-        <section className={card}>
-          <h2 className="mb-2 font-medium text-red-700">Extraction failed</h2>
+        <SectionCard title="Extraction failed">
           <p className="text-sm text-stone-600">{extraction.error ?? "Unknown error."}</p>
           <p className="mt-2 text-sm text-stone-500">
             If this mentions authentication, add <code>ANTHROPIC_API_KEY</code> to your{" "}
@@ -69,7 +69,7 @@ export default async function ExtractionReviewPage({
               Discard this run
             </button>
           </form>
-        </section>
+        </SectionCard>
       )}
 
       {extraction.status !== "FAILED" && (

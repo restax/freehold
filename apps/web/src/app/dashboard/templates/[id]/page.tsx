@@ -2,10 +2,11 @@ import { withTenant } from "@freehold/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DangerDelete } from "@/components/danger-delete";
+import { SectionCard } from "@/components/section-card";
 import { deleteTemplate, updateTemplate } from "@/lib/actions/templates";
 import { MERGE_FIELD_REFERENCE } from "@/lib/templates";
 import { requireAdminTenant } from "@/lib/tenant";
-import { btn, btnDanger, card, input, label } from "@/lib/ui";
+import { btn, card, input, label } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -69,8 +70,7 @@ export default async function TemplateEditPage({ params }: { params: Promise<{ i
         </form>
       </section>
 
-      <section className={card}>
-        <h2 className="mb-2 font-medium">Merge fields</h2>
+      <SectionCard title="Merge fields">
         <p className="mb-2 text-sm text-stone-500">
           Unknown fields render as blanks. Party roles: BUYER, SELLER, BUYER_AGENT, LISTING_AGENT,
           LENDER, TITLE_COMPANY, INSPECTOR, APPRAISER, ATTORNEY. A second party in the same role
@@ -85,7 +85,7 @@ export default async function TemplateEditPage({ params }: { params: Promise<{ i
             </code>
           ))}
         </div>
-      </section>
+      </SectionCard>
     </div>
   );
 }

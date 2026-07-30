@@ -2,6 +2,7 @@ import { withTenant } from "@freehold/db";
 import { Badge, type BadgeTone } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
 import { RevealCredential } from "@/components/reveal-credential";
+import { SectionCard } from "@/components/section-card";
 import { createCredential, deleteCredential } from "@/lib/actions/vault";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
@@ -176,8 +177,7 @@ export default async function VaultPage() {
         )}
       </section>
 
-      <section className={card}>
-        <h2 className="mb-2 font-medium">Access log</h2>
+      <SectionCard title="Access log">
         {log.length === 0 ? (
           <p className="text-sm text-stone-500">No vault activity yet.</p>
         ) : (
@@ -196,7 +196,7 @@ export default async function VaultPage() {
             ))}
           </ul>
         )}
-      </section>
+      </SectionCard>
     </div>
   );
 }

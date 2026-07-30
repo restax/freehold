@@ -1,17 +1,27 @@
 @import "tailwindcss";
 
-/* Brand greens matched to the reference design (Untitled-UI-style scale). */
+/* The default brand ramp: Moss, the earthy green.
+ *
+ * These are exactly `themeTokens({theme:"forest"})` — the Moss preset — so
+ * surfaces rendered outside a themed root (marketing, auth, the first paint)
+ * match a default workspace instead of drifting to a different green. It was
+ * previously a saturated emerald, which read bright and synthetic next to the
+ * shaded section strips and address pills it had to sit beside.
+ *
+ * A themed root overrides all ten steps inline, so this is a fallback, not
+ * the source of truth. Keep it in step with the Moss preset in
+ * lib/appearance.ts. */
 @theme {
-  --color-brand-50: #ecfdf3;
-  --color-brand-100: #d1fadf;
-  --color-brand-200: #a6f4c5;
-  --color-brand-300: #6ce9a6;
-  --color-brand-400: #32d583;
-  --color-brand-500: #12b76a;
-  --color-brand-600: #0d9257;
-  --color-brand-700: #0b7a49;
-  --color-brand-800: #08603a;
-  --color-brand-900: #054f30;
+  --color-brand-50: #f1f3ef;
+  --color-brand-100: #e3e7e0;
+  --color-brand-200: #cad3c5;
+  --color-brand-300: #aab8a1;
+  --color-brand-400: #839777;
+  --color-brand-500: #637d53;
+  --color-brand-600: #4e6b3c;
+  --color-brand-700: #425b32;
+  --color-brand-800: #374e29;
+  --color-brand-900: #2f4423;
 }
 
 @theme inline {
@@ -144,41 +154,45 @@ form:has(select[name="side"] option[value="DUAL"]:checked) .side-panel-buy {
   }
 }
 
-/* The top bar's ground colour.
+/* Themed surfaces — the fallback copy of what lib/appearance.ts computes.
  *
- * A desaturated green-grey rather than black: flat black sat hard against the
- * warm stone greys the rest of the app uses, and read as a different product
- * bolted on top. This is dark enough for white text at roughly 9:1 contrast
- * while keeping a trace of the forest brand hue.
+ * Every value below is *also* emitted at runtime by `themeTokens()` and
+ * applied inline on the dashboard and portal roots, derived from whichever
+ * accent the workspace picked. These static values are the Moss default, and
+ * they matter for the surfaces rendered outside a themed root: the marketing
+ * pages, the auth screens, and the first paint before a root's inline style
+ * applies.
  *
- * A variable because it's the kind of value that gets nudged — one line here
- * rather than hunting arbitrary values through the markup.
+ * Do not hardcode a new themed colour in a component. Add it to
+ * `themeTokens()` and mirror the Moss value here, or picking a theme will
+ * move everything except the thing you added — which is exactly the bug this
+ * replaced, where the top bar, section strips and address pills stayed green
+ * on a blue workspace.
  */
 :root {
-  --topbar: #3c4a43;
-  --topbar-hover: #4a5a52;
-}
+  /* The top bar's ground colour. A desaturated dark hue rather than flat
+   * black: black sat hard against the warm stone greys used elsewhere and
+   * read as a different product bolted on top. */
+  --topbar: #39422e;
+  --topbar-fg: #ffffff;
 
-/* SectionCard's title-strip fill.
- *
- * Has to sit strictly between the page background (stone-50) and the card
- * border — it was previously the same stone-50 as the page itself, so the
- * "shaded" strip was invisible against its own surroundings. Tinted toward
- * the top bar's green-grey so the two shaded surfaces read as one family
- * rather than two unrelated greys.
- */
-:root {
-  --section-header: #eef1ed;
-}
+  /* SectionCard's title-strip fill. Has to sit strictly between the page
+   * background (stone-50) and the card border — when it was the same
+   * stone-50 as the page, the "shaded" strip was invisible against its own
+   * surroundings. */
+  --section-header: #edf0ec;
 
-/* The address pill — every clickable reference to a transaction's property
- * address, anywhere on a dashboard page, renders the same way: a rounded
- * earthy-green chip, one shade darker on hover. Deliberately not the
- * saturated --color-brand emerald — that reads bright/synthetic as a fill
- * color at this scale. See CLAUDE.md ("Address links").
- */
-:root {
-  --pill-green: #e3e8d4;
-  --pill-green-hover: #cdd6b6;
-  --pill-green-text: #3f4c2b;
+  /* The address pill — every clickable reference to a transaction's property
+   * address renders as a rounded chip, one shade darker on hover.
+   * Deliberately a soft wash rather than the full-strength accent, which
+   * reads bright and synthetic as a fill at this scale.
+   * See CLAUDE.md ("Address links"). */
+  --pill-bg: #dfe4dc;
+  --pill-bg-hover: #c6d0c1;
+  --pill-fg: #38462b;
+
+  /* Text/icons on a filled brand-700 surface (primary buttons). A variable,
+   * not `text-white`, because a workspace can pick a pale custom accent that
+   * white would disappear on. */
+  --color-brand-fg: #ffffff;
 }

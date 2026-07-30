@@ -16,7 +16,7 @@ export default async function AcceptInvitationPage({
     where: { id: invitationId },
     include: { organization: { select: { name: true } } },
   });
-  if (!invitation || invitation.status !== "pending" || invitation.expiresAt < new Date()) {
+  if (invitation?.status !== "pending" || invitation.expiresAt < new Date()) {
     notFound();
   }
   const session = await getSession();

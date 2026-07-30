@@ -6,8 +6,12 @@
  */
 export const input =
   "rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-sm shadow-xs transition-colors focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/15";
+/** Primary button. The label colour is a variable, not `text-white`: a
+ *  workspace can pick a pale accent from the theme picker, and white text
+ *  would vanish on it — `--color-brand-fg` is the readable ink for whatever
+ *  brand-700 resolved to. See lib/appearance.ts. */
 export const btn =
-  "rounded-md bg-brand-700 px-3 py-1.5 text-sm font-medium text-white shadow-xs transition hover:bg-brand-600 active:scale-[0.98]";
+  "rounded-md bg-brand-700 px-3 py-1.5 text-sm font-medium text-[var(--color-brand-fg)] shadow-xs transition hover:bg-brand-600 active:scale-[0.98]";
 export const btnGhost =
   "rounded-md border border-stone-300 bg-white px-2.5 py-1 text-sm text-stone-700 shadow-xs transition hover:border-stone-400 hover:bg-stone-50 active:scale-[0.98]";
 export const btnDanger = "text-sm text-red-700 transition-colors hover:text-red-900";

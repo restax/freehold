@@ -2,6 +2,7 @@ import { TaskStatus, TransactionStatus, withTenant } from "@freehold/db";
 import { HouseLine } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { CopyButton } from "@/components/copy-button";
+import { SectionCard } from "@/components/section-card";
 import { regenerateCalendarToken } from "@/lib/actions/calendar";
 import { calendarFeedUrl, ensureCalendarToken } from "@/lib/calendar";
 import { priorityBadgeStyle } from "@/lib/priority";
@@ -255,8 +256,7 @@ export default async function CalendarPage({
         </div>
       </section>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Subscribe from any calendar app</h2>
+      <SectionCard title="Subscribe from any calendar app">
         <p className="mb-3 text-sm text-stone-500">
           This link is yours alone — a secret URL, not a login. Paste it into Google Calendar,
           Outlook, or Apple Calendar as a "subscribe by URL" feed, and it stays current: new dates
@@ -273,7 +273,7 @@ export default async function CalendarPage({
             Lost a device? Regenerate this link (the old one stops working immediately)
           </button>
         </form>
-      </section>
+      </SectionCard>
     </div>
   );
 }

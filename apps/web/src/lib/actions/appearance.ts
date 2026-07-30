@@ -36,6 +36,9 @@ export async function saveAppearance(formData: FormData) {
 
   const next: Appearance = {
     theme: oneOf(formData, "theme", THEME_KEYS, current.theme),
+    // Kept even when the chosen theme isn't "custom", so switching to a
+    // preset and back doesn't discard the colour someone mixed.
+    customAccent: hex(formData, "customAccent", current.customAccent),
     portalFont: oneOf(formData, "portalFont", FONT_KEYS, current.portalFont),
     priorityColors: {
       HIGH: hex(formData, "priorityHigh", current.priorityColors.HIGH),

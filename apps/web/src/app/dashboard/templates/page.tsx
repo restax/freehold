@@ -1,15 +1,7 @@
 import { withTenant } from "@freehold/db";
 import Link from "next/link";
-import { DangerDelete } from "@/components/danger-delete";
 import { EmptyState } from "@/components/empty-state";
-import {
-  createEmailTemplateLib,
-  createTemplate,
-  deleteEmailTemplateLib,
-  saveEmailTemplates,
-  updateEmailTemplateLib,
-} from "@/lib/actions/templates";
-import { EMAIL_MERGE_CODES, parseEmailTemplates } from "@/lib/email-template";
+import { createTemplate } from "@/lib/actions/templates";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
 import { btn, card, input, label, summaryLink, tableWrap, td, th, trHover } from "@/lib/ui";

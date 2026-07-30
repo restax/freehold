@@ -2,6 +2,7 @@ import { prisma, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { Badge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
+import { SectionCard } from "@/components/section-card";
 import { TwoFactorSettings } from "@/components/two-factor-settings";
 import {
   createApiKey,
@@ -31,7 +32,7 @@ import { listTenants } from "@/lib/session";
 import { tenantSideLabels } from "@/lib/side-labels";
 import { storageStatus } from "@/lib/storage-config";
 import { getMemberRole, requireTenant } from "@/lib/tenant";
-import { btn, btnGhost, card, input, label, td, th, trHover } from "@/lib/ui";
+import { btn, btnGhost, input, label, td, th, trHover } from "@/lib/ui";
 import { WEBHOOK_EVENTS } from "@/lib/webhook-emit";
 
 export const dynamic = "force-dynamic";
@@ -48,8 +49,7 @@ async function ApiSection({ tenantId, userId }: { tenantId: string; userId: stri
 
   return (
     <>
-      <section className={card}>
-        <h2 className="mb-1 font-medium">API keys</h2>
+      <SectionCard title="API keys">
         <p className="mb-3 text-sm text-stone-500">
           Keys give full read/write access to this workspace through the REST API. Treat them like
           passwords.
@@ -112,10 +112,9 @@ async function ApiSection({ tenantId, userId }: { tenantId: string; userId: stri
             Create key
           </button>
         </form>
-      </section>
+      </SectionCard>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Webhooks</h2>
+      <SectionCard title="Webhooks">
         <p className="mb-3 text-sm text-stone-500">
           Freehold POSTs signed JSON to your URL when things happen. Verify the{" "}
           <code>freehold-signature</code> header with your endpoint's secret.
@@ -167,7 +166,7 @@ async function ApiSection({ tenantId, userId }: { tenantId: string; userId: stri
             Add endpoint
           </button>
         </form>
-      </section>
+      </SectionCard>
     </>
   );
 }
@@ -187,8 +186,7 @@ async function ContactVisibilitySection({
     select: { restrictContactsToOwner: true },
   });
   return (
-    <section className={card}>
-      <h2 className="mb-1 font-medium">Contact visibility</h2>
+    <SectionCard title="Contact visibility">
       <p className="mb-3 text-sm text-stone-500">
         {org.restrictContactsToOwner
           ? "Members currently see only contacts they own. Owners and admins always see everything."
@@ -202,7 +200,7 @@ async function ContactVisibilitySection({
             : "Restrict to owned contacts"}
         </button>
       </form>
-    </section>
+    </SectionCard>
   );
 }
 
@@ -220,8 +218,7 @@ async function OperatingStatesSection({ tenantId, userId }: { tenantId: string; 
   const blocking = org.licenseEnforcement === "block";
 
   return (
-    <section className={card}>
-      <h2 className="mb-1 font-medium">Operating states</h2>
+    <SectionCard title="Operating states">
       <p className="mb-3 text-sm text-stone-500">
         The states you work in, and which of them require a licensed coordinator on every file.
         Freehold doesn't decide this for you — mark the ones your business has determined require a
@@ -309,7 +306,7 @@ async function OperatingStatesSection({ tenantId, userId }: { tenantId: string; 
           Save enforcement
         </button>
       </form>
-    </section>
+    </SectionCard>
   );
 }
 
@@ -326,8 +323,7 @@ async function DirectorySection({ tenantId, userId }: { tenantId: string; userId
   const cfg = readDirectoryConfig(org.directoryConfig);
 
   return (
-    <section className={card}>
-      <h2 className="mb-1 font-medium">Coordinator directory</h2>
+    <SectionCard title="Coordinator directory">
       <p className="mb-3 text-sm text-stone-500">
         List this workspace so other coordinators can find you for overflow and vacation coverage.
         Listing publishes your workspace name, the states you cover, and whatever you enter below —
@@ -461,7 +457,7 @@ async function DirectorySection({ tenantId, userId }: { tenantId: string; userId
           </Link>
         </div>
       </form>
-    </section>
+    </SectionCard>
   );
 }
 
@@ -472,8 +468,7 @@ async function AuditSection({ tenantId, userId }: { tenantId: string; userId: st
     tx.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
   );
   return (
-    <section className={card}>
-      <h2 className="mb-1 font-medium">Audit trail</h2>
+    <SectionCard title="Audit trail">
       <p className="mb-3 text-sm text-stone-500">
         Who did what, newest first. Deletions, portal access changes, and other significant actions
         are recorded automatically. Last 100 entries.
@@ -496,7 +491,7 @@ async function AuditSection({ tenantId, userId }: { tenantId: string; userId: st
           ))}
         </ul>
       )}
-    </section>
+    </SectionCard>
   );
 }
 
@@ -540,19 +535,17 @@ export default async function SettingsPage() {
       {/* Independent setting cards sit two-up on wide screens (kept to two so
           each card — including the one with a table — stays comfortably wide). */}
       <div className="columns-1 gap-6 lg:columns-2 [&>*]:mb-6 [&>*]:break-inside-avoid">
-        <section className={card}>
-          <h2 className="mb-2 font-medium">Workspace</h2>
+        <SectionCard title="Workspace">
           <p className="text-sm">
             <span className="text-stone-500">Name:</span> {tenant?.name}
           </p>
           <p className="text-sm">
             <span className="text-stone-500">Signed in as:</span> {session.user.email}
           </p>
-        </section>
+        </SectionCard>
 
         {isAdmin && (
-          <section className={card}>
-            <h2 className="mb-1 font-medium">Appearance</h2>
+          <SectionCard title="Appearance">
             <p className="mb-3 text-sm text-stone-500">
               Brand the client portal with a colour theme and font, and colour-code task priorities
               and row highlights across your dashboard.
@@ -560,11 +553,10 @@ export default async function SettingsPage() {
             <Link href="/dashboard/settings/appearance" className={btnGhost}>
               Customize appearance
             </Link>
-          </section>
+          </SectionCard>
         )}
 
-        <section className={card}>
-          <h2 className="mb-1 font-medium">Your data</h2>
+        <SectionCard title="Your data">
           <p className="mb-3 text-sm text-stone-500">
             Everything in this workspace — transactions, contacts, clients, tasks, and every
             document — as one ZIP you can take anywhere. Freehold is source-available, so this
@@ -595,11 +587,10 @@ export default async function SettingsPage() {
               and we'll deliver a nightly export there — a backup in infrastructure you control.
             </p>
           )}
-        </section>
+        </SectionCard>
 
         {isAdmin && (
-          <section className={card}>
-            <h2 className="mb-1 font-medium">Client billing defaults</h2>
+          <SectionCard title="Client billing defaults">
             <p className="mb-3 text-sm text-stone-500">
               How this workspace bills by default. Any client can override any of this on their
               profile — these are the settings a client gets when you haven't said otherwise.
@@ -704,12 +695,11 @@ export default async function SettingsPage() {
                 Save billing defaults
               </button>
             </form>
-          </section>
+          </SectionCard>
         )}
 
         {emailEnabled() && isAdmin && (
-          <section className={card}>
-            <h2 className="mb-1 font-medium">Daily briefing</h2>
+          <SectionCard title="Daily briefing">
             <p className="mb-3 text-sm text-stone-500">
               Every morning, owners and admins get an emailed summary of every active transaction —
               status, key dates, and the contact details for every party — with a PDF attached. Once
@@ -722,12 +712,11 @@ export default async function SettingsPage() {
                 {briefingOn ? "Turn off daily briefing" : "Turn on daily briefing"}
               </button>
             </form>
-          </section>
+          </SectionCard>
         )}
 
         {emailEnabled() && isAdmin && (
-          <section className={card}>
-            <h2 className="mb-1 font-medium">Invoice report</h2>
+          <SectionCard title="Invoice report">
             <p className="mb-3 text-sm text-stone-500">
               Each morning, one chosen person gets the outstanding-invoices list — what's unpaid,
               what's overdue, who to chase. Mornings with nothing outstanding send nothing.{" "}
@@ -749,20 +738,18 @@ export default async function SettingsPage() {
                 Save
               </button>
             </form>
-          </section>
+          </SectionCard>
         )}
 
-        <section className={card}>
-          <h2 className="mb-1 font-medium">Two-factor authentication</h2>
+        <SectionCard title="Two-factor authentication">
           <TwoFactorSettings enabled={Boolean(session.user.twoFactorEnabled)} />
-        </section>
+        </SectionCard>
 
         <OperatingStatesSection tenantId={tenantId} userId={session.user.id} />
 
         <DirectorySection tenantId={tenantId} userId={session.user.id} />
 
-        <section className={card}>
-          <h2 className="mb-1 font-medium">Side wording</h2>
+        <SectionCard title="Side wording">
           <p className="mb-3 text-sm text-stone-500">
             Different markets say it differently — sell side, sale side, list side. Whatever you
             type here is used everywhere sides appear: transactions, portals, and intake forms.
@@ -780,10 +767,9 @@ export default async function SettingsPage() {
               Save wording
             </button>
           </form>
-        </section>
+        </SectionCard>
 
-        <section className={card}>
-          <h2 className="mb-2 font-medium">Sample data</h2>
+        <SectionCard title="Sample data">
           {sampleCount > 0 ? (
             <form action={removeSampleData} className="flex items-center gap-3">
               <p className="text-sm text-stone-500">
@@ -796,7 +782,7 @@ export default async function SettingsPage() {
           ) : (
             <p className="text-sm text-stone-500">No sample data in this workspace.</p>
           )}
-        </section>
+        </SectionCard>
 
         <ApiSection tenantId={tenantId} userId={session.user.id} />
 
@@ -804,12 +790,11 @@ export default async function SettingsPage() {
 
         <AuditSection tenantId={tenantId} userId={session.user.id} />
 
-        <section className={card}>
-          <h2 className="mb-2 font-medium">System health</h2>
+        <SectionCard title="System health">
           <p className="text-sm text-stone-500">
             Version 0.0.1 (Stage 01). Include this page in self-host support requests.
           </p>
-        </section>
+        </SectionCard>
       </div>
     </div>
   );

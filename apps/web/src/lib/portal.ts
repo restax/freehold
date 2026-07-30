@@ -49,7 +49,7 @@ async function tenantName(tenantId: string): Promise<string> {
  */
 export async function resolvePortal(token: string) {
   const link = await liveLink(token);
-  if (!link || link.audience !== "CLIENT" || !link.transactionId) return null;
+  if (link?.audience !== "CLIENT" || !link.transactionId) return null;
   const transactionId = link.transactionId;
 
   const txn = await withTenant(link.tenantId, (tx) =>
@@ -82,7 +82,7 @@ export async function resolvePortal(token: string) {
  */
 export async function resolveAgentPortal(token: string) {
   const link = await liveLink(token);
-  if (!link || link.audience !== "AGENT" || !link.clientId) return null;
+  if (link?.audience !== "AGENT" || !link.clientId) return null;
   const clientId = link.clientId;
 
   const data = await withTenant(link.tenantId, async (tx) => {
@@ -166,7 +166,7 @@ export async function resolveAgentPortal(token: string) {
 /** One transaction through an agent portal link, agent-visible items only. */
 export async function resolveAgentPortalTxn(token: string, txnId: string) {
   const link = await liveLink(token);
-  if (!link || link.audience !== "AGENT" || !link.clientId) return null;
+  if (link?.audience !== "AGENT" || !link.clientId) return null;
   const clientId = link.clientId;
 
   const txn = await withTenant(link.tenantId, (tx) =>

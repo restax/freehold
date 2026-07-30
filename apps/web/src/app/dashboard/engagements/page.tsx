@@ -2,10 +2,11 @@ import { EngagementStatus, prisma, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { Badge, type BadgeTone } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
+import { SectionCard } from "@/components/section-card";
 import { acceptEngagement, declineEngagement, endEngagement } from "@/lib/actions/engagements";
 import { fmtDate } from "@/lib/format";
 import { requireAdminTenant } from "@/lib/tenant";
-import { btnGhost, card, input, label } from "@/lib/ui";
+import { btnGhost, input, label } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -62,8 +63,7 @@ export default async function EngagementsPage() {
         </p>
       </div>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Coverage you've asked for</h2>
+      <SectionCard title="Coverage you've asked for">
         <p className="mb-3 text-sm text-stone-500">
           Once they accept, assign their person to a file like any other teammate — from the file's
           Participants tab.
@@ -104,10 +104,9 @@ export default async function EngagementsPage() {
             ))}
           </ul>
         )}
-      </section>
+      </SectionCard>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Coverage you've been asked to provide</h2>
+      <SectionCard title="Coverage you've been asked to provide">
         <p className="mb-3 text-sm text-stone-500">
           Accepting puts one of your people into their workspace as a guest, working their files
           there. Your own workspace is unaffected.
@@ -174,7 +173,7 @@ export default async function EngagementsPage() {
             ))}
           </ul>
         )}
-      </section>
+      </SectionCard>
     </div>
   );
 }

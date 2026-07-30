@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionPlanTaskGrid } from "@/components/action-plan-task-grid";
 import { DangerDelete } from "@/components/danger-delete";
+import { SectionCard } from "@/components/section-card";
 import {
   addTemplateDocument,
   deletePlan,
@@ -60,8 +61,7 @@ export default async function ActionPlanDetailPage({
         <ActionPlanTaskGrid planId={plan.id} tasks={plan.tasks} emailTemplates={emailTemplates} />
       </section>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Required documents</h2>
+      <SectionCard title="Required documents">
         <p className="mb-3 text-sm text-stone-500">
           The documents a file on this plan should collect. Applying the plan drops this checklist
           onto the transaction's Documents tab, each one marked received or missing.
@@ -99,7 +99,7 @@ export default async function ActionPlanDetailPage({
             Add required document
           </button>
         </form>
-      </section>
+      </SectionCard>
     </div>
   );
 }

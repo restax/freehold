@@ -1,6 +1,7 @@
 import { prisma, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { DangerDelete } from "@/components/danger-delete";
+import { SectionCard } from "@/components/section-card";
 import { TemplateEditor } from "@/components/template-editor";
 import {
   createEmailTemplateLib,
@@ -64,8 +65,7 @@ export default async function EmailTemplatesPage({
         </p>
       </div>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Signature &amp; footer</h2>
+      <SectionCard title="Signature &amp; footer">
         <p className="mb-4 text-sm text-stone-500">
           Appended to every outgoing email — change it once here and it changes everywhere,
           including the automated emails.
@@ -136,7 +136,7 @@ export default async function EmailTemplatesPage({
             <p className="text-sm text-stone-400">Only workspace admins can edit these.</p>
           )}
         </form>
-      </section>
+      </SectionCard>
 
       {restored !== undefined && (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
@@ -303,8 +303,7 @@ export default async function EmailTemplatesPage({
         </section>
       ))}
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Automated emails</h2>
+      <SectionCard title="Automated emails">
         <p className="mb-4 text-sm text-stone-500">
           Sent for you: the intro when a file opens, the congratulations after closing, and the
           review ask a few days after that. Per-client on/off switches live on each client's page.
@@ -381,7 +380,7 @@ export default async function EmailTemplatesPage({
             Save
           </button>
         </form>
-      </section>
+      </SectionCard>
     </div>
   );
 }

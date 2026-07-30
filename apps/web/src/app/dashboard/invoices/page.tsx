@@ -2,6 +2,7 @@ import { prisma, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { Badge, type BadgeTone } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
+import { SectionCard } from "@/components/section-card";
 import {
   createInvoice,
   deleteDraftInvoice,
@@ -275,8 +276,7 @@ export default async function InvoicesPage({
       )}
 
       {allowed && outstanding.length > 0 && (
-        <section className={card}>
-          <h2 className="mb-1 font-medium">Outstanding</h2>
+        <SectionCard title="Outstanding">
           <p className="text-sm text-stone-600">
             <strong className="tabular-nums">{fmtCents(outstandingBalance)}</strong> open across{" "}
             {outstanding.length} invoice{outstanding.length === 1 ? "" : "s"}
@@ -294,7 +294,7 @@ export default async function InvoicesPage({
           <p className="mt-1 text-xs text-stone-400">
             Get this as an email every morning — switch it on under Settings → Invoice report.
           </p>
-        </section>
+        </SectionCard>
       )}
 
       {allowed && invoices.length > 0 && (
@@ -439,8 +439,7 @@ export default async function InvoicesPage({
       )}
 
       {allowed && isAdmin && (
-        <section className={card}>
-          <h2 className="mb-1 font-medium">Client credit</h2>
+        <SectionCard title="Client credit">
           <p className="mb-3 text-sm text-stone-500">
             Money held on account — retainers and pre-payments from long-standing clients, applied
             to invoices as they're issued. Every movement is an entry; the balance is their sum.
@@ -541,12 +540,11 @@ export default async function InvoicesPage({
               </button>
             </form>
           </details>
-        </section>
+        </SectionCard>
       )}
 
       {isAdmin && payRequests.length > 0 && (
-        <section className={card}>
-          <h2 className="mb-1 font-medium">Pay requests</h2>
+        <SectionCard title="Pay requests">
           <p className="mb-3 text-sm text-stone-500">
             What your team has asked to be paid for the files they worked. Freehold tracks and
             itemizes it; pay however you already pay people, then mark it here.
@@ -626,7 +624,7 @@ export default async function InvoicesPage({
               );
             })}
           </ul>
-        </section>
+        </SectionCard>
       )}
 
       {allowed && isAdmin && (

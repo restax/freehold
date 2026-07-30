@@ -80,7 +80,7 @@ export async function replaceDocument(formData: FormData) {
       },
     }),
   );
-  if (!prior || !prior.isCurrent) return; // only current versions can be replaced
+  if (!prior?.isCurrent) return; // only current versions can be replaced
 
   const bytes = Buffer.from(await file.arrayBuffer());
   const filename = file.name || "document.pdf";

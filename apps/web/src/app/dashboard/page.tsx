@@ -21,7 +21,7 @@ import {
   rowHighlightStyle,
 } from "@/lib/priority";
 import { getBillingAccess, requireTenant } from "@/lib/tenant";
-import { card, tableWrap, td, th, trHover } from "@/lib/ui";
+import { tableWrap, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -86,8 +86,7 @@ async function GuestDashboard({ tenantId, userId }: { tenantId: string; userId: 
         <h1 className="font-display text-2xl font-bold tracking-tight">Your files</h1>
       </div>
       <div className="columns-1 gap-6 lg:columns-2 [&>*]:mb-6 [&>*]:break-inside-avoid">
-        <section className={card}>
-          <h2 className="mb-1 font-medium">Assigned to you</h2>
+        <SectionCard title="Assigned to you">
           <p className="mb-3 text-xs text-stone-400">
             You're working these files as outside coverage. You see only what you've been assigned.
           </p>
@@ -120,10 +119,9 @@ async function GuestDashboard({ tenantId, userId }: { tenantId: string; userId: 
               ))}
             </ul>
           )}
-        </section>
+        </SectionCard>
         {tasks.length > 0 && (
-          <section className={card}>
-            <h2 className="mb-3 font-medium">Open tasks on your files</h2>
+          <SectionCard title="Open tasks on your files">
             <ul className="flex flex-col">
               {tasks.map((t) => (
                 <li
@@ -145,7 +143,7 @@ async function GuestDashboard({ tenantId, userId }: { tenantId: string; userId: 
                 </li>
               ))}
             </ul>
-          </section>
+          </SectionCard>
         )}
       </div>
     </div>
@@ -612,8 +610,7 @@ export default async function DashboardPage() {
 
           {/* Your assigned files */}
           {myFiles.length > 0 && (
-            <section className={card}>
-              <h2 className="mb-1 font-medium">Your files</h2>
+            <SectionCard title="Your files">
               <p className="mb-2 text-xs text-stone-400">
                 Active transactions assigned to you, soonest closing first.
               </p>
@@ -642,13 +639,12 @@ export default async function DashboardPage() {
               >
                 All your files →
               </Link>
-            </section>
+            </SectionCard>
           )}
 
           {/* Prospecting queue */}
           {prospecting.length > 0 && (
-            <section className={card}>
-              <h2 className="mb-1 font-medium">Prospecting due</h2>
+            <SectionCard title="Prospecting due">
               <p className="mb-2 text-xs text-stone-400">
                 Contacts whose auto-prospect cadence says it's time. Open one and hit "Touched
                 today" when you've reached out.
@@ -682,7 +678,7 @@ export default async function DashboardPage() {
               >
                 All due contacts →
               </Link>
-            </section>
+            </SectionCard>
           )}
         </div>
 

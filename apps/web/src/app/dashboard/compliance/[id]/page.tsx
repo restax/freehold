@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
 import { EmptyState } from "@/components/empty-state";
+import { SectionCard } from "@/components/section-card";
 import {
   addChecklistItem,
   deleteChecklist,
@@ -11,7 +12,7 @@ import {
   setChecklistApprovalLevels,
 } from "@/lib/actions/compliance";
 import { requireAdminTenant } from "@/lib/tenant";
-import { btn, card, input, label, td, th, trHover } from "@/lib/ui";
+import { btn, input, label, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -52,8 +53,7 @@ export default async function ComplianceChecklistPage({
         </p>
       </div>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Required documents</h2>
+      <SectionCard title="Required documents">
         <p className="mb-3 text-sm text-stone-500">
           Every file under this checklist must carry these. Optional items are tracked but never
           block a file from passing.
@@ -121,11 +121,10 @@ export default async function ComplianceChecklistPage({
             Add document
           </button>
         </form>
-      </section>
+      </SectionCard>
 
       {isAdmin && (
-        <section className={card}>
-          <h2 className="mb-1 font-medium">Review policy</h2>
+        <SectionCard title="Review policy">
           <p className="mb-3 text-sm text-stone-500">
             How many levels of reviewer sign-off each document needs. One level means any reviewer's
             approval passes it; more levels make it climb the ladder — set who reviews at which
@@ -153,11 +152,10 @@ export default async function ComplianceChecklistPage({
               Save
             </button>
           </form>
-        </section>
+        </SectionCard>
       )}
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Clients using this checklist</h2>
+      <SectionCard title="Clients using this checklist">
         {checklist.clients.length === 0 ? (
           <p className="text-sm text-stone-500">
             Not assigned yet. Open a client and set their compliance rules to apply this checklist
@@ -177,11 +175,10 @@ export default async function ComplianceChecklistPage({
             ))}
           </ul>
         )}
-      </section>
+      </SectionCard>
 
       {isAdmin && (
-        <section className={card}>
-          <h2 className="mb-1 font-medium">Danger zone</h2>
+        <SectionCard title="Danger zone">
           <p className="mb-3 text-sm text-stone-500">
             Deleting a checklist leaves the clients using it with no document requirements.
           </p>
@@ -191,7 +188,7 @@ export default async function ComplianceChecklistPage({
             description="Removes this checklist and its documents."
             hidden={{ id: checklist.id }}
           />
-        </section>
+        </SectionCard>
       )}
     </div>
   );

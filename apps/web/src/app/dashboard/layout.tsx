@@ -9,7 +9,7 @@ import { SupportTicketWidget } from "@/components/support-ticket-widget";
 import { TopBar } from "@/components/top-bar";
 import { VoiceWidget } from "@/components/voice-widget";
 import { openBillingPortal } from "@/lib/actions/billing";
-import { brandRamp, priorityVars, tenantAppearance } from "@/lib/appearance";
+import { priorityVars, tenantAppearance, themeTokens } from "@/lib/appearance";
 import { DEMO_SLUG } from "@/lib/demo";
 import { getTenantPlan } from "@/lib/plans";
 import { getSession, listTenants } from "@/lib/session";
@@ -86,10 +86,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const isDemoTenant = active?.slug === DEMO_SLUG;
 
   // The colour theme paints the whole dashboard the same way it paints the
-  // portal — overriding the brand ramp reskins every brand class, sidebar
-  // included. Forest is the native palette, so skip the override there and
-  // leave existing default workspaces pixel-identical.
-  const themeVars = appearance.theme === "forest" ? {} : brandRamp(appearance.theme);
+  // portal: the tokens cover the brand ramp *and* the shaded section strips,
+  // top bar and address pills, so one choice moves every themed surface.
+  //
+  // Emitted for every theme including the default. It used to short-circuit
+  // on "forest" to keep default workspaces byte-identical, which quietly
+  // meant the default could never be re-tuned from one place — the CSS
+  // fallback and the preset had to be kept in agreement by hand.
+  const themeVars = themeTokens(appearance);
 
   return (
     <div

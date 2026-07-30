@@ -2,6 +2,7 @@ import { ComplianceSlotStatus, ComplianceStatus, withTenant } from "@freehold/db
 import Link from "next/link";
 import { Badge } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
+import { SectionCard } from "@/components/section-card";
 import { createChecklist } from "@/lib/actions/compliance";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/compliance";
 import { fmtDate } from "@/lib/format";
@@ -60,8 +61,7 @@ export default async function CompliancePage() {
         </p>
       </div>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Review queue</h2>
+      <SectionCard title="Review queue">
         <p className="mb-3 text-sm text-stone-500">
           Files sent up for compliance review, longest-waiting first. Open one to approve each
           document or send it back with a note.
@@ -130,7 +130,7 @@ export default async function CompliancePage() {
             </table>
           </div>
         )}
-      </section>
+      </SectionCard>
 
       <details className={card}>
         <summary className={summaryLink}>New checklist</summary>
@@ -149,8 +149,7 @@ export default async function CompliancePage() {
         </form>
       </details>
 
-      <section className={card}>
-        <h2 className="mb-3 font-medium">Checklists</h2>
+      <SectionCard title="Checklists">
         {checklists.length === 0 ? (
           <EmptyState
             title="No compliance checklists yet"
@@ -188,10 +187,9 @@ export default async function CompliancePage() {
             </table>
           </div>
         )}
-      </section>
+      </SectionCard>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Who compliance applies to</h2>
+      <SectionCard title="Who compliance applies to">
         <p className="mb-3 text-sm text-stone-500">
           Set each client's rules on their profile. A client with compliance off, or with no
           checklist assigned, has no document requirements.
@@ -235,7 +233,7 @@ export default async function CompliancePage() {
             </table>
           </div>
         )}
-      </section>
+      </SectionCard>
     </div>
   );
 }

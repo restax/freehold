@@ -16,6 +16,7 @@ import { Badge, StatusBadge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
 import { RevealCredential } from "@/components/reveal-credential";
 import { RevealSkyslope } from "@/components/reveal-skyslope";
+import { SectionCard } from "@/components/section-card";
 import { saveClientBilling } from "@/lib/actions/billing-policy";
 import {
   addClientAgent,
@@ -360,8 +361,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         </form>
       </details>
 
-      <section className={card}>
-        <h2 className="mb-3 font-medium">Transactions</h2>
+      <SectionCard title="Transactions">
         {client.transactions.length === 0 ? (
           <p className="text-sm text-stone-500">
             No transactions for this client yet.{" "}
@@ -402,7 +402,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             </table>
           </div>
         )}
-      </section>
+      </SectionCard>
 
       {showAgents && (
         <section className={card}>
@@ -670,8 +670,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         </section>
       )}
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Credentials</h2>
+      <SectionCard title="Credentials">
         <p className="mb-3 text-sm text-stone-500">
           Vault logins for {client.name} and their agents — encrypted at rest, every reveal audited.
         </p>
@@ -761,11 +760,10 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           </Link>
           .
         </p>
-      </section>
+      </SectionCard>
 
       {isAdmin && (
-        <section className={card}>
-          <h2 className="mb-1 font-medium">SkySlope API access</h2>
+        <SectionCard title="SkySlope API access">
           <p className="mb-3 text-sm text-stone-500">
             {client.name} generates an Access Key and Secret in SkySlope under{" "}
             <strong>My Account → Integrations → Generate New Key</strong> and gives them to you.
@@ -832,7 +830,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
               </button>
             </form>
           )}
-        </section>
+        </SectionCard>
       )}
 
       <section className={card}>
@@ -901,8 +899,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         )}
       </section>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Their forms</h2>
+      <SectionCard title="Their forms">
         <p className="mb-3 text-sm text-stone-500">
           {client.name} sees your shared portal forms unless you give them their own version. A
           private version starts as a copy and stays a draft until you publish it — until then they
@@ -997,10 +994,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             )}
           </p>
         </form>
-      </section>
+      </SectionCard>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Compliance</h2>
+      <SectionCard title="Compliance">
         <p className="mb-3 text-sm text-stone-500">
           {client.complianceEnabled && client.complianceChecklist ? (
             <>
@@ -1061,10 +1057,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             </span>
           )}
         </form>
-      </section>
+      </SectionCard>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Billing</h2>
+      <SectionCard title="Billing">
         <p className="mb-3 text-sm text-stone-500">
           How {client.name} is billed. Anything left on “workspace default” follows Settings →
           Client billing defaults; overrides here win for this client only.
@@ -1162,10 +1157,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             Save billing
           </button>
         </form>
-      </section>
+      </SectionCard>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Quiet-file alerts</h2>
+      <SectionCard title="Quiet-file alerts">
         <p className="mb-3 text-sm text-stone-500">
           How long one of {client.name}'s files may sit untouched before it's flagged — on the
           dashboard, the transaction, and the daily briefing. Counted in business days, so weekends
@@ -1219,10 +1213,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         <p className="mt-2 text-xs text-stone-400">
           Critical dates, in priority order: closing, mortgage commitment, inspection deadline.
         </p>
-      </section>
+      </SectionCard>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Automated emails</h2>
+      <SectionCard title="Automated emails">
         <p className="mb-3 text-sm text-stone-500">
           Lifecycle emails {client.name} receives automatically. Wording is editable under{" "}
           <Link href="/dashboard/emails" className="text-brand-700 hover:underline">
@@ -1263,10 +1256,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             Save
           </button>
         </form>
-      </section>
+      </SectionCard>
 
-      <section className={card}>
-        <h2 className="mb-1 font-medium">Notes</h2>
+      <SectionCard title="Notes">
         <p className="mb-3 text-sm text-stone-500">Internal only — never visible on any portal.</p>
         <form action={addClientNote} className="mb-3 flex items-end gap-2">
           <input type="hidden" name="clientId" value={client.id} />
@@ -1296,7 +1288,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             ))}
           </ul>
         )}
-      </section>
+      </SectionCard>
 
       {isAdmin && (
         <DangerDelete
