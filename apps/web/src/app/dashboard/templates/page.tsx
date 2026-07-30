@@ -27,10 +27,21 @@ export default async function TemplatesHubPage({
     restoredLibrary?: string;
     templateId?: string;
     folder?: string;
+    planId?: string;
+    docId?: string;
   }>;
 }) {
   const { tenantId, isAdmin } = await requireAdminTenant();
-  const { tab: rawTab, group, restored, restoredLibrary, templateId, folder } = await searchParams;
+  const {
+    tab: rawTab,
+    group,
+    restored,
+    restoredLibrary,
+    templateId,
+    folder,
+    planId,
+    docId,
+  } = await searchParams;
   const tab: TemplateTab = VALID_TABS.includes(rawTab as TemplateTab)
     ? (rawTab as TemplateTab)
     : "tasks";
@@ -50,8 +61,10 @@ export default async function TemplatesHubPage({
       {tab === "tasks" && (
         <TemplatesTabTasks
           tenantId={tenantId}
+          isAdmin={isAdmin}
           groupParam={group}
           restoredLibrary={restoredLibrary}
+          planId={planId}
         />
       )}
       {tab === "emails" && (
@@ -65,7 +78,9 @@ export default async function TemplatesHubPage({
       )}
       {tab === "attachments" && <TemplatesTabAttachments tenantId={tenantId} groupParam={group} />}
       {tab === "dates" && <TemplatesTabDates tenantId={tenantId} groupParam={group} />}
-      {tab === "docs" && <TemplatesTabDocs tenantId={tenantId} groupParam={group} />}
+      {tab === "docs" && (
+        <TemplatesTabDocs tenantId={tenantId} isAdmin={isAdmin} groupParam={group} docId={docId} />
+      )}
     </div>
   );
 }

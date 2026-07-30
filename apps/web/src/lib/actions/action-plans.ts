@@ -97,7 +97,7 @@ export async function createPlan(formData: FormData) {
     }),
   );
   revalidatePath("/dashboard/templates");
-  redirect(`/dashboard/action-plans/${created.id}`);
+  redirect(`/dashboard/templates?tab=tasks&planId=${created.id}`);
 }
 
 export async function deletePlan(formData: FormData) {
@@ -141,7 +141,7 @@ export async function addTemplateTask(formData: FormData) {
       },
     });
   });
-  revalidatePath(`/dashboard/action-plans/${actionPlanId}`);
+  revalidatePath("/dashboard/templates");
 }
 
 export async function updateTemplateTask(formData: FormData) {
@@ -162,7 +162,7 @@ export async function updateTemplateTask(formData: FormData) {
       },
     }),
   );
-  revalidatePath(`/dashboard/action-plans/${actionPlanId}`);
+  revalidatePath("/dashboard/templates");
 }
 
 /**
@@ -180,7 +180,7 @@ export async function deleteTemplateTasks(formData: FormData) {
   await withTenant(tenantId, (tx) =>
     tx.actionPlanTask.deleteMany({ where: { id: { in: ids }, actionPlanId } }),
   );
-  revalidatePath(`/dashboard/action-plans/${actionPlanId}`);
+  revalidatePath("/dashboard/templates");
 }
 
 /** A document this plan expects on the file. Applying the plan seeds the
@@ -199,14 +199,13 @@ export async function addTemplateDocument(formData: FormData) {
       data: { tenantId, actionPlanId, label, sortOrder: (max._max.sortOrder ?? 0) + 1 },
     });
   });
-  revalidatePath(`/dashboard/action-plans/${actionPlanId}`);
+  revalidatePath("/dashboard/templates");
 }
 
 export async function deleteTemplateDocument(formData: FormData) {
   const { tenantId } = await requireTenant();
   const id = str(formData, "id");
-  const actionPlanId = str(formData, "actionPlanId");
   if (!id) return;
   await withTenant(tenantId, (tx) => tx.actionPlanDocument.delete({ where: { id } }));
-  revalidatePath(`/dashboard/action-plans/${actionPlanId}`);
+  revalidatePath("/dashboard/templates");
 }

@@ -1,5 +1,5 @@
 import { withTenant } from "@freehold/db";
-import Link from "next/link";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { EmailTemplateTree } from "@/components/email-template-tree";
 import { MergeFieldBrowser, TrackedInput } from "@/components/merge-field-browser";
 import { SaveMenu } from "@/components/save-menu";
@@ -17,25 +17,6 @@ import { btn, btnGhost, input, label as labelCls, summaryLink } from "@/lib/ui";
 
 const composeRow = "grid grid-cols-[5.5rem_1fr] items-center gap-3 border-b border-stone-100 py-2";
 const composeLabel = "text-sm text-stone-500";
-
-function Breadcrumbs({ items }: { items: Array<{ label: string; href?: string }> }) {
-  return (
-    <nav className="flex flex-wrap items-center gap-1.5 text-sm text-stone-400">
-      {items.map((it, i) => (
-        <span key={it.label} className="flex items-center gap-1.5">
-          {i > 0 && <span aria-hidden>/</span>}
-          {it.href ? (
-            <Link href={it.href} className="hover:text-brand-700 hover:underline">
-              {it.label}
-            </Link>
-          ) : (
-            <span className="font-medium text-stone-700">{it.label}</span>
-          )}
-        </span>
-      ))}
-    </nav>
-  );
-}
 
 export async function TemplatesTabEmails({
   tenantId,

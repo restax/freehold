@@ -23,11 +23,12 @@ export async function createTemplate(formData: FormData) {
         name,
         description: optStr(formData, "description"),
         body: str(formData, "body") || `# ${name}\n\n`,
+        groupId: optStr(formData, "groupId"),
       },
     }),
   );
   revalidatePath("/dashboard/templates");
-  redirect(`/dashboard/templates/${created.id}`);
+  redirect(`/dashboard/templates?tab=docs&docId=${created.id}`);
 }
 
 export async function updateTemplate(formData: FormData) {
@@ -41,10 +42,10 @@ export async function updateTemplate(formData: FormData) {
         name: str(formData, "name") || undefined,
         description: optStr(formData, "description"),
         body: String(formData.get("body") ?? ""),
+        groupId: optStr(formData, "groupId"),
       },
     }),
   );
-  revalidatePath(`/dashboard/templates/${id}`);
   revalidatePath("/dashboard/templates");
 }
 
@@ -54,7 +55,7 @@ export async function deleteTemplate(formData: FormData) {
   if (!id || !isAdmin || !confirmed(formData)) return;
   await withTenant(tenantId, (tx) => tx.docTemplate.delete({ where: { id } }));
   revalidatePath("/dashboard/templates");
-  redirect("/dashboard/templates");
+  redirect("/dashboard/templates?tab=docs");
 }
 
 /** Render a template against a transaction and attach the PDF as a document. */
