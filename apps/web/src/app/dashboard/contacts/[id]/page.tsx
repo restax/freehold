@@ -4,7 +4,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
+import { HandbookGradeControl } from "@/components/handbook-grade";
+import { HandbookNotes } from "@/components/handbook-notes";
 import { RevealCredential } from "@/components/reveal-credential";
+import { SectionCard } from "@/components/section-card";
 import { addContactNote, deleteContact, logTouch, scheduleFollowUp } from "@/lib/actions/contacts";
 import { toggleTask } from "@/lib/actions/tasks";
 import { createCredential } from "@/lib/actions/vault";
@@ -19,7 +22,8 @@ import {
   type TouchDates,
 } from "@/lib/crm";
 import { fmtDate, fmtMoney } from "@/lib/format";
-import { requireTenant } from "@/lib/tenant";
+import { handbookState } from "@/lib/plans";
+import { getMemberRole, requireTenant } from "@/lib/tenant";
 import {
   btn,
   btnGhost,
@@ -72,6 +76,18 @@ export default async function ContactDetailPage({
   const { id } = await params;
   const { tab: tabRaw } = await searchParams;
   const tab: Tab = (TABS.some(([t]) => t === tabRaw) ? tabRaw : "recent") as Tab;
+
+  const hb = await handbookState(tenantId);
+  const role = await getMemberRole(tenantId, userId);
+  const canGrade = role === "owner" || role === "admin";
+  const handbookNotes = hb.notes
+    ? await withTenant(tenantId, (tx) =>
+        tx.handbookNote.findMany({
+          where: { subjectType: "CONTACT", subjectId: id },
+          orderBy: { createdAt: "desc" },
+        }),
+      )
+    : [];
 
   const contact = await withTenant(tenantId, (tx) =>
     tx.contact.findUnique({
@@ -168,6 +184,17 @@ export default async function ContactDetailPage({
           {contact.grade && (
             <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-800">
               {contact.grade} · every {GRADE_CADENCE[contact.grade]}d
+            </span>
+          )}
+          {/* Spelled out rather than shown as a bare letter: the cadence grade
+              sits immediately to the left, and two unlabelled letter grades
+              side by side would be unreadable. */}
+          {contact.handbookGrade && (
+            <span
+              title={contact.handbookGradeNote ?? undefined}
+              className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-semibold text-stone-700"
+            >
+              {contact.handbookGrade} · working relationship
             </span>
           )}
           {dueForTouch && (
@@ -267,6 +294,33 @@ export default async function ContactDetailPage({
 
       {/* Tabs */}
       <div>
+        {/* Above the tabbed detail, not inside it: these are the things someone
+          needs before they act, and a tab is where information goes to be
+          missed. */}
+        <HandbookNotes
+          subjectType="CONTACT"
+          subjectId={contact.id}
+          notes={handbookNotes}
+          canWrite={hb.notes}
+          locked={hb.locked}
+          hint="What someone new would need telling — how to reach them, what they do and don't cover, anything that has caught the team out before."
+        />
+
+        {!hb.locked && canGrade && (
+          <SectionCard title="Working relationship">
+            <p className="mb-3 text-sm text-stone-500">
+              How this business has found dealing with them. Separate from the contact grade above,
+              which only sets how often to get in touch.
+            </p>
+            <HandbookGradeControl
+              kind="contact"
+              subjectId={contact.id}
+              grade={contact.handbookGrade}
+              reason={contact.handbookGradeNote}
+            />
+          </SectionCard>
+        )}
+
         <nav className="flex flex-wrap gap-1 border-b border-stone-200">
           {TABS.map(([key, labelText]) => (
             <Link

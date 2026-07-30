@@ -14,6 +14,8 @@ import { notFound } from "next/navigation";
 import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { Badge, StatusBadge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
+import { HandbookGradeControl } from "@/components/handbook-grade";
+import { HandbookNotes } from "@/components/handbook-notes";
 import { RevealCredential } from "@/components/reveal-credential";
 import { RevealSkyslope } from "@/components/reveal-skyslope";
 import { SectionCard } from "@/components/section-card";
@@ -45,7 +47,7 @@ import {
 import { parseEmailPrefs } from "@/lib/email-prefs";
 import { FORM_KIND_LABEL } from "@/lib/form-schema";
 import { fmtDate, fmtMoney } from "@/lib/format";
-import { transactionHasPro } from "@/lib/plans";
+import { handbookState, transactionHasPro } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
 import { decodeSkyslopeConfig, maskKey, parseSkyslopeConfig, skyslopeState } from "@/lib/skyslope";
 import { requireAdminTenant } from "@/lib/tenant";
@@ -117,6 +119,19 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
       tx.contact.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     ]),
   );
+  // The Handbook's notes for this client, newest first. Fetched separately
+  // rather than as an include because the panel is plan-gated and a locked
+  // workspace shouldn't pay for the query.
+  const hb = await handbookState(tenantId);
+  const handbookNotes = hb.notes
+    ? await withTenant(tenantId, (tx) =>
+        tx.handbookNote.findMany({
+          where: { subjectType: "CLIENT", subjectId: id },
+          orderBy: { createdAt: "desc" },
+        }),
+      )
+    : [];
+
   const checklists = await withTenant(tenantId, (tx) =>
     tx.complianceChecklist.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
   );
@@ -1257,6 +1272,33 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           </button>
         </form>
       </SectionCard>
+
+      {/* The Handbook sits above the running notes below on purpose. Notes are
+          a log of what happened; the Handbook is the standing instructions —
+          the things that stay true and that a new coordinator needs told. */}
+      <HandbookNotes
+        subjectType="CLIENT"
+        subjectId={client.id}
+        notes={handbookNotes}
+        canWrite={hb.notes}
+        locked={hb.locked}
+        hint="What someone new would need telling about this client — how they like to be reached, what they always ask for, anything that trips people up."
+      />
+
+      {!hb.locked && isAdmin && (
+        <SectionCard title="Working relationship">
+          <p className="mb-3 text-sm text-stone-500">
+            Your team's own read on this client. Everyone here can see it — that's the point, so
+            nobody takes on work the business has already decided against.
+          </p>
+          <HandbookGradeControl
+            kind="client"
+            subjectId={client.id}
+            grade={client.handbookGrade}
+            reason={client.handbookGradeNote}
+          />
+        </SectionCard>
+      )}
 
       <SectionCard title="Notes">
         <p className="mb-3 text-sm text-stone-500">Internal only — never visible on any portal.</p>

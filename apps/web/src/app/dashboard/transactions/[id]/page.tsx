@@ -43,6 +43,7 @@ import { DocumentDropZone } from "@/components/document-drop-zone";
 import { EmailPortalLinkForm } from "@/components/email-portal-link-form";
 import { EntityPicker } from "@/components/entity-picker";
 import { ExtractButton } from "@/components/extract-button";
+import { HandbookNotes } from "@/components/handbook-notes";
 import { KeyDateRow } from "@/components/key-date-row";
 import { LinkPartyForm } from "@/components/link-party-form";
 import { LiveDictateButton } from "@/components/live-dictate-button";
@@ -134,7 +135,7 @@ import { isGovernedDateField, KEY_DATE_LABELS } from "@/lib/governed-dates";
 import { invoiceLabel, TERM_PRESETS } from "@/lib/invoicing";
 import { gapForTransaction, gapMessage } from "@/lib/licensing";
 import { fmtCents } from "@/lib/pay";
-import { creditBalance, transactionHasPro } from "@/lib/plans";
+import { creditBalance, handbookState, transactionHasPro } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
 import { resolveTaskColumns, TASK_COLUMNS, taskColumnGroups } from "@/lib/task-columns";
@@ -327,6 +328,20 @@ export default async function TransactionDetailPage({
   const taskColumns = resolveTaskColumns(
     (myMember?.tablePrefs as { taskColumns?: unknown } | null)?.taskColumns,
   );
+
+  // The Handbook notes kept on this file itself. The pooled recap that also
+  // gathers the client's and the parties' notes is Stage 3; this is only the
+  // file's own list, so a standing instruction can be recorded where it
+  // applies to one deal rather than to every deal that client ever brings.
+  const hb = await handbookState(tenantId);
+  const handbookNotes = hb.notes
+    ? await withTenant(tenantId, (tx) =>
+        tx.handbookNote.findMany({
+          where: { subjectType: "TRANSACTION", subjectId: id },
+          orderBy: { createdAt: "desc" },
+        }),
+      )
+    : [];
 
   // Compliance: the current round drives the tab; older rounds stay as history.
   const currentRound = txn.compliance.find((c) => c.isCurrent) ?? null;
@@ -2614,6 +2629,18 @@ export default async function TransactionDetailPage({
                 )}
               </SectionCard>
             </>
+          )}
+          {tab === "notes" && (
+            <div className="mb-4">
+              <HandbookNotes
+                subjectType="TRANSACTION"
+                subjectId={txn.id}
+                notes={handbookNotes}
+                canWrite={hb.notes}
+                locked={hb.locked}
+                hint="Anything specific to this file that someone picking it up would need told."
+              />
+            </div>
           )}
           {tab === "notes" && (
             <SectionCard title="Notes" icon={<NotePencil size={15} weight="fill" aria-hidden />}>

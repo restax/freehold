@@ -1,6 +1,7 @@
 import { prisma, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { Avatar } from "@/components/avatar";
+import { MemberHandbookNotes } from "@/components/handbook-notes";
 import { SectionCard } from "@/components/section-card";
 import { addLicense, deleteLicense } from "@/lib/actions/licenses";
 import {
@@ -14,7 +15,7 @@ import {
 import { BILLING_ROLE_OPTIONS, billingRoleLabel } from "@/lib/billing-access";
 import { fmtDate } from "@/lib/format";
 import { licenseHealth } from "@/lib/licenses";
-import { seatState } from "@/lib/plans";
+import { handbookState, seatState } from "@/lib/plans";
 import { requireAdminTenant } from "@/lib/tenant";
 import { btn, btnGhost, input, label, tableWrap, td, th, trHover } from "@/lib/ui";
 
@@ -62,6 +63,26 @@ export default async function TeamPage() {
       tx.userLicense.findMany({ orderBy: [{ state: "asc" }, { createdAt: "asc" }] }),
     ),
   ]);
+  // Notes about people, keyed by member. Only fetched for an admin — a plain
+  // member must never receive these rows at all, not merely fail to render
+  // them, so the query itself is behind the check rather than the markup.
+  const hb = await handbookState(tenantId);
+  const showMemberNotes = isAdmin && hb.notes;
+  const memberNotes = showMemberNotes
+    ? await withTenant(tenantId, (tx) =>
+        tx.handbookNote.findMany({
+          where: { subjectType: "MEMBER" },
+          orderBy: { createdAt: "desc" },
+        }),
+      )
+    : [];
+  const notesByMember = new Map<string, typeof memberNotes>();
+  for (const n of memberNotes) {
+    const list = notesByMember.get(n.subjectId) ?? [];
+    list.push(n);
+    notesByMember.set(n.subjectId, list);
+  }
+
   const baseUrl = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
   const seats = await seatState(tenantId);
   const licensesByUser = new Map<string, typeof licenses>();
@@ -242,6 +263,18 @@ export default async function TeamPage() {
           </table>
         </div>
       </SectionCard>
+
+      {showMemberNotes &&
+        members.map((m) => (
+          <MemberHandbookNotes
+            key={`hb-${m.id}`}
+            subjectId={m.id}
+            personName={m.user.name ?? m.user.email}
+            notes={notesByMember.get(m.id) ?? []}
+            canWrite
+            back="/dashboard/team"
+          />
+        ))}
 
       {isAdmin && (
         <SectionCard title="Team licenses">
