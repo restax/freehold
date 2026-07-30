@@ -10,7 +10,7 @@ import { SectionCard } from "@/components/section-card";
 import { toggleTask } from "@/lib/actions/tasks";
 import { rankAlerts, transactionAlerts } from "@/lib/alerts";
 import { billingExceptions, invoiceMoney, transactionBilling } from "@/lib/billing";
-import { fmtDate, STATUS_LABEL } from "@/lib/format";
+import { fmtDate, fmtDayMonth, STATUS_LABEL } from "@/lib/format";
 import { agingBucket } from "@/lib/invoicing";
 import { fmtCents } from "@/lib/pay";
 import {
@@ -112,7 +112,7 @@ async function GuestDashboard({ tenantId, userId }: { tenantId: string; userId: 
                   {t.client && <span className="text-stone-400">{t.client.name}</span>}
                   {t.closeDate && (
                     <span className="ml-auto tabular-nums text-stone-400">
-                      closes {fmtDate(t.closeDate)}
+                      closes {fmtDayMonth(t.closeDate)}
                     </span>
                   )}
                 </li>
@@ -129,7 +129,7 @@ async function GuestDashboard({ tenantId, userId }: { tenantId: string; userId: 
                   className="flex items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
                 >
                   <span className="whitespace-nowrap tabular-nums text-stone-500">
-                    {fmtDate(t.dueDate)}
+                    {fmtDayMonth(t.dueDate)}
                   </span>
                   <span>{t.title}</span>
                   {t.transaction && (
@@ -335,7 +335,7 @@ export default async function DashboardPage() {
             tone === "red" ? "font-medium text-red-600" : "text-stone-500"
           }`}
         >
-          {fmtDate(t.dueDate)}
+          {fmtDayMonth(t.dueDate)}
         </span>
         <span className="text-sm">{t.title}</span>
         {PRIORITY_LABEL[eff] && (
@@ -627,7 +627,7 @@ export default async function DashboardPage() {
                     {t.client && <span className="text-stone-400">{t.client.name}</span>}
                     {t.closeDate && (
                       <span className="ml-auto tabular-nums text-stone-400">
-                        closes {fmtDate(t.closeDate)}
+                        closes {fmtDayMonth(t.closeDate)}
                       </span>
                     )}
                   </li>
@@ -667,7 +667,7 @@ export default async function DashboardPage() {
                       </span>
                     )}
                     <span className="ml-auto tabular-nums text-stone-400">
-                      due {fmtDate(c.nextTouchAt)}
+                      due {fmtDayMonth(c.nextTouchAt)}
                     </span>
                   </li>
                 ))}
@@ -722,7 +722,7 @@ export default async function DashboardPage() {
                   <div key={dayKey(date)} className="flex gap-4">
                     <div className="w-24 shrink-0 pt-1.5">
                       <p className="text-sm font-medium">{dayLabel(date, todayKey)}</p>
-                      <p className="text-xs tabular-nums text-stone-400">{dayKey(date)}</p>
+                      <p className="text-xs tabular-nums text-stone-400">{fmtDayMonth(date)}</p>
                     </div>
                     <div className="min-w-0 flex-1 border-l-2 border-stone-100 pl-4">
                       {dayClosings.map((c) => (
@@ -773,7 +773,7 @@ export default async function DashboardPage() {
                         </button>
                       </form>
                       <span className="whitespace-nowrap text-sm tabular-nums text-stone-400">
-                        {fmtDate(t.completedAt)}
+                        {fmtDayMonth(t.completedAt)}
                       </span>
                       <span className="text-sm text-stone-400 line-through">{t.title}</span>
                       {t.transaction && (
@@ -828,7 +828,7 @@ export default async function DashboardPage() {
                         <td className={td}>
                           <StatusBadge status={t.status} />
                         </td>
-                        <td className={td}>{fmtDate(t.closeDate)}</td>
+                        <td className={td}>{fmtDayMonth(t.closeDate)}</td>
                       </tr>
                     ))}
                   </tbody>
