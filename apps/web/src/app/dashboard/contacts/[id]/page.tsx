@@ -640,17 +640,16 @@ export default async function ContactDetailPage({
                   roadmap.
                 </span>
               </p>
+              <DangerDelete
+                action={deleteContact}
+                label="Delete this contact"
+                description={`Removes ${contact.name}, their notes, and follow-ups. Transaction history is kept. This cannot be undone.`}
+                hidden={{ id: contact.id }}
+              />
             </div>
           )}
         </div>
       </div>
-
-      <DangerDelete
-        action={deleteContact}
-        label="Delete this contact"
-        description={`Removes ${contact.name}, their notes, and follow-ups. Transaction history is kept. This cannot be undone.`}
-        hidden={{ id: contact.id }}
-      />
     </div>
   );
 }

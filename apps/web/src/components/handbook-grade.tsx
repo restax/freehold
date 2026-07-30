@@ -68,7 +68,7 @@ export function HandbookGradeControl({
           name="gradeNote"
           defaultValue={reason ?? ""}
           maxLength={1000}
-          placeholder="Blamed us for a deal falling through — do not accept work"
+          placeholder="Briefly state the reason for this rating…"
           className={input}
         />
       </label>
