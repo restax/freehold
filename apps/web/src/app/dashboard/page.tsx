@@ -4,6 +4,7 @@ import Link from "next/link";
 import { after } from "next/server";
 import { AddressPill } from "@/components/address-pill";
 import { StatusBadge, statusDot } from "@/components/badges";
+import { RangeSwitch, TopClientsChart, VolumeChart } from "@/components/dashboard-charts";
 import { DemoWelcome } from "@/components/demo-welcome";
 import { EmptyState } from "@/components/empty-state";
 import { HandbookGlance } from "@/components/handbook-glance";
@@ -12,6 +13,7 @@ import { SectionCard } from "@/components/section-card";
 import { toggleTask } from "@/lib/actions/tasks";
 import { rankAlerts, transactionAlerts } from "@/lib/alerts";
 import { billingExceptions, invoiceMoney, transactionBilling } from "@/lib/billing";
+import { bucketByDay, parseRange, topClients } from "@/lib/dashboard-charts";
 import { fmtDate, fmtDayMonth, STATUS_LABEL } from "@/lib/format";
 import { summaryNotesFor } from "@/lib/handbook";
 import { isStale } from "@/lib/handbook/summary-context";
@@ -155,7 +157,12 @@ async function GuestDashboard({ tenantId, userId }: { tenantId: string; userId: 
   );
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string }>;
+}) {
+  const chartRange = parseRange((await searchParams).range);
   const { tenantId, userId, isGuest } = await requireTenant({ allowGuest: true });
   // Everything on this page is workspace-wide. A guest gets only their own
   // assigned files instead — see GuestDashboard below.
@@ -221,6 +228,24 @@ export default async function DashboardPage() {
         };
       })
     : null;
+
+  // Files opened inside the chart window, for the two panels in the right
+  // rail. Three columns only — this feeds a count and a ranking, not a list
+  // anyone reads.
+  const chartFiles = await withTenant(tenantId, (tx) =>
+    tx.transaction.findMany({
+      where: { createdAt: { gte: new Date(now.getTime() - chartRange * 24 * 3600 * 1000) } },
+      select: { createdAt: true, clientId: true, client: { select: { name: true } } },
+    }),
+  );
+  const volumeBuckets = bucketByDay(
+    chartFiles.map((t) => t.createdAt),
+    chartRange,
+    now,
+  );
+  const busiestClients = topClients(
+    chartFiles.map((t) => ({ clientId: t.clientId, clientName: t.client?.name ?? null })),
+  );
 
   const { counts, openTasks, closings, doneThisWeek, prospecting, recent, licenseAlerts, myFiles } =
     await withTenant(tenantId, async (tx) => ({
@@ -496,54 +521,14 @@ export default async function DashboardPage() {
         </SectionCard>
       )}
 
-      {revenue && (
-        <SectionCard
-          title="Money"
-          action={
-            <Link href="/dashboard/invoices" className="text-xs text-brand-700 hover:underline">
-              Invoices →
-            </Link>
-          }
-        >
-          <div className="flex flex-wrap gap-x-6 gap-y-2">
-            {(
-              [
-                ["Outstanding", fmtCents(revenue.outstanding), "text-stone-800"],
-                [
-                  "Overdue",
-                  fmtCents(revenue.overdue),
-                  revenue.overdue > 0 ? "text-red-700" : "text-stone-800",
-                ],
-                [
-                  "Collected this month",
-                  fmtCents(revenue.collectedThisMonth),
-                  revenue.collectedThisMonth > 0 ? "text-brand-700" : "text-stone-800",
-                ],
-                [
-                  "Closed unbilled",
-                  String(revenue.exceptions),
-                  revenue.exceptions > 0 ? "text-amber-700" : "text-stone-800",
-                ],
-              ] as const
-            ).map(([labelText, value, tone], i) => (
-              <div
-                key={labelText}
-                className={`flex flex-col ${i === 0 ? "" : "border-l border-stone-200 pl-6"}`}
-              >
-                <span className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
-                  {labelText}
-                </span>
-                <span className={`tabular-nums text-lg font-semibold ${tone}`}>{value}</span>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-      )}
-
       {/* Two columns: the day's work on the left (Today runs long, so it's
           the only thing in its column), everything else — stats first,
           then the rest of the week — stacked on the right. */}
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+      {/* Two thirds and a rail: the day's work reads down the left, the
+          numbers sit beside it. Everything in the rail is a figure or a small
+          chart — none of it needs width, and moving it out of the flow stops
+          the left column running alone down a 1600px screen. */}
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-6">
           {/* Today */}
           <SectionCard
@@ -747,38 +732,6 @@ export default async function DashboardPage() {
               </Link>
             </SectionCard>
           )}
-        </div>
-
-        <div className="flex flex-col gap-6">
-          {/* Transaction stats — first thing in the right column; more panels
-            will land here over time. */}
-          <SectionCard title="Transaction stats" bodyClassName="p-0">
-            <div className="grid grid-cols-2 sm:grid-cols-4">
-              {PIPELINE.map((s, i) => (
-                <Link
-                  key={s}
-                  href={`/dashboard/transactions?status=${s}`}
-                  className={`flex flex-col gap-0.5 border-stone-100 px-4 py-3 transition-colors hover:bg-stone-50 ${
-                    [
-                      "border-b border-r sm:border-b-0",
-                      "border-b sm:border-b-0 sm:border-r",
-                      "border-r",
-                      "",
-                    ][i]
-                  }`}
-                >
-                  <span className="font-serif text-2xl font-semibold tabular-nums leading-none">
-                    {countFor(s)}
-                  </span>
-                  <span className="flex items-center gap-1.5 text-xs text-stone-500">
-                    <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${statusDot(s)}`} />
-                    {STATUS_LABEL[s]}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </SectionCard>
-
           {/* Week agenda */}
           <SectionCard title="Next 7 days">
             {agendaDays.length === 0 ? (
@@ -905,6 +858,90 @@ export default async function DashboardPage() {
           </SectionCard>
 
           <HubNews />
+        </div>
+
+        <div className="flex flex-col gap-6">
+          {revenue && (
+            <SectionCard
+              title="Money"
+              action={
+                <Link href="/dashboard/invoices" className="text-xs text-brand-700 hover:underline">
+                  Invoices →
+                </Link>
+              }
+            >
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                {(
+                  [
+                    ["Outstanding", fmtCents(revenue.outstanding), "text-stone-800"],
+                    [
+                      "Overdue",
+                      fmtCents(revenue.overdue),
+                      revenue.overdue > 0 ? "text-red-700" : "text-stone-800",
+                    ],
+                    [
+                      "Collected this month",
+                      fmtCents(revenue.collectedThisMonth),
+                      revenue.collectedThisMonth > 0 ? "text-brand-700" : "text-stone-800",
+                    ],
+                    [
+                      "Closed unbilled",
+                      String(revenue.exceptions),
+                      revenue.exceptions > 0 ? "text-amber-700" : "text-stone-800",
+                    ],
+                  ] as const
+                ).map(([labelText, value, tone]) => (
+                  <div key={labelText} className="flex flex-col">
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
+                      {labelText}
+                    </span>
+                    <span className={`tabular-nums text-lg font-semibold ${tone}`}>{value}</span>
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
+          )}
+          <SectionCard title="Transaction stats" bodyClassName="p-0">
+            <div className="grid grid-cols-2">
+              {PIPELINE.map((s, i) => (
+                <Link
+                  key={s}
+                  href={`/dashboard/transactions?status=${s}`}
+                  className={`flex flex-col gap-0.5 border-stone-100 px-4 py-3 transition-colors hover:bg-stone-50 ${
+                    [
+                      "border-b border-r sm:border-b-0",
+                      "border-b sm:border-b-0 sm:border-r",
+                      "border-r",
+                      "",
+                    ][i]
+                  }`}
+                >
+                  <span className="font-serif text-2xl font-semibold tabular-nums leading-none">
+                    {countFor(s)}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-xs text-stone-500">
+                    <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${statusDot(s)}`} />
+                    {STATUS_LABEL[s]}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </SectionCard>
+
+          {/* Both panels read the same window, so one range switch governs
+              both — two switches a few pixels apart would only ever be set to
+              the same value. */}
+          <SectionCard
+            title="New files"
+            tooltip="Files opened in the selected window."
+            action={<RangeSwitch active={chartRange} />}
+          >
+            <VolumeChart buckets={volumeBuckets} range={chartRange} />
+          </SectionCard>
+
+          <SectionCard title="Busiest clients" tooltip="Who sent the most work in the window.">
+            <TopClientsChart clients={busiestClients} range={chartRange} />
+          </SectionCard>
         </div>
       </div>
     </div>

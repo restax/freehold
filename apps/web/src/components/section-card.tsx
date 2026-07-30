@@ -15,6 +15,7 @@ import type { ReactNode } from "react";
  */
 export function SectionCard({
   title,
+  tooltip,
   icon,
   count,
   action,
@@ -23,6 +24,8 @@ export function SectionCard({
   bodyClassName = "p-4",
 }: {
   title: string;
+  /** Hover text on the title, for a section whose name needs a sentence. */
+  tooltip?: string;
   /** Small glyph left of the title, in the muted header colour. */
   icon?: ReactNode;
   /** Optional pill after the title — a row count, an unread total. */
@@ -40,7 +43,9 @@ export function SectionCard({
     >
       <header className="flex items-center gap-2 border-b border-stone-200/80 bg-[var(--section-header)] px-4 py-2.5">
         {icon && <span className="shrink-0 text-stone-400">{icon}</span>}
-        <h2 className="text-sm font-semibold text-stone-800">{title}</h2>
+        <h2 className="text-sm font-semibold text-stone-800" title={tooltip}>
+          {title}
+        </h2>
         {count != null && (
           <span className="rounded-full bg-stone-200/70 px-1.5 py-0.5 text-xs font-medium text-stone-600">
             {count}
