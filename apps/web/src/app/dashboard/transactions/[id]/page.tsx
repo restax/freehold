@@ -782,7 +782,7 @@ export default async function TransactionDetailPage({
             >
               {fileMoney.billedCents > 0 ? (
                 <>
-                  <span className="text-stone-500">Billed</span>
+                  <span className="text-stone-500">Invoiced</span>
                   <span className="tabular-nums font-medium text-stone-800">
                     {fmtCents(fileMoney.billedCents)}
                   </span>
@@ -801,7 +801,7 @@ export default async function TransactionDetailPage({
                 <span className="text-stone-400">No charge</span>
               ) : (
                 <>
-                  <span className="text-stone-500">Unbilled</span>
+                  <span className="text-stone-500">Not invoiced</span>
                   <span className="tabular-nums font-medium text-amber-700">
                     {fmtCents(txn.expectedFeeCents)}
                   </span>
@@ -1675,7 +1675,9 @@ export default async function TransactionDetailPage({
                   </Link>
                 }
               >
-                {/* The ledger strip: the four numbers a TC needs to trust a file. */}
+                {/* The ledger strip: the five numbers a TC needs to trust a
+                    file — matching the draft → issue → collect stages the
+                    invoice tracker below shows one invoice at a time. */}
                 <div className="flex flex-wrap gap-x-6 gap-y-2">
                   {(
                     [
@@ -1688,14 +1690,19 @@ export default async function TransactionDetailPage({
                             : fmtCents(txn.expectedFeeCents),
                         "text-stone-800",
                       ],
-                      ["Billed", fmtCents(fileMoney.billedCents), "text-stone-800"],
+                      [
+                        "Drafted",
+                        fmtCents(draftedCents),
+                        draftedCents > 0 ? "text-stone-500" : "text-stone-800",
+                      ],
+                      ["Invoiced", fmtCents(fileMoney.billedCents), "text-stone-800"],
                       [
                         "Paid",
                         fmtCents(fileMoney.paidCents),
                         fileMoney.paidCents > 0 ? "text-brand-700" : "text-stone-800",
                       ],
                       [
-                        "Still due",
+                        "Balance due",
                         fmtCents(Math.max(0, stillDueCents)),
                         stillDueCents > 0 ? "text-amber-700" : "text-stone-800",
                       ],
@@ -1732,11 +1739,17 @@ export default async function TransactionDetailPage({
                         {fmtCents(fileMoney.paidCents)} collected of {fmtCents(base)}{" "}
                         {txn.expectedFeeCents != null && txn.expectedFeeCents > 0
                           ? "expected"
-                          : "billed"}
-                        {remainingToBillCents != null && remainingToBillCents > 0 && (
+                          : "invoiced"}
+                        {draftedCents > 0 && (
+                          <span className="text-stone-500">
+                            {" "}
+                            · {fmtCents(draftedCents)} drafted, not yet issued
+                          </span>
+                        )}
+                        {remainingToDraftCents != null && remainingToDraftCents > 0 && (
                           <span className="text-amber-700">
                             {" "}
-                            · {fmtCents(remainingToBillCents)} not yet invoiced
+                            · {fmtCents(remainingToDraftCents)} not yet drafted
                           </span>
                         )}
                       </p>
