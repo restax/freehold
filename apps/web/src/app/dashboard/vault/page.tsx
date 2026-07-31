@@ -6,7 +6,7 @@ import { SectionCard } from "@/components/section-card";
 import { createCredential, deleteCredential } from "@/lib/actions/vault";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
-import { btn, card, input, label, summaryLink, tableWrap, td, th, trHover } from "@/lib/ui";
+import { btn, btnAdd, card, input, label, tableWrap, td, th, trHover } from "@/lib/ui";
 
 const LOG_TONE: Record<string, BadgeTone> = {
   REVEALED: "progress",
@@ -55,9 +55,12 @@ export default async function VaultPage() {
         </p>
       )}
 
-      <details className={card}>
-        <summary className={summaryLink}>Add credential</summary>
-        <form action={createCredential} className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <details>
+        <summary className={`${btnAdd} w-fit list-none`}>+ Add credential</summary>
+        <form
+          action={createCredential}
+          className={`${card} mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3`}
+        >
           <label className={label}>
             System *
             <input name="system" required placeholder="MLS — MRED" className={input} />

@@ -1,8 +1,8 @@
 import { prisma, withTenant } from "@freehold/db";
 import { ArrowSquareOut, Globe, UsersThree } from "@phosphor-icons/react/dist/ssr";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/badges";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DangerDelete } from "@/components/danger-delete";
 import { FormDesigner } from "@/components/form-designer";
 import { deleteForm, updateFormMeta, updateFormPlacement } from "@/lib/actions/forms";
@@ -37,9 +37,20 @@ export default async function FormDesignerPage({ params }: { params: Promise<{ i
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Link href="/dashboard/forms" className="text-sm text-stone-500 hover:underline">
-          ← Forms
-        </Link>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Breadcrumbs
+            items={[{ label: "Forms", href: "/dashboard/forms" }, { label: form.name }]}
+          />
+          {isAdmin && (
+            <DangerDelete
+              compact
+              action={deleteForm}
+              label="Delete this form"
+              description={`Removes "${form.name}". Submissions already received are kept — each carries its own copy of the form.`}
+              hidden={{ id: form.id }}
+            />
+          )}
+        </div>
         <h1 className="flex flex-wrap items-center gap-2.5 text-xl font-semibold">
           {form.name}
           <Badge tone={form.status === "published" ? "success" : "neutral"}>
@@ -162,15 +173,6 @@ export default async function FormDesignerPage({ params }: { params: Promise<{ i
           </div>
         </form>
       </section>
-
-      {isAdmin && (
-        <DangerDelete
-          action={deleteForm}
-          label="Delete this form…"
-          description={`Removes "${form.name}". Submissions already received are kept — each carries its own copy of the form.`}
-          hidden={{ id: form.id }}
-        />
-      )}
     </div>
   );
 }

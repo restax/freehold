@@ -1,7 +1,7 @@
 import { Plus } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { createTemplateGroup, deleteTemplateGroup } from "@/lib/actions/template-groups";
-import { input } from "@/lib/ui";
+import { btnAdd, input } from "@/lib/ui";
 
 export interface TreeItem {
   id: string;
@@ -57,10 +57,20 @@ export function TemplateTree({
   const byGroup = (groupId: string | null) => items.filter((t) => t.groupId === groupId);
   const unfiled = byGroup(null);
 
+  // A small tree reads better fully open than as a wall of collapsed
+  // one-line folders the user has to click through just to see what's
+  // there — only worth collapsing once there's enough here to want to hide.
+  const folderCount = groups.length + 1;
+  const expandAllByDefault = folderCount <= 6 && items.length <= 15;
+
   const folderRow = (folderId: string, name: string, rows: TreeItem[]) => {
     const isOpenByDefault = rows.some((t) => t.id === selectedId) || selectedGroupId === folderId;
     return (
-      <details key={folderId} className="group" open={isOpenByDefault || rows.length === 0}>
+      <details
+        key={folderId}
+        className="group"
+        open={isOpenByDefault || rows.length === 0 || expandAllByDefault}
+      >
         <summary className="flex cursor-pointer select-none items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide text-stone-400 hover:text-stone-600">
           <span className="inline-block transition-transform group-open:rotate-90">▸</span>
           <span className="truncate">{name}</span>
@@ -117,15 +127,9 @@ export function TemplateTree({
         </details>
       </div>
 
-      {/* Styled to match the global "+ Create" button in the top bar — the
-          same affordance for starting something new, wherever it appears. */}
       <Link
         href={`${base}&${idParam}=new`}
-        className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-white transition ${
-          selectedId === "new" && !selectedGroupId
-            ? "bg-brand-500"
-            : "bg-brand-600 hover:bg-brand-500"
-        }`}
+        className={`${btnAdd} ${selectedId === "new" && !selectedGroupId ? "bg-brand-500" : ""}`}
       >
         <Plus size={14} weight="bold" /> {newLabel}
       </Link>

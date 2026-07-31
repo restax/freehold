@@ -3,6 +3,7 @@ import { EnvelopeSimple, Phone, UserCircle, UsersThree } from "@phosphor-icons/r
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/badges";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DangerDelete } from "@/components/danger-delete";
 import { HandbookGradeControl } from "@/components/handbook-grade";
 import { HandbookNotes } from "@/components/handbook-notes";
@@ -162,9 +163,9 @@ export default async function ContactDetailPage({
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Link href="/dashboard/contacts" className="text-sm text-stone-500 hover:underline">
-          ← Contacts
-        </Link>
+        <Breadcrumbs
+          items={[{ label: "Contacts", href: "/dashboard/contacts" }, { label: contact.name }]}
+        />
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="flex items-center gap-2.5 text-xl font-semibold">
             {contact.photoUrl ? (
@@ -641,6 +642,7 @@ export default async function ContactDetailPage({
                 </span>
               </p>
               <DangerDelete
+                compact
                 action={deleteContact}
                 label="Delete this contact"
                 description={`Removes ${contact.name}, their notes, and follow-ups. Transaction history is kept. This cannot be undone.`}

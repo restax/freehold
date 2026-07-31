@@ -31,6 +31,7 @@ import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { AgentsCommissions } from "@/components/agents-commissions";
 import { Avatar } from "@/components/avatar";
 import { Badge, EnvelopeBadge, ExtractionBadge } from "@/components/badges";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { CcEmailPill } from "@/components/cc-email-pill";
 import {
   ClosingDateCalendar,
@@ -635,9 +636,12 @@ export default async function TransactionDetailPage({
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <Link href="/dashboard/transactions" className="text-sm text-stone-500 hover:underline">
-            ← Transactions
-          </Link>
+          <Breadcrumbs
+            items={[
+              { label: "Transactions", href: "/dashboard/transactions" },
+              { label: txn.propertyAddress },
+            ]}
+          />
           <h1 className="text-xl font-semibold">{txn.propertyAddress}</h1>
           <p className="text-sm text-stone-500">
             {[txn.city, txn.state, txn.zip].filter(Boolean).join(", ") || "No location set"} ·{" "}

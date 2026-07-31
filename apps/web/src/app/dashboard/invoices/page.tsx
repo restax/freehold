@@ -40,7 +40,7 @@ import { fmtDate } from "@/lib/format";
 import { agingBucket, daysOverdue, invoiceLabel, TERM_PRESETS } from "@/lib/invoicing";
 import { fmtCents } from "@/lib/pay";
 import { getBillingAccess, requireTenant } from "@/lib/tenant";
-import { btn, btnGhost, card, input, label, summaryLink } from "@/lib/ui";
+import { btn, btnAdd, btnGhost, card, input, label, summaryLink } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -628,9 +628,9 @@ export default async function InvoicesPage({
       )}
 
       {allowed && isAdmin && (
-        <details className={card} open={invoices.length === 0}>
-          <summary className={summaryLink}>New invoice</summary>
-          <form action={createInvoice} className="mt-4 flex flex-wrap items-end gap-3">
+        <details open={invoices.length === 0}>
+          <summary className={`${btnAdd} w-fit list-none`}>+ New invoice</summary>
+          <form action={createInvoice} className={`${card} mt-3 flex flex-wrap items-end gap-3`}>
             <label className={label}>
               Client *
               <select name="clientId" required className={input} defaultValue="">

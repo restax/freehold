@@ -15,6 +15,12 @@ export const btn =
 export const btnGhost =
   "rounded-md border border-stone-300 bg-white px-2.5 py-1 text-sm text-stone-700 shadow-xs transition hover:border-stone-400 hover:bg-stone-50 active:scale-[0.98]";
 export const btnDanger = "text-sm text-red-700 transition-colors hover:text-red-900";
+/** The "start something new" button — matches the global "+ Create" button
+ *  in the top bar, so every "add an X" affordance in the app looks and
+ *  behaves the same regardless of which list it's on. Works as a <Link>,
+ *  a <button>, or a <summary> (pair with `list-none` there). */
+export const btnAdd =
+  "inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-500 active:scale-[0.98]";
 export const card =
   "rounded-lg border border-stone-200/70 bg-white p-4 shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_8px_rgb(41_37_36/0.04)]";
 /**

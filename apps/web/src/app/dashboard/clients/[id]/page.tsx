@@ -13,6 +13,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { Badge, StatusBadge } from "@/components/badges";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DangerDelete } from "@/components/danger-delete";
 import { HandbookGradeControl } from "@/components/handbook-grade";
 import { HandbookNotes } from "@/components/handbook-notes";
@@ -216,9 +217,20 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Link href="/dashboard/clients" className="text-sm text-stone-500 hover:underline">
-          ← Clients
-        </Link>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Breadcrumbs
+            items={[{ label: "Clients", href: "/dashboard/clients" }, { label: client.name }]}
+          />
+          {isAdmin && (
+            <DangerDelete
+              compact
+              action={deleteClient}
+              label="Delete this client"
+              description={`Removes ${client.name} and unlinks their transactions (the transactions themselves are kept). This cannot be undone.`}
+              hidden={{ id: client.id }}
+            />
+          )}
+        </div>
         <h1 className="flex flex-wrap items-center gap-2.5 text-xl font-semibold">
           <TypeIcon size={20} weight="duotone" className="text-brand-600" aria-hidden />
           {client.name}
@@ -1331,15 +1343,6 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           </ul>
         )}
       </SectionCard>
-
-      {isAdmin && (
-        <DangerDelete
-          action={deleteClient}
-          label="Delete this client"
-          description={`Removes ${client.name} and unlinks their transactions (the transactions themselves are kept). This cannot be undone.`}
-          hidden={{ id: client.id }}
-        />
-      )}
     </div>
   );
 }

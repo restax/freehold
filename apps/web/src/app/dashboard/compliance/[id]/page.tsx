@@ -2,6 +2,7 @@ import { withTenant } from "@freehold/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/badges";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DangerDelete } from "@/components/danger-delete";
 import { EmptyState } from "@/components/empty-state";
 import { SectionCard } from "@/components/section-card";
@@ -40,9 +41,23 @@ export default async function ComplianceChecklistPage({
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Link href="/dashboard/compliance" className="text-sm text-stone-500 hover:underline">
-          ← Compliance
-        </Link>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Breadcrumbs
+            items={[
+              { label: "Compliance", href: "/dashboard/compliance" },
+              { label: checklist.name },
+            ]}
+          />
+          {isAdmin && (
+            <DangerDelete
+              compact
+              action={deleteChecklist}
+              label="Delete checklist"
+              description="Removes this checklist and its documents."
+              hidden={{ id: checklist.id }}
+            />
+          )}
+        </div>
         <h1 className="text-xl font-semibold">{checklist.name}</h1>
         <p className="text-sm text-stone-500">
           {checklist.description ? `${checklist.description} · ` : ""}
@@ -176,20 +191,6 @@ export default async function ComplianceChecklistPage({
           </ul>
         )}
       </SectionCard>
-
-      {isAdmin && (
-        <SectionCard title="Danger zone">
-          <p className="mb-3 text-sm text-stone-500">
-            Deleting a checklist leaves the clients using it with no document requirements.
-          </p>
-          <DangerDelete
-            action={deleteChecklist}
-            label="Delete checklist"
-            description="Removes this checklist and its documents."
-            hidden={{ id: checklist.id }}
-          />
-        </SectionCard>
-      )}
     </div>
   );
 }

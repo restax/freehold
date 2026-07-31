@@ -7,7 +7,7 @@ import { createChecklist } from "@/lib/actions/compliance";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/compliance";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
-import { btn, card, input, label, summaryLink, tableWrap, td, th, trHover } from "@/lib/ui";
+import { btn, btnAdd, card, input, label, tableWrap, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -132,9 +132,9 @@ export default async function CompliancePage() {
         )}
       </SectionCard>
 
-      <details className={card}>
-        <summary className={summaryLink}>New checklist</summary>
-        <form action={createChecklist} className="mt-4 flex flex-wrap items-end gap-3">
+      <details>
+        <summary className={`${btnAdd} w-fit list-none`}>+ New checklist</summary>
+        <form action={createChecklist} className={`${card} mt-3 flex flex-wrap items-end gap-3`}>
           <label className={label}>
             Name *
             <input name="name" required className={input} placeholder="Buy-side file — Texas" />
