@@ -33,6 +33,10 @@ export async function updatePlatformSettings(formData: FormData) {
   // Blank means "use the bundled house style", so it is stored as null rather
   // than as an empty string that would reach the model as an empty prompt.
   const handbookStyleGuide = optStr(formData, "handbookStyleGuide") || null;
+  // Blank means "use the bundled copy", so it is stored as null. Removing the
+  // prompt is the checkbox's job — an empty textarea never means two things.
+  const cloudPromptText = optStr(formData, "cloudPromptText") || null;
+  const cloudPromptEnabled = formData.get("cloudPromptEnabled") === "on";
 
   await prisma.platformSetting.upsert({
     where: { id: "singleton" },
@@ -46,6 +50,8 @@ export async function updatePlatformSettings(formData: FormData) {
       ...(handbookModel ? { handbookModel } : {}),
       handbookThinking,
       handbookStyleGuide,
+      cloudPromptText,
+      cloudPromptEnabled,
     },
     update: {
       founderCallsAvailable: formData.get("founderCallsAvailable") === "on",
@@ -58,6 +64,8 @@ export async function updatePlatformSettings(formData: FormData) {
       ...(handbookModel ? { handbookModel } : {}),
       handbookThinking,
       handbookStyleGuide,
+      cloudPromptText,
+      cloudPromptEnabled,
     },
   });
 

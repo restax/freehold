@@ -15,6 +15,7 @@ import { toggleTask } from "@/lib/actions/tasks";
 import { activityTitle } from "@/lib/activity";
 import { rankAlerts, transactionAlerts } from "@/lib/alerts";
 import { billingExceptions, invoiceMoney, transactionBilling } from "@/lib/billing";
+import { cloudPromptDue, cloudPromptText, readCloudPromptConfig } from "@/lib/cloud-prompt";
 import { bucketByDay, parseRange, topClients } from "@/lib/dashboard-charts";
 import { directoryNudgeDue, readDirectoryConfig } from "@/lib/directory";
 import { fmtDate, fmtDayMonth, STATUS_LABEL } from "@/lib/format";
@@ -22,7 +23,8 @@ import { summaryNotesFor } from "@/lib/handbook";
 import { isStale } from "@/lib/handbook/summary-context";
 import { agingBucket } from "@/lib/invoicing";
 import { fmtCents } from "@/lib/pay";
-import { handbookState } from "@/lib/plans";
+import { handbookState, isCloud } from "@/lib/plans";
+import { getPlatformSettings } from "@/lib/platform-settings";
 import {
   byPriorityThenDate,
   effectivePriority,
@@ -351,20 +353,24 @@ export default async function DashboardPage({
   // than this one, which beats a spinner every morning.
   const hb = await handbookState(tenantId);
   const sideLabels = await tenantSideLabels(tenantId);
-  // Matches the bell's count in the dashboard layout — admins only, and only
-  // while the workspace is neither listed nor deliberately silenced.
+  // The two bell nudges, mirrored here so clicking the bell lands on
+  // something that explains the count. Both are admin-only, matching how
+  // the dashboard layout counts them.
+  const nudgeAdmin = ["owner", "admin"].includes(await getMemberRole(tenantId, userId));
+  const nudgeOrg = nudgeAdmin
+    ? await prisma.organization.findUnique({
+        where: { id: tenantId },
+        select: { directoryConfig: true, cloudPromptConfig: true },
+      })
+    : null;
   const directoryNudge =
-    ["owner", "admin"].includes(await getMemberRole(tenantId, userId)) &&
-    directoryNudgeDue(
-      readDirectoryConfig(
-        (
-          await prisma.organization.findUnique({
-            where: { id: tenantId },
-            select: { directoryConfig: true },
-          })
-        )?.directoryConfig,
-      ),
-    );
+    nudgeAdmin && directoryNudgeDue(readDirectoryConfig(nudgeOrg?.directoryConfig));
+  const cloudPrompt =
+    nudgeAdmin && !isCloud() && cloudPromptDue(readCloudPromptConfig(nudgeOrg?.cloudPromptConfig))
+      ? await getPlatformSettings().then((s) =>
+          cloudPromptText(s.cloudPromptText, s.cloudPromptEnabled),
+        )
+      : null;
   const me = hb.summary
     ? await prisma.member.findFirst({
         where: { organizationId: tenantId, userId },
@@ -499,6 +505,17 @@ export default async function DashboardPage({
           you for overflow or vacation coverage.{" "}
           <Link href="/dashboard/directory" className="font-medium text-brand-700 underline">
             List it, or turn off the reminder →
+          </Link>
+        </p>
+      )}
+
+      {/* Self-host's monthly Freehold Cloud note. Same deal as the directory
+          nudge: the bell counts it, so it needs somewhere to land. */}
+      {cloudPrompt && (
+        <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-900">
+          {cloudPrompt}{" "}
+          <Link href="/dashboard/settings" className="font-medium text-brand-700 underline">
+            More, or stop the reminder →
           </Link>
         </p>
       )}

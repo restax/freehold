@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { updatePlatformSettings } from "@/lib/actions/platform-settings";
+import { DEFAULT_CLOUD_PROMPT } from "@/lib/cloud-prompt";
 import { DEFAULT_SUMMARY_STYLE, SUMMARY_MODELS } from "@/lib/handbook/style";
 import { isOperator } from "@/lib/operator";
 import { getPlatformSettings } from "@/lib/platform-settings";
@@ -183,6 +184,39 @@ export default async function AdminSettingsPage() {
             Leave blank to use the bundled default shown above — it bans greetings, praise,
             exclamation marks and invented facts. It ships as a source file, so a self-hosted
             install always has one.
+          </p>
+        </section>
+
+        <section className={card}>
+          <h2 className="mb-1 font-medium">Freehold Cloud prompt (self-host only)</h2>
+          <p className="mb-4 text-sm text-stone-500">
+            Shown once a month on the bell, and as a banner in workspace Settings, on installs not
+            running in Cloud mode. Cloud installs never see it. A workspace can snooze it for a
+            month or switch it off entirely.
+          </p>
+          <label className="mb-4 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="cloudPromptEnabled"
+              defaultChecked={settings.cloudPromptEnabled}
+              className="h-4 w-4 accent-brand-600"
+            />
+            Show the prompt on this install
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            Prompt text
+            <textarea
+              name="cloudPromptText"
+              rows={4}
+              defaultValue={settings.cloudPromptText ?? ""}
+              placeholder={DEFAULT_CLOUD_PROMPT}
+              className={`${field} resize-y`}
+            />
+          </label>
+          <p className="mt-2 text-xs text-stone-400">
+            Leave blank to use the bundled default shown above, which ships as a source file.
+            Unticking the box removes the prompt from this install entirely — self-hosting is a
+            supported choice, so that lever exists rather than only a reword.
           </p>
         </section>
 

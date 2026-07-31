@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Badge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
 import { SectionCard } from "@/components/section-card";
+import { SubmitOnChangeCheckbox } from "@/components/submit-on-change-checkbox";
 import { TwoFactorSettings } from "@/components/two-factor-settings";
 import {
   createApiKey,
@@ -12,6 +13,7 @@ import {
   revokeApiKey,
 } from "@/lib/actions/api-keys";
 import { saveBillingDefaults } from "@/lib/actions/billing-policy";
+import { setCloudPromptOff, snoozeCloudPrompt } from "@/lib/actions/cloud-prompt";
 import { setContactVisibilityRestriction } from "@/lib/actions/contacts";
 import { setHandbookEnabled, setHandbookSummaryEnabled } from "@/lib/actions/handbook";
 import { saveHolidaySchedule } from "@/lib/actions/holidays";
@@ -20,11 +22,13 @@ import { addState, removeState, setLicenseEnforcement } from "@/lib/actions/stat
 import { setDailyBriefing, setInvoiceReport } from "@/lib/actions/templates";
 import { saveSideLabels } from "@/lib/actions/website";
 import { BILLING_MODES, tenantBillingPolicy } from "@/lib/billing-policy";
+import { cloudPromptText, readCloudPromptConfig } from "@/lib/cloud-prompt";
 import { enabledHolidayKeys, FEDERAL_HOLIDAYS } from "@/lib/date-calculators";
 import { readDirectoryConfig } from "@/lib/directory";
 import { emailEnabled } from "@/lib/email";
 import { fmtDate } from "@/lib/format";
-import { handbookState } from "@/lib/plans";
+import { handbookState, isCloud } from "@/lib/plans";
+import { getPlatformSettings } from "@/lib/platform-settings";
 import { listTenants } from "@/lib/session";
 import { tenantSideLabels } from "@/lib/side-labels";
 import { storageStatus } from "@/lib/storage-config";
@@ -461,6 +465,64 @@ async function HolidayScheduleSection({ tenantId, userId }: { tenantId: string; 
   );
 }
 
+/**
+ * The Freehold Cloud note, on self-hosted installs only. Rendered even when
+ * snoozed — the point of the banner is that the switch has a home you can
+ * find on purpose, not only when the reminder happens to be firing.
+ */
+async function CloudPromptBanner({ tenantId, userId }: { tenantId: string; userId: string }) {
+  if (isCloud()) return null;
+  const role = await getMemberRole(tenantId, userId);
+  if (role !== "owner" && role !== "admin") return null;
+
+  const [settings, org] = await Promise.all([
+    getPlatformSettings(),
+    prisma.organization.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { cloudPromptConfig: true },
+    }),
+  ]);
+  const text = cloudPromptText(settings.cloudPromptText, settings.cloudPromptEnabled);
+  if (!text) return null;
+  const cfg = readCloudPromptConfig(org.cloudPromptConfig);
+
+  return (
+    <div className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-64 flex-1">
+          <p className="text-sm font-medium text-brand-900">Freehold Cloud</p>
+          <p className="mt-0.5 text-sm text-brand-900/80">{text}</p>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <Link href="/pricing" className={btn}>
+            See what's included
+          </Link>
+          {!cfg.off && (
+            <form action={snoozeCloudPrompt}>
+              <button type="submit" className="text-xs text-brand-700 hover:underline">
+                Remind me next month
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+      <form action={setCloudPromptOff} className="mt-2 border-t border-brand-200/70 pt-2">
+        <label
+          htmlFor="cloud-prompt-off"
+          className="flex items-center gap-1.5 text-xs text-brand-900/70"
+        >
+          <SubmitOnChangeCheckbox
+            id="cloud-prompt-off"
+            name="off"
+            defaultChecked={cfg.off === true}
+          />
+          Don't remind me about Freehold Cloud
+        </label>
+      </form>
+    </div>
+  );
+}
+
 async function DirectorySection({ tenantId, userId }: { tenantId: string; userId: string }) {
   const role = await getMemberRole(tenantId, userId);
   if (role !== "owner" && role !== "admin") return null;
@@ -560,6 +622,11 @@ export default async function SettingsPage() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold">Settings</h1>
+
+      {/* Outside the two-column masonry below on purpose — a banner that
+          landed in one column would read as a setting card rather than as a
+          note about the install. */}
+      <CloudPromptBanner tenantId={tenantId} userId={session.user.id} />
 
       {/* Independent setting cards sit two-up on wide screens (kept to two so
           each card — including the one with a table — stays comfortably wide). */}

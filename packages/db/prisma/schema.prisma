@@ -748,6 +748,11 @@ model Organization {
   /// calculators — array of the holiday keys in lib/date-calculators.ts.
   /// Null = the full default US federal set.
   holidaySchedule         Json?                         @map("holiday_schedule")
+  /// This workspace's answer to the self-host Freehold Cloud prompt:
+  /// `{off?: boolean, snoozedAt?: ISO string}`. Two different noes — "not
+  /// now" (snoozed, back in a month) and "never" (off). Null = never
+  /// answered, which is what makes a fresh install see it at all.
+  cloudPromptConfig       Json?                         @map("cloud_prompt_config")
   documents               Document[]
   extractions             ContractExtraction[]
   extractionFields        ExtractionField[]
@@ -1763,6 +1768,15 @@ model PlatformSetting {
   /// several states require a license for independent contract TC work)
   /// that applies before any state-specific note.
   tcLicenseGeneralRule       String?   @map("tc_license_general_rule")
+  /// The Freehold Cloud pitch shown on self-hosted installs — monthly on the
+  /// bell, and as a banner in workspace Settings. Null or blank = the bundled
+  /// default in lib/cloud-prompt.ts, which ships in the repo so an install
+  /// that has never had an operator still has something to say.
+  cloudPromptText            String?   @map("cloud_prompt_text")
+  /// Whether to show that prompt at all. Freehold is source-available and
+  /// self-hosting is a supported choice, so an operator can remove the upsell
+  /// from their install outright rather than only reword it.
+  cloudPromptEnabled         Boolean   @default(true) @map("cloud_prompt_enabled")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
 
   @@map("platform_setting")
