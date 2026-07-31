@@ -1,13 +1,22 @@
-import { prisma } from "@freehold/db";
+import { prisma, withTenant } from "@freehold/db";
 import Link from "next/link";
+import { DangerDelete } from "@/components/danger-delete";
 import { SectionCard } from "@/components/section-card";
+import { SignaturePermissionToggle } from "@/components/signature-permission-toggle";
 import { TemplateEditor } from "@/components/template-editor";
+import {
+  createSignature,
+  deleteSignature,
+  saveSignaturePermission,
+  setDefaultSignature,
+  updateSignature,
+} from "@/lib/actions/signatures";
 import { saveEmailSettings, saveEmailTemplates, saveReviewDelay } from "@/lib/actions/templates";
 import { EMAIL_MERGE_CODES, parseEmailSettings, parseEmailTemplates } from "@/lib/email-template";
 import { parseQuietHours } from "@/lib/outbox";
 import { requireAdminTenant } from "@/lib/tenant";
 import { parseAppearance, resolveEmailAccent } from "@/lib/theme";
-import { btn, btnGhost, input, label as labelCls } from "@/lib/ui";
+import { btn, btnGhost, input, label as labelCls, summaryLink } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -20,12 +29,22 @@ export default async function EmailTemplatesPage() {
   const { tenantId, isAdmin } = await requireAdminTenant();
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: tenantId },
-    select: { name: true, emailTemplates: true, emailSettings: true, appearanceConfig: true },
+    select: {
+      name: true,
+      emailTemplates: true,
+      emailSettings: true,
+      appearanceConfig: true,
+      membersCanEditSignatures: true,
+    },
   });
   const automated = parseEmailTemplates(org.emailTemplates);
   const settings = parseEmailSettings(org.emailSettings);
   const quiet = parseQuietHours(org.emailSettings);
   const accent = resolveEmailAccent(parseAppearance(org.appearanceConfig));
+  const signatures = await withTenant(tenantId, (tx) =>
+    tx.emailSignature.findMany({ orderBy: [{ isDefault: "desc" }, { name: "asc" }] }),
+  );
+  const canEditSignatures = isAdmin || org.membersCanEditSignatures;
 
   return (
     <div className="flex flex-col gap-4">
@@ -121,6 +140,158 @@ export default async function EmailTemplatesPage() {
             <p className="text-sm text-stone-400">Only workspace admins can edit these.</p>
           )}
         </form>
+      </SectionCard>
+
+      <SectionCard
+        title="Signature blocks"
+        action={
+          isAdmin ? (
+            <SignaturePermissionToggle
+              action={saveSignaturePermission}
+              defaultChecked={org.membersCanEditSignatures}
+            />
+          ) : null
+        }
+      >
+        <p className="mb-4 text-sm text-stone-500">
+          The "Your transaction coordinator" contact card at the bottom of every branded email —
+          name, title, phone, email. Different from the signature above: that's an extra paragraph
+          of text; this is the structured card, and a workspace can keep more than one (a shared
+          support line vs. an individual coordinator's own number) and pick per email.
+          {!canEditSignatures && " Only workspace admins can edit these."}
+        </p>
+        {signatures.length > 0 && (
+          <ul className="mb-4 flex flex-col divide-y divide-stone-100">
+            {signatures.map((s) => (
+              <li key={s.id} className="py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-stone-800">{s.name}</span>
+                  {s.isDefault ? (
+                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-800">
+                      Default
+                    </span>
+                  ) : (
+                    canEditSignatures && (
+                      <form action={setDefaultSignature}>
+                        <input type="hidden" name="id" value={s.id} />
+                        <button
+                          type="submit"
+                          className="text-xs font-medium text-stone-500 hover:text-brand-700"
+                        >
+                          Make default
+                        </button>
+                      </form>
+                    )
+                  )}
+                  {canEditSignatures && (
+                    <span className="ml-auto">
+                      <DangerDelete
+                        compact
+                        action={deleteSignature}
+                        label={`Delete ${s.name}`}
+                        description={`Removes the "${s.name}" signature block. Anyone using it for compose will fall back to the default.`}
+                        hidden={{ id: s.id }}
+                      />
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-stone-600">
+                  {s.displayName}
+                  {s.title ? ` — ${s.title}` : ""}
+                  {s.company ? ` · ${s.company}` : ""}
+                </p>
+                <p className="text-xs text-stone-400">
+                  {[s.email, s.phone].filter(Boolean).join(" · ") || "No contact info on file"}
+                </p>
+                {canEditSignatures && (
+                  <details className="mt-1">
+                    <summary className={summaryLink}>Edit</summary>
+                    <form
+                      action={updateSignature}
+                      className="mt-2 grid gap-3 rounded-lg bg-stone-50 p-3 sm:grid-cols-2"
+                    >
+                      <input type="hidden" name="id" value={s.id} />
+                      <label className={labelCls}>
+                        Label (picker only)
+                        <input name="name" defaultValue={s.name} required className={input} />
+                      </label>
+                      <label className={labelCls}>
+                        Name shown on the card
+                        <input
+                          name="displayName"
+                          defaultValue={s.displayName}
+                          required
+                          className={input}
+                        />
+                      </label>
+                      <label className={labelCls}>
+                        Title
+                        <input name="title" defaultValue={s.title ?? ""} className={input} />
+                      </label>
+                      <label className={labelCls}>
+                        Company
+                        <input name="company" defaultValue={s.company ?? ""} className={input} />
+                      </label>
+                      <label className={labelCls}>
+                        Email
+                        <input
+                          name="email"
+                          type="email"
+                          defaultValue={s.email ?? ""}
+                          className={input}
+                        />
+                      </label>
+                      <label className={labelCls}>
+                        Phone
+                        <input name="phone" defaultValue={s.phone ?? ""} className={input} />
+                      </label>
+                      <button type="submit" className={`${btn} self-start sm:col-span-2`}>
+                        Save
+                      </button>
+                    </form>
+                  </details>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {canEditSignatures && (
+          <details>
+            <summary className={summaryLink}>+ Add a signature block</summary>
+            <form
+              action={createSignature}
+              className="mt-2 grid gap-3 rounded-lg bg-stone-50 p-3 sm:grid-cols-2"
+            >
+              <label className={labelCls}>
+                Label (picker only)
+                <input name="name" placeholder="Jordan's cell" required className={input} />
+              </label>
+              <label className={labelCls}>
+                Name shown on the card
+                <input name="displayName" placeholder="Jordan Rivera" required className={input} />
+              </label>
+              <label className={labelCls}>
+                Title
+                <input name="title" placeholder="Transaction Coordinator" className={input} />
+              </label>
+              <label className={labelCls}>
+                Company
+                <input name="company" placeholder={org.name} className={input} />
+              </label>
+              <label className={labelCls}>
+                Email
+                <input name="email" type="email" className={input} />
+              </label>
+              <label className={labelCls}>
+                Phone
+                <input name="phone" placeholder="(312) 555-0148" className={input} />
+              </label>
+              <button type="submit" className={`${btn} self-start sm:col-span-2`}>
+                Add signature block
+              </button>
+            </form>
+          </details>
+        )}
       </SectionCard>
 
       <SectionCard title="Template library">

@@ -135,7 +135,7 @@ import {
   partyLabel,
 } from "@/lib/ai/contract-schema";
 import { transactionAlert } from "@/lib/alerts";
-import { emailContextForTransaction } from "@/lib/auto-emails";
+import { emailContextForTransaction, tcPhone } from "@/lib/auto-emails";
 import {
   displayState,
   type InvoiceDisplayState,
@@ -152,7 +152,7 @@ import {
   effectiveTier,
 } from "@/lib/compliance";
 import { emailEnabled } from "@/lib/email";
-import { parseEmailSettings, renderMerge } from "@/lib/email-template";
+import { type EmailContact, parseEmailSettings, renderMerge } from "@/lib/email-template";
 import { suggestForTask } from "@/lib/email-template-library";
 import { fmtDate, fmtDayMonth, fmtMoney, ROLE_LABEL } from "@/lib/format";
 import { isGovernedDateField, KEY_DATE_LABELS } from "@/lib/governed-dates";
@@ -679,6 +679,23 @@ export default async function TransactionDetailPage({
   // compose form's Preview button shows what will actually go out — cards,
   // colour, and all — rather than a guess at it.
   const emailCtx = await emailContextForTransaction(tenantId, txn.id, session.user);
+  const signatureOptions = await withTenant(tenantId, (tx) =>
+    tx.emailSignature.findMany({ orderBy: [{ isDefault: "desc" }, { name: "asc" }] }),
+  );
+  const defaultSignatureId = signatureOptions.find((s) => s.isDefault)?.id ?? "none";
+  // The compose form's tc prop is only ever the fallback for "Just my own
+  // info" — emailCtx.tcCard already picked the default signature block, so
+  // reusing it here would make that explicit "use my own info" choice
+  // silently show the default block's name instead of the sender's own.
+  const ownTcCard: EmailContact | null = emailCtx
+    ? {
+        heading: "Your transaction coordinator",
+        name: session.user.name || emailCtx.org.name,
+        company: emailCtx.org.name,
+        email: session.user.email,
+        phone: await tcPhone(session.user),
+      }
+    : null;
 
   // Key dates for the header calendar popover: contract, close, listing dates,
   // and every open deadline task.
@@ -3048,9 +3065,11 @@ export default async function TransactionDetailPage({
                           transactionId={txn.id}
                           tenantName={emailCtx?.org.name ?? txn.propertyAddress}
                           accent={emailCtx?.emailAccent}
-                          tc={emailCtx?.tcCard}
+                          tc={ownTcCard}
                           agent={emailCtx?.agentCard}
                           otherSide={emailCtx?.otherCard}
+                          signatureOptions={signatureOptions}
+                          defaultSignatureId={defaultSignatureId}
                         />
                       </div>
                       {currentDocs.length > 0 && (

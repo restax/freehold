@@ -23,6 +23,7 @@ export async function sendTransactionEmail(formData: FormData) {
   const body = str(formData, "body").trim();
   const contactId = optStr(formData, "contactId");
   const emailTemplateId = optStr(formData, "emailTemplateId");
+  const signatureId = optStr(formData, "signatureId");
   if (!transactionId || !to.includes("@") || !subject || !body) return;
 
   // Attachments: selected transaction documents, decrypted, capped at 15 MB.
@@ -71,7 +72,7 @@ export async function sendTransactionEmail(formData: FormData) {
   // trusted from the form.
   const sendAsUserId = optStr(formData, "sendAsSelf") ? session.user.id : null;
 
-  const ctx = await emailContextForTransaction(tenantId, transactionId, session.user);
+  const ctx = await emailContextForTransaction(tenantId, transactionId, session.user, signatureId);
   const html = ctx
     ? renderEmailHtml({
         tenantName: ctx.org.name,

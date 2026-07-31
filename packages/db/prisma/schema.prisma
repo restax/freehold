@@ -639,6 +639,12 @@ model Organization {
   aiModelOverride         String?                       @map("ai_model_override")
   /// Admin setting: when true, members only see contacts they own.
   restrictContactsToOwner Boolean                       @default(false) @map("restrict_contacts_to_owner")
+  /// Admin setting: when true, any member can create/edit/delete signature
+  /// blocks. Off (the default) keeps that to owners/admins only — a
+  /// coordinator's title and phone number on outgoing mail isn't something
+  /// every new hire should be able to rewrite on day one.
+  membersCanEditSignatures Boolean                      @default(false) @map("members_can_edit_signatures")
+  emailSignatures         EmailSignature[]
   /// The Handbook: the notes a team keeps about clients, contacts, people and
   /// files. Two switches, not one, because the halves are separable — someone
   /// who wants nothing to do with AI can still keep notes, which is the more
@@ -2913,6 +2919,38 @@ model EmailTemplate {
   @@index([tenantId])
   @@index([tenantId, groupId])
   @@map("email_template")
+}
+
+/// A named "Your transaction coordinator" contact card — the structured
+/// signature block that fills the tc/agent/other-side cards every branded
+/// email carries (see lib/email-template.ts → contactCell). A workspace
+/// keeps a small library rather than one fixed signature: a brokerage with
+/// a shared support line wants a different card than an individual
+/// coordinator's own name and cell number, and a TC composing on someone
+/// else's behalf needs to pick the right one rather than always getting
+/// their own.
+model EmailSignature {
+  id          String       @id @default(uuid())
+  tenantId    String       @map("tenant_id")
+  tenant      Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Label shown only in the picker — "Formal", "Jordan's cell" — never in
+  /// the email itself.
+  name        String
+  displayName String       @map("display_name")
+  /// Role/company line under the name, e.g. "Transaction Coordinator, Acme TC".
+  title       String?
+  company     String?
+  email       String?
+  phone       String?
+  /// Used whenever nothing more specific was picked: composing without
+  /// choosing one, and every automated system email (intro, post-close,
+  /// review request), which has no sender to ask.
+  isDefault   Boolean      @default(false) @map("is_default")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([tenantId])
+  @@map("email_signature")
 }
 
 /// Operator analytics: every Checkout session we start, completed or not.

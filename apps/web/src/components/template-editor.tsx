@@ -16,6 +16,16 @@ import { trackMergeFocus } from "@/components/merge-field-browser";
 import { EMAIL_MERGE_CODES, type EmailContact, renderEmailHtml } from "@/lib/email-template";
 import type { EmailAccent } from "@/lib/theme";
 
+export interface SignatureOption {
+  id: string;
+  name: string;
+  displayName: string;
+  title: string | null;
+  company: string | null;
+  email: string | null;
+  phone: string | null;
+}
+
 /**
  * The email body editor: formatting toolbar + merge-field picker + voice
  * dictation + live preview of the rendered email. Under the hood it's
@@ -33,6 +43,9 @@ export function TemplateEditor({
   tc,
   agent,
   otherSide,
+  signatureOptions,
+  defaultSignatureId,
+  signatureFieldName = "signatureId",
 }: {
   name: string;
   defaultValue?: string;
@@ -53,15 +66,38 @@ export function TemplateEditor({
   accent?: EmailAccent | null;
   /** Signature-block contacts, when the caller already has them — the
    *  transaction compose form does. Showing them in preview is the only way
-   *  "preview" means what it says: this is what actually goes out. */
+   *  "preview" means what it says: this is what actually goes out. Ignored
+   *  once `signatureOptions` is set — that picker takes over the tc card. */
   tc?: EmailContact | null;
   agent?: EmailContact | null;
   otherSide?: EmailContact | null;
+  /** The workspace's signature-block library. Only the transaction compose
+   *  form passes this — it's the one place picking a sender identity makes
+   *  sense. Renders a picker above the toolbar and posts the choice as a
+   *  hidden field, so the server builds the *same* card the preview shows. */
+  signatureOptions?: SignatureOption[];
+  defaultSignatureId?: string | null;
+  signatureFieldName?: string;
 }) {
   const id = useId().replace(/[:]/g, "");
   const areaId = `tpl-${id}`;
   const [value, setValue] = useState(defaultValue ?? "");
   const [preview, setPreview] = useState(false);
+  const [signatureId, setSignatureId] = useState(defaultSignatureId ?? "none");
+
+  const signatureTc = useMemo((): EmailContact | null | undefined => {
+    if (!signatureOptions || signatureId === "none") return tc;
+    const s = signatureOptions.find((o) => o.id === signatureId);
+    if (!s) return tc;
+    return {
+      heading: "Your transaction coordinator",
+      name: s.displayName,
+      company: [s.title, s.company].filter(Boolean).join(", ") || undefined,
+      email: s.email,
+      phone: s.phone,
+    };
+  }, [signatureOptions, signatureId, tc]);
+
   const previewHtml = useMemo(
     () =>
       preview
@@ -69,12 +105,12 @@ export function TemplateEditor({
             tenantName,
             body: value || "Nothing yet — start typing.",
             accent,
-            tc,
+            tc: signatureTc,
             agent,
             otherSide,
           })
         : "",
-    [preview, tenantName, value, accent, tc, agent, otherSide],
+    [preview, tenantName, value, accent, signatureTc, agent, otherSide],
   );
 
   function getArea(): HTMLTextAreaElement | null {
@@ -133,6 +169,24 @@ export function TemplateEditor({
 
   return (
     <div className="flex flex-col gap-2">
+      {signatureOptions && signatureOptions.length > 0 && (
+        <label className="flex items-center gap-1.5 text-xs text-stone-600">
+          Signature
+          <select
+            value={signatureId}
+            onChange={(e) => setSignatureId(e.target.value)}
+            className="h-7 rounded border border-stone-200 bg-white px-1.5 text-xs text-stone-600 focus:border-brand-600 focus:outline-none"
+          >
+            <option value="none">Just my own info</option>
+            {signatureOptions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          <input type="hidden" name={signatureFieldName} value={signatureId} />
+        </label>
+      )}
       <div className="flex flex-wrap items-center gap-1.5">
         <button type="button" title="Bold" className={toolBtn} onClick={() => insert("**", "**")}>
           <TextB size={14} weight="bold" />

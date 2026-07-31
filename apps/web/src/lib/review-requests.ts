@@ -111,6 +111,9 @@ export async function runReviewRequests(): Promise<{ sent: number; skipped: numb
           select: { name: true, emailTemplates: true, emailSettings: true, appearanceConfig: true },
         });
         const emailAccent = resolveEmailAccent(parseAppearance(orgRow.appearanceConfig));
+        const signature = await withTenant(org.id, (tx) =>
+          tx.emailSignature.findFirst({ where: { isDefault: true } }),
+        );
         const base = await portalOrigin(org.id);
         const link = `${base}/r/${token}`;
         const template = parseEmailTemplates(orgRow.emailTemplates).review;
@@ -123,12 +126,21 @@ export async function runReviewRequests(): Promise<{ sent: number; skipped: numb
           review_link: link,
         };
         const body = renderMerge(template.body, merge);
-        const tcCard: EmailContact = {
-          heading: "Your transaction coordinator",
-          name: coordinator?.name ?? orgRow.name,
-          company: orgRow.name,
-          phone: coordinator?.phone ?? null,
-        };
+        const tcCard: EmailContact = signature
+          ? {
+              heading: "Your transaction coordinator",
+              name: signature.displayName,
+              company:
+                [signature.title, signature.company].filter(Boolean).join(", ") || orgRow.name,
+              email: signature.email,
+              phone: signature.phone,
+            }
+          : {
+              heading: "Your transaction coordinator",
+              name: coordinator?.name ?? orgRow.name,
+              company: orgRow.name,
+              phone: coordinator?.phone ?? null,
+            };
         await sendTenantEmail({
           tenantId: org.id,
           transactionId: txn.id,

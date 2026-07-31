@@ -46,11 +46,20 @@ export async function tcPhone(tc: TcIdentity): Promise<string | null> {
     .catch(() => null);
 }
 
-/** Signature-block contacts for a transaction's branded emails. */
+/**
+ * Signature-block contacts for a transaction's branded emails.
+ *
+ * `signatureId` picks a specific block from the workspace's library (the
+ * compose form's dropdown); omitted, this reaches for whichever block is
+ * marked default. Only once a workspace has never set one up does the card
+ * fall back to the sender's own name/email/phone — the pre-signature-block
+ * behavior, kept so an empty library doesn't leave automated mail blank.
+ */
 export async function emailContextForTransaction(
   tenantId: string,
   transactionId: string,
   tc: TcIdentity,
+  signatureId?: string | null,
 ) {
   const txn = await withTenant(tenantId, (tx) =>
     tx.transaction.findUnique({
@@ -66,13 +75,33 @@ export async function emailContextForTransaction(
   });
   const emailAccent = resolveEmailAccent(parseAppearance(org.appearanceConfig));
 
-  const tcCard: EmailContact = {
-    heading: "Your transaction coordinator",
-    name: tc.name || org.name,
-    company: org.name,
-    email: tc.email,
-    phone: await tcPhone(tc),
-  };
+  // "none" is a deliberate choice — "just my own info" in the compose
+  // picker — distinct from not specifying one at all, which is every
+  // automated send: those have no sender to ask, so they get the default.
+  const signature =
+    signatureId === "none"
+      ? null
+      : await withTenant(tenantId, (tx) =>
+          signatureId
+            ? tx.emailSignature.findUnique({ where: { id: signatureId } })
+            : tx.emailSignature.findFirst({ where: { isDefault: true } }),
+        );
+
+  const tcCard: EmailContact = signature
+    ? {
+        heading: "Your transaction coordinator",
+        name: signature.displayName,
+        company: [signature.title, signature.company].filter(Boolean).join(", ") || org.name,
+        email: signature.email,
+        phone: signature.phone,
+      }
+    : {
+        heading: "Your transaction coordinator",
+        name: tc.name || org.name,
+        company: org.name,
+        email: tc.email,
+        phone: await tcPhone(tc),
+      };
 
   const agentCard: EmailContact | null = txn.client
     ? {
