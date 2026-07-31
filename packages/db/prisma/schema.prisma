@@ -963,6 +963,9 @@ enum TaskStatus {
   OPEN
   DONE
   SKIPPED
+  /// On hold — deliberately parked, distinct from a plain open item still
+  /// waiting its turn. Excluded from "open" counts the same as SKIPPED.
+  HOLD
 }
 
 /// What a template task (or the task it produced) is dated from. The two

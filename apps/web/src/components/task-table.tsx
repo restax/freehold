@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { DangerDelete } from "@/components/danger-delete";
+import { TaskNotesField } from "@/components/task-notes-field";
+import { TaskStatusSelect } from "@/components/task-status-select";
 import { VisibilityToggles } from "@/components/visibility-toggles";
 import { fmtDate, fmtDayMonth } from "@/lib/format";
 import { PRIORITY_LABEL, priorityBadgeStyle, priorityColorStyle } from "@/lib/priority";
@@ -59,6 +61,8 @@ export function TaskTable({
   transactionId,
   today,
   toggleTask,
+  setTaskStatus,
+  setTaskNotes,
   cycleTaskPriority,
   deleteTask,
   emailHref,
@@ -69,6 +73,8 @@ export function TaskTable({
   /** Today as yyyy-mm-dd, for the overdue comparison. */
   today: string;
   toggleTask: (formData: FormData) => Promise<void>;
+  setTaskStatus: (formData: FormData) => Promise<void>;
+  setTaskNotes: (formData: FormData) => Promise<void>;
   cycleTaskPriority: (formData: FormData) => Promise<void>;
   deleteTask: (formData: FormData) => Promise<void>;
   emailHref: (t: TaskRow) => string;
@@ -121,7 +127,16 @@ export function TaskTable({
                     className={`${td} ${c.align === "right" ? "text-right" : ""}`}
                     style={{ backgroundColor: cellTint(c.key, t) }}
                   >
-                    {cell(c.key, t, { done, overdue: Boolean(overdue) })}
+                    {cell(
+                      c.key,
+                      t,
+                      { done, overdue: Boolean(overdue) },
+                      {
+                        transactionId,
+                        setTaskStatus,
+                        setTaskNotes,
+                      },
+                    )}
                   </td>
                 ))}
                 <td className={td}>
@@ -191,17 +206,27 @@ function cellTint(key: string, t: TaskRow): string | undefined {
   return priorityBadgeStyle(t.priority)?.backgroundColor as string | undefined;
 }
 
-function cell(key: string, t: TaskRow, state: { done: boolean; overdue: boolean }): ReactNode {
+function cell(
+  key: string,
+  t: TaskRow,
+  state: { done: boolean; overdue: boolean },
+  ctx: {
+    transactionId: string;
+    setTaskStatus: (formData: FormData) => Promise<void>;
+    setTaskNotes: (formData: FormData) => Promise<void>;
+  },
+): ReactNode {
   switch (key) {
     case "title":
       return <span className={state.done ? "text-stone-400 line-through" : ""}>{t.title}</span>;
     case "notes":
-      return t.notes ? (
-        <span className="text-stone-500" title={t.notes}>
-          {t.notes}
-        </span>
-      ) : (
-        <span className="text-stone-300">—</span>
+      return (
+        <TaskNotesField
+          action={ctx.setTaskNotes}
+          id={t.id}
+          transactionId={ctx.transactionId}
+          notes={t.notes}
+        />
       );
     case "dueDate":
       return (
@@ -221,7 +246,14 @@ function cell(key: string, t: TaskRow, state: { done: boolean; overdue: boolean 
         <span className="text-stone-300">—</span>
       );
     case "status":
-      return <span className="text-stone-500">{state.done ? "Done" : "Open"}</span>;
+      return (
+        <TaskStatusSelect
+          action={ctx.setTaskStatus}
+          id={t.id}
+          transactionId={ctx.transactionId}
+          status={t.status}
+        />
+      );
     case "completedAt":
       return <span className="text-stone-500">{fmtDayMonth(t.completedAt)}</span>;
     case "createdAt":

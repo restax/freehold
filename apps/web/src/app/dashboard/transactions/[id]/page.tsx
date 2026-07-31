@@ -99,6 +99,8 @@ import {
   createTask,
   cycleTaskPriority,
   deleteTask,
+  setTaskNotes,
+  setTaskStatus,
   toggleTask,
 } from "@/lib/actions/tasks";
 import { generateDocument } from "@/lib/actions/templates";
@@ -983,6 +985,8 @@ export default async function TransactionDetailPage({
                     transactionId={txn.id}
                     today={today}
                     toggleTask={toggleTask}
+                    setTaskStatus={setTaskStatus}
+                    setTaskNotes={setTaskNotes}
                     cycleTaskPriority={cycleTaskPriority}
                     deleteTask={deleteTask}
                     emailHref={(t) =>

@@ -42,6 +42,94 @@ export async function createTask(formData: FormData) {
   revalidateTaskViews(transactionId);
 }
 
+const TASK_STATUS_VALUES = [
+  TaskStatus.OPEN,
+  TaskStatus.DONE,
+  TaskStatus.SKIPPED,
+  TaskStatus.HOLD,
+] as const;
+
+/**
+ * Move a task to an explicit status — the done-checkbox and the Status
+ * dropdown both land here, so "select Done" and "click the checkbox" are the
+ * same transition and stay in sync automatically (the checkbox just renders
+ * `status === DONE`).
+ */
+async function applyTaskStatus(
+  tenantId: string,
+  session: { user: { id?: string | null; name?: string | null; email?: string | null } },
+  transactionId: string | null,
+  id: string,
+  status: TaskStatus,
+) {
+  const { title, nowDone, wasDone, dated } = await withTenant(tenantId, async (tx) => {
+    const task = await tx.task.findUniqueOrThrow({
+      where: { id },
+      select: { status: true, title: true, emailTemplateId: true, autoSendEmail: true },
+    });
+    const wasDone = task.status === TaskStatus.DONE;
+    const nowDone = status === TaskStatus.DONE;
+    const completedAt = nowDone ? new Date() : null;
+    await tx.task.update({ where: { id }, data: { status, completedAt } });
+
+    // Dependency dating: a task waiting on this one has had no due date up
+    // to now — "thank-you note, one day after closing is confirmed" can't be
+    // dated before the confirmation lands. Finishing this task is the event
+    // that dates them.
+    //
+    // Un-completing clears those dates again rather than leaving them
+    // behind: a mis-click that gets undone shouldn't leave a chain of tasks
+    // claiming deadlines derived from a completion that no longer exists.
+    // Only untouched ones — a due date someone typed by hand is theirs to
+    // keep. Only relevant on an actual done/not-done transition.
+    let dated = 0;
+    if (nowDone !== wasDone) {
+      const waiting = await tx.task.findMany({
+        where: {
+          dependsOnTaskId: id,
+          status: TaskStatus.OPEN,
+          dueDateEdited: false,
+          anchor: "DEPENDENCY",
+        },
+        select: { id: true, offsetDays: true },
+      });
+      for (const w of waiting) {
+        await tx.task.update({
+          where: { id: w.id },
+          data: { dueDate: completedAt ? dependentDueDate(completedAt, w.offsetDays ?? 0) : null },
+        });
+      }
+      dated = waiting.length;
+    }
+    return { title: task.title, nowDone, wasDone, dated };
+  });
+  if (nowDone && !wasDone) {
+    if (transactionId) {
+      // Optional automation: the task's email, merged and sent to the client
+      // (quiet hours respected via the outbox).
+      fireTaskTemplateEmail(tenantId, transactionId, id, session.user);
+    }
+    await emitWebhook(tenantId, "task.completed", { id, title, transactionId });
+  }
+  if (nowDone !== wasDone) {
+    // A done/not-done transition is activity too — it means someone looked
+    // at the file. A change between two non-done statuses (Open ↔ Hold) is
+    // quieter bookkeeping and doesn't need its own activity-log line.
+    const knockOn =
+      dated > 0
+        ? ` — ${dated} waiting task${dated === 1 ? "" : "s"} ${nowDone ? "dated" : "un-dated"}`
+        : "";
+    logActivity({
+      tenantId,
+      transactionId,
+      actor: session.user,
+      action: nowDone ? "task.completed" : "task.reopened",
+      summary: `${nowDone ? "Completed" : "Reopened"} task “${activityTitle(title)}”${knockOn}`,
+    });
+  }
+  revalidateTaskViews(transactionId);
+}
+
 export async function toggleTask(formData: FormData) {
   // Working tasks is the point of covering a file, so guests may — but only
   // on the files they were actually assigned.
@@ -52,64 +140,39 @@ export async function toggleTask(formData: FormData) {
   if (transactionId && !(await guestMaySeeTransaction(tenantId, session.user.id, transactionId))) {
     return;
   }
-  const { title, nowDone, dated } = await withTenant(tenantId, async (tx) => {
-    const task = await tx.task.findUniqueOrThrow({
-      where: { id },
-      select: { status: true, title: true, emailTemplateId: true, autoSendEmail: true },
-    });
-    const done = task.status !== TaskStatus.DONE;
-    const completedAt = done ? new Date() : null;
-    await tx.task.update({
-      where: { id },
-      data: { status: done ? TaskStatus.DONE : TaskStatus.OPEN, completedAt },
-    });
+  const current = await withTenant(tenantId, (tx) =>
+    tx.task.findUniqueOrThrow({ where: { id }, select: { status: true } }),
+  );
+  const next = current.status === TaskStatus.DONE ? TaskStatus.OPEN : TaskStatus.DONE;
+  await applyTaskStatus(tenantId, session, transactionId, id, next);
+}
 
-    // Dependency dating: a task waiting on this one has had no due date up
-    // to now — "thank-you note, one day after closing is confirmed" can't be
-    // dated before the confirmation lands. Finishing this task is the event
-    // that dates them.
-    //
-    // Reopening clears those dates again rather than leaving them behind: a
-    // mis-click that gets undone shouldn't leave a chain of tasks claiming
-    // deadlines derived from a completion that no longer exists. Only
-    // untouched ones — a due date someone typed by hand is theirs to keep.
-    const waiting = await tx.task.findMany({
-      where: {
-        dependsOnTaskId: id,
-        status: TaskStatus.OPEN,
-        dueDateEdited: false,
-        anchor: "DEPENDENCY",
-      },
-      select: { id: true, offsetDays: true },
-    });
-    for (const w of waiting) {
-      await tx.task.update({
-        where: { id: w.id },
-        data: { dueDate: completedAt ? dependentDueDate(completedAt, w.offsetDays ?? 0) : null },
-      });
-    }
-    return { title: task.title, nowDone: done, dated: waiting.length };
-  });
-  if (nowDone && transactionId) {
-    // Optional automation: the task's email, merged and sent to the client
-    // (quiet hours respected via the outbox).
-    fireTaskTemplateEmail(tenantId, transactionId, id, session.user);
+/** Status dropdown on the task row: Open, Done, Canceled (SKIPPED), Hold. */
+export async function setTaskStatus(formData: FormData) {
+  const { tenantId, session } = await requireTenant({ allowGuest: true });
+  const id = str(formData, "id");
+  const statusRaw = str(formData, "status");
+  if (!id || !TASK_STATUS_VALUES.includes(statusRaw as TaskStatus)) return;
+  const transactionId = str(formData, "transactionId") || null;
+  if (transactionId && !(await guestMaySeeTransaction(tenantId, session.user.id, transactionId))) {
+    return;
   }
-  if (nowDone) {
-    await emitWebhook(tenantId, "task.completed", { id, title, transactionId });
+  await applyTaskStatus(tenantId, session, transactionId, id, statusRaw as TaskStatus);
+}
+
+/** Inline notes edit on the task row. */
+export async function setTaskNotes(formData: FormData) {
+  const { tenantId, session } = await requireTenant({ allowGuest: true });
+  const id = str(formData, "id");
+  if (!id) return;
+  const transactionId = str(formData, "transactionId") || null;
+  if (transactionId && !(await guestMaySeeTransaction(tenantId, session.user.id, transactionId))) {
+    return;
   }
-  // Reopening is activity too — it means someone looked at the file.
-  const knockOn =
-    dated > 0
-      ? ` — ${dated} waiting task${dated === 1 ? "" : "s"} ${nowDone ? "dated" : "un-dated"}`
-      : "";
-  logActivity({
-    tenantId,
-    transactionId,
-    actor: session.user,
-    action: nowDone ? "task.completed" : "task.reopened",
-    summary: `${nowDone ? "Completed" : "Reopened"} task “${activityTitle(title)}”${knockOn}`,
-  });
+  const notes = str(formData, "notes");
+  await withTenant(tenantId, (tx) =>
+    tx.task.update({ where: { id }, data: { notes: notes || null } }),
+  );
   revalidateTaskViews(transactionId);
 }
 
