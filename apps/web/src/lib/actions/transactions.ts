@@ -17,6 +17,7 @@ import { fireIntroEmail, firePostCloseEmail } from "@/lib/auto-emails";
 import { ensureAutoDraft } from "@/lib/billing-drafts";
 import { resolveDefaultFee, tenantBillingPolicy } from "@/lib/billing-policy";
 import { parseCommissionPct, parseGrossCents } from "@/lib/commission";
+import { fmtMoney } from "@/lib/format";
 import { confirmed, dateOnly, intOr, oneOf, optStr, str } from "@/lib/forms";
 import {
   amendmentTitle,
@@ -313,6 +314,50 @@ export async function updateKeyDate(formData: FormData) {
     summary: proposedValue
       ? `Proposed ${KEY_DATE_LABELS[key]} → ${proposedValue} (amendment needed)`
       : `Set ${KEY_DATE_LABELS[key]} to ${next ? next.toISOString().slice(0, 10) : "—"}`,
+  });
+  revalidatePath(`/dashboard/transactions/${id}`);
+}
+
+const LISTING_DETAIL_FIELDS = ["mlsId", "listPrice", "purchasePrice"] as const;
+type ListingDetailField = (typeof LISTING_DETAIL_FIELDS)[number];
+
+const LISTING_DETAIL_LABELS: Record<ListingDetailField, string> = {
+  mlsId: "MLS ID",
+  listPrice: "List price",
+  purchasePrice: "Contract price",
+};
+
+function isListingDetailField(field: string): field is ListingDetailField {
+  return (LISTING_DETAIL_FIELDS as readonly string[]).includes(field);
+}
+
+/**
+ * One field at a time, by design: commonFields (below) fills every field it
+ * knows from the form it was given, so a smaller single-field form routed
+ * through it would read every field it doesn't carry as blank and null them
+ * out — "the shape of the bug that quietly wiped every file's listing
+ * details for months." A dedicated single-column write can't do that.
+ */
+export async function updateListingDetail(formData: FormData) {
+  const { tenantId, session } = await requireTenant();
+  const id = str(formData, "id");
+  const field = str(formData, "field");
+  if (!id || !isListingDetailField(field)) return;
+
+  const data =
+    field === "mlsId"
+      ? { mlsId: optStr(formData, "value") }
+      : { [field]: intOr(formData, "value") };
+  await withTenant(tenantId, (tx) => tx.transaction.update({ where: { id }, data }));
+
+  const display =
+    field === "mlsId" ? (optStr(formData, "value") ?? "—") : fmtMoney(intOr(formData, "value"));
+  logActivity({
+    tenantId,
+    transactionId: id,
+    actor: session.user,
+    action: "transaction.updated",
+    summary: `Set ${LISTING_DETAIL_LABELS[field]} to ${display}`,
   });
   revalidatePath(`/dashboard/transactions/${id}`);
 }

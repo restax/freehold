@@ -54,6 +54,7 @@ export function LinkPartyForm({
           onCreate={createContactByName}
           createHint="Add contact"
           placeholder={`Search contacts for "${value}"…`}
+          autoSubmitOnCreate
         />
       </div>
       <button type="submit" className={btnGhost}>

@@ -37,6 +37,7 @@ export function EntityPicker({
   onCreate,
   createHint = "Add",
   onSelect,
+  autoSubmitOnCreate = false,
 }: {
   name: string;
   label: string;
@@ -57,6 +58,18 @@ export function EntityPicker({
    * client-side, e.g. prefilling an email from the contact just chosen.
    */
   onSelect?: (option: PickerOption) => void;
+  /**
+   * Submit the surrounding form the moment a *new* record is created —
+   * picking an existing option still just fills the field. Only turn this on
+   * where the form's entire job is "attach this one person" (adding a
+   * transaction participant, linking an extracted party): creating someone
+   * there and still having to find and click a second "Add" was the actual
+   * bug report — the coordinator reasonably reads "+ Add contact" as the
+   * finished action. Leave off wherever the picker shares a form with other
+   * fields (agents & commissions, a compose field) that aren't ready to
+   * submit yet.
+   */
+  autoSubmitOnCreate?: boolean;
 }) {
   const byId = useMemo(() => new Map(options.map((o) => [o.id, o])), [options]);
   const [selected, setSelected] = useState<PickerOption | null>(byId.get(defaultId) ?? null);
@@ -110,7 +123,16 @@ export function EntityPicker({
     setCreating(true);
     try {
       const made = await onCreate(wanted);
-      if (made) choose(made);
+      if (made) {
+        choose(made);
+        // The hidden input's value tracks `selected` state, so it hasn't
+        // re-rendered with the new id yet at this point in the same tick —
+        // submitting now would go out with the *old* (empty) value. Defer to
+        // the next frame, after React has committed the update.
+        if (autoSubmitOnCreate) {
+          requestAnimationFrame(() => inputRef.current?.form?.requestSubmit());
+        }
+      }
     } catch {
       // Leave the box as it was; the coordinator can retry or pick an
       // existing name. Losing the rest of the form to a failed create here

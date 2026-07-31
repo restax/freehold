@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
 import { DangerDelete } from "@/components/danger-delete";
+import { TaskDueDateField } from "@/components/task-due-date-field";
 import { TaskNotesField } from "@/components/task-notes-field";
+import { TaskPrioritySelect } from "@/components/task-priority-select";
 import { TaskStatusSelect } from "@/components/task-status-select";
 import { VisibilityToggles } from "@/components/visibility-toggles";
 import { fmtDate, fmtDayMonth } from "@/lib/format";
-import { PRIORITY_LABEL, priorityBadgeStyle, priorityColorStyle } from "@/lib/priority";
+import { priorityBadgeStyle } from "@/lib/priority";
 import type { ColumnDef } from "@/lib/task-columns";
 import { taskTableMinWidth } from "@/lib/task-columns";
 import { tableWrap, td, th, trHover } from "@/lib/ui";
@@ -63,7 +65,8 @@ export function TaskTable({
   toggleTask,
   setTaskStatus,
   setTaskNotes,
-  cycleTaskPriority,
+  setTaskPriority,
+  setTaskDueDate,
   deleteTask,
   emailHref,
 }: {
@@ -75,7 +78,8 @@ export function TaskTable({
   toggleTask: (formData: FormData) => Promise<void>;
   setTaskStatus: (formData: FormData) => Promise<void>;
   setTaskNotes: (formData: FormData) => Promise<void>;
-  cycleTaskPriority: (formData: FormData) => Promise<void>;
+  setTaskPriority: (formData: FormData) => Promise<void>;
+  setTaskDueDate: (formData: FormData) => Promise<void>;
   deleteTask: (formData: FormData) => Promise<void>;
   emailHref: (t: TaskRow) => string;
 }) {
@@ -135,6 +139,8 @@ export function TaskTable({
                         transactionId,
                         setTaskStatus,
                         setTaskNotes,
+                        setTaskPriority,
+                        setTaskDueDate,
                       },
                     )}
                   </td>
@@ -156,20 +162,6 @@ export function TaskTable({
                     >
                       ✉
                     </a>
-                    <form action={cycleTaskPriority}>
-                      <input type="hidden" name="id" value={t.id} />
-                      <input type="hidden" name="transactionId" value={transactionId} />
-                      <button
-                        type="submit"
-                        title={`Priority: ${t.priority.toLowerCase()} — click to change`}
-                        className={
-                          t.priority === "NORMAL" ? "text-stone-300 hover:text-amber-500" : ""
-                        }
-                        style={priorityColorStyle(t.priority)}
-                      >
-                        ⚑
-                      </button>
-                    </form>
                     <VisibilityToggles
                       kind="task"
                       id={t.id}
@@ -214,6 +206,8 @@ function cell(
     transactionId: string;
     setTaskStatus: (formData: FormData) => Promise<void>;
     setTaskNotes: (formData: FormData) => Promise<void>;
+    setTaskPriority: (formData: FormData) => Promise<void>;
+    setTaskDueDate: (formData: FormData) => Promise<void>;
   },
 ): ReactNode {
   switch (key) {
@@ -230,20 +224,23 @@ function cell(
       );
     case "dueDate":
       return (
-        <span className={state.overdue ? "font-medium text-red-600" : "text-stone-500"}>
-          {fmtDayMonth(t.dueDate)}
-        </span>
+        <TaskDueDateField
+          action={ctx.setTaskDueDate}
+          id={t.id}
+          transactionId={ctx.transactionId}
+          value={t.dueDate ? t.dueDate.toISOString().slice(0, 10) : ""}
+          display={fmtDayMonth(t.dueDate)}
+          overdue={state.overdue}
+        />
       );
     case "priority":
-      return PRIORITY_LABEL[t.priority] ? (
-        <span
-          className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-          style={priorityBadgeStyle(t.priority)}
-        >
-          {PRIORITY_LABEL[t.priority]}
-        </span>
-      ) : (
-        <span className="text-stone-300">—</span>
+      return (
+        <TaskPrioritySelect
+          action={ctx.setTaskPriority}
+          id={t.id}
+          transactionId={ctx.transactionId}
+          priority={t.priority}
+        />
       );
     case "status":
       return (

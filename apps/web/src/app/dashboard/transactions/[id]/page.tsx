@@ -16,6 +16,7 @@ import {
   ListChecks,
   NotePencil,
   PaperPlaneTilt,
+  PencilSimple,
   Phone,
   PlusCircle,
   Receipt,
@@ -52,6 +53,7 @@ import { HandbookNotes } from "@/components/handbook-notes";
 import { HandbookRecap, type RecapGrade } from "@/components/handbook-recap";
 import { KeyDateRow } from "@/components/key-date-row";
 import { LinkPartyForm } from "@/components/link-party-form";
+import { ListingDetailRow } from "@/components/listing-detail-row";
 import { SectionCard } from "@/components/section-card";
 import { SideFields } from "@/components/side-fields";
 import { StatusSelect } from "@/components/status-select";
@@ -98,9 +100,10 @@ import { saveTaskColumns } from "@/lib/actions/table-prefs";
 import {
   applyActionPlan,
   createTask,
-  cycleTaskPriority,
   deleteTask,
+  setTaskDueDate,
   setTaskNotes,
+  setTaskPriority,
   setTaskStatus,
   toggleTask,
 } from "@/lib/actions/tasks";
@@ -116,6 +119,7 @@ import {
   setCustomField,
   setRequiredDocument,
   updateKeyDate,
+  updateListingDetail,
   updateTransaction,
   withdrawDateChange,
 } from "@/lib/actions/transactions";
@@ -844,11 +848,17 @@ export default async function TransactionDetailPage({
                 .filter((t) => t.status === "OPEN" && t.dueDate)
                 .slice(0, 6)
                 .map((t) => (
-                  <li key={t.id} className="flex justify-between gap-2">
-                    <span className="truncate">{t.title}</span>
-                    <span className="shrink-0 tabular-nums text-stone-400">
-                      {fmtDayMonth(t.dueDate)}
-                    </span>
+                  <li key={t.id}>
+                    <Link
+                      href={`/dashboard/transactions/${txn.id}?tab=${t.title.startsWith("Follow up:") ? "billing" : "tasks"}`}
+                      className="flex justify-between gap-2 hover:text-brand-700"
+                      title="This file's own task — opens the tab it lives on"
+                    >
+                      <span className="truncate">{t.title}</span>
+                      <span className="shrink-0 tabular-nums text-stone-400">
+                        {fmtDayMonth(t.dueDate)}
+                      </span>
+                    </Link>
                   </li>
                 ))}
               {txn.tasks.filter((t) => t.status === "OPEN" && t.dueDate).length === 0 && (
@@ -862,18 +872,35 @@ export default async function TransactionDetailPage({
             bodyClassName="p-3"
           >
             <dl className="flex flex-col gap-1.5 text-sm">
-              <div className="flex justify-between gap-2">
-                <dt className="text-stone-500">MLS ID</dt>
-                <dd className="font-medium">{txn.mlsId ?? "—"}</dd>
-              </div>
-              <div className="flex justify-between gap-2">
-                <dt className="text-stone-500">List price</dt>
-                <dd className="tabular-nums font-medium">{fmtMoney(txn.listPrice)}</dd>
-              </div>
-              <div className="flex justify-between gap-2">
-                <dt className="text-stone-500">Contract price</dt>
-                <dd className="tabular-nums font-medium">{fmtMoney(txn.purchasePrice)}</dd>
-              </div>
+              <ListingDetailRow
+                action={updateListingDetail}
+                transactionId={txn.id}
+                field="mlsId"
+                label="MLS ID"
+                value={txn.mlsId ?? ""}
+                display={txn.mlsId ?? "—"}
+                placeholder="MLS-102938"
+              />
+              <ListingDetailRow
+                action={updateListingDetail}
+                transactionId={txn.id}
+                field="listPrice"
+                label="List price"
+                value={txn.listPrice != null ? String(txn.listPrice) : ""}
+                display={fmtMoney(txn.listPrice)}
+                inputMode="numeric"
+                placeholder="450000"
+              />
+              <ListingDetailRow
+                action={updateListingDetail}
+                transactionId={txn.id}
+                field="purchasePrice"
+                label="Contract price"
+                value={txn.purchasePrice != null ? String(txn.purchasePrice) : ""}
+                display={fmtMoney(txn.purchasePrice)}
+                inputMode="numeric"
+                placeholder="450000"
+              />
             </dl>
           </SectionCard>
           <SectionCard
@@ -1013,7 +1040,8 @@ export default async function TransactionDetailPage({
                     toggleTask={toggleTask}
                     setTaskStatus={setTaskStatus}
                     setTaskNotes={setTaskNotes}
-                    cycleTaskPriority={cycleTaskPriority}
+                    setTaskPriority={setTaskPriority}
+                    setTaskDueDate={setTaskDueDate}
                     deleteTask={deleteTask}
                     emailHref={(t) =>
                       `/dashboard/transactions/${txn.id}?tab=emails&emailTask=${t.id}${
@@ -2491,6 +2519,7 @@ export default async function TransactionDetailPage({
                       onCreate={createContactByName}
                       createHint="Add contact"
                       placeholder="Search contacts…"
+                      autoSubmitOnCreate
                     />
                   </div>
                   <button type="submit" className={btn}>
@@ -2545,12 +2574,22 @@ export default async function TransactionDetailPage({
                               {ROLE_LABEL[p.role]}
                             </td>
                             <td className={td}>
-                              <Link
-                                href={`/dashboard/contacts/${p.contact.id}`}
-                                className="font-medium text-brand-700 hover:underline"
-                              >
-                                {p.contact.name}
-                              </Link>
+                              <span className="inline-flex items-center gap-1.5">
+                                <Link
+                                  href={`/dashboard/contacts/${p.contact.id}`}
+                                  className="font-medium text-brand-700 hover:underline"
+                                >
+                                  {p.contact.name}
+                                </Link>
+                                <Link
+                                  href={`/dashboard/contacts/${p.contact.id}/edit`}
+                                  title="Edit contact details"
+                                  aria-label={`Edit ${p.contact.name}`}
+                                  className="text-stone-300 transition-colors hover:text-brand-700"
+                                >
+                                  <PencilSimple size={12} aria-hidden />
+                                </Link>
+                              </span>
                             </td>
                             <td className={td}>
                               {p.contact.company ? (
@@ -2589,17 +2628,13 @@ export default async function TransactionDetailPage({
                               )}
                             </td>
                             <td className={td}>
-                              <form action={removeParty}>
-                                <input type="hidden" name="id" value={p.id} />
-                                <input type="hidden" name="transactionId" value={txn.id} />
-                                <button
-                                  type="submit"
-                                  aria-label={`Remove ${p.contact.name}`}
-                                  className="text-xs text-stone-300 hover:text-red-600"
-                                >
-                                  remove
-                                </button>
-                              </form>
+                              <DangerDelete
+                                compact
+                                action={removeParty}
+                                label={`Remove ${p.contact.name}`}
+                                description={`Removes ${p.contact.name} as ${ROLE_LABEL[p.role].toLowerCase()} from this transaction. Their contact record is untouched.`}
+                                hidden={{ id: p.id, transactionId: txn.id }}
+                              />
                             </td>
                           </tr>
                         ))}

@@ -1,12 +1,12 @@
 "use server";
 
-import { TaskStatus, withTenant } from "@freehold/db";
+import { TaskPriority, TaskStatus, withTenant } from "@freehold/db";
 import { dependentDueDate, instantiatePlan, type PlanTaskTemplate } from "@freehold/workflows";
 import { revalidatePath } from "next/cache";
 import { activityTitle, logActivity } from "@/lib/activity";
 import { resolveAssigneeRole } from "@/lib/assignee-roles";
 import { fireTaskTemplateEmail } from "@/lib/auto-emails";
-import { confirmed, dateOnly, str } from "@/lib/forms";
+import { confirmed, dateOnly, oneOf, str } from "@/lib/forms";
 import { seedRequiredDocuments } from "@/lib/required-documents";
 import { guestMaySeeTransaction, requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
@@ -335,19 +335,27 @@ export async function applyActionPlan(formData: FormData) {
   revalidateTaskViews(transactionId);
 }
 
-const PRIORITY_CYCLE = ["NORMAL", "HIGH", "CRITICAL"] as const;
+const PRIORITIES = [TaskPriority.NORMAL, TaskPriority.HIGH, TaskPriority.CRITICAL] as const;
 
-/** Cycle a task's priority flag: Normal → High → Critical → Normal. */
-export async function cycleTaskPriority(formData: FormData) {
+/** Priority dropdown on the task row. */
+export async function setTaskPriority(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  if (!id) return;
+  const priority = oneOf(formData, "priority", PRIORITIES, TaskPriority.NORMAL);
+  const transactionId = str(formData, "transactionId") || null;
+  await withTenant(tenantId, (tx) => tx.task.update({ where: { id }, data: { priority } }));
+  revalidateTaskViews(transactionId);
+}
+
+/** Due-date inline edit on the task row — a plain field edit, not an
+ *  anchor-derived date, so it never proposes an amendment. */
+export async function setTaskDueDate(formData: FormData) {
   const { tenantId } = await requireTenant();
   const id = str(formData, "id");
   if (!id) return;
   const transactionId = str(formData, "transactionId") || null;
-  await withTenant(tenantId, async (tx) => {
-    const task = await tx.task.findUniqueOrThrow({ where: { id }, select: { priority: true } });
-    const next =
-      PRIORITY_CYCLE[(PRIORITY_CYCLE.indexOf(task.priority) + 1) % PRIORITY_CYCLE.length];
-    await tx.task.update({ where: { id }, data: { priority: next } });
-  });
+  const dueDate = dateOnly(formData, "value");
+  await withTenant(tenantId, (tx) => tx.task.update({ where: { id }, data: { dueDate } }));
   revalidateTaskViews(transactionId);
 }
