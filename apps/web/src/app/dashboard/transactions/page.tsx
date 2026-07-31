@@ -4,6 +4,7 @@ import { StatusBadge } from "@/components/badges";
 import { ColumnPicker } from "@/components/column-picker";
 import { EmptyState } from "@/components/empty-state";
 import { MultiSelect } from "@/components/multi-select";
+import { SideBadge } from "@/components/side-badge";
 import { saveTransactionColumns } from "@/lib/actions/table-prefs";
 import { fmtDate, fmtMoney, STATUS_LABEL } from "@/lib/format";
 import { licenseGap, requiredStates } from "@/lib/licensing";
@@ -118,9 +119,13 @@ function renderCell(
     case "address":
       return (
         <>
+          {/* The side rides with the address so it survives the column
+              picker — hiding the Side column shouldn't hide which side
+              of the deal the file is worked from. */}
+          <SideBadge side={t.side} labels={ctx.labels} />
           <Link
             href={`/dashboard/transactions/${t.id}`}
-            className="font-medium text-brand-700 hover:text-brand-600"
+            className="ml-1.5 font-medium text-brand-700 hover:text-brand-600"
           >
             {t.propertyAddress}
           </Link>

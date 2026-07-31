@@ -30,6 +30,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Fragment } from "react";
 import { ActivityPanel } from "@/components/activity-panel";
 import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { AgentsCommissions } from "@/components/agents-commissions";
@@ -55,6 +56,7 @@ import { KeyDateRow } from "@/components/key-date-row";
 import { LinkPartyForm } from "@/components/link-party-form";
 import { ListingDetailRow } from "@/components/listing-detail-row";
 import { SectionCard } from "@/components/section-card";
+import { SideBadge } from "@/components/side-badge";
 import { SideFields } from "@/components/side-fields";
 import { StatusSelect } from "@/components/status-select";
 import { TaskTable } from "@/components/task-table";
@@ -154,6 +156,7 @@ import { isGovernedDateField, KEY_DATE_LABELS } from "@/lib/governed-dates";
 import { poolForTransaction } from "@/lib/handbook";
 import { invoiceLabel, TERM_PRESETS } from "@/lib/invoicing";
 import { gapForTransaction, gapMessage } from "@/lib/licensing";
+import { GROUP_LABEL, groupPartiesBySide } from "@/lib/party-side";
 import { fmtCents } from "@/lib/pay";
 import { creditBalance, handbookState, transactionHasPro } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
@@ -677,6 +680,8 @@ export default async function TransactionDetailPage({
   const missingSides = (["BUYER", "SELLER"] as const).filter(
     (role) => !txn.parties.some((p) => p.role === role),
   );
+  // Ours first, then the third parties, then the other side's people.
+  const groupedParties = groupPartiesBySide(txn.parties, txn.side);
   const latestExtraction = txn.extractions[0] ?? null;
   const execNotice = latestExtraction
     ? executionNotice((latestExtraction.execution as ExecutionCheck | null) ?? null)
@@ -693,7 +698,10 @@ export default async function TransactionDetailPage({
               { label: txn.propertyAddress },
             ]}
           />
-          <h1 className="text-xl font-semibold">{txn.propertyAddress}</h1>
+          <h1 className="flex items-center gap-2 text-xl font-semibold">
+            <SideBadge side={txn.side} labels={labels} size="md" />
+            {txn.propertyAddress}
+          </h1>
           <p className="text-sm text-stone-500">
             {[txn.city, txn.state, txn.zip].filter(Boolean).join(", ") || "No location set"} ·{" "}
             {sideLabel(txn.side, labels)} · contract {fmtMoney(txn.purchasePrice)} · list{" "}
@@ -911,17 +919,24 @@ export default async function TransactionDetailPage({
           >
             {txn.parties.length > 0 ? (
               <ul className="mb-3 flex flex-col divide-y divide-stone-100">
-                {txn.parties.map((p) => (
-                  <li key={p.id} className="flex items-center gap-2 py-1.5 text-sm">
-                    <span className="w-24 shrink-0 text-xs font-medium uppercase tracking-wide text-stone-400">
-                      {ROLE_LABEL[p.role]}
+                {groupedParties.map(({ party: p, group, firstOfGroup }) => (
+                  <li key={p.id} className="flex flex-col">
+                    {firstOfGroup && (
+                      <span className="pt-2 text-[0.65rem] font-semibold uppercase tracking-wide text-stone-400">
+                        {GROUP_LABEL[group]}
+                      </span>
+                    )}
+                    <span className="flex items-center gap-2 py-1.5 text-sm">
+                      <span className="w-24 shrink-0 text-xs font-medium uppercase tracking-wide text-stone-400">
+                        {ROLE_LABEL[p.role]}
+                      </span>
+                      <Link
+                        href={`/dashboard/contacts/${p.contact.id}`}
+                        className="min-w-0 flex-1 truncate font-medium text-brand-700 hover:underline"
+                      >
+                        {p.contact.name}
+                      </Link>
                     </span>
-                    <Link
-                      href={`/dashboard/contacts/${p.contact.id}`}
-                      className="min-w-0 flex-1 truncate font-medium text-brand-700 hover:underline"
-                    >
-                      {p.contact.name}
-                    </Link>
                   </li>
                 ))}
               </ul>
@@ -2553,90 +2568,102 @@ export default async function TransactionDetailPage({
                         </tr>
                       </thead>
                       <tbody>
-                        {txn.parties.map((p) => (
-                          <tr key={p.id} className={trHover}>
-                            <td className={td}>
-                              {p.contact.email && (
-                                <input
-                                  type="checkbox"
-                                  name="emailTo"
-                                  value={p.contact.email}
-                                  form="email-participants-form"
-                                  defaultChecked
-                                  aria-label={`Include ${p.contact.name} in email`}
-                                  className="accent-brand-600"
-                                />
-                              )}
-                            </td>
-                            <td
-                              className={`${td} text-xs font-medium uppercase tracking-wide text-stone-400`}
-                            >
-                              {ROLE_LABEL[p.role]}
-                            </td>
-                            <td className={td}>
-                              <span className="inline-flex items-center gap-1.5">
-                                <Link
-                                  href={`/dashboard/contacts/${p.contact.id}`}
-                                  className="font-medium text-brand-700 hover:underline"
+                        {groupedParties.map(({ party: p, group, firstOfGroup }) => (
+                          <Fragment key={p.id}>
+                            {firstOfGroup && (
+                              <tr>
+                                <td
+                                  colSpan={7}
+                                  className="bg-stone-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-stone-500"
                                 >
-                                  {p.contact.name}
-                                </Link>
-                                <Link
-                                  href={`/dashboard/contacts/${p.contact.id}/edit`}
-                                  title="Edit contact details"
-                                  aria-label={`Edit ${p.contact.name}`}
-                                  className="text-stone-300 transition-colors hover:text-brand-700"
-                                >
-                                  <PencilSimple size={12} aria-hidden />
-                                </Link>
-                              </span>
-                            </td>
-                            <td className={td}>
-                              {p.contact.company ? (
-                                <span className="inline-flex items-center gap-1">
-                                  <Buildings size={13} className="text-stone-400" aria-hidden />
-                                  {p.contact.company}
+                                  {GROUP_LABEL[group]}
+                                </td>
+                              </tr>
+                            )}
+                            <tr className={trHover}>
+                              <td className={td}>
+                                {p.contact.email && (
+                                  <input
+                                    type="checkbox"
+                                    name="emailTo"
+                                    value={p.contact.email}
+                                    form="email-participants-form"
+                                    defaultChecked
+                                    aria-label={`Include ${p.contact.name} in email`}
+                                    className="accent-brand-600"
+                                  />
+                                )}
+                              </td>
+                              <td
+                                className={`${td} text-xs font-medium uppercase tracking-wide text-stone-400`}
+                              >
+                                {ROLE_LABEL[p.role]}
+                              </td>
+                              <td className={td}>
+                                <span className="inline-flex items-center gap-1.5">
+                                  <Link
+                                    href={`/dashboard/contacts/${p.contact.id}`}
+                                    className="font-medium text-brand-700 hover:underline"
+                                  >
+                                    {p.contact.name}
+                                  </Link>
+                                  <Link
+                                    href={`/dashboard/contacts/${p.contact.id}/edit`}
+                                    title="Edit contact details"
+                                    aria-label={`Edit ${p.contact.name}`}
+                                    className="text-stone-300 transition-colors hover:text-brand-700"
+                                  >
+                                    <PencilSimple size={12} aria-hidden />
+                                  </Link>
                                 </span>
-                              ) : (
-                                <span className="text-stone-300">—</span>
-                              )}
-                            </td>
-                            <td className={td}>
-                              {p.contact.phone ? (
-                                <a
-                                  href={`tel:${p.contact.phone}`}
-                                  className="inline-flex items-center gap-1 hover:underline"
-                                >
-                                  <Phone size={13} className="text-stone-400" aria-hidden />
-                                  {p.contact.phone}
-                                </a>
-                              ) : (
-                                <span className="text-stone-300">—</span>
-                              )}
-                            </td>
-                            <td className={td}>
-                              {p.contact.email ? (
-                                <Link
-                                  href={`/dashboard/transactions/${txn.id}?tab=emails&emailTo=${encodeURIComponent(p.contact.email)}`}
-                                  className="inline-flex items-center gap-1 text-brand-700 hover:underline"
-                                >
-                                  <Envelope size={13} aria-hidden />
-                                  {p.contact.email}
-                                </Link>
-                              ) : (
-                                <span className="text-stone-300">—</span>
-                              )}
-                            </td>
-                            <td className={td}>
-                              <DangerDelete
-                                compact
-                                action={removeParty}
-                                label={`Remove ${p.contact.name}`}
-                                description={`Removes ${p.contact.name} as ${ROLE_LABEL[p.role].toLowerCase()} from this transaction. Their contact record is untouched.`}
-                                hidden={{ id: p.id, transactionId: txn.id }}
-                              />
-                            </td>
-                          </tr>
+                              </td>
+                              <td className={td}>
+                                {p.contact.company ? (
+                                  <span className="inline-flex items-center gap-1">
+                                    <Buildings size={13} className="text-stone-400" aria-hidden />
+                                    {p.contact.company}
+                                  </span>
+                                ) : (
+                                  <span className="text-stone-300">—</span>
+                                )}
+                              </td>
+                              <td className={td}>
+                                {p.contact.phone ? (
+                                  <a
+                                    href={`tel:${p.contact.phone}`}
+                                    className="inline-flex items-center gap-1 hover:underline"
+                                  >
+                                    <Phone size={13} className="text-stone-400" aria-hidden />
+                                    {p.contact.phone}
+                                  </a>
+                                ) : (
+                                  <span className="text-stone-300">—</span>
+                                )}
+                              </td>
+                              <td className={td}>
+                                {p.contact.email ? (
+                                  <Link
+                                    href={`/dashboard/transactions/${txn.id}?tab=emails&emailTo=${encodeURIComponent(p.contact.email)}`}
+                                    className="inline-flex items-center gap-1 text-brand-700 hover:underline"
+                                  >
+                                    <Envelope size={13} aria-hidden />
+                                    {p.contact.email}
+                                  </Link>
+                                ) : (
+                                  <span className="text-stone-300">—</span>
+                                )}
+                              </td>
+                              <td className={td}>
+                                <DangerDelete
+                                  compact
+                                  action={removeParty}
+                                  label={`Remove ${p.contact.name}`}
+                                  description={`Removes ${p.contact.name} as ${ROLE_LABEL[p.role].toLowerCase()} from this transaction. Their contact record is untouched.`}
+                                  hidden={{ id: p.id, transactionId: txn.id }}
+                                />
+                              </td>
+                            </tr>
+                          </Fragment>
                         ))}
                       </tbody>
                     </table>

@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/empty-state";
 import { HandbookGlance } from "@/components/handbook-glance";
 import { HubNews } from "@/components/hub-news";
 import { SectionCard } from "@/components/section-card";
+import { SideBadge } from "@/components/side-badge";
 import { toggleTask } from "@/lib/actions/tasks";
 import { activityTitle } from "@/lib/activity";
 import { rankAlerts, transactionAlerts } from "@/lib/alerts";
@@ -28,6 +29,7 @@ import {
   priorityBadgeStyle,
   rowHighlightStyle,
 } from "@/lib/priority";
+import { tenantSideLabels } from "@/lib/side-labels";
 import { getBillingAccess, requireTenant } from "@/lib/tenant";
 import { tableWrap, td, th, trHover } from "@/lib/ui";
 
@@ -306,6 +308,7 @@ export default async function DashboardPage({
           id: true,
           propertyAddress: true,
           status: true,
+          side: true,
           closeDate: true,
           client: { select: { name: true } },
         },
@@ -346,6 +349,7 @@ export default async function DashboardPage({
   // the cost is that a first-ever briefing appears on the next visit rather
   // than this one, which beats a spinner every morning.
   const hb = await handbookState(tenantId);
+  const sideLabels = await tenantSideLabels(tenantId);
   const me = hb.summary
     ? await prisma.member.findFirst({
         where: { organizationId: tenantId, userId },
@@ -694,6 +698,7 @@ export default async function DashboardPage({
                     key={t.id}
                     className="flex items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
                   >
+                    <SideBadge side={t.side} labels={sideLabels} />
                     <AddressPill href={`/dashboard/transactions/${t.id}`}>
                       {t.propertyAddress}
                     </AddressPill>
@@ -862,9 +867,12 @@ export default async function DashboardPage({
                     {recent.map((t) => (
                       <tr key={t.id} className={trHover}>
                         <td className={td}>
-                          <AddressPill href={`/dashboard/transactions/${t.id}`}>
-                            {t.propertyAddress}
-                          </AddressPill>
+                          <span className="flex items-center gap-2">
+                            <SideBadge side={t.side} labels={sideLabels} />
+                            <AddressPill href={`/dashboard/transactions/${t.id}`}>
+                              {t.propertyAddress}
+                            </AddressPill>
+                          </span>
                         </td>
                         <td className={td}>{t.client?.name ?? "—"}</td>
                         <td className={td}>
