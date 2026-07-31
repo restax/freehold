@@ -326,10 +326,21 @@ function ClientPortal(
 
         {link.showDocuments && txn.documents.length > 0 && (
           <section className={cardCls}>
-            <h2 className="mb-3 flex items-center gap-2 font-medium">
-              <FileText size={17} weight="bold" className="text-brand-600" aria-hidden />
-              Your documents
-            </h2>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 font-medium">
+                <FileText size={17} weight="bold" className="text-brand-600" aria-hidden />
+                Your documents
+              </h2>
+              {txn.documents.length > 1 && (
+                <a
+                  href={`/portal/${link.token}/documents.zip`}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-700 hover:underline"
+                >
+                  <Archive size={14} aria-hidden />
+                  Download all
+                </a>
+              )}
+            </div>
             <ul className="flex flex-col gap-1 text-sm">
               {txn.documents.map((d) => (
                 <li key={d.id}>

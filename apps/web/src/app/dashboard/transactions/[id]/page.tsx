@@ -1,5 +1,6 @@
 import { PartyRole, prisma, TransactionSide, withTenant } from "@freehold/db";
 import {
+  Archive,
   ArrowSquareOut,
   Buildings,
   CalendarBlank,
@@ -125,7 +126,7 @@ import {
   updateTransaction,
   withdrawDateChange,
 } from "@/lib/actions/transactions";
-import { recentActivity } from "@/lib/activity";
+import { lastSentByDocument, lastSentByPortalLink, recentActivity } from "@/lib/activity";
 import { isAgentEligible } from "@/lib/agent-contacts";
 import {
   type ContractParty,
@@ -219,6 +220,7 @@ export default async function TransactionDetailPage({
     licenseError?: string;
     dateTemplate?: string;
     emailTo?: string | string[];
+    attachDoc?: string | string[];
   }>;
 }) {
   const { tenantId, session } = await requireTenant({ allowGuest: true });
@@ -239,6 +241,7 @@ export default async function TransactionDetailPage({
     licenseError,
     dateTemplate,
     emailTo,
+    attachDoc,
   } = await searchParams;
   const tab: TxnTab = (TXN_TABS.some(([t]) => t === tabRaw) ? tabRaw : "tasks") as TxnTab;
 
@@ -649,6 +652,11 @@ export default async function TransactionDetailPage({
   if (emailToList.length > 0) {
     composeTo = emailToList.join(", ");
   }
+  // Arriving from a document's envelope icon: that file is already ticked, so
+  // "send me the inspection report" is one click and a recipient.
+  for (const docId of Array.isArray(attachDoc) ? attachDoc : attachDoc ? [attachDoc] : []) {
+    if (currentDocs.some((d) => d.id === docId)) attachPrechecked.add(docId);
+  }
 
   const customFields = (txn.customFields as Record<string, string> | null) ?? {};
   const contractParties = (txn.contractParties as ContractParty[] | null) ?? [];
@@ -693,6 +701,12 @@ export default async function TransactionDetailPage({
   );
   // Ours first, then the third parties, then the other side's people.
   const groupedParties = groupPartiesBySide(txn.parties, txn.side);
+  // "Did you send that to the lender?" — answered from what actually went
+  // out, on the row for the thing that was sent.
+  const [sentDocs, sentLinks] = await Promise.all([
+    lastSentByDocument(tenantId, txn.id),
+    lastSentByPortalLink(tenantId, txn.id),
+  ]);
   const latestExtraction = txn.extractions[0] ?? null;
   const execNotice = latestExtraction
     ? executionNotice((latestExtraction.execution as ExecutionCheck | null) ?? null)
@@ -1293,6 +1307,23 @@ export default async function TransactionDetailPage({
                   </p>
                 )}
                 {currentDocs.length > 0 && (
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <span className="text-xs text-stone-400">
+                      {currentDocs.length} file{currentDocs.length === 1 ? "" : "s"} on this
+                      transaction
+                    </span>
+                    {/* Lenders and clients ask for "the whole file" — one
+                        download rather than clicking each row in turn. */}
+                    <a
+                      href={`/api/transactions/${txn.id}/documents/zip`}
+                      className={`${btnGhost} inline-flex items-center gap-1.5`}
+                    >
+                      <Archive size={14} aria-hidden />
+                      Download all (.zip)
+                    </a>
+                  </div>
+                )}
+                {currentDocs.length > 0 && (
                   <ul className="mb-4 flex flex-col">
                     {currentDocs.map((doc) => (
                       <li
@@ -1354,6 +1385,17 @@ export default async function TransactionDetailPage({
                             </span>
                           ))}
                         <span className="ml-auto flex items-center gap-3">
+                          {/* Straight to the compose form with this file
+                              already ticked — the client or the lender asked
+                              for this one document, not the whole file. */}
+                          <Link
+                            href={`/dashboard/transactions/${txn.id}?tab=emails&attachDoc=${doc.id}`}
+                            title={`Email ${doc.filename}`}
+                            aria-label={`Email ${doc.filename}`}
+                            className="text-stone-300 transition-colors hover:text-brand-700"
+                          >
+                            <Envelope size={15} aria-hidden />
+                          </Link>
                           <VisibilityToggles
                             kind="document"
                             id={doc.id}
@@ -1371,6 +1413,16 @@ export default async function TransactionDetailPage({
                             hidden={{ id: doc.id, transactionId: txn.id }}
                           />
                         </div>
+                        {(() => {
+                          const sent = sentDocs.get(doc.id);
+                          if (!sent) return null;
+                          return (
+                            <p className="w-full text-xs text-stone-400">
+                              <Envelope size={11} className="mr-1 inline" aria-hidden />
+                              {sent.summary} · {sent.actorName} · {fmtDate(sent.at)}
+                            </p>
+                          );
+                        })()}
                         <details className="w-full">
                           <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
                             Send for signature
@@ -3389,6 +3441,16 @@ export default async function TransactionDetailPage({
                               />
                             </span>
                           </div>
+                          {(() => {
+                            const sent = sentLinks.get(pl.id);
+                            if (!sent) return null;
+                            return (
+                              <p className="mt-1 text-xs text-stone-400">
+                                <Envelope size={11} className="mr-1 inline" aria-hidden />
+                                {sent.summary} · {sent.actorName} · {fmtDate(sent.at)}
+                              </p>
+                            );
+                          })()}
                           {!pl.revokedAt && (
                             <>
                               <input

@@ -90,7 +90,9 @@ export async function emailPortalLink(formData: FormData) {
     actor: session.user,
     action: "portal.emailed",
     summary: `Emailed the "${link.label}" portal link to ${to}`,
+    portalLinkId,
   });
+  revalidatePath(`/dashboard/transactions/${transactionId}`);
 }
 
 /**

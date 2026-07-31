@@ -2,7 +2,7 @@
 
 import { withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
-import { logActivity } from "@/lib/activity";
+import { DOCUMENT_EMAILED, logActivity } from "@/lib/activity";
 import { logAudit } from "@/lib/audit";
 import { emailContextForTransaction } from "@/lib/auto-emails";
 import { emailEnabled, sendTenantEmail } from "@/lib/email";
@@ -28,11 +28,16 @@ export async function sendTransactionEmail(formData: FormData) {
   // Attachments: selected transaction documents, decrypted, capped at 15 MB.
   const attachDocIds = formData.getAll("attachDoc").map(String).filter(Boolean);
   const attachments: Array<{ filename: string; content: string }> = [];
+  // Only the files that actually made it under the cap get a "sent" record —
+  // logging one for a file the cap silently dropped would be a lie the TC
+  // then repeats to a lender.
+  const attached: Array<{ id: string; filename: string }> = [];
   if (attachDocIds.length > 0) {
     const docs = await withTenant(tenantId, (tx) =>
       tx.document.findMany({
         where: { id: { in: attachDocIds }, transactionId },
         select: {
+          id: true,
           filename: true,
           data: true,
           storageKey: true,
@@ -47,6 +52,7 @@ export async function sendTransactionEmail(formData: FormData) {
       total += bytes.length;
       if (total > 15 * 1024 * 1024) break;
       attachments.push({ filename: doc.filename, content: bytes.toString("base64") });
+      attached.push({ id: doc.id, filename: doc.filename });
     }
   }
 
@@ -104,6 +110,10 @@ export async function sendTransactionEmail(formData: FormData) {
         subjectType: "transaction",
         subjectId: transactionId,
       });
+      // Deliberately no per-document "sent" record here: this hasn't gone
+      // anywhere yet. Claiming a file was emailed when it's still sitting in
+      // the outbox is exactly the answer a TC would repeat to a lender and be
+      // wrong about. The record is written when the outbox actually sends.
       revalidatePath(`/dashboard/transactions/${transactionId}`);
       return;
     }
@@ -137,6 +147,16 @@ export async function sendTransactionEmail(formData: FormData) {
     action: "email.sent",
     summary: `Emailed ${to} — “${subject.slice(0, 60)}”`,
   });
+  for (const doc of attached) {
+    logActivity({
+      tenantId,
+      transactionId,
+      actor: session.user,
+      action: DOCUMENT_EMAILED,
+      summary: `Emailed ${doc.filename} to ${to}`,
+      documentId: doc.id,
+    });
+  }
   revalidatePath(`/dashboard/transactions/${transactionId}`);
 }
 

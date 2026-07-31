@@ -1,6 +1,6 @@
 import { prisma, withTenant } from "@freehold/db";
-import JSZip from "jszip";
-import { getObjectBytes } from "@/lib/storage";
+import { buildDocumentZip, zipResponse } from "@/lib/zip";
+import { zipFilename } from "@/lib/zip-names";
 
 export const dynamic = "force-dynamic";
 
@@ -38,23 +38,6 @@ export async function GET(
     return new Response("Not found", { status: 404 });
   }
 
-  const zip = new JSZip();
-  const used = new Set<string>();
-  for (const doc of txn.documents) {
-    const bytes = await getObjectBytes(doc);
-    let name = doc.filename.replace(/[^\w.\- ]/g, "_");
-    while (used.has(name)) name = `_${name}`;
-    used.add(name);
-    zip.file(name, bytes);
-  }
-  const archive = await zip.generateAsync({ type: "uint8array" });
-  const zipName = `${txn.propertyAddress.replace(/[^\w\- ]/g, "_").slice(0, 60)}.zip`;
-
-  return new Response(new Uint8Array(archive), {
-    headers: {
-      "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="${zipName}"`,
-      "Cache-Control": "private, no-store",
-    },
-  });
+  const archive = await buildDocumentZip(txn.documents);
+  return zipResponse(archive, zipFilename(txn.propertyAddress));
 }

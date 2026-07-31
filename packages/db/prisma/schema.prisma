@@ -1674,6 +1674,7 @@ model PortalLink {
   showVendorOrders Boolean        @default(false) @map("show_vendor_orders")
   revokedAt        DateTime?      @map("revoked_at")
   lastAccessedAt   DateTime?      @map("last_accessed_at")
+  emailedActivity  TransactionActivity[]
   createdAt        DateTime       @default(now())
 
   @@index([tenantId])
@@ -1987,9 +1988,21 @@ model TransactionActivity {
   action        String
   /// Human sentence shown in the UI, the briefing email, and the PDF.
   summary       String
+  /// Set on "email.sent" rows that carried exactly one attachment, so a
+  /// document's row can show who it was last emailed to without scraping
+  /// free-text summaries. SetNull rather than cascade: the document is gone,
+  /// but the fact that it was once emailed to someone is still worth keeping.
+  documentId    String?      @map("document_id")
+  document      Document?    @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  /// Same idea for "portal.emailed" rows, so a link's row can show its own
+  /// last-sent-to instead of only appearing in the general activity feed.
+  portalLinkId  String?      @map("portal_link_id")
+  portalLink    PortalLink?  @relation(fields: [portalLinkId], references: [id], onDelete: SetNull)
   createdAt     DateTime     @default(now())
 
   @@index([tenantId, transactionId, createdAt])
+  @@index([documentId])
+  @@index([portalLinkId])
   @@map("transaction_activity")
 }
 
@@ -2778,6 +2791,7 @@ model Document {
   envelopes       SignatureEnvelope[]
   complianceSlots ComplianceSlot[]
   requiredSlots   TransactionRequiredDocument[]
+  emailedActivity TransactionActivity[]
   createdAt       DateTime                      @default(now())
 
   @@index([tenantId])

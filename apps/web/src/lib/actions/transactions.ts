@@ -32,6 +32,7 @@ import {
 import { gapForPending, gapMessage, licenseEnforcement } from "@/lib/licensing";
 import { parseFeeCents } from "@/lib/pay";
 import { transactionLimit } from "@/lib/plans";
+import { deleteObject } from "@/lib/storage";
 import { requireAdminTenant, requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
 
@@ -630,9 +631,21 @@ export async function deleteTransaction(formData: FormData) {
   const { tenantId, isAdmin, session } = await requireAdminTenant();
   const id = str(formData, "id");
   if (!id || !isAdmin || !confirmed(formData)) return;
-  const gone = await withTenant(tenantId, (tx) =>
-    tx.transaction.delete({ where: { id }, select: { propertyAddress: true } }),
-  );
+  const { gone, docs } = await withTenant(tenantId, async (tx) => {
+    // Row deletion cascades in Postgres, but the object storage behind each
+    // row does not — collect what it was pointing at before it's gone, or
+    // the bytes sit in the bucket forever with nothing left to name them.
+    const docs = await tx.document.findMany({
+      where: { transactionId: id },
+      select: { storageKey: true, storageProvider: true, tenantId: true },
+    });
+    const gone = await tx.transaction.delete({
+      where: { id },
+      select: { propertyAddress: true },
+    });
+    return { gone, docs };
+  });
+  await Promise.all(docs.map((doc) => deleteObject({ ...doc, data: null })));
   logAudit({
     tenantId,
     actorId: session.user.id,
