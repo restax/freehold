@@ -141,6 +141,9 @@ export default async function AdminPage() {
           <Link href="/admin/ads" className={btnGhost}>
             Vendor ads
           </Link>
+          <Link href="/admin/states" className={btnGhost}>
+            State reference
+          </Link>
           <Link href="/admin/inbound" className={btnGhost}>
             Unmatched inbound
           </Link>

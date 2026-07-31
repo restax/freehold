@@ -1741,6 +1741,12 @@ model PlatformSetting {
   /// default in lib/handbook/style.ts, which ships in the repo so a
   /// self-hosted install always has one.
   handbookStyleGuide         String?   @map("handbook_style_guide")
+  /// Cross-tenant guidance shown above the per-state list on
+  /// /admin/states and on the tenant-facing Operating states helper —
+  /// the general rule (unlicensed TCs as broker-supervised admin only;
+  /// several states require a license for independent contract TC work)
+  /// that applies before any state-specific note.
+  tcLicenseGeneralRule       String?   @map("tc_license_general_rule")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
 
   @@map("platform_setting")
@@ -2548,6 +2554,51 @@ model SlackTicketLink {
 
   @@unique([slackChannel, slackThreadTs])
   @@map("slack_ticket_link")
+}
+
+/// Which of the three closing-process shapes a state's transactions follow —
+/// coarse enough to be useful for defaults/copy, with the real nuance kept in
+/// StateReference.closingModelDetail.
+enum StateClosingModel {
+  TITLE_ESCROW
+  ATTORNEY
+  PARTIAL_ATTORNEY
+}
+
+/// Platform-wide reference notes for one US state — closing process, dominant
+/// MLS systems, TC licensing norms, and local jargon/forms. Cross-tenant by
+/// design (every workspace operating in Texas benefits from the same Texas
+/// notes), so no tenantId and no RLS — the same root-table shape as Vendor
+/// and PlatformSetting. Editable only from /admin/states; read by every
+/// tenant wherever a transaction or Operating-states entry names this state.
+///
+/// Deliberately informational, not enforcement: TenantState.licenseRequired
+/// (self-declared per workspace) remains the only thing that actually gates
+/// a file — see lib/licensing.ts. This is a hint shown alongside that
+/// checkbox, not a value that sets it.
+model StateReference {
+  /// Two-letter USPS code, uppercase — "TX", "CA".
+  code               String            @id
+  name               String
+  closingModel       StateClosingModel @map("closing_model")
+  /// The specific shape within that model, e.g. "Strict Attorney State —
+  /// attorney conducts closing, handles escrow, and performs title search."
+  closingModelDetail String            @map("closing_model_detail")
+  /// Named regional MLS systems operating in this state.
+  dominantMls        String            @map("dominant_mls")
+  /// Plain-language note on when an unlicensed TC vs. a licensed one is
+  /// needed here. Not legal advice — a starting point for the workspace's
+  /// own Operating-states decision.
+  licenseSummary     String            @map("license_summary")
+  /// State-specific forms, disclosures, and terms of art a TC working this
+  /// state will run into.
+  jargon             String
+  /// Paul's confirmed-accurate flag — data arrives as a best-effort baseline
+  /// and gets marked verified as each state is checked.
+  verified           Boolean           @default(false)
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  @@map("state_reference")
 }
 
 /// A state the workspace operates in, and whether it requires a licensed

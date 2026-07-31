@@ -282,14 +282,25 @@ async function OperatingStatesSection({ tenantId, userId }: { tenantId: string; 
   const role = await getMemberRole(tenantId, userId);
   if (role !== "owner" && role !== "admin") return null;
   const { prisma } = await import("@freehold/db");
-  const [states, org] = await Promise.all([
+  const [states, org, setting] = await Promise.all([
     withTenant(tenantId, (tx) => tx.tenantState.findMany({ orderBy: { state: "asc" } })),
     prisma.organization.findUniqueOrThrow({
       where: { id: tenantId },
       select: { licenseEnforcement: true },
     }),
+    prisma.platformSetting.findUnique({
+      where: { id: "singleton" },
+      select: { tcLicenseGeneralRule: true },
+    }),
   ]);
   const blocking = org.licenseEnforcement === "block";
+  const refs =
+    states.length > 0
+      ? await prisma.stateReference.findMany({
+          where: { code: { in: states.map((s) => s.state.toUpperCase()) } },
+        })
+      : [];
+  const refByCode = new Map(refs.map((r) => [r.code, r]));
 
   return (
     <SectionCard title="Operating states">
@@ -305,31 +316,65 @@ async function OperatingStatesSection({ tenantId, userId }: { tenantId: string; 
 
       {states.length > 0 && (
         <ul className="mb-4 flex flex-col">
-          {states.map((s) => (
-            <li
-              key={s.id}
-              className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
-            >
-              <span className="w-10 font-medium">{s.state}</span>
-              <span className={s.licenseRequired ? "text-stone-700" : "text-stone-400"}>
-                {s.licenseRequired ? "License required" : "No license requirement"}
-              </span>
-              <form action={addState} className="ml-auto">
-                <input type="hidden" name="state" value={s.state} />
-                {!s.licenseRequired && <input type="hidden" name="licenseRequired" value="on" />}
-                <button type="submit" className="text-xs text-brand-600 hover:underline">
-                  {s.licenseRequired ? "drop requirement" : "require a license"}
-                </button>
-              </form>
-              <form action={removeState}>
-                <input type="hidden" name="id" value={s.id} />
-                <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
-                  remove
-                </button>
-              </form>
-            </li>
-          ))}
+          {states.map((s) => {
+            const ref = refByCode.get(s.state.toUpperCase());
+            return (
+              <li key={s.id} className="border-b border-stone-100 py-2 last:border-0">
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <span className="w-10 font-medium">{s.state}</span>
+                  <span className={s.licenseRequired ? "text-stone-700" : "text-stone-400"}>
+                    {s.licenseRequired ? "License required" : "No license requirement"}
+                  </span>
+                  <form action={addState} className="ml-auto">
+                    <input type="hidden" name="state" value={s.state} />
+                    {!s.licenseRequired && (
+                      <input type="hidden" name="licenseRequired" value="on" />
+                    )}
+                    <button type="submit" className="text-xs text-brand-600 hover:underline">
+                      {s.licenseRequired ? "drop requirement" : "require a license"}
+                    </button>
+                  </form>
+                  <form action={removeState}>
+                    <input type="hidden" name="id" value={s.id} />
+                    <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
+                      remove
+                    </button>
+                  </form>
+                </div>
+                {ref && (
+                  <div className="mt-1.5 rounded-lg bg-stone-50 px-3 py-2 text-xs text-stone-500">
+                    <p>
+                      <strong className="font-medium text-stone-600">
+                        Freehold's notes on {ref.name}:
+                      </strong>{" "}
+                      {ref.closingModelDetail}
+                    </p>
+                    <p className="mt-1">
+                      <strong className="font-medium text-stone-600">MLS —</strong>{" "}
+                      {ref.dominantMls}
+                    </p>
+                    <p className="mt-1">
+                      <strong className="font-medium text-stone-600">Licensing —</strong>{" "}
+                      {ref.licenseSummary}
+                    </p>
+                    <p className="mt-1">
+                      <strong className="font-medium text-stone-600">Jargon —</strong> {ref.jargon}
+                    </p>
+                    <p className="mt-1.5 text-stone-400">
+                      Informational only, not legal advice — decide "License required" above for
+                      your business.
+                    </p>
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
+      )}
+      {setting?.tcLicenseGeneralRule && (
+        <p className="mb-4 rounded-lg bg-stone-50 px-3 py-2 text-xs text-stone-500">
+          {setting.tcLicenseGeneralRule}
+        </p>
       )}
 
       <form action={addState} className="mb-4 flex flex-wrap items-end gap-3">
