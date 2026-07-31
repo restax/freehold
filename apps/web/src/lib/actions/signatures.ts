@@ -3,7 +3,7 @@
 import { prisma, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { confirmed, optStr, str } from "@/lib/forms";
-import { getMemberRole, requireAdminTenant, requireTenant } from "@/lib/tenant";
+import { GUEST_ROLE, getMemberRole, requireAdminTenant, requireTenant } from "@/lib/tenant";
 
 /**
  * Signature-block editing rights: owners and admins always have them;
@@ -14,6 +14,11 @@ import { getMemberRole, requireAdminTenant, requireTenant } from "@/lib/tenant";
  */
 async function canEditSignatures(tenantId: string, userId: string): Promise<boolean> {
   const role = await getMemberRole(tenantId, userId);
+  // Outside coverage staff never edit the workspace's own outgoing identity,
+  // whatever the members switch says. requireTenant already turns them away
+  // before this runs, so this is belt-and-braces: it keeps the rule true of
+  // this function on its own, rather than true only because of its callers.
+  if (role === GUEST_ROLE) return false;
   if (role === "owner" || role === "admin") return true;
   const org = await prisma.organization.findUnique({
     where: { id: tenantId },

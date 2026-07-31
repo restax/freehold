@@ -10,6 +10,7 @@ import {
   renderMerge,
 } from "@/lib/email-template";
 import { portalOrigin } from "@/lib/portal";
+import { isUndeliverableAddress } from "@/lib/reserved-email";
 import { reviewDue, reviewLinkExpiry } from "@/lib/reviews";
 import { parseAppearance, resolveEmailAccent } from "@/lib/theme";
 
@@ -66,8 +67,8 @@ export async function runReviewRequests(): Promise<{ sent: number; skipped: numb
         skipped++;
         continue;
       }
-      // Sample/demo data uses reserved .example addresses — never actually send.
-      if (/\.(example|test|invalid)$/i.test(txn.client.email.split("@")[1] ?? "")) {
+      // Placeholder contacts would bounce, and bounces cost sender reputation.
+      if (isUndeliverableAddress(txn.client.email)) {
         skipped++;
         continue;
       }

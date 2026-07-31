@@ -10,6 +10,7 @@ import {
   renderMerge,
 } from "@/lib/email-template";
 import { fmtDate } from "@/lib/format";
+import { isUndeliverableAddress } from "@/lib/reserved-email";
 import { parseAppearance, resolveEmailAccent } from "@/lib/theme";
 
 /**
@@ -157,8 +158,8 @@ async function sendLifecycleEmail(
   if (!emailEnabled()) return;
   const ctx = await emailContextForTransaction(tenantId, transactionId, tc);
   if (!ctx?.txn.client?.email) return;
-  // Sample/demo data uses reserved .example addresses — never actually send.
-  if (/\.(example|test|invalid)$/i.test(ctx.txn.client.email.split("@")[1] ?? "")) return;
+  // Placeholder contacts would bounce, and bounces cost sender reputation.
+  if (isUndeliverableAddress(ctx.txn.client.email)) return;
   if (!parseEmailPrefs(ctx.txn.client.emailPrefs)[kind]) return;
 
   const template = parseEmailTemplates(ctx.org.emailTemplates)[kind];
@@ -214,7 +215,7 @@ export function fireTaskTemplateEmail(
     if (!emailEnabled()) return;
     const ctx = await emailContextForTransaction(tenantId, transactionId, tc);
     if (!ctx?.txn.client?.email) return;
-    if (/\.(example|test|invalid)$/i.test(ctx.txn.client.email.split("@")[1] ?? "")) return;
+    if (isUndeliverableAddress(ctx.txn.client.email)) return;
     const task = await withTenant(tenantId, (tx) =>
       tx.task.findUnique({
         where: { id: taskId },
