@@ -29,6 +29,11 @@ model User {
   /// subdomains. Lowercase, URL-safe. displayUsername keeps the as-typed form.
   username               String?               @unique
   displayUsername        String?
+  /// The coordinator's own contact number, shown on the signature card of
+  /// every email they send and available to templates as {{tc_phone}}. On the
+  /// user rather than the membership: it's the person's number, and a
+  /// coordinator working two workspaces answers the same phone in both.
+  phone                  String?
   image                  String?
   /// Profile photo bytes, stored inline (photos are small and user-global, so
   /// they never route to a tenant's bucket). Served by /api/users/[id]/avatar;

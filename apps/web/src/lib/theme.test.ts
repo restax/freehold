@@ -5,6 +5,7 @@ import {
   PRESET_THEMES,
   parseAppearance,
   resolveAccent,
+  resolveEmailAccent,
   THEMES,
   type ThemeKey,
   themeTokens,
@@ -177,6 +178,40 @@ describe("themeTokens", () => {
       expect(seen.has(sig), `${key} duplicates ${seen.get(sig)}`).toBe(false);
       seen.set(sig, key);
     }
+  });
+});
+
+describe("resolveEmailAccent", () => {
+  it("emits valid hex for every theme", () => {
+    for (const { label, a } of everyAccent()) {
+      const e = resolveEmailAccent(a);
+      expect(isHex(e.header), `${label} header`).toBe(true);
+      expect(isHex(e.headerFg), `${label} headerFg`).toBe(true);
+      expect(isHex(e.link), `${label} link`).toBe(true);
+    }
+  });
+
+  it("keeps the header text readable on the header band, for any accent", () => {
+    for (const { label, a } of everyAccent()) {
+      const e = resolveEmailAccent(a);
+      expect(contrastRatio(e.headerFg, e.header), label).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("keeps the link colour readable on white, for any accent", () => {
+    for (const { label, a } of everyAccent()) {
+      const e = resolveEmailAccent(a);
+      expect(contrastRatio(e.link, "#ffffff"), label).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("moves the header colour with the theme — the bug this replaces", () => {
+    // Every branded email used to hardcode #0b6a40 regardless of the
+    // workspace's Appearance choice — Cobalt workspace, green email.
+    const moss = resolveEmailAccent({ theme: "forest", customAccent: "#000000" });
+    const cobalt = resolveEmailAccent({ theme: "cobalt", customAccent: "#000000" });
+    expect(moss.header).not.toBe(cobalt.header);
+    expect(moss.link).not.toBe(cobalt.link);
   });
 });
 

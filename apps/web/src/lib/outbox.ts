@@ -125,6 +125,7 @@ async function renderOutboxHtml(
     tc: ctx.tcCard,
     agent: ctx.agentCard,
     otherSide: ctx.otherCard,
+    accent: ctx.emailAccent,
     ...parseEmailSettings(ctx.org.emailSettings),
   });
 }

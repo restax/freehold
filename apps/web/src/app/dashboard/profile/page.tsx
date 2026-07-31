@@ -38,7 +38,7 @@ export default async function ProfilePage({
   const [user, licenses, unbilled, payRequests, nylasGrant] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { id: userId },
-      select: { id: true, name: true, email: true, image: true },
+      select: { id: true, name: true, email: true, image: true, phone: true },
     }),
     withTenant(tenantId, (tx) =>
       tx.userLicense.findMany({
@@ -149,10 +149,23 @@ export default async function ProfilePage({
               Display name
               <input name="name" defaultValue={user.name} required className={input} />
             </label>
+            <label className={label}>
+              Phone
+              <input
+                name="phone"
+                type="tel"
+                defaultValue={user.phone ?? ""}
+                placeholder="(312) 555-0148"
+                className={input}
+              />
+            </label>
             <button type="submit" className={btn}>
               Save
             </button>
-            <p className="w-full text-xs text-stone-400">Signed in as {user.email}</p>
+            <p className="w-full text-xs text-stone-400">
+              Signed in as {user.email}. Your name and phone appear on the signature card of emails
+              you send, and in templates as <code className="font-mono">{"{{tc_phone}}"}</code>.
+            </p>
           </form>
         </div>
       </SectionCard>

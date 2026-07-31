@@ -2,19 +2,22 @@
 
 import { prisma } from "@freehold/db";
 import { revalidatePath } from "next/cache";
-import { str } from "@/lib/forms";
+import { optStr, str } from "@/lib/forms";
 import { requireTenant } from "@/lib/tenant";
 
 /** Profile photos stay small — they render as 32–96px avatars. */
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2 MB
 const AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
-/** Update the signed-in user's own display name. */
+/** Update the signed-in user's own display name and contact number. */
 export async function updateProfile(formData: FormData) {
   const { userId } = await requireTenant();
   const name = str(formData, "name");
   if (!name) return;
-  await prisma.user.update({ where: { id: userId }, data: { name } });
+  // Blank clears it — the signature card just drops the line, rather than
+  // keeping a number the coordinator deliberately removed.
+  const phone = optStr(formData, "phone");
+  await prisma.user.update({ where: { id: userId }, data: { name, phone } });
   revalidatePath("/dashboard/profile");
   revalidatePath("/dashboard/team");
 }

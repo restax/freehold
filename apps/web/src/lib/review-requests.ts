@@ -11,6 +11,7 @@ import {
 } from "@/lib/email-template";
 import { portalOrigin } from "@/lib/portal";
 import { reviewDue, reviewLinkExpiry } from "@/lib/reviews";
+import { parseAppearance, resolveEmailAccent } from "@/lib/theme";
 
 /**
  * The nightly sweep that asks for a review. Runs across every tenant, since
@@ -49,7 +50,7 @@ export async function runReviewRequests(): Promise<{ sent: number; skipped: numb
           assignees: {
             orderBy: { createdAt: "asc" },
             take: 1,
-            select: { user: { select: { id: true, name: true } } },
+            select: { user: { select: { id: true, name: true, phone: true } } },
           },
         },
       });
@@ -107,8 +108,9 @@ export async function runReviewRequests(): Promise<{ sent: number; skipped: numb
       try {
         const orgRow = await prisma.organization.findUniqueOrThrow({
           where: { id: org.id },
-          select: { name: true, emailTemplates: true, emailSettings: true },
+          select: { name: true, emailTemplates: true, emailSettings: true, appearanceConfig: true },
         });
+        const emailAccent = resolveEmailAccent(parseAppearance(orgRow.appearanceConfig));
         const base = await portalOrigin(org.id);
         const link = `${base}/r/${token}`;
         const template = parseEmailTemplates(orgRow.emailTemplates).review;
@@ -125,6 +127,7 @@ export async function runReviewRequests(): Promise<{ sent: number; skipped: numb
           heading: "Your transaction coordinator",
           name: coordinator?.name ?? orgRow.name,
           company: orgRow.name,
+          phone: coordinator?.phone ?? null,
         };
         await sendTenantEmail({
           tenantId: org.id,
@@ -136,6 +139,7 @@ export async function runReviewRequests(): Promise<{ sent: number; skipped: numb
             tenantName: orgRow.name,
             body,
             tc: tcCard,
+            accent: emailAccent,
             ...parseEmailSettings(orgRow.emailSettings),
           }),
         });

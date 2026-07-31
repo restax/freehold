@@ -242,6 +242,38 @@ export function themeTokens(a: Pick<Appearance, "theme" | "customAccent">): Reco
   };
 }
 
+/** The three concrete colours an outbound email needs. HTML email can't read
+ *  CSS variables reliably, so these are resolved to hex once per send rather
+ *  than themed live like the app chrome. */
+export interface EmailAccent {
+  /** The banner behind the workspace name. */
+  header: string;
+  /** Text/wordmark colour readable on `header`. */
+  headerFg: string;
+  /** Links and the contact card's email address, readable on white. */
+  link: string;
+}
+
+/**
+ * A workspace's theme, resolved for an email. Every branded email used to be
+ * hardcoded brand-green — Cobalt workspace, blue app, green email — which is
+ * exactly the "one choice moves every surface" property `themeTokens` exists
+ * to guarantee for the app chrome. This is that guarantee's email half.
+ */
+export function resolveEmailAccent(a: Pick<Appearance, "theme" | "customAccent">): EmailAccent {
+  // Reuses the app chrome's own top-bar solution rather than re-deriving it:
+  // a raw `dark` anchor isn't guaranteed 4.5:1 for white text on a pale
+  // custom accent (the same dead zone --topbar exists to escape), and
+  // duplicating that fix here would be one more place for it to rot out of
+  // sync.
+  const tokens = themeTokens(a);
+  return {
+    header: tokens["--topbar"],
+    headerFg: tokens["--topbar-fg"],
+    link: tokens["--color-brand-600"],
+  };
+}
+
 /**
  * Portal root vars: the themed surfaces plus one typeface across the portal —
  * remapping the font utilities used here (font-display hero, font-serif stat

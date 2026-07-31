@@ -79,6 +79,7 @@ export async function sendTransactionEmail(formData: FormData) {
         tc: ctx.tcCard,
         agent: ctx.agentCard,
         otherSide: ctx.otherCard,
+        accent: ctx.emailAccent,
         ...parseEmailSettings(ctx.org.emailSettings),
       })
     : undefined;

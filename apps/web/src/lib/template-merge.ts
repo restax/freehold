@@ -1,4 +1,5 @@
 import { prisma, withTenant } from "@freehold/db";
+import { type TcIdentity, tcPhone } from "@/lib/auto-emails";
 import { fmtDate } from "@/lib/format";
 
 /**
@@ -101,7 +102,7 @@ const lastName = (full: string | null | undefined) => {
 export async function buildTemplateMergeContext(
   tenantId: string,
   transactionId: string,
-  tc: { name?: string | null; email?: string | null },
+  tc: TcIdentity,
 ): Promise<Record<string, string>> {
   const [txn, org, portalLinks] = await withTenant(tenantId, (tx) =>
     Promise.all([
@@ -220,7 +221,7 @@ export async function buildTemplateMergeContext(
     tc_name: tc.name ?? org.name,
     tc_first_name: firstName(tc.name),
     tc_email: tc.email ?? "",
-    tc_phone: "",
+    tc_phone: (await tcPhone(tc)) ?? "",
     task_title: "",
     task_due: "",
     review_link: "",

@@ -10,6 +10,7 @@ import {
   renderMerge,
 } from "@/lib/email-template";
 import { fmtDate } from "@/lib/format";
+import { parseAppearance, resolveEmailAccent } from "@/lib/theme";
 
 /**
  * Automated lifecycle emails (intro on file open, congratulations on
@@ -19,11 +20,37 @@ import { fmtDate } from "@/lib/format";
  * user's action.
  */
 
+/**
+ * Who the email is from, as the callers have them. Nearly every caller passes
+ * `session.user`, which carries no phone — so the number is looked up from the
+ * id rather than being threaded through a dozen signatures.
+ */
+export interface TcIdentity {
+  id?: string | null;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+}
+
+/**
+ * The coordinator's contact number for the signature card. Already-known
+ * values win; otherwise one lookup by id. Never throws — an email must still
+ * go out if the profile read fails.
+ */
+export async function tcPhone(tc: TcIdentity): Promise<string | null> {
+  if (tc.phone !== undefined && tc.phone !== null) return tc.phone;
+  if (!tc.id) return null;
+  return prisma.user
+    .findUnique({ where: { id: tc.id }, select: { phone: true } })
+    .then((u) => u?.phone ?? null)
+    .catch(() => null);
+}
+
 /** Signature-block contacts for a transaction's branded emails. */
 export async function emailContextForTransaction(
   tenantId: string,
   transactionId: string,
-  tc: { name?: string | null; email?: string | null },
+  tc: TcIdentity,
 ) {
   const txn = await withTenant(tenantId, (tx) =>
     tx.transaction.findUnique({
@@ -35,14 +62,16 @@ export async function emailContextForTransaction(
 
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: tenantId },
-    select: { name: true, emailTemplates: true, emailSettings: true },
+    select: { name: true, emailTemplates: true, emailSettings: true, appearanceConfig: true },
   });
+  const emailAccent = resolveEmailAccent(parseAppearance(org.appearanceConfig));
 
   const tcCard: EmailContact = {
     heading: "Your transaction coordinator",
     name: tc.name || org.name,
     company: org.name,
     email: tc.email,
+    phone: await tcPhone(tc),
   };
 
   const agentCard: EmailContact | null = txn.client
@@ -65,7 +94,7 @@ export async function emailContextForTransaction(
       }
     : null;
 
-  return { txn, org, tcCard, agentCard, otherCard };
+  return { txn, org, tcCard, agentCard, otherCard, emailAccent };
 }
 
 /** Merge map for template rendering on a transaction (party names by role). */
@@ -94,7 +123,7 @@ async function sendLifecycleEmail(
   kind: "intro" | "postClose",
   tenantId: string,
   transactionId: string,
-  tc: { name?: string | null; email?: string | null },
+  tc: TcIdentity,
 ) {
   if (!emailEnabled()) return;
   const ctx = await emailContextForTransaction(tenantId, transactionId, tc);
@@ -125,6 +154,7 @@ async function sendLifecycleEmail(
       tc: ctx.tcCard,
       agent: ctx.agentCard,
       otherSide: ctx.otherCard,
+      accent: ctx.emailAccent,
       ...parseEmailSettings(ctx.org.emailSettings),
     }),
   });
@@ -133,19 +163,11 @@ async function sendLifecycleEmail(
 // Fire-and-forget helpers schedule through next/server's after(): work
 // queued this way survives the server action's response (waitUntil on
 // Vercel) — a bare floating promise gets dropped when the request ends.
-export function fireIntroEmail(
-  tenantId: string,
-  transactionId: string,
-  tc: { name?: string | null; email?: string | null },
-) {
+export function fireIntroEmail(tenantId: string, transactionId: string, tc: TcIdentity) {
   after(() => sendLifecycleEmail("intro", tenantId, transactionId, tc).catch(() => {}));
 }
 
-export function firePostCloseEmail(
-  tenantId: string,
-  transactionId: string,
-  tc: { name?: string | null; email?: string | null },
-) {
+export function firePostCloseEmail(tenantId: string, transactionId: string, tc: TcIdentity) {
   after(() => sendLifecycleEmail("postClose", tenantId, transactionId, tc).catch(() => {}));
 }
 
@@ -157,7 +179,7 @@ export function fireTaskTemplateEmail(
   tenantId: string,
   transactionId: string,
   taskId: string,
-  tc: { name?: string | null; email?: string | null },
+  tc: TcIdentity,
 ) {
   after(async () => {
     if (!emailEnabled()) return;

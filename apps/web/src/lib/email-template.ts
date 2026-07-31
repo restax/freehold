@@ -1,10 +1,20 @@
+// Relative, not "@/lib/theme": this module is unit-tested and vitest runs
+// without the Next path aliases.
+import { type EmailAccent, resolveEmailAccent } from "./theme";
+
 /**
  * HTML email rendering. Table-based layout (email clients ignore modern
- * CSS), deliberately image-free — a text wordmark, clean type, brand-green
- * accents. Every branded email carries the sender's signature block: the
- * TC's contact card, the client's agent/brokerage card, and a smaller
- * other-side card, with a "Powered by Freehold" footer.
+ * CSS), deliberately image-free — a text wordmark, clean type. The accent
+ * follows the workspace's Appearance setting, the same colour that themes
+ * the dashboard — see [resolveEmailAccent]. Every branded email carries the
+ * sender's signature block: the TC's contact card, the client's
+ * agent/brokerage card, and a smaller other-side card, with a
+ * "Powered by Freehold" footer.
  */
+
+/** The default green, used only where no workspace theme is available to
+ *  resolve (a preview render with no tenant, for instance). */
+const FALLBACK_ACCENT: EmailAccent = resolveEmailAccent({ theme: "forest", customAccent: "" });
 
 export interface EmailContact {
   heading: string;
@@ -25,6 +35,9 @@ export interface EmailRenderInput {
   signature?: string | null;
   /** Workspace footer line, rendered above the powered-by line. */
   footer?: string | null;
+  /** Resolved from the workspace's Appearance setting — see
+   *  [resolveEmailAccent]. Falls back to the default green when omitted. */
+  accent?: EmailAccent | null;
 }
 
 /** Workspace-wide signature + footer, stored on organization.emailSettings. */
@@ -51,7 +64,7 @@ export function parseEmailSettings(raw: unknown): EmailSettings {
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-function contactCell(c: EmailContact, small = false): string {
+function contactCell(c: EmailContact, accent: EmailAccent, small = false): string {
   const size = small ? "12px" : "13px";
   const nameSize = small ? "13px" : "14px";
   return `
@@ -59,7 +72,7 @@ function contactCell(c: EmailContact, small = false): string {
       <p style="margin:0 0 2px;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#a8a29e;">${esc(c.heading)}</p>
       <p style="margin:0;font-size:${nameSize};font-weight:600;color:#1c1917;">${esc(c.name)}</p>
       ${c.company ? `<p style="margin:1px 0 0;font-size:${size};color:#57534e;">${esc(c.company)}</p>` : ""}
-      ${c.email ? `<p style="margin:3px 0 0;font-size:${size};"><a href="mailto:${esc(c.email)}" style="color:#0b7a49;text-decoration:none;">${esc(c.email)}</a></p>` : ""}
+      ${c.email ? `<p style="margin:3px 0 0;font-size:${size};"><a href="mailto:${esc(c.email)}" style="color:${accent.link};text-decoration:none;">${esc(c.email)}</a></p>` : ""}
       ${c.phone ? `<p style="margin:1px 0 0;font-size:${size};color:#57534e;">${esc(c.phone)}</p>` : ""}
     </td>`;
 }
@@ -71,19 +84,19 @@ function contactCell(c: EmailContact, small = false): string {
  * "[text](url)" links, "![alt](url)" images (their own block), blank lines
  * for paragraphs. Everything else renders literally.
  */
-function inline(text: string): string {
+function inline(text: string, linkColor: string): string {
   return esc(text)
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\b_([^_]+)_\b/g, "<em>$1</em>")
     .replace(
       /\[([^\]]*)\]\(([^)\s]+)\)/g,
-      '<a href="$2" style="color:#0b7a49;text-decoration:underline;">$1</a>',
+      `<a href="$2" style="color:${linkColor};text-decoration:underline;">$1</a>`,
     );
 }
 
 const IMAGE_BLOCK = /^!\[([^\]]*)\]\(([^)\s]+)\)$/;
 
-export function renderLiteMarkdown(body: string): string {
+export function renderLiteMarkdown(body: string, accent: EmailAccent = FALLBACK_ACCENT): string {
   const blocks = body
     .split(/\n{2,}/)
     .map((b) => b.trim())
@@ -97,36 +110,40 @@ export function renderLiteMarkdown(body: string): string {
       }
       if (lines.every((l) => l.trim().startsWith("- "))) {
         const items = lines
-          .map((l) => `<li style="margin:0 0 6px;">${inline(l.trim().slice(2))}</li>`)
+          .map((l) => `<li style="margin:0 0 6px;">${inline(l.trim().slice(2), accent.link)}</li>`)
           .join("");
         return `<ul style="margin:0 0 14px;padding-left:22px;font-size:15px;line-height:1.6;color:#292524;">${items}</ul>`;
       }
       if (block.startsWith("!! ")) {
         // Warning callout — an amber panel, e.g. the wire-fraud notice on the
         // closing email. Renders reliably across email clients (table + inline).
-        return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;"><tr><td style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:14px 16px;font-size:14px;line-height:1.6;color:#78350f;">${inline(block.slice(3)).replace(/\n/g, "<br/>")}</td></tr></table>`;
+        // Deliberately not themed: amber reads as "caution" universally, and
+        // tying it to the accent would mute that on a workspace whose accent
+        // is itself warm (Clay, Garnet).
+        return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;"><tr><td style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:14px 16px;font-size:14px;line-height:1.6;color:#78350f;">${inline(block.slice(3), accent.link).replace(/\n/g, "<br/>")}</td></tr></table>`;
       }
       if (block.startsWith("## ")) {
-        return `<p style="margin:0 0 10px;font-size:17px;font-weight:600;color:#1c1917;">${inline(block.slice(3))}</p>`;
+        return `<p style="margin:0 0 10px;font-size:17px;font-weight:600;color:#1c1917;">${inline(block.slice(3), accent.link)}</p>`;
       }
       if (block.startsWith("# ")) {
-        return `<p style="margin:0 0 10px;font-size:20px;font-weight:700;color:#1c1917;">${inline(block.slice(2))}</p>`;
+        return `<p style="margin:0 0 10px;font-size:20px;font-weight:700;color:#1c1917;">${inline(block.slice(2), accent.link)}</p>`;
       }
-      return `<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#292524;">${inline(block).replace(/\n/g, "<br/>")}</p>`;
+      return `<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#292524;">${inline(block, accent.link).replace(/\n/g, "<br/>")}</p>`;
     })
     .join("");
 }
 
 export function renderEmailHtml(input: EmailRenderInput): string {
+  const accent = input.accent ?? FALLBACK_ACCENT;
   const paragraphs =
-    renderLiteMarkdown(input.body) +
+    renderLiteMarkdown(input.body, accent) +
     (input.signature?.trim()
-      ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="border-top:1px solid #e7e5e4;padding-top:12px;">${renderLiteMarkdown(input.signature)}</td></tr></table>`
+      ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="border-top:1px solid #e7e5e4;padding-top:12px;">${renderLiteMarkdown(input.signature, accent)}</td></tr></table>`
       : "");
 
   const cards: string[] = [];
-  if (input.tc) cards.push(contactCell(input.tc));
-  if (input.agent) cards.push(contactCell(input.agent));
+  if (input.tc) cards.push(contactCell(input.tc, accent));
+  if (input.agent) cards.push(contactCell(input.agent, accent));
 
   return `<!doctype html>
 <html>
@@ -136,8 +153,8 @@ export function renderEmailHtml(input: EmailRenderInput): string {
 <tr><td align="center">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
   <tr>
-    <td style="background:#0b6a40;border-radius:12px 12px 0 0;padding:18px 28px;">
-      <span style="font-size:17px;font-weight:700;color:#ffffff;font-family:Georgia,serif;letter-spacing:0.01em;">${esc(input.tenantName)}</span>
+    <td style="background:${accent.header};border-radius:12px 12px 0 0;padding:18px 28px;">
+      <span style="font-size:17px;font-weight:700;color:${accent.headerFg};font-family:Georgia,serif;letter-spacing:0.01em;">${esc(input.tenantName)}</span>
     </td>
   </tr>
   <tr>
@@ -158,7 +175,7 @@ export function renderEmailHtml(input: EmailRenderInput): string {
     input.otherSide
       ? `<tr><td style="background:#ffffff;padding:10px 28px 4px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
       <table role="presentation" width="60%" cellpadding="0" cellspacing="0"><tr>
-        ${contactCell(input.otherSide, true)}
+        ${contactCell(input.otherSide, accent, true)}
       </tr></table>
     </td></tr>`
       : ""
