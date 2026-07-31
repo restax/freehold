@@ -7,6 +7,7 @@ import { SideFields } from "@/components/side-fields";
 import { StatusSelect } from "@/components/status-select";
 import { createFromContract } from "@/lib/actions/extractions";
 import { createTransaction } from "@/lib/actions/transactions";
+import { isAgentEligible } from "@/lib/agent-contacts";
 import { creditBalance, getTenantPlan, isCloud, transactionLimit } from "@/lib/plans";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
 import { requireTenant } from "@/lib/tenant";
@@ -51,9 +52,11 @@ export default async function NewTransactionPage({
     }),
     // Names only: the picker filters locally, and shipping whole contact rows
     // to the browser would be both slower and more than it needs to know.
+    // Party roles come along too, filtered out again below — see
+    // isAgentEligible.
     contacts: await tx.contact.findMany({
       orderBy: { name: "asc" },
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true, email: true, parties: { select: { role: true } } },
     }),
   }));
 
@@ -194,7 +197,9 @@ export default async function NewTransactionPage({
               and the client-based co-agent. */}
           <div className="border-t border-stone-100 pt-3">
             <AgentsCommissions
-              contacts={contacts.map((c) => ({ id: c.id, name: c.name, hint: c.email }))}
+              contacts={contacts
+                .filter((c) => isAgentEligible(c.parties))
+                .map((c) => ({ id: c.id, name: c.name, hint: c.email }))}
               users={members.map((m) => ({ id: m.user.id, name: m.user.name }))}
               clientTypes={Object.fromEntries(clients.map((c) => [c.id, c.type]))}
             />

@@ -126,6 +126,7 @@ import {
   withdrawDateChange,
 } from "@/lib/actions/transactions";
 import { recentActivity } from "@/lib/activity";
+import { isAgentEligible } from "@/lib/agent-contacts";
 import {
   type ContractParty,
   type ExecutionCheck,
@@ -316,7 +317,10 @@ export default async function TransactionDetailPage({
     if (!txn) return null;
     const [contacts, clients, plans, templates, attachmentTemplates, dateTemplates] =
       await Promise.all([
-        tx.contact.findMany({ orderBy: { name: "asc" } }),
+        tx.contact.findMany({
+          orderBy: { name: "asc" },
+          include: { parties: { select: { role: true } } },
+        }),
         tx.client.findMany({ orderBy: { name: "asc" } }),
         tx.actionPlan.findMany({
           orderBy: { name: "asc" },
@@ -393,6 +397,13 @@ export default async function TransactionDetailPage({
     name: c.name,
     hint: c.email ?? c.phone,
   }));
+
+  // Buyers, sellers, and third parties from any transaction don't belong in
+  // the agent picker just because they're a contact somewhere — see
+  // isAgentEligible.
+  const agentContactOptions = contacts
+    .filter((c) => isAgentEligible(c.parties))
+    .map((c) => ({ id: c.id, name: c.name, hint: c.email ?? c.phone }));
 
   // The most recent extraction run per document, so a file that has already
   // been read says so on its own row instead of only appearing in the runs
@@ -2473,7 +2484,7 @@ export default async function TransactionDetailPage({
                   <div className="sm:col-span-2 lg:col-span-4">
                     <AgentsCommissions
                       includeAssignees={false}
-                      contacts={contactOptions}
+                      contacts={agentContactOptions}
                       users={[]}
                       clientTypes={Object.fromEntries(clients.map((c) => [c.id, c.type]))}
                       defaults={{
