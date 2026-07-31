@@ -27,6 +27,15 @@ export interface StarterEmailTemplate {
 
 const AGENT_CC = "{{agent_email}}";
 
+/**
+ * The prospecting folder — outreach to agents who aren't a client yet, and
+ * the past-client drip series. Nothing in it is about a specific file, so it
+ * has no business in the "start from a template" picker on a transaction:
+ * that list is long enough already without templates that don't apply.
+ * Still fully visible and usable from the template library itself.
+ */
+export const PROSPECTING_TEMPLATE_GROUP = "Client outreach";
+
 export const STARTER_EMAIL_TEMPLATES: StarterEmailTemplate[] = [
   // ---------------------------------------------------------------- Buyer side
   {

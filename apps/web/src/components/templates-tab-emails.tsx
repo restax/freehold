@@ -1,4 +1,4 @@
-import { withTenant } from "@freehold/db";
+import { prisma, withTenant } from "@freehold/db";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { MergeFieldBrowser, TrackedInput } from "@/components/merge-field-browser";
 import { SaveMenu } from "@/components/save-menu";
@@ -13,6 +13,7 @@ import {
 } from "@/lib/actions/templates";
 import { EMAIL_PHASES } from "@/lib/default-email-templates";
 import { MERGE_FIELD_GROUPS } from "@/lib/template-merge";
+import { parseAppearance, resolveEmailAccent } from "@/lib/theme";
 import {
   btn,
   btnGhost,
@@ -38,19 +39,26 @@ export async function TemplatesTabEmails({
   /** Target folder for a new template — a group id, or "none". */
   folderParam?: string;
 }) {
-  const [templates, groups, usageRows] = await withTenant(tenantId, (tx) =>
-    Promise.all([
-      tx.emailTemplate.findMany({ orderBy: { name: "asc" } }),
-      tx.templateGroup.findMany({ where: { kind: "EMAIL" }, orderBy: { sortOrder: "asc" } }),
-      // "Used on N tasks" is computed live, not stored — it can never drift
-      // from what a plan actually references.
-      tx.actionPlanTask.groupBy({
-        by: ["emailTemplateId"],
-        _count: { _all: true },
-        where: { emailTemplateId: { not: null } },
-      }),
-    ]),
-  );
+  const [[templates, groups, usageRows], org] = await Promise.all([
+    withTenant(tenantId, (tx) =>
+      Promise.all([
+        tx.emailTemplate.findMany({ orderBy: { name: "asc" } }),
+        tx.templateGroup.findMany({ where: { kind: "EMAIL" }, orderBy: { sortOrder: "asc" } }),
+        // "Used on N tasks" is computed live, not stored — it can never drift
+        // from what a plan actually references.
+        tx.actionPlanTask.groupBy({
+          by: ["emailTemplateId"],
+          _count: { _all: true },
+          where: { emailTemplateId: { not: null } },
+        }),
+      ]),
+    ),
+    prisma.organization.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { name: true, appearanceConfig: true },
+    }),
+  ]);
+  const accent = resolveEmailAccent(parseAppearance(org.appearanceConfig));
   const usageByTemplate = new Map(usageRows.map((r) => [r.emailTemplateId, r._count._all]));
   const groupName = (id: string | null) =>
     id ? (groups.find((g) => g.id === id)?.name ?? "No folder") : "No folder";
@@ -161,7 +169,7 @@ export async function TemplatesTabEmails({
                   </div>
                   <div className="mt-3 flex flex-col gap-1">
                     <span className="text-sm font-medium text-stone-700">Body *</span>
-                    <TemplateEditor name="body" rows={10} />
+                    <TemplateEditor name="body" rows={10} tenantName={org.name} accent={accent} />
                   </div>
 
                   <details className="mt-3">
@@ -300,7 +308,13 @@ export async function TemplatesTabEmails({
                         </div>
                         <div className="mt-3 flex flex-col gap-1">
                           <span className="text-sm font-medium text-stone-700">Body</span>
-                          <TemplateEditor name="body" defaultValue={t.body} rows={12} />
+                          <TemplateEditor
+                            name="body"
+                            defaultValue={t.body}
+                            rows={12}
+                            tenantName={org.name}
+                            accent={accent}
+                          />
                         </div>
 
                         <details className="mt-3">

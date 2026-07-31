@@ -10,10 +10,11 @@ import {
   TextHTwo,
   TextItalic,
 } from "@phosphor-icons/react";
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { LiveDictateButton } from "@/components/live-dictate-button";
 import { trackMergeFocus } from "@/components/merge-field-browser";
-import { EMAIL_MERGE_CODES, renderLiteMarkdown } from "@/lib/email-template";
+import { EMAIL_MERGE_CODES, type EmailContact, renderEmailHtml } from "@/lib/email-template";
+import type { EmailAccent } from "@/lib/theme";
 
 /**
  * The email body editor: formatting toolbar + merge-field picker + voice
@@ -27,6 +28,11 @@ export function TemplateEditor({
   rows = 10,
   showMergeField = true,
   transactionId,
+  tenantName = "Your workspace",
+  accent,
+  tc,
+  agent,
+  otherSide,
 }: {
   name: string;
   defaultValue?: string;
@@ -38,11 +44,38 @@ export function TemplateEditor({
   /** Gates dictation on this transaction's pro state, same as using
    *  LiveDictateButton directly on a transaction page. */
   transactionId?: string;
+  /** For the preview's header band. Falls back to a placeholder — the
+   *  template library and the workspace signature editor aren't scoped to
+   *  one workspace's real name the way a transaction's compose form is. */
+  tenantName?: string;
+  /** The workspace's resolved Appearance colour. Omitted, the preview falls
+   *  back to Freehold's own default rather than guessing a colour. */
+  accent?: EmailAccent | null;
+  /** Signature-block contacts, when the caller already has them — the
+   *  transaction compose form does. Showing them in preview is the only way
+   *  "preview" means what it says: this is what actually goes out. */
+  tc?: EmailContact | null;
+  agent?: EmailContact | null;
+  otherSide?: EmailContact | null;
 }) {
   const id = useId().replace(/[:]/g, "");
   const areaId = `tpl-${id}`;
   const [value, setValue] = useState(defaultValue ?? "");
   const [preview, setPreview] = useState(false);
+  const previewHtml = useMemo(
+    () =>
+      preview
+        ? renderEmailHtml({
+            tenantName,
+            body: value || "Nothing yet — start typing.",
+            accent,
+            tc,
+            agent,
+            otherSide,
+          })
+        : "",
+    [preview, tenantName, value, accent, tc, agent, otherSide],
+  );
 
   function getArea(): HTMLTextAreaElement | null {
     return document.getElementById(areaId) as HTMLTextAreaElement | null;
@@ -185,26 +218,22 @@ export function TemplateEditor({
       />
       {preview && (
         <div className="rounded-lg border border-stone-200 bg-stone-100 p-4">
-          <div className="mx-auto max-w-md rounded-lg bg-white p-5 shadow-sm">
-            <div
-              className="rounded-t-md bg-[#0b6a40] px-4 py-2 text-sm font-bold text-white"
-              style={{ fontFamily: "Georgia, serif" }}
-            >
-              Your workspace
-            </div>
-            <div
-              className="px-1 py-3 text-[15px]"
-              // biome-ignore lint/security/noDangerouslySetInnerHtml: renderLiteMarkdown escapes all input before adding formatting tags.
-              dangerouslySetInnerHTML={{
-                __html: renderLiteMarkdown(value || "Nothing yet — start typing."),
-              }}
-            />
-            {showMergeField && (
-              <p className="border-t border-stone-100 pt-2 text-[11px] text-stone-400">
-                Merge fields fill from the transaction when sent.
-              </p>
-            )}
-          </div>
+          {/* The actual renderEmailHtml output, not an approximation of it —
+              a hand-drawn preview box is exactly how this drifted from the
+              real email (hardcoded green, no signature cards) the first
+              time. An iframe is the only way to show a full HTML document
+              without its table layout and inline styles fighting the app's
+              own CSS. */}
+          <iframe
+            title="Email preview"
+            srcDoc={previewHtml}
+            className="h-[26rem] w-full rounded-lg border border-stone-200 bg-white"
+          />
+          {showMergeField && (
+            <p className="mt-2 text-[11px] text-stone-400">
+              Merge fields fill from the transaction when sent.
+            </p>
+          )}
         </div>
       )}
     </div>

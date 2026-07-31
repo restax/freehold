@@ -6,6 +6,7 @@ import { saveEmailSettings, saveEmailTemplates, saveReviewDelay } from "@/lib/ac
 import { EMAIL_MERGE_CODES, parseEmailSettings, parseEmailTemplates } from "@/lib/email-template";
 import { parseQuietHours } from "@/lib/outbox";
 import { requireAdminTenant } from "@/lib/tenant";
+import { parseAppearance, resolveEmailAccent } from "@/lib/theme";
 import { btn, btnGhost, input, label as labelCls } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -19,11 +20,12 @@ export default async function EmailTemplatesPage() {
   const { tenantId, isAdmin } = await requireAdminTenant();
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: tenantId },
-    select: { emailTemplates: true, emailSettings: true },
+    select: { name: true, emailTemplates: true, emailSettings: true, appearanceConfig: true },
   });
   const automated = parseEmailTemplates(org.emailTemplates);
   const settings = parseEmailSettings(org.emailSettings);
   const quiet = parseQuietHours(org.emailSettings);
+  const accent = resolveEmailAccent(parseAppearance(org.appearanceConfig));
 
   return (
     <div className="flex flex-col gap-4">
@@ -50,7 +52,13 @@ export default async function EmailTemplatesPage() {
         <form action={saveEmailSettings} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <span className="text-sm font-medium text-stone-700">Signature</span>
-            <TemplateEditor name="signature" defaultValue={settings.signature} rows={4} />
+            <TemplateEditor
+              name="signature"
+              defaultValue={settings.signature}
+              rows={4}
+              tenantName={org.name}
+              accent={accent}
+            />
           </div>
           <label className={labelCls}>
             Footer line
@@ -143,7 +151,13 @@ export default async function EmailTemplatesPage() {
                 />
               </label>
               <span className="text-sm font-medium text-stone-700">Body</span>
-              <TemplateEditor name="introBody" defaultValue={automated.intro.body} rows={8} />
+              <TemplateEditor
+                name="introBody"
+                defaultValue={automated.intro.body}
+                rows={8}
+                tenantName={org.name}
+                accent={accent}
+              />
             </div>
             <div className="flex flex-col gap-2">
               <h3 className="text-sm font-semibold text-stone-700">Post-close email</h3>
@@ -160,6 +174,8 @@ export default async function EmailTemplatesPage() {
                 name="postCloseBody"
                 defaultValue={automated.postClose.body}
                 rows={8}
+                tenantName={org.name}
+                accent={accent}
               />
             </div>
             <div className="flex flex-col gap-2">
@@ -173,7 +189,13 @@ export default async function EmailTemplatesPage() {
                 />
               </label>
               <span className="text-sm font-medium text-stone-700">Body</span>
-              <TemplateEditor name="reviewBody" defaultValue={automated.review.body} rows={8} />
+              <TemplateEditor
+                name="reviewBody"
+                defaultValue={automated.review.body}
+                rows={8}
+                tenantName={org.name}
+                accent={accent}
+              />
             </div>
           </div>
           <button type="submit" className={`${btn} self-start`}>

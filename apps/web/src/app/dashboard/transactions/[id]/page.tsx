@@ -135,6 +135,7 @@ import {
   partyLabel,
 } from "@/lib/ai/contract-schema";
 import { transactionAlert } from "@/lib/alerts";
+import { emailContextForTransaction } from "@/lib/auto-emails";
 import {
   displayState,
   type InvoiceDisplayState,
@@ -163,6 +164,7 @@ import { fmtCents } from "@/lib/pay";
 import { creditBalance, handbookState, transactionHasPro } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
+import { PROSPECTING_TEMPLATE_GROUP } from "@/lib/starter-email-templates";
 import { resolveTaskColumns, TASK_COLUMNS, taskColumnGroups } from "@/lib/task-columns";
 import { buildTemplateMergeContext } from "@/lib/template-merge";
 import {
@@ -594,9 +596,12 @@ export default async function TransactionDetailPage({
   const emailTaskTitle = emailTask ? txn.tasks.find((t) => t.id === emailTask)?.title : undefined;
   const { suggested: suggestedTemplates } = suggestForTask(emailTemplates, emailTaskTitle);
   // Grouped for the "start from a template" dropdown — named folders first
-  // (alphabetically), then anything unfiled last.
+  // (alphabetically), then anything unfiled last. Prospecting templates
+  // (Client outreach) aren't about any one file, so they're left out here —
+  // still fully available from the template library.
   const emailTemplateGroupMap = new Map<string, Array<{ id: string; name: string }>>();
   for (const t of emailTemplates) {
+    if (t.group?.name === PROSPECTING_TEMPLATE_GROUP) continue;
     const key = t.group?.name ?? "No folder";
     const list = emailTemplateGroupMap.get(key) ?? [];
     list.push({ id: t.id, name: t.name.replace(" (Sample)", "") });
@@ -669,6 +674,11 @@ export default async function TransactionDetailPage({
     select: { emailSettings: true },
   });
   const ccEmail = parseEmailSettings(orgEmail?.emailSettings).cc ?? "";
+
+  // The same signature-card context the real send builds, reused here so the
+  // compose form's Preview button shows what will actually go out — cards,
+  // colour, and all — rather than a guess at it.
+  const emailCtx = await emailContextForTransaction(tenantId, txn.id, session.user);
 
   // Key dates for the header calendar popover: contract, close, listing dates,
   // and every open deadline task.
@@ -3036,6 +3046,11 @@ export default async function TransactionDetailPage({
                           rows={9}
                           showMergeField={false}
                           transactionId={txn.id}
+                          tenantName={emailCtx?.org.name ?? txn.propertyAddress}
+                          accent={emailCtx?.emailAccent}
+                          tc={emailCtx?.tcCard}
+                          agent={emailCtx?.agentCard}
+                          otherSide={emailCtx?.otherCard}
                         />
                       </div>
                       {currentDocs.length > 0 && (
