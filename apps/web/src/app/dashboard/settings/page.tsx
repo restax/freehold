@@ -13,7 +13,6 @@ import {
 } from "@/lib/actions/api-keys";
 import { saveBillingDefaults } from "@/lib/actions/billing-policy";
 import { setContactVisibilityRestriction } from "@/lib/actions/contacts";
-import { saveDirectoryListing } from "@/lib/actions/directory";
 import { setHandbookEnabled, setHandbookSummaryEnabled } from "@/lib/actions/handbook";
 import { saveHolidaySchedule } from "@/lib/actions/holidays";
 import { removeSampleData } from "@/lib/actions/sample-data";
@@ -22,13 +21,7 @@ import { setDailyBriefing, setInvoiceReport } from "@/lib/actions/templates";
 import { saveSideLabels } from "@/lib/actions/website";
 import { BILLING_MODES, tenantBillingPolicy } from "@/lib/billing-policy";
 import { enabledHolidayKeys, FEDERAL_HOLIDAYS } from "@/lib/date-calculators";
-import {
-  AVAILABILITY,
-  PRICING_MODELS,
-  readDirectoryConfig,
-  SOFTWARE,
-  SPECIALIZATIONS,
-} from "@/lib/directory";
+import { readDirectoryConfig } from "@/lib/directory";
 import { emailEnabled } from "@/lib/email";
 import { fmtDate } from "@/lib/format";
 import { handbookState } from "@/lib/plans";
@@ -471,150 +464,28 @@ async function HolidayScheduleSection({ tenantId, userId }: { tenantId: string; 
 async function DirectorySection({ tenantId, userId }: { tenantId: string; userId: string }) {
   const role = await getMemberRole(tenantId, userId);
   if (role !== "owner" && role !== "admin") return null;
-  const [org, states] = await Promise.all([
-    prisma.organization.findUniqueOrThrow({
-      where: { id: tenantId },
-      select: { directoryConfig: true },
-    }),
-    withTenant(tenantId, (tx) => tx.tenantState.findMany({ orderBy: { state: "asc" } })),
-  ]);
+  const org = await prisma.organization.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: { directoryConfig: true },
+  });
   const cfg = readDirectoryConfig(org.directoryConfig);
 
+  // The listing itself is managed on the directory page — the page it
+  // affects, next to the search it has to survive. This is a signpost, not
+  // a second copy of the form.
   return (
     <SectionCard title="Coordinator directory">
-      <p className="mb-3 text-sm text-stone-500">
-        List this workspace so other coordinators can find you for overflow and vacation coverage.
-        Listing publishes your workspace name, the states you cover, and whatever you enter below —
-        to other workspaces and to the public directory feed. Nothing about your transactions,
-        clients, or people is ever published. Switch it off any time.
+      <p className="text-sm text-stone-500">
+        This workspace is{" "}
+        <strong className="font-medium text-stone-800">
+          {cfg.listed === true ? "listed" : "not listed"}
+        </strong>{" "}
+        in the coordinator directory. Listing lets other coordinators find you for overflow and
+        vacation coverage.{" "}
+        <Link href="/dashboard/directory" className="text-brand-700 hover:underline">
+          Manage your listing →
+        </Link>
       </p>
-      {states.length === 0 && (
-        <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Add the states you work in under <strong>Operating states</strong> above — a listing with
-          no coverage won't be found by anyone searching.
-        </p>
-      )}
-
-      <form action={saveDirectoryListing} className="flex flex-col gap-3">
-        <label className="flex items-center gap-2 text-sm font-medium text-stone-800">
-          <input
-            type="checkbox"
-            name="listed"
-            defaultChecked={cfg.listed === true}
-            className="accent-brand-600"
-          />
-          List this workspace in the directory
-        </label>
-
-        <div className="flex flex-wrap items-end gap-3">
-          <label className={`${label} min-w-72 flex-1`}>
-            What you want other coordinators to know
-            <input
-              name="blurb"
-              defaultValue={cfg.blurb ?? ""}
-              className={input}
-              placeholder="Buy-side residential, 48-hour turnaround, Texas and Florida"
-            />
-          </label>
-          <label className={label}>
-            Contact email
-            <input
-              name="contactEmail"
-              type="email"
-              defaultValue={cfg.contactEmail ?? ""}
-              className={input}
-            />
-          </label>
-          <label className={label}>
-            Years in business
-            <input
-              name="yearsExperience"
-              inputMode="numeric"
-              defaultValue={cfg.yearsExperience ?? ""}
-              className={`${input} w-24`}
-            />
-          </label>
-        </div>
-
-        <div className="flex flex-wrap gap-6">
-          <fieldset>
-            <legend className="mb-1 text-sm font-medium text-stone-700">Specializations</legend>
-            <div className="flex flex-wrap gap-3">
-              {SPECIALIZATIONS.map((s) => (
-                <label key={s} className="flex items-center gap-1.5 text-sm text-stone-600">
-                  <input
-                    type="checkbox"
-                    name="specializations"
-                    value={s}
-                    defaultChecked={cfg.specializations?.includes(s)}
-                    className="accent-brand-600"
-                  />
-                  {s}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          <label className={label}>
-            Availability
-            <select name="availability" defaultValue={cfg.availability ?? ""} className={input}>
-              <option value="">—</option>
-              {AVAILABILITY.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={label}>
-            Pricing
-            <select name="pricingModel" defaultValue={cfg.pricingModel ?? ""} className={input}>
-              <option value="">—</option>
-              {PRICING_MODELS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <fieldset>
-          <legend className="mb-1 text-sm font-medium text-stone-700">Software you work in</legend>
-          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-            {SOFTWARE.map((s) => (
-              <label key={s} className="flex items-center gap-1.5 text-sm text-stone-600">
-                <input
-                  type="checkbox"
-                  name="software"
-                  value={s}
-                  defaultChecked={cfg.software?.includes(s)}
-                  className="accent-brand-600"
-                />
-                {s}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-
-        <label className="flex items-center gap-2 text-sm text-stone-600">
-          <input
-            type="checkbox"
-            name="remote"
-            defaultChecked={cfg.remote !== false}
-            className="accent-brand-600"
-          />
-          Works remotely
-        </label>
-
-        <div className="flex items-center gap-3">
-          <button type="submit" className={btnGhost}>
-            Save listing
-          </button>
-          <Link href="/dashboard/directory" className="text-sm text-brand-700 hover:underline">
-            Browse the directory →
-          </Link>
-        </div>
-      </form>
     </SectionCard>
   );
 }

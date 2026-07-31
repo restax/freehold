@@ -37,6 +37,9 @@ export async function addState(formData: FormData) {
   });
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/transactions");
+  // Coverage is what makes a directory listing findable, and the states can
+  // now be edited from the directory page itself.
+  revalidatePath("/dashboard/directory");
 }
 
 export async function removeState(formData: FormData) {
@@ -60,6 +63,7 @@ export async function removeState(formData: FormData) {
   });
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/transactions");
+  revalidatePath("/dashboard/directory");
 }
 
 /**

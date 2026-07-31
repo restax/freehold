@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  canListWithCoverage,
   type DirectoryListing,
+  directoryNudgeDue,
   filterListings,
   freeholdListing,
   publicListing,
@@ -202,5 +204,37 @@ describe("sortListings", () => {
     const before = rows.map((r) => r.name);
     sortListings(rows, "name");
     expect(rows.map((r) => r.name)).toEqual(before);
+  });
+});
+
+describe("directoryNudgeDue", () => {
+  it("nudges a brand-new workspace, which has neither flag set", () => {
+    expect(directoryNudgeDue({})).toBe(true);
+  });
+
+  it("stops once the workspace is listed", () => {
+    expect(directoryNudgeDue({ listed: true })).toBe(false);
+  });
+
+  it("stops once they ask not to be reminded", () => {
+    expect(directoryNudgeDue({ remindersOff: true })).toBe(false);
+  });
+
+  it("treats an explicit listed:false as still worth nudging", () => {
+    expect(directoryNudgeDue({ listed: false })).toBe(true);
+  });
+
+  it("keeps quiet for a listed workspace that also silenced reminders", () => {
+    expect(directoryNudgeDue({ listed: true, remindersOff: true })).toBe(false);
+  });
+});
+
+describe("canListWithCoverage", () => {
+  it("refuses a listing with no operating states", () => {
+    expect(canListWithCoverage(0)).toBe(false);
+  });
+
+  it("allows one state", () => {
+    expect(canListWithCoverage(1)).toBe(true);
   });
 });

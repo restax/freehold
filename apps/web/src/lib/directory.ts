@@ -56,6 +56,33 @@ export interface DirectoryConfig {
   pricingModel?: string;
   yearsExperience?: number;
   remote?: boolean;
+  /**
+   * "Stop asking me to list." Absent on every new workspace, so a brand-new
+   * admin does get the nudge — opting out is a decision they make, never a
+   * default they inherit.
+   */
+  remindersOff?: boolean;
+}
+
+/**
+ * Whether to nudge an admin to put their workspace in the directory.
+ *
+ * Two ways to make it stop, and they mean different things: listing (the
+ * nudge worked) and asking not to be reminded (a deliberate choice to stay
+ * private). Neither is a default — an untouched workspace is unlisted and
+ * un-silenced, which is exactly the state worth a nudge.
+ */
+export function directoryNudgeDue(cfg: DirectoryConfig): boolean {
+  return cfg.listed !== true && cfg.remindersOff !== true;
+}
+
+/**
+ * A listing nobody can find is worse than no listing: every directory search
+ * is filtered by state, so a workspace with no coverage never appears in one.
+ * Enforced when listing, not when saving the rest of the profile.
+ */
+export function canListWithCoverage(stateCount: number): boolean {
+  return stateCount > 0;
 }
 
 export const SPECIALIZATIONS = ["Residential", "Commercial", "Luxury", "Land"] as const;

@@ -16,6 +16,7 @@ import { activityTitle } from "@/lib/activity";
 import { rankAlerts, transactionAlerts } from "@/lib/alerts";
 import { billingExceptions, invoiceMoney, transactionBilling } from "@/lib/billing";
 import { bucketByDay, parseRange, topClients } from "@/lib/dashboard-charts";
+import { directoryNudgeDue, readDirectoryConfig } from "@/lib/directory";
 import { fmtDate, fmtDayMonth, STATUS_LABEL } from "@/lib/format";
 import { summaryNotesFor } from "@/lib/handbook";
 import { isStale } from "@/lib/handbook/summary-context";
@@ -30,7 +31,7 @@ import {
   rowHighlightStyle,
 } from "@/lib/priority";
 import { tenantSideLabels } from "@/lib/side-labels";
-import { getBillingAccess, requireTenant } from "@/lib/tenant";
+import { getBillingAccess, getMemberRole, requireTenant } from "@/lib/tenant";
 import { tableWrap, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -350,6 +351,20 @@ export default async function DashboardPage({
   // than this one, which beats a spinner every morning.
   const hb = await handbookState(tenantId);
   const sideLabels = await tenantSideLabels(tenantId);
+  // Matches the bell's count in the dashboard layout — admins only, and only
+  // while the workspace is neither listed nor deliberately silenced.
+  const directoryNudge =
+    ["owner", "admin"].includes(await getMemberRole(tenantId, userId)) &&
+    directoryNudgeDue(
+      readDirectoryConfig(
+        (
+          await prisma.organization.findUnique({
+            where: { id: tenantId },
+            select: { directoryConfig: true },
+          })
+        )?.directoryConfig,
+      ),
+    );
   const me = hb.summary
     ? await prisma.member.findFirst({
         where: { organizationId: tenantId, userId },
@@ -471,6 +486,19 @@ export default async function DashboardPage({
             : `${licenseAlerts.length} team licenses are expired or expiring soon.`}{" "}
           <Link href="/dashboard/team" className="font-medium text-brand-700 underline">
             Review on Team
+          </Link>
+        </p>
+      )}
+
+      {/* The bell counts this, so the bell has to land somewhere that explains
+          it. Dismissing lives on the directory page next to the switch — one
+          place to decide, rather than a banner that can silence itself. */}
+      {directoryNudge && (
+        <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-900">
+          This workspace isn't listed in the coordinator directory, so other coordinators can't find
+          you for overflow or vacation coverage.{" "}
+          <Link href="/dashboard/directory" className="font-medium text-brand-700 underline">
+            List it, or turn off the reminder →
           </Link>
         </p>
       )}

@@ -11,6 +11,7 @@ import { VoiceWidget } from "@/components/voice-widget";
 import { openBillingPortal } from "@/lib/actions/billing";
 import { priorityVars, tenantAppearance, themeTokens } from "@/lib/appearance";
 import { DEMO_SLUG } from "@/lib/demo";
+import { directoryNudgeDue, readDirectoryConfig } from "@/lib/directory";
 import { getTenantPlan } from "@/lib/plans";
 import { getSession, listTenants } from "@/lib/session";
 import { supportUnreadCount } from "@/lib/support-unread";
@@ -37,8 +38,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // The workspace's own mark, shown at the top of the rail when they've set one.
   const org = await prisma.organization.findUnique({
     where: { id: active.id },
-    select: { logo: true },
+    select: { logo: true, directoryConfig: true },
   });
+  // One standing nudge for admins whose workspace isn't in the directory —
+  // it costs them referrals to leave it off, and it's easy to never notice
+  // the setting exists. Silenced by listing, or by asking not to be asked.
+  const isDirectoryAdmin = ["owner", "admin"].includes(
+    await getMemberRole(active.id, session.user.id),
+  );
+  const directoryNudge =
+    isDirectoryAdmin && directoryNudgeDue(readDirectoryConfig(org?.directoryConfig)) ? 1 : 0;
 
   // Failed-renewal lock: access is paused until payment is fixed, but nothing
   // is deleted and the recovery path (Stripe portal, sign-out) stays open.
@@ -116,7 +125,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         userName={session.user.name ?? session.user.email}
         userEmail={session.user.email}
         isGuest={isGuest}
-        alerts={supportUnread + formsPending}
+        alerts={supportUnread + formsPending + directoryNudge}
       />
       <div className="flex min-h-0 flex-1">
         <aside className="sticky top-14 flex h-[calc(100vh-3.5rem)] w-14 shrink-0 flex-col overflow-y-auto overflow-x-hidden border-r border-stone-200 bg-white px-2 py-6 lg:w-56 lg:px-4">
