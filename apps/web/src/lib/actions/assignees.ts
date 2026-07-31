@@ -95,7 +95,7 @@ export async function unassignUser(formData: FormData) {
   if (!removed) return;
   if ("blocked" in removed) {
     redirect(
-      `/dashboard/transactions/${transactionId}?tab=participants&licenseError=${encodeURIComponent(removed.blocked)}`,
+      `/dashboard/transactions/${transactionId}?tab=team&licenseError=${encodeURIComponent(removed.blocked)}`,
     );
   }
 

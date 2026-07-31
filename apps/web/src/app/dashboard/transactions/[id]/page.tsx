@@ -1,6 +1,7 @@
 import { PartyRole, prisma, TransactionSide, withTenant } from "@freehold/db";
 import {
   ArrowSquareOut,
+  Buildings,
   CalendarBlank,
   CalendarCheck,
   ChartPieSlice,
@@ -8,12 +9,14 @@ import {
   CheckSquare,
   Clock,
   CurrencyDollar,
+  Envelope,
   FilePdf,
   Link as LinkIcon,
   ListBullets,
   ListChecks,
   NotePencil,
   PaperPlaneTilt,
+  Phone,
   PlusCircle,
   Receipt,
   ShieldCheck,
@@ -157,7 +160,7 @@ import {
   guestMaySeeTransaction,
   requireTenant,
 } from "@/lib/tenant";
-import { btn, btnGhost, input, label } from "@/lib/ui";
+import { btn, btnAdd, btnGhost, card, input, label, tableWrap, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -172,6 +175,7 @@ const TXN_TABS = [
   ["compliance", "Compliance"],
   ["dates", "Dates & details"],
   ["participants", "Participants"],
+  ["team", "Team"],
   ["emails", "Emails"],
   ["notes", "Notes"],
   ["payout", "Payout"],
@@ -190,6 +194,7 @@ export default async function TransactionDetailPage({
     emailTask?: string;
     licenseError?: string;
     dateTemplate?: string;
+    emailTo?: string | string[];
   }>;
 }) {
   const { tenantId, session } = await requireTenant({ allowGuest: true });
@@ -203,7 +208,14 @@ export default async function TransactionDetailPage({
   // A guest reaches only the files they were handed; anything else doesn't
   // exist as far as they're concerned.
   if (!(await guestMaySeeTransaction(tenantId, session.user.id, id))) notFound();
-  const { tab: tabRaw, emailTemplate, emailTask, licenseError, dateTemplate } = await searchParams;
+  const {
+    tab: tabRaw,
+    emailTemplate,
+    emailTask,
+    licenseError,
+    dateTemplate,
+    emailTo,
+  } = await searchParams;
   const tab: TxnTab = (TXN_TABS.some(([t]) => t === tabRaw) ? tabRaw : "tasks") as TxnTab;
 
   const data = await withTenant(tenantId, async (tx) => {
@@ -584,6 +596,13 @@ export default async function TransactionDetailPage({
     composeTo = renderMerge(selectedEmailTemplate.toDefault ?? "", merge);
     composeCc = renderMerge(selectedEmailTemplate.ccDefault ?? "", merge);
   }
+  // Recipients chosen on the Participants tab (single click-to-email, or a
+  // checked selection) win over a template's default To — picking people
+  // explicitly is a more specific signal than a template's usual audience.
+  const emailToList = Array.isArray(emailTo) ? emailTo : emailTo ? [emailTo] : [];
+  if (emailToList.length > 0) {
+    composeTo = emailToList.join(", ");
+  }
 
   const customFields = (txn.customFields as Record<string, string> | null) ?? {};
   const contractParties = (txn.contractParties as ContractParty[] | null) ?? [];
@@ -740,7 +759,7 @@ export default async function TransactionDetailPage({
           <Warning size={14} weight="fill" className="mr-1 inline text-amber-600" aria-hidden />
           {gapMessage(gap)}{" "}
           <Link
-            href={`/dashboard/transactions/${txn.id}?tab=participants`}
+            href={`/dashboard/transactions/${txn.id}?tab=team`}
             className="font-medium text-brand-700 underline"
           >
             Assign someone
@@ -830,117 +849,36 @@ export default async function TransactionDetailPage({
             </dl>
           </SectionCard>
           <SectionCard
-            title="Parties"
+            title="Participants"
             icon={<UsersThree size={15} weight="fill" aria-hidden />}
             count={txn.parties.length || undefined}
             bodyClassName="p-3"
           >
-            <p className="mb-3 text-xs text-stone-400">
-              Real contacts, not free text — click a name to open their record. Add your own, or
-              link one the contract-reader found below.
-            </p>
             {txn.parties.length > 0 ? (
               <ul className="mb-3 flex flex-col divide-y divide-stone-100">
                 {txn.parties.map((p) => (
-                  <li key={p.id} className="group flex items-start gap-2 py-1.5 text-sm">
+                  <li key={p.id} className="flex items-center gap-2 py-1.5 text-sm">
                     <span className="w-24 shrink-0 text-xs font-medium uppercase tracking-wide text-stone-400">
                       {ROLE_LABEL[p.role]}
                     </span>
-                    <div className="min-w-0 flex-1">
-                      <Link
-                        href={`/dashboard/contacts/${p.contact.id}`}
-                        className="font-medium text-brand-700 hover:underline"
-                      >
-                        {p.contact.name}
-                      </Link>
-                      {(p.contact.email || p.contact.phone) && (
-                        <span className="ml-2 text-xs text-stone-400">
-                          {p.contact.email ?? p.contact.phone}
-                        </span>
-                      )}
-                    </div>
-                    <form action={removeParty}>
-                      <input type="hidden" name="id" value={p.id} />
-                      <input type="hidden" name="transactionId" value={txn.id} />
-                      <button
-                        type="submit"
-                        aria-label={`Remove ${p.contact.name}`}
-                        className="text-xs text-stone-300 opacity-0 transition hover:text-red-600 group-hover:opacity-100"
-                      >
-                        ✕
-                      </button>
-                    </form>
+                    <Link
+                      href={`/dashboard/contacts/${p.contact.id}`}
+                      className="min-w-0 flex-1 truncate font-medium text-brand-700 hover:underline"
+                    >
+                      {p.contact.name}
+                    </Link>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="mb-3 text-sm text-stone-400">No parties yet.</p>
+              <p className="mb-3 text-sm text-stone-400">No participants yet.</p>
             )}
-            <form action={addParty} className="flex flex-wrap items-end gap-2">
-              <input type="hidden" name="transactionId" value={txn.id} />
-              <label className={label}>
-                Role
-                <select name="role" defaultValue="BUYER" className={input}>
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {ROLE_LABEL[r]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="min-w-[11rem] flex-1">
-                <EntityPicker
-                  name="contactId"
-                  label="Contact"
-                  options={contactOptions}
-                  onCreate={createContactByName}
-                  createHint="Add contact"
-                  placeholder="Search contacts…"
-                />
-              </div>
-              <button type="submit" className={btnGhost}>
-                Add party
-              </button>
-            </form>
-            {contractParties.length > 0 && (
-              <div className="mt-3 border-t border-stone-100 pt-3">
-                <p className="mb-1.5 text-xs font-medium text-stone-500">
-                  From the contract — not yet linked to a contact
-                </p>
-                <ul className="flex flex-col divide-y divide-stone-100">
-                  {contractParties.map((p) => (
-                    <li key={`${p.role}:${p.value}`} className="group py-1.5 text-sm">
-                      <div className="flex items-start gap-2">
-                        <span className="w-24 shrink-0 text-xs font-medium uppercase tracking-wide text-stone-400">
-                          {partyLabel(p.role)}
-                        </span>
-                        <span className="min-w-0 flex-1 text-stone-600">{p.value}</span>
-                        <form action={removeTransactionParty}>
-                          <input type="hidden" name="id" value={txn.id} />
-                          <input type="hidden" name="role" value={p.role} />
-                          <input type="hidden" name="value" value={p.value} />
-                          <button
-                            type="submit"
-                            aria-label={`Dismiss ${p.value}`}
-                            title="Dismiss — not a real party"
-                            className="text-xs text-stone-300 opacity-0 transition hover:text-red-600 group-hover:opacity-100"
-                          >
-                            ✕
-                          </button>
-                        </form>
-                      </div>
-                      <LinkPartyForm
-                        action={linkExtractedParty}
-                        transactionId={txn.id}
-                        role={p.role}
-                        value={p.value}
-                        contacts={contactOptions}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <Link
+              href={`/dashboard/transactions/${txn.id}?tab=participants`}
+              className="text-xs font-medium text-brand-700 hover:underline"
+            >
+              Manage participants →
+            </Link>
           </SectionCard>
           <SectionCard
             title="Custom fields"
@@ -1822,10 +1760,10 @@ export default async function TransactionDetailPage({
                       Nobody has a payout on this file yet — set a flat fee or a % share per person
                       under{" "}
                       <Link
-                        href={`/dashboard/transactions/${txn.id}?tab=participants`}
+                        href={`/dashboard/transactions/${txn.id}?tab=team`}
                         className="text-brand-700 hover:underline"
                       >
-                        Participants
+                        Team
                       </Link>
                       .
                     </p>
@@ -2493,10 +2431,214 @@ export default async function TransactionDetailPage({
             </>
           )}
           {tab === "participants" && (
-            <SectionCard title="Assigned" icon={<UserCircle size={15} weight="fill" aria-hidden />}>
+            <SectionCard
+              title="Participants"
+              icon={<UsersThree size={15} weight="fill" aria-hidden />}
+            >
               <p className="mb-3 text-sm text-stone-500">
-                Who in the workspace works this file. Filter the transactions list to "Assigned to
-                me" to see your own.
+                Everyone on this file who isn't your team — buyer, seller, agents, lender, title,
+                and more. Real contacts, not free text; click a name to open their record.
+              </p>
+              <details className="mb-4">
+                <summary className={`${btnAdd} w-fit list-none`}>+ Add participant</summary>
+                <form action={addParty} className={`${card} mt-3 flex flex-wrap items-end gap-3`}>
+                  <input type="hidden" name="transactionId" value={txn.id} />
+                  <label className={label}>
+                    Role
+                    <select name="role" defaultValue="BUYER" className={input}>
+                      {ROLES.map((r) => (
+                        <option key={r} value={r}>
+                          {ROLE_LABEL[r]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="min-w-[13rem] flex-1">
+                    <EntityPicker
+                      name="contactId"
+                      label="Contact"
+                      options={contactOptions}
+                      onCreate={createContactByName}
+                      createHint="Add contact"
+                      placeholder="Search contacts…"
+                    />
+                  </div>
+                  <button type="submit" className={btn}>
+                    Add
+                  </button>
+                </form>
+              </details>
+
+              {txn.parties.length === 0 ? (
+                <p className="text-sm text-stone-400">No participants yet — add one above.</p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <form
+                    id="email-participants-form"
+                    method="GET"
+                    action={`/dashboard/transactions/${txn.id}`}
+                  >
+                    <input type="hidden" name="tab" value="emails" />
+                  </form>
+                  <div className={tableWrap}>
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr>
+                          <th className={th} />
+                          <th className={th}>Role</th>
+                          <th className={th}>Name</th>
+                          <th className={th}>Company</th>
+                          <th className={th}>Phone</th>
+                          <th className={th}>Email</th>
+                          <th className={th} />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {txn.parties.map((p) => (
+                          <tr key={p.id} className={trHover}>
+                            <td className={td}>
+                              {p.contact.email && (
+                                <input
+                                  type="checkbox"
+                                  name="emailTo"
+                                  value={p.contact.email}
+                                  form="email-participants-form"
+                                  defaultChecked
+                                  aria-label={`Include ${p.contact.name} in email`}
+                                  className="accent-brand-600"
+                                />
+                              )}
+                            </td>
+                            <td
+                              className={`${td} text-xs font-medium uppercase tracking-wide text-stone-400`}
+                            >
+                              {ROLE_LABEL[p.role]}
+                            </td>
+                            <td className={td}>
+                              <Link
+                                href={`/dashboard/contacts/${p.contact.id}`}
+                                className="font-medium text-brand-700 hover:underline"
+                              >
+                                {p.contact.name}
+                              </Link>
+                            </td>
+                            <td className={td}>
+                              {p.contact.company ? (
+                                <span className="inline-flex items-center gap-1">
+                                  <Buildings size={13} className="text-stone-400" aria-hidden />
+                                  {p.contact.company}
+                                </span>
+                              ) : (
+                                <span className="text-stone-300">—</span>
+                              )}
+                            </td>
+                            <td className={td}>
+                              {p.contact.phone ? (
+                                <a
+                                  href={`tel:${p.contact.phone}`}
+                                  className="inline-flex items-center gap-1 hover:underline"
+                                >
+                                  <Phone size={13} className="text-stone-400" aria-hidden />
+                                  {p.contact.phone}
+                                </a>
+                              ) : (
+                                <span className="text-stone-300">—</span>
+                              )}
+                            </td>
+                            <td className={td}>
+                              {p.contact.email ? (
+                                <Link
+                                  href={`/dashboard/transactions/${txn.id}?tab=emails&emailTo=${encodeURIComponent(p.contact.email)}`}
+                                  className="inline-flex items-center gap-1 text-brand-700 hover:underline"
+                                >
+                                  <Envelope size={13} aria-hidden />
+                                  {p.contact.email}
+                                </Link>
+                              ) : (
+                                <span className="text-stone-300">—</span>
+                              )}
+                            </td>
+                            <td className={td}>
+                              <form action={removeParty}>
+                                <input type="hidden" name="id" value={p.id} />
+                                <input type="hidden" name="transactionId" value={txn.id} />
+                                <button
+                                  type="submit"
+                                  aria-label={`Remove ${p.contact.name}`}
+                                  className="text-xs text-stone-300 hover:text-red-600"
+                                >
+                                  remove
+                                </button>
+                              </form>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {txn.parties.some((p) => p.contact.email) && (
+                    <button
+                      type="submit"
+                      form="email-participants-form"
+                      className={`${btnGhost} w-fit`}
+                    >
+                      <Envelope size={14} className="mr-1 inline" aria-hidden />
+                      Email selected
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {contractParties.length > 0 && (
+                <div className="mt-4 border-t border-stone-100 pt-3">
+                  <p className="mb-1.5 text-xs font-medium text-stone-500">
+                    From the contract — not yet linked to a contact
+                  </p>
+                  <ul className="flex flex-col divide-y divide-stone-100">
+                    {contractParties.map((p) => (
+                      <li key={`${p.role}:${p.value}`} className="group py-1.5 text-sm">
+                        <div className="flex items-start gap-2">
+                          <span className="w-24 shrink-0 text-xs font-medium uppercase tracking-wide text-stone-400">
+                            {partyLabel(p.role)}
+                          </span>
+                          <span className="min-w-0 flex-1 text-stone-600">{p.value}</span>
+                          <form action={removeTransactionParty}>
+                            <input type="hidden" name="id" value={txn.id} />
+                            <input type="hidden" name="role" value={p.role} />
+                            <input type="hidden" name="value" value={p.value} />
+                            <button
+                              type="submit"
+                              aria-label={`Dismiss ${p.value}`}
+                              title="Dismiss — not a real party"
+                              className="text-xs text-stone-300 opacity-0 transition hover:text-red-600 group-hover:opacity-100"
+                            >
+                              ✕
+                            </button>
+                          </form>
+                        </div>
+                        <LinkPartyForm
+                          action={linkExtractedParty}
+                          transactionId={txn.id}
+                          role={p.role}
+                          value={p.value}
+                          contacts={contactOptions}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </SectionCard>
+          )}
+          {tab === "team" && (
+            <SectionCard
+              title="Team on this file"
+              icon={<UserCircle size={15} weight="fill" aria-hidden />}
+            >
+              <p className="mb-3 text-sm text-stone-500">
+                Who in the workspace works this file — not the buyer, seller, or other outside
+                contacts (see the Participants tab for those). Filter the transactions list to
+                "Assigned to me" to see your own.
                 {canSetFees && " Set what each person is paid; they request it when it's due."}
               </p>
               {txn.assignees.length === 0 ? (
@@ -3115,7 +3257,7 @@ export default async function TransactionDetailPage({
                               shows:{" "}
                               {[
                                 pl.showTasks && "tasks",
-                                pl.showParties && "parties",
+                                pl.showParties && "participants",
                                 pl.showDocuments && "documents",
                               ]
                                 .filter(Boolean)
@@ -3208,7 +3350,7 @@ export default async function TransactionDetailPage({
                       defaultChecked
                       className="h-4 w-4 accent-brand-600"
                     />
-                    Parties
+                    Participants
                   </label>
                   <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
                     <input
