@@ -13,10 +13,15 @@ import {
 } from "@/lib/actions/templates";
 import { EMAIL_PHASES } from "@/lib/default-email-templates";
 import { MERGE_FIELD_GROUPS } from "@/lib/template-merge";
-import { btn, btnGhost, input, label as labelCls, summaryLink } from "@/lib/ui";
-
-const composeRow = "grid grid-cols-[5.5rem_1fr] items-center gap-3 border-b border-stone-100 py-2";
-const composeLabel = "text-sm text-stone-500";
+import {
+  btn,
+  btnGhost,
+  composeLabel,
+  composeRow,
+  input,
+  label as labelCls,
+  summaryLink,
+} from "@/lib/ui";
 
 export async function TemplatesTabEmails({
   tenantId,

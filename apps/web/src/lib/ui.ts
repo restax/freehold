@@ -48,3 +48,13 @@ export const fieldGroupLabel =
  */
 export const tableFixed = "w-full table-fixed border-collapse";
 export const tdFixed = "truncate border-b border-stone-100 px-2.5 py-1.5 text-sm";
+
+/**
+ * The To/Cc/Subject row rhythm shared by every email compose surface —
+ * template editing and sending from a transaction both use this, so a
+ * field's label-and-divider look is identical wherever an email gets
+ * written.
+ */
+export const composeRow =
+  "grid grid-cols-[5.5rem_1fr] items-center gap-3 border-b border-stone-100 py-2";
+export const composeLabel = "text-sm text-stone-500";

@@ -25,10 +25,19 @@ export function TemplateEditor({
   name,
   defaultValue,
   rows = 10,
+  showMergeField = true,
+  transactionId,
 }: {
   name: string;
   defaultValue?: string;
   rows?: number;
+  /** Off when composing a real send whose body already has merge codes
+   *  resolved to real values — inserting `{{code}}` there would go out
+   *  as literal, unresolved text instead of being re-merged. */
+  showMergeField?: boolean;
+  /** Gates dictation on this transaction's pro state, same as using
+   *  LiveDictateButton directly on a transaction page. */
+  transactionId?: string;
 }) {
   const id = useId().replace(/[:]/g, "");
   const areaId = `tpl-${id}`;
@@ -128,24 +137,28 @@ export function TemplateEditor({
         <button type="button" title="Insert image" className={toolBtn} onClick={addImage}>
           <ImageIcon size={14} />
         </button>
-        <span className="mx-1 h-5 w-px bg-stone-200" aria-hidden />
-        <select
-          value=""
-          onChange={(e) => {
-            if (e.target.value) insert(e.target.value);
-          }}
-          className="h-7 rounded border border-stone-200 bg-white px-1.5 text-xs text-stone-600 focus:border-brand-600 focus:outline-none"
-          title="Insert a merge field"
-        >
-          <option value="">Insert merge field…</option>
-          {EMAIL_MERGE_CODES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        {showMergeField && (
+          <>
+            <span className="mx-1 h-5 w-px bg-stone-200" aria-hidden />
+            <select
+              value=""
+              onChange={(e) => {
+                if (e.target.value) insert(e.target.value);
+              }}
+              className="h-7 rounded border border-stone-200 bg-white px-1.5 text-xs text-stone-600 focus:border-brand-600 focus:outline-none"
+              title="Insert a merge field"
+            >
+              <option value="">Insert merge field…</option>
+              {EMAIL_MERGE_CODES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
         <span className="ml-auto flex items-center gap-2">
-          <LiveDictateButton targetId={areaId} />
+          <LiveDictateButton targetId={areaId} transactionId={transactionId} />
           <button
             type="button"
             onClick={() => setPreview((p) => !p)}
@@ -186,9 +199,11 @@ export function TemplateEditor({
                 __html: renderLiteMarkdown(value || "Nothing yet — start typing."),
               }}
             />
-            <p className="border-t border-stone-100 pt-2 text-[11px] text-stone-400">
-              Merge fields fill from the transaction when sent.
-            </p>
+            {showMergeField && (
+              <p className="border-t border-stone-100 pt-2 text-[11px] text-stone-400">
+                Merge fields fill from the transaction when sent.
+              </p>
+            )}
           </div>
         </div>
       )}

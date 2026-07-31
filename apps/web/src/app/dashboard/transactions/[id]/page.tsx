@@ -45,17 +45,18 @@ import { ColumnPicker } from "@/components/column-picker";
 import { DangerDelete } from "@/components/danger-delete";
 import { DocumentDropZone } from "@/components/document-drop-zone";
 import { EmailPortalLinkForm } from "@/components/email-portal-link-form";
+import { EmailTemplateSelect } from "@/components/email-template-select";
 import { EntityPicker } from "@/components/entity-picker";
 import { ExtractButton } from "@/components/extract-button";
 import { HandbookNotes } from "@/components/handbook-notes";
 import { HandbookRecap, type RecapGrade } from "@/components/handbook-recap";
 import { KeyDateRow } from "@/components/key-date-row";
 import { LinkPartyForm } from "@/components/link-party-form";
-import { LiveDictateButton } from "@/components/live-dictate-button";
 import { SectionCard } from "@/components/section-card";
 import { SideFields } from "@/components/side-fields";
 import { StatusSelect } from "@/components/status-select";
 import { TaskTable } from "@/components/task-table";
+import { TemplateEditor } from "@/components/template-editor";
 import { VendorOrderTab } from "@/components/vendor-order-tab";
 import { VisibilityToggles } from "@/components/visibility-toggles";
 import { assignUser, unassignUser } from "@/lib/actions/assignees";
@@ -142,7 +143,7 @@ import {
   effectiveTier,
 } from "@/lib/compliance";
 import { emailEnabled } from "@/lib/email";
-import { EMAIL_MERGE_CODES, parseEmailSettings, renderMerge } from "@/lib/email-template";
+import { parseEmailSettings, renderMerge } from "@/lib/email-template";
 import { suggestForTask } from "@/lib/email-template-library";
 import { fmtDate, fmtDayMonth, fmtMoney, ROLE_LABEL } from "@/lib/format";
 import { isGovernedDateField, KEY_DATE_LABELS } from "@/lib/governed-dates";
@@ -162,7 +163,20 @@ import {
   guestMaySeeTransaction,
   requireTenant,
 } from "@/lib/tenant";
-import { btn, btnAdd, btnGhost, card, input, label, tableWrap, td, th, trHover } from "@/lib/ui";
+import {
+  btn,
+  btnAdd,
+  btnGhost,
+  card,
+  composeLabel,
+  composeRow,
+  input,
+  label,
+  tableWrap,
+  td,
+  th,
+  trHover,
+} from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -308,7 +322,10 @@ export default async function TransactionDetailPage({
         }),
         tx.dateTemplate.findMany({ orderBy: { name: "asc" } }),
       ]);
-    const emailTemplates = await tx.emailTemplate.findMany({ orderBy: { name: "asc" } });
+    const emailTemplates = await tx.emailTemplate.findMany({
+      orderBy: { name: "asc" },
+      include: { group: { select: { name: true } } },
+    });
     return {
       txn,
       contacts,
@@ -554,10 +571,19 @@ export default async function TransactionDetailPage({
   // Template-driven compose prefill: merge fields render server-side so the
   // TC sees (and can edit) the final text before sending.
   const emailTaskTitle = emailTask ? txn.tasks.find((t) => t.id === emailTask)?.title : undefined;
-  const { suggested: suggestedTemplates, rest: restTemplates } = suggestForTask(
-    emailTemplates,
-    emailTaskTitle,
-  );
+  const { suggested: suggestedTemplates } = suggestForTask(emailTemplates, emailTaskTitle);
+  // Grouped for the "start from a template" dropdown — named folders first
+  // (alphabetically), then anything unfiled last.
+  const emailTemplateGroupMap = new Map<string, Array<{ id: string; name: string }>>();
+  for (const t of emailTemplates) {
+    const key = t.group?.name ?? "No folder";
+    const list = emailTemplateGroupMap.get(key) ?? [];
+    list.push({ id: t.id, name: t.name.replace(" (Sample)", "") });
+    emailTemplateGroupMap.set(key, list);
+  }
+  const emailTemplateGroups = [...emailTemplateGroupMap.entries()]
+    .sort(([a], [b]) => (a === "No folder" ? 1 : b === "No folder" ? -1 : a.localeCompare(b)))
+    .map(([label, items]) => ({ label, items }));
   const scheduledEmails = await prisma.emailOutbox.findMany({
     where: { tenantId, transactionId: txn.id, sentAt: null, canceledAt: null },
     orderBy: { sendAt: "asc" },
@@ -2773,9 +2799,9 @@ export default async function TransactionDetailPage({
                       )}
                     </p>
                     {emailTemplates.length > 0 && (
-                      <div className="mb-3 flex flex-col gap-1.5 text-xs">
+                      <div className="mb-3 flex flex-col gap-2">
                         {emailTaskTitle && suggestedTemplates.length > 0 && (
-                          <p className="flex flex-wrap items-center gap-2">
+                          <p className="flex flex-wrap items-center gap-2 text-xs">
                             <span className="font-medium uppercase tracking-wide text-brand-700">
                               Suggested for “{emailTaskTitle.slice(0, 40)}”
                             </span>
@@ -2794,26 +2820,12 @@ export default async function TransactionDetailPage({
                             ))}
                           </p>
                         )}
-                        <p className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium uppercase tracking-wide text-stone-400">
-                            {emailTaskTitle && suggestedTemplates.length > 0
-                              ? "All templates"
-                              : "Start from a template"}
-                          </span>
-                          {restTemplates.map((t) => (
-                            <Link
-                              key={t.id}
-                              href={`/dashboard/transactions/${txn.id}?tab=emails&emailTemplate=${t.id}${emailTask ? `&emailTask=${emailTask}` : ""}`}
-                              className={`rounded-full border px-2.5 py-1 transition-colors ${
-                                t.id === emailTemplate
-                                  ? "border-brand-600 bg-brand-50 font-medium text-brand-800"
-                                  : "border-stone-200 text-stone-600 hover:border-brand-600 hover:text-brand-700"
-                              }`}
-                            >
-                              {t.name.replace(" (Sample)", "")}
-                            </Link>
-                          ))}
-                        </p>
+                        <EmailTemplateSelect
+                          transactionId={txn.id}
+                          emailTask={emailTask}
+                          groups={emailTemplateGroups}
+                          selected={emailTemplate}
+                        />
                       </div>
                     )}
                     <form
@@ -2829,9 +2841,9 @@ export default async function TransactionDetailPage({
                           value={selectedEmailTemplate.id}
                         />
                       )}
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <label className={label}>
-                          To
+                      <div className="flex flex-col">
+                        <div className={composeRow}>
+                          <span className={composeLabel}>To</span>
                           <input
                             name="to"
                             required
@@ -2840,7 +2852,7 @@ export default async function TransactionDetailPage({
                             placeholder="name@example.com"
                             className={input}
                           />
-                        </label>
+                        </div>
                         <datalist id={`party-emails-${txn.id}`}>
                           {txn.parties
                             .filter((p) => p.contact.email)
@@ -2850,8 +2862,8 @@ export default async function TransactionDetailPage({
                               </option>
                             ))}
                         </datalist>
-                        <label className={label}>
-                          Cc
+                        <div className={composeRow}>
+                          <span className={composeLabel}>Cc</span>
                           <input
                             name="cc"
                             defaultValue={composeCc}
@@ -2859,16 +2871,16 @@ export default async function TransactionDetailPage({
                             placeholder="name@example.com"
                             className={input}
                           />
-                        </label>
-                        <label className={label}>
-                          Subject
+                        </div>
+                        <div className={composeRow}>
+                          <span className={composeLabel}>Subject</span>
                           <input
                             name="subject"
                             required
                             defaultValue={composeSubject}
                             className={input}
                           />
-                        </label>
+                        </div>
                       </div>
                       {selectedEmailTemplate?.composeNote && (
                         <p className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs text-brand-800">
@@ -2891,17 +2903,16 @@ export default async function TransactionDetailPage({
                             ))}
                         </div>
                       )}
-                      <label className={label}>
-                        Message
-                        <textarea
-                          id="compose-body"
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm font-medium text-stone-700">Body</span>
+                        <TemplateEditor
                           name="body"
-                          required
-                          rows={9}
                           defaultValue={composeBody}
-                          className={input}
+                          rows={9}
+                          showMergeField={false}
+                          transactionId={txn.id}
                         />
-                      </label>
+                      </div>
                       {currentDocs.length > 0 && (
                         <div className="flex flex-col gap-1">
                           <span className="text-sm font-medium text-stone-700">
@@ -2929,11 +2940,6 @@ export default async function TransactionDetailPage({
                           </div>
                         </div>
                       )}
-                      <p className="text-xs text-stone-400">
-                        Formatting: **bold**, _italic_, "# " big heading, "- " bullet lists — the
-                        sent email renders them properly. Merge codes work in templates:{" "}
-                        {EMAIL_MERGE_CODES.slice(0, 4).join(" ")} …
-                      </p>
                       {canSendAsMe && (
                         <label className="flex flex-wrap items-center gap-2 text-xs text-stone-600">
                           <input
@@ -2953,7 +2959,6 @@ export default async function TransactionDetailPage({
                         <button type="submit" className={btn}>
                           Send email
                         </button>
-                        <LiveDictateButton targetId="compose-body" transactionId={txn.id} />
                         <label className="ml-auto flex items-center gap-2 text-xs text-stone-500">
                           Send later
                           <input
