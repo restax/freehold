@@ -188,6 +188,15 @@ describe("resolveEmailAccent", () => {
       expect(isHex(e.header), `${label} header`).toBe(true);
       expect(isHex(e.headerFg), `${label} headerFg`).toBe(true);
       expect(isHex(e.link), `${label} link`).toBe(true);
+      expect(isHex(e.tint), `${label} tint`).toBe(true);
+      expect(isHex(e.tintFg), `${label} tintFg`).toBe(true);
+    }
+  });
+
+  it("keeps the tint text readable on the tint banner, for any accent", () => {
+    for (const { label, a } of everyAccent()) {
+      const e = resolveEmailAccent(a);
+      expect(contrastRatio(e.tintFg, e.tint), label).toBeGreaterThanOrEqual(4.5);
     }
   });
 

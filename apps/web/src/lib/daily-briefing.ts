@@ -1,8 +1,11 @@
 import { prisma, withTenant } from "@freehold/db";
 import { PDFDocument, type PDFFont, type PDFPage, rgb, StandardFonts } from "pdf-lib";
 import { transactionAlerts } from "@/lib/alerts";
+import { hexToRgb } from "@/lib/color";
 import { emailEnabled, sendTenantEmail } from "@/lib/email";
+import { renderBrandedEnvelope } from "@/lib/email-template";
 import { fmtDate, ROLE_LABEL, STATUS_LABEL } from "@/lib/format";
+import { type EmailAccent, parseAppearance, resolveEmailAccent } from "@/lib/theme";
 import { type Staleness, stalenessMessage } from "@/lib/transaction-alerts";
 
 /**
@@ -143,11 +146,12 @@ const esc = (s: string) =>
 
 /**
  * Branded HTML so the summary is readable inline, not only in the
- * attachment. Matches the shared transactional-email look (`email-template.ts`
- * → `renderEmailHtml`): the same brand green header band and Georgia
- * wordmark, so this reads as the same product as every other Freehold email
- * rather than a one-off. Carries its own explainer + footer, since — unlike
- * a transaction email a TC chose to send — this one goes out automatically,
+ * attachment. Shares its header/footer chrome with every other Freehold
+ * email via `renderBrandedEnvelope`, themed with the workspace's own
+ * Appearance accent rather than a hardcoded colour — so this reads as the
+ * same product, in the same colour, as every other Freehold email rather
+ * than a one-off. Carries its own explainer + footer, since — unlike a
+ * transaction email a TC chose to send — this one goes out automatically,
  * so the recipient needs to know what it is and how to stop it without
  * asking anyone.
  */
@@ -155,6 +159,7 @@ function briefingHtml(
   txns: BriefingTxn[],
   orgName: string,
   dateLabel: string,
+  accent: EmailAccent,
   alerts: LicenseAlert[] = [],
 ): string {
   const alertBlock = alerts.length
@@ -226,52 +231,20 @@ function briefingHtml(
         .join("")
     : `<p style="color:#57534e;font-size:13px;">No active transactions today.</p>`;
 
-  return `<!doctype html>
-<html>
-<head><meta charset="utf-8"/></head>
-<body style="margin:0;padding:0;background:#f5f5f4;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f4;padding:24px 12px;">
-<tr><td align="center">
-<table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;">
-  <tr>
-    <td style="background:#0b6a40;border-radius:12px 12px 0 0;padding:18px 24px;">
-      <span style="font-size:17px;font-weight:700;color:#ffffff;font-family:Georgia,serif;letter-spacing:0.01em;">${esc(orgName)}</span>
-      <p style="margin:2px 0 0;font-size:12px;color:#d7ebe1;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;">Daily transaction briefing &nbsp;·&nbsp; ${dateLabel}</p>
-    </td>
-  </tr>
-  <tr>
-    <td style="background:#f0fdf6;padding:10px 24px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;">
-      <p style="margin:0;font-size:12px;line-height:1.5;color:#166534;">
-        Automatic morning summary of every active transaction in ${esc(orgName)}, sent to workspace
+  return renderBrandedEnvelope({
+    tenantName: orgName,
+    subtitle: `Daily transaction briefing · ${dateLabel}`,
+    accent,
+    width: 640,
+    explainerHtml: `Automatic morning summary of every active transaction in ${esc(orgName)}, sent to workspace
         owners and admins so no file lives in only one inbox. A full copy is attached as a PDF —
-        keep it; it's readable offline no matter what happens to your connection or ours.
-      </p>
-    </td>
-  </tr>
-  <tr>
-    <td style="background:#ffffff;padding:18px 24px 6px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1c1917;">
-      ${alertBlock}
-      ${cards}
-    </td>
-  </tr>
-  <tr>
-    <td style="background:#ffffff;border-radius:0 0 12px 12px;padding:14px 24px 20px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;">
-      <p style="margin:0 0 4px;border-top:1px solid #e7e5e4;padding-top:12px;font-size:11px;line-height:1.6;color:#78716c;">
-        <strong>Why am I getting this?</strong> You're an owner or admin on ${esc(orgName)}'s Freehold
+        keep it; it's readable offline no matter what happens to your connection or ours.`,
+    bodyHtml: `${alertBlock}${cards}`,
+    footerHtml: `<strong>Why am I getting this?</strong> You're an owner or admin on ${esc(orgName)}'s Freehold
         workspace. Concerns about a transaction on this list? Reply to this email, or reach a workspace
         admin directly. To stop these emails, an admin can turn it off from
-        <strong>Settings → Daily briefing</strong>.
-      </p>
-      <p style="margin:8px 0 0;font-size:11px;color:#a8a29e;">
-        Powered by <a href="https://freeholdtc.dev" style="color:#78716c;text-decoration:none;font-weight:600;">Freehold</a>
-      </p>
-    </td>
-  </tr>
-</table>
-</td></tr>
-</table>
-</body>
-</html>`;
+        <strong>Settings → Daily briefing</strong>.`,
+  });
 }
 
 const PAGE: [number, number] = [612, 792];
@@ -279,8 +252,11 @@ const MARGIN = 50;
 const HEADER_H = 92;
 const CONT_HEADER_H = 34;
 const FOOTER_H = 46;
-const GREEN = rgb(0x0b / 255, 0x6a / 255, 0x40 / 255);
-const GREEN_TINT = rgb(0xd7 / 255, 0xeb / 255, 0xe1 / 255);
+/** pdf-lib wants 0–1 components; the theme system deals in hex everywhere else. */
+const rgbHex = (hex: string) => {
+  const [r, g, b] = hexToRgb(hex);
+  return rgb(r / 255, g / 255, b / 255);
+};
 const AMBER_BG = rgb(1, 0xfb / 255, 0xeb / 255);
 const AMBER_LINE = rgb(0xfc / 255, 0xd3 / 255, 0x4d / 255);
 const AMBER_TEXT = rgb(0x78 / 255, 0x35 / 255, 0x0f / 255);
@@ -302,8 +278,11 @@ async function renderBriefingPdf(
   txns: BriefingTxn[],
   orgName: string,
   dateLabel: string,
+  accent: EmailAccent,
   alerts: LicenseAlert[],
 ): Promise<Buffer> {
+  const headerColor = rgbHex(accent.header);
+  const headerFgColor = rgbHex(accent.headerFg);
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -336,21 +315,22 @@ async function renderBriefingPdf(
       y: PAGE[1] - HEADER_H,
       width: PAGE[0],
       height: HEADER_H,
-      color: GREEN,
+      color: headerColor,
     });
     page.drawText(orgName.slice(0, 60), {
       x: MARGIN,
       y: PAGE[1] - 38,
       size: 18,
       font: bold,
-      color: WHITE,
+      color: headerFgColor,
     });
     page.drawText(`Daily transaction briefing  ·  ${dateLabel}`, {
       x: MARGIN,
       y: PAGE[1] - 58,
       size: 11,
       font,
-      color: GREEN_TINT,
+      color: headerFgColor,
+      opacity: 0.85,
     });
     y = PAGE[1] - HEADER_H - 20;
 
@@ -568,7 +548,7 @@ export async function runDailyBriefings(): Promise<BriefingRunSummary> {
   if (!emailEnabled()) return summary;
 
   const orgs = await prisma.organization.findMany({
-    select: { id: true, name: true, emailSettings: true },
+    select: { id: true, name: true, emailSettings: true, appearanceConfig: true },
   });
   const optedIn = orgs.filter(
     (o) => (o.emailSettings as { dailyBriefing?: boolean } | null)?.dailyBriefing === true,
@@ -584,11 +564,12 @@ export async function runDailyBriefings(): Promise<BriefingRunSummary> {
 
   for (const org of optedIn) {
     try {
+      const accent = resolveEmailAccent(parseAppearance(org.appearanceConfig));
       const txns = await briefingTransactions(org.id);
       const alerts = await briefingLicenseAlerts(org.id);
       const text = briefingText(txns, org.name, dateLabel, alerts);
-      const html = briefingHtml(txns, org.name, dateLabel, alerts);
-      const pdf = await renderBriefingPdf(txns, org.name, dateLabel, alerts);
+      const html = briefingHtml(txns, org.name, dateLabel, accent, alerts);
+      const pdf = await renderBriefingPdf(txns, org.name, dateLabel, accent, alerts);
       const to = await recipients(org.id);
       for (const addr of to) {
         await sendTenantEmail({

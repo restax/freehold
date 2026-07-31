@@ -4,8 +4,12 @@ import {
   daysOverdue,
   invoiceLabel,
   invoiceText,
+  outstandingReportHtml,
   outstandingReportText,
 } from "./invoicing";
+import { resolveEmailAccent } from "./theme";
+
+const ACCENT = resolveEmailAccent({ theme: "cobalt", customAccent: "" });
 
 const d = (s: string) => new Date(`${s}T00:00:00.000Z`);
 const now = d("2026-07-20");
@@ -97,5 +101,44 @@ describe("outstandingReportText", () => {
     expect(text.indexOf("INV-0002")).toBeLessThan(text.indexOf("INV-0001"));
     expect(text).toContain("19d overdue");
     expect(text).toContain("due 2026-08-01");
+  });
+});
+
+describe("outstandingReportHtml", () => {
+  it("says so when nothing is outstanding", () => {
+    expect(outstandingReportHtml([], "W", ACCENT, now)).toContain("Nothing outstanding");
+  });
+
+  it("uses the resolved accent for the header, not a hardcoded colour", () => {
+    const html = outstandingReportHtml(
+      [{ number: 1, clientName: "A", amountCents: 10000, dueDate: null, address: null }],
+      "W",
+      ACCENT,
+      now,
+    );
+    expect(html).toContain(ACCENT.header);
+    expect(html).not.toContain("#0b6a40");
+  });
+
+  it("lists overdue before current and escapes client-supplied text", () => {
+    const html = outstandingReportHtml(
+      [
+        { number: 1, clientName: "A", amountCents: 10000, dueDate: d("2026-08-01"), address: null },
+        {
+          number: 2,
+          clientName: "<b>B</b>",
+          amountCents: 25000,
+          dueDate: d("2026-07-01"),
+          address: "88 Harbor Ln",
+        },
+      ],
+      "W",
+      ACCENT,
+      now,
+    );
+    expect(html.indexOf("INV-0002")).toBeLessThan(html.indexOf("INV-0001"));
+    expect(html).toContain("19d overdue");
+    expect(html).not.toContain("<b>B</b>");
+    expect(html).toContain("&lt;b&gt;B&lt;/b&gt;");
   });
 });

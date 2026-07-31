@@ -1,7 +1,13 @@
 import { prisma, withTenant } from "@freehold/db";
 import { emailEnabled, sendTenantEmail } from "@/lib/email";
 import { fmtCents } from "@/lib/pay";
-import { agingBucket, type OutstandingLine, outstandingReportText } from "./invoicing";
+import { parseAppearance, resolveEmailAccent } from "@/lib/theme";
+import {
+  agingBucket,
+  type OutstandingLine,
+  outstandingReportHtml,
+  outstandingReportText,
+} from "./invoicing";
 
 /**
  * The morning invoice report: every workspace that picked a recipient
@@ -21,12 +27,12 @@ export async function runInvoiceReports(): Promise<InvoiceReportRunSummary> {
   if (!emailEnabled()) return summary;
 
   const orgs = await prisma.organization.findMany({
-    select: { id: true, name: true, emailSettings: true },
+    select: { id: true, name: true, emailSettings: true, appearanceConfig: true },
   });
   const optedIn = orgs.flatMap((o) => {
     const userId = (o.emailSettings as { invoiceReportUserId?: string } | null)
       ?.invoiceReportUserId;
-    return userId ? [{ id: o.id, name: o.name, userId }] : [];
+    return userId ? [{ id: o.id, name: o.name, userId, appearanceConfig: o.appearanceConfig }] : [];
   });
   summary.workspaces = optedIn.length;
 
@@ -65,6 +71,7 @@ export async function runInvoiceReports(): Promise<InvoiceReportRunSummary> {
       const overdueCount = lines.filter((l) => agingBucket(l.dueDate) === "overdue").length;
       const total = lines.reduce((s, l) => s + l.amountCents, 0);
 
+      const accent = resolveEmailAccent(parseAppearance(org.appearanceConfig));
       await sendTenantEmail({
         tenantId: org.id,
         to: member.user.email,
@@ -72,6 +79,7 @@ export async function runInvoiceReports(): Promise<InvoiceReportRunSummary> {
           overdueCount > 0 ? `, ${overdueCount} overdue` : ""
         }`,
         body: outstandingReportText(lines, org.name),
+        html: outstandingReportHtml(lines, org.name, accent),
       }).then(
         () => {
           summary.sent += 1;

@@ -242,8 +242,8 @@ export function themeTokens(a: Pick<Appearance, "theme" | "customAccent">): Reco
   };
 }
 
-/** The three concrete colours an outbound email needs. HTML email can't read
- *  CSS variables reliably, so these are resolved to hex once per send rather
+/** The concrete colours an outbound email needs. HTML email can't read CSS
+ *  variables reliably, so these are resolved to hex once per send rather
  *  than themed live like the app chrome. */
 export interface EmailAccent {
   /** The banner behind the workspace name. */
@@ -252,6 +252,10 @@ export interface EmailAccent {
   headerFg: string;
   /** Links and the contact card's email address, readable on white. */
   link: string;
+  /** Pale wash for an explainer/info banner — "why am I getting this". */
+  tint: string;
+  /** Text colour readable on `tint`. */
+  tintFg: string;
 }
 
 /**
@@ -267,10 +271,16 @@ export function resolveEmailAccent(a: Pick<Appearance, "theme" | "customAccent">
   // duplicating that fix here would be one more place for it to rot out of
   // sync.
   const tokens = themeTokens(a);
+  const tint = tokens["--color-brand-50"];
   return {
     header: tokens["--topbar"],
     headerFg: tokens["--topbar-fg"],
     link: tokens["--color-brand-600"],
+    tint,
+    // brand-900 is already dark, but a wash this pale is close enough to
+    // white that it deserves the same readability guarantee as the topbar
+    // rather than an assumption.
+    tintFg: darkenUntilReadable(tokens["--color-brand-900"], 4.5, tint),
   };
 }
 

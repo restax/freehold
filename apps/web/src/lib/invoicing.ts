@@ -1,5 +1,7 @@
 import type { TenantTx } from "@freehold/db";
+import { esc, renderBrandedEnvelope } from "./email-template";
 import { fmtCents } from "./pay";
+import type { EmailAccent } from "./theme";
 
 /**
  * Payment-agnostic client invoicing. Clients pay by check, Zelle, wire, or
@@ -146,4 +148,55 @@ export function outstandingReportText(
     for (const l of current) out.push(fmt(l));
   }
   return out.join("\n").trimEnd();
+}
+
+/**
+ * Branded HTML twin of [outstandingReportText] — the report went out as
+ * plain text with no styling at all, which read as broken next to every
+ * other Freehold email once those picked up the workspace's Appearance
+ * colour. Shares `renderBrandedEnvelope` rather than inventing a third copy
+ * of the header/footer chrome.
+ */
+export function outstandingReportHtml(
+  lines: OutstandingLine[],
+  workspaceName: string,
+  accent: EmailAccent,
+  now: Date = new Date(),
+): string {
+  const overdue = lines.filter((l) => agingBucket(l.dueDate, now) === "overdue");
+  const current = lines.filter((l) => agingBucket(l.dueDate, now) === "current");
+  const total = lines.reduce((s, l) => s + l.amountCents, 0);
+
+  const row = (l: OutstandingLine) => {
+    const bucket = agingBucket(l.dueDate, now);
+    const when = l.dueDate
+      ? bucket === "overdue"
+        ? `<span style="color:#b91c1c;font-weight:600;">${daysOverdue(l.dueDate, now)}d overdue</span>`
+        : `due ${esc(dateOnly(l.dueDate))}`
+      : "";
+    return `<tr>
+      <td style="padding:6px 10px 6px 0;font-size:13px;color:#1c1917;white-space:nowrap;">${esc(invoiceLabel(l.number))}</td>
+      <td style="padding:6px 10px;font-size:13px;color:#1c1917;text-align:right;white-space:nowrap;">${esc(fmtCents(l.amountCents))}</td>
+      <td style="padding:6px 10px;font-size:13px;color:#57534e;">${esc(l.clientName ?? "—")}${l.address ? ` <span style="color:#a8a29e;">· ${esc(l.address)}</span>` : ""}</td>
+      <td style="padding:6px 0 6px 10px;font-size:12px;text-align:right;white-space:nowrap;">${when}</td>
+    </tr>`;
+  };
+
+  const table = (rows: OutstandingLine[]) =>
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 14px;">${rows.map(row).join("")}</table>`;
+
+  const bodyHtml =
+    lines.length === 0
+      ? `<p style="margin:0;font-size:14px;color:#57534e;">Nothing outstanding. All invoices are settled.</p>`
+      : `<p style="margin:0 0 12px;font-size:14px;color:#1c1917;">${lines.length} outstanding, <strong>${esc(fmtCents(total))}</strong> total${overdue.length > 0 ? `, <strong style="color:#b91c1c;">${overdue.length} overdue</strong>` : ""}.</p>
+      ${overdue.length > 0 ? `<p style="margin:0 0 4px;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#a8a29e;">Overdue</p>${table(overdue)}` : ""}
+      ${current.length > 0 ? `<p style="margin:0 0 4px;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#a8a29e;">Current</p>${table(current)}` : ""}`;
+
+  return renderBrandedEnvelope({
+    tenantName: workspaceName,
+    subtitle: "Outstanding invoices",
+    accent,
+    bodyHtml,
+    footerHtml: `Sent to the recipient set for ${esc(workspaceName)} in <strong>Settings → Invoice report</strong>. Mornings with nothing outstanding send nothing.`,
+  });
 }

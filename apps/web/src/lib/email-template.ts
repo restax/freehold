@@ -61,7 +61,7 @@ export function parseEmailSettings(raw: unknown): EmailSettings {
   };
 }
 
-const esc = (s: string) =>
+export const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 function contactCell(c: EmailContact, accent: EmailAccent, small = false): string {
@@ -190,6 +190,73 @@ export function renderEmailHtml(input: EmailRenderInput): string {
       <p style="margin:0;${input.footer?.trim() ? "" : "border-top:1px solid #e7e5e4;padding-top:14px;"}font-size:11px;color:#a8a29e;">
         Powered by <a href="https://freeholdtc.dev" style="color:#78716c;text-decoration:none;font-weight:600;">Freehold</a>
         — reply to this email and it lands right back on your file.
+      </p>
+    </td>
+  </tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
+export interface EmailEnvelopeInput {
+  tenantName: string;
+  /** e.g. "Daily transaction briefing · Friday, July 31" — under the wordmark. */
+  subtitle: string;
+  accent: EmailAccent;
+  /** Optional "why am I getting this" banner, tinted with the accent. Raw HTML. */
+  explainerHtml?: string;
+  /** The body, already rendered — these callers build their own cards/tables
+   *  rather than markdown-lite, so this takes HTML directly. */
+  bodyHtml: string;
+  /** Small print above the "Powered by Freehold" line. Raw HTML. */
+  footerHtml: string;
+  /** Card width in px. 640 for the denser briefing tables, 600 elsewhere. */
+  width?: number;
+}
+
+/**
+ * The header/footer chrome shared by system emails that don't carry a
+ * TC/agent signature block — the daily briefing and the invoice report.
+ * `renderEmailHtml` above owns that block's layout, which these emails have
+ * no use for; this is the other half of the same envelope, so both still
+ * read as the same product and neither hardcodes its own copy of the accent.
+ */
+export function renderBrandedEnvelope(input: EmailEnvelopeInput): string {
+  const { accent, width = 600 } = input;
+  return `<!doctype html>
+<html>
+<head><meta charset="utf-8"/></head>
+<body style="margin:0;padding:0;background:#f5f5f4;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f4;padding:24px 12px;">
+<tr><td align="center">
+<table role="presentation" width="${width}" cellpadding="0" cellspacing="0" style="max-width:${width}px;width:100%;">
+  <tr>
+    <td style="background:${accent.header};border-radius:12px 12px 0 0;padding:18px 24px;">
+      <span style="font-size:17px;font-weight:700;color:${accent.headerFg};font-family:Georgia,serif;letter-spacing:0.01em;">${esc(input.tenantName)}</span>
+      <p style="margin:2px 0 0;font-size:12px;color:${accent.headerFg};opacity:0.85;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;">${esc(input.subtitle)}</p>
+    </td>
+  </tr>
+  ${
+    input.explainerHtml
+      ? `<tr><td style="background:${accent.tint};padding:10px 24px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;">
+      <p style="margin:0;font-size:12px;line-height:1.5;color:${accent.tintFg};">${input.explainerHtml}</p>
+    </td></tr>`
+      : ""
+  }
+  <tr>
+    <td style="background:#ffffff;padding:18px 24px 6px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1c1917;">
+      ${input.bodyHtml}
+    </td>
+  </tr>
+  <tr>
+    <td style="background:#ffffff;border-radius:0 0 12px 12px;padding:14px 24px 20px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;">
+      <p style="margin:0 0 4px;border-top:1px solid #e7e5e4;padding-top:12px;font-size:11px;line-height:1.6;color:#78716c;">
+        ${input.footerHtml}
+      </p>
+      <p style="margin:8px 0 0;font-size:11px;color:#a8a29e;">
+        Powered by <a href="https://freeholdtc.dev" style="color:#78716c;text-decoration:none;font-weight:600;">Freehold</a>
       </p>
     </td>
   </tr>
