@@ -14,9 +14,8 @@
  * the TC licensing rule. Overridden by PlatformSetting.cloudPromptText.
  */
 export const DEFAULT_CLOUD_PROMPT =
-  "You're self-hosting Freehold, which means you own your data and your uptime. " +
-  "Freehold Cloud runs it for you instead: automatic updates, managed backups, " +
-  "and the AI features included — no keys to bring, no upgrades to schedule.";
+  "Freehold Cloud does the hosting: automatic updates, managed backups, " +
+  "and AI included without your own API key.";
 
 /** Shape stored in Organization.cloudPromptConfig. */
 export interface CloudPromptConfig {
