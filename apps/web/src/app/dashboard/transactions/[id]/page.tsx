@@ -53,9 +53,11 @@ import { EntityPicker } from "@/components/entity-picker";
 import { ExtractButton } from "@/components/extract-button";
 import { HandbookNotes } from "@/components/handbook-notes";
 import { HandbookRecap, type RecapGrade } from "@/components/handbook-recap";
+import { InvoiceStatusTracker } from "@/components/invoice-status-tracker";
 import { KeyDateRow } from "@/components/key-date-row";
 import { LinkPartyForm } from "@/components/link-party-form";
 import { ListingDetailRow } from "@/components/listing-detail-row";
+import { PendingButton } from "@/components/pending-button";
 import { SectionCard } from "@/components/section-card";
 import { SideBadge } from "@/components/side-badge";
 import { SideFields } from "@/components/side-fields";
@@ -1819,6 +1821,7 @@ export default async function TransactionDetailPage({
                               </span>
                             </div>
                           </div>
+                          <InvoiceStatusTracker state={state} className="mt-1.5" />
                           {inv.lines.length > 1 && (
                             <ul className="mt-1 flex flex-col gap-0.5 border-l-2 border-stone-100 pl-3">
                               {inv.lines.map((l) => (
@@ -1863,12 +1866,12 @@ export default async function TransactionDetailPage({
                                       type="date"
                                       className={`${input} px-2 py-1 text-xs`}
                                     />
-                                    <button
-                                      type="submit"
+                                    <PendingButton
+                                      pendingLabel="Issuing…"
                                       className={`${btnGhost} px-2 py-1 text-xs`}
                                     >
                                       Issue invoice
-                                    </button>
+                                    </PendingButton>
                                   </form>
                                   <form action={deleteDraftInvoice}>
                                     <input type="hidden" name="id" value={inv.id} />
@@ -1892,9 +1895,12 @@ export default async function TransactionDetailPage({
                                     placeholder="check #1042"
                                     className={`${input} w-28 px-2 py-1 text-xs`}
                                   />
-                                  <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                                  <PendingButton
+                                    pendingLabel="Marking paid…"
+                                    className={`${btnGhost} px-2 py-1 text-xs`}
+                                  >
                                     Mark paid
-                                  </button>
+                                  </PendingButton>
                                 </form>
                               )}
                             </div>
@@ -2050,9 +2056,9 @@ export default async function TransactionDetailPage({
                         name="amount"
                         value={(remainingToDraftCents / 100).toFixed(2)}
                       />
-                      <button type="submit" className={btn}>
+                      <PendingButton pendingLabel="Drafting…" className={btn}>
                         Draft the remaining fee — {fmtCents(remainingToDraftCents)}
-                      </button>
+                      </PendingButton>
                     </form>
                   )}
                   <form action={addTransactionCharge} className="flex flex-wrap items-end gap-2">
@@ -2086,9 +2092,9 @@ export default async function TransactionDetailPage({
                         className={`${input} w-28`}
                       />
                     </label>
-                    <button type="submit" className={btnGhost}>
+                    <PendingButton pendingLabel="Adding…" className={btnGhost}>
                       Add charge
-                    </button>
+                    </PendingButton>
                   </form>
                 </SectionCard>
               )}
