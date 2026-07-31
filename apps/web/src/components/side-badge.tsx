@@ -1,4 +1,5 @@
 import { DEFAULT_SIDE_LABELS, type SideLabels, sideLabel } from "@/lib/side-labels";
+import { THEMES } from "@/lib/theme";
 
 /**
  * Which side of the deal a file is worked from, as a single letter in a
@@ -15,10 +16,20 @@ import { DEFAULT_SIDE_LABELS, type SideLabels, sideLabel } from "@/lib/side-labe
  * tooltip.
  */
 
-const SIDE_STYLE: Record<string, { letter: string; className: string }> = {
-  BUY_SIDE: { letter: "B", className: "bg-blue-600" },
-  SELL_SIDE: { letter: "S", className: "bg-orange-600" },
-  DUAL: { letter: "D", className: "bg-violet-600" },
+/**
+ * The three colours come from the accent presets in lib/theme, not from
+ * Tailwind's stock palette: a saturated blue/orange/violet trio sat on these
+ * earthy surfaces looking like a different product bolted on — the same
+ * mistake the greens were retuned to fix.
+ *
+ * Buy is the cool one and sell the warm one so they read as opposites at a
+ * glance; dual takes the muted purple that sits between them. All three
+ * clear 4.5:1 against the white letter.
+ */
+const SIDE_STYLE: Record<string, { letter: string; color: string }> = {
+  BUY_SIDE: { letter: "B", color: THEMES.cobalt.accent },
+  SELL_SIDE: { letter: "S", color: THEMES.clay.accent },
+  DUAL: { letter: "D", color: THEMES.lilac.accent },
 };
 
 export function SideBadge({
@@ -38,7 +49,8 @@ export function SideBadge({
       role="img"
       title={sideLabel(side, labels)}
       aria-label={sideLabel(side, labels)}
-      className={`inline-flex shrink-0 items-center justify-center rounded-full font-semibold leading-none text-white ${style.className} ${dim}`}
+      style={{ backgroundColor: style.color }}
+      className={`inline-flex shrink-0 items-center justify-center rounded-full font-semibold leading-none text-white ${dim}`}
     >
       {style.letter}
     </span>
