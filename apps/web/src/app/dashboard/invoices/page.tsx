@@ -1,7 +1,9 @@
 import { prisma, withTenant } from "@freehold/db";
+import { Envelope } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { Badge, type BadgeTone } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
+import { PendingButton } from "@/components/pending-button";
 import { SectionCard } from "@/components/section-card";
 import {
   createInvoice,
@@ -10,6 +12,7 @@ import {
   erpnextConnected,
   invoicingAllowed,
   issueDraftInvoice,
+  reissueInvoice,
   sendInvoice,
   voidInvoice,
 } from "@/lib/actions/invoices";
@@ -146,6 +149,11 @@ export default async function InvoicesPage({
             recordedByName: true,
             reversedBy: { select: { amountCents: true } },
           },
+        },
+        emailLogs: {
+          orderBy: { createdAt: "desc" },
+          take: 5,
+          select: { id: true, to: true, sentByName: true, createdAt: true },
         },
       },
     }),
@@ -700,13 +708,14 @@ export default async function InvoicesPage({
                 </select>
               </label>
             )}
-            <button type="submit" className={btn}>
+            <PendingButton pendingLabel="Issuing…" className={btn}>
               Issue invoice
-            </button>
+            </PendingButton>
           </form>
           <p className="mt-2 text-xs text-stone-400">
-            Issuing opens a follow-up task that closes itself when the invoice is paid off. Clients
-            need an email address on file to be sent the invoice.
+            Issuing opens a follow-up task that closes itself when the invoice is paid off. It
+            doesn't email anyone by itself — find it below once issued to download the PDF or send
+            it (clients need an email address on file to be sent to).
           </p>
         </details>
       )}
@@ -927,17 +936,21 @@ export default async function InvoicesPage({
                               canEmail &&
                               inv.client &&
                               invoiceRecipient(inv.client) && (
-                                <form action={sendInvoice}>
+                                <form action={sendInvoice} className="flex items-center gap-1.5">
                                   <input type="hidden" name="id" value={inv.id} />
-                                  <button
-                                    type="submit"
+                                  <input
+                                    name="to"
+                                    type="email"
+                                    defaultValue={invoiceRecipient(inv.client) ?? ""}
+                                    title="Who to email this invoice to — override to send it to the closing attorney, a co-buyer, anyone"
+                                    className={`${input} w-44 px-2 py-0.5 text-xs`}
+                                  />
+                                  <PendingButton
+                                    pendingLabel="Sending…"
                                     className="font-medium text-brand-700 hover:text-brand-600"
-                                    title={`Emails ${invoiceRecipient(inv.client)}`}
                                   >
-                                    {inv.sentAt
-                                      ? `re-send (emailed ${fmtDate(inv.sentAt)})`
-                                      : "send"}
-                                  </button>
+                                    {inv.sentAt ? "re-send" : "send"}
+                                  </PendingButton>
                                 </form>
                               )}
                             {inv.paymentTerms && (
@@ -954,7 +967,31 @@ export default async function InvoicesPage({
                                 </button>
                               </form>
                             )}
+                            {isAdmin && inv.status === "VOID" && (
+                              <form action={reissueInvoice} className="ml-auto">
+                                <input type="hidden" name="id" value={inv.id} />
+                                <PendingButton
+                                  pendingLabel="Reissuing…"
+                                  className="font-medium text-stone-400 hover:text-brand-700"
+                                >
+                                  reissue as new draft
+                                </PendingButton>
+                              </form>
+                            )}
                           </div>
+                          {inv.emailLogs.length > 0 && (
+                            <ul className="flex flex-col gap-0.5">
+                              {inv.emailLogs.map((sent) => (
+                                <li
+                                  key={sent.id}
+                                  className="flex items-center gap-1.5 text-[11px] text-stone-400"
+                                >
+                                  <Envelope size={11} className="shrink-0" aria-hidden />
+                                  Emailed {sent.to} · {sent.sentByName} · {fmtDate(sent.createdAt)}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
 
                           {isAdmin && inv.status === "DRAFT" && (
                             <div className="flex flex-wrap items-center gap-2">
@@ -978,9 +1015,12 @@ export default async function InvoicesPage({
                                   type="date"
                                   className={`${input} px-2 py-1 text-xs`}
                                 />
-                                <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                                <PendingButton
+                                  pendingLabel="Issuing…"
+                                  className={`${btnGhost} px-2 py-1 text-xs`}
+                                >
                                   Issue invoice
-                                </button>
+                                </PendingButton>
                               </form>
                               <form action={deleteDraftInvoice}>
                                 <input type="hidden" name="id" value={inv.id} />
@@ -991,6 +1031,10 @@ export default async function InvoicesPage({
                                   discard draft
                                 </button>
                               </form>
+                              <p className="w-full text-[11px] text-stone-400">
+                                Marks it billed — it isn't emailed automatically. Once issued,
+                                download the PDF or send it from this same row.
+                              </p>
                             </div>
                           )}
 

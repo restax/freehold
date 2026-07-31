@@ -774,6 +774,7 @@ model Organization {
   invoices                Invoice[]
   invoiceLines            InvoiceLine[]
   invoicePayments         InvoicePayment[]
+  invoiceEmailLogs        InvoiceEmailLog[]
   clientCreditEntries     ClientCreditEntry[]
   webhookEndpoints        WebhookEndpoint[]
 
@@ -1833,12 +1834,33 @@ model Invoice {
   payments       InvoicePayment[]
   /// Client-credit entries applied against this invoice (kind "applied").
   creditEntries  ClientCreditEntry[]
+  emailLogs      InvoiceEmailLog[]
   createdAt      DateTime            @default(now())
   paidAt         DateTime?           @map("paid_at")
 
   @@unique([tenantId, number])
   @@index([tenantId])
   @@map("invoice")
+}
+
+/// Every time an invoice was actually emailed — not just the last one.
+/// Invoice.sentAt only ever holds the latest timestamp, which can't answer
+/// "did we already send this to the closing attorney" once a second send
+/// (to a different recipient) overwrites it. Kept even after more sends
+/// happen, so the row under each invoice reads as real history, not a
+/// single fact that silently changes underneath a bookmark.
+model InvoiceEmailLog {
+  id         String       @id @default(uuid())
+  tenantId   String       @map("tenant_id")
+  tenant     Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoiceId  String       @map("invoice_id")
+  invoice    Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  to         String
+  sentByName String       @map("sent_by_name")
+  createdAt  DateTime     @default(now())
+
+  @@index([tenantId, invoiceId, createdAt])
+  @@map("invoice_email_log")
 }
 
 /// One charge on an invoice: the base fee, an up-charge for extra work, a

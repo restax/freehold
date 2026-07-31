@@ -183,7 +183,12 @@ export async function createInvoice(formData: FormData) {
   if (transactionId) revalidatePath(`/dashboard/transactions/${transactionId}`);
 }
 
-/** Email the invoice to the client, PDF attached. */
+/**
+ * Email the invoice, PDF attached — to the client by default, or to
+ * whatever address the "to" field is overridden with (the closing
+ * attorney, a co-buyer, anyone). Every send is logged, not just the last
+ * one: two sends to two different people shouldn't erase each other.
+ */
 export async function sendInvoice(formData: FormData) {
   const { tenantId, session } = await requireTenant();
   if (!(await getBillingAccess(tenantId, session.user.id)).manage || !emailEnabled()) return;
@@ -205,8 +210,9 @@ export async function sendInvoice(formData: FormData) {
   );
   if (invoice?.status !== "SENT" || !invoice.client) return;
   // The billing contact pays the bills when the office has one; the client's
-  // own email otherwise.
-  const recipient = invoiceRecipient(invoice.client);
+  // own email otherwise. An explicit "to" overrides both — sending the same
+  // invoice to the closing attorney doesn't need a different client record.
+  const recipient = optStr(formData, "to") || invoiceRecipient(invoice.client);
   if (!recipient) return;
 
   const org = await prisma.organization.findUniqueOrThrow({
@@ -237,9 +243,12 @@ export async function sendInvoice(formData: FormData) {
       { filename: `${invoiceLabel(invoice.number)}.pdf`, content: pdf.toString("base64") },
     ],
   });
-  await withTenant(tenantId, (tx) =>
-    tx.invoice.update({ where: { id }, data: { sentAt: new Date() } }),
-  );
+  await withTenant(tenantId, async (tx) => {
+    await tx.invoice.update({ where: { id }, data: { sentAt: new Date() } });
+    await tx.invoiceEmailLog.create({
+      data: { tenantId, invoiceId: id, to: recipient, sentByName: session.user.name ?? "—" },
+    });
+  });
 
   logAudit({
     tenantId,
@@ -352,6 +361,65 @@ export async function voidInvoice(formData: FormData) {
   });
   revalidatePath("/dashboard/invoices");
   if (voided.transactionId) revalidatePath(`/dashboard/transactions/${voided.transactionId}`);
+}
+
+/**
+ * Bill again after a void: a new draft, same client/file/lines as the
+ * voided invoice, under its own new number. Void is a dead end on purpose
+ * (the old number stays void forever, for the paper trail) — this is the
+ * fast path so "start over" doesn't mean retyping every line by hand.
+ */
+export async function reissueInvoice(formData: FormData) {
+  const { tenantId, session } = await requireTenant();
+  if (!(await getBillingAccess(tenantId, session.user.id)).manage) return;
+  const id = str(formData, "id");
+  if (!id) return;
+
+  const reissued = await withTenant(tenantId, async (tx) => {
+    const original = await tx.invoice.findUnique({
+      where: { id },
+      include: { lines: { orderBy: { sortOrder: "asc" } } },
+    });
+    if (original?.status !== "VOID") return null;
+    const number = await nextInvoiceNumber(tx, tenantId);
+    const created = await tx.invoice.create({
+      data: {
+        tenantId,
+        clientId: original.clientId,
+        transactionId: original.transactionId,
+        number,
+        provider: "freehold",
+        // A draft, not a live bill: the whole point is a second look before
+        // the client sees the replacement for something you just voided.
+        status: "DRAFT",
+        description: original.description,
+        amountCents: original.amountCents,
+        lines: {
+          create: original.lines.map((l) => ({
+            tenantId,
+            transactionId: l.transactionId,
+            kind: l.kind,
+            description: l.description,
+            amountCents: l.amountCents,
+            sortOrder: l.sortOrder,
+          })),
+        },
+      },
+    });
+    return { original, created };
+  });
+  if (!reissued) return;
+
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "invoice.reissued",
+    summary: `Reissued ${invoiceLabel(reissued.original.number)} as ${invoiceLabel(reissued.created.number)} (draft)`,
+  });
+  revalidatePath("/dashboard/invoices");
+  if (reissued.created.transactionId)
+    revalidatePath(`/dashboard/transactions/${reissued.created.transactionId}`);
 }
 
 /**
