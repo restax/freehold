@@ -1,6 +1,7 @@
 import { prisma, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { DangerDelete } from "@/components/danger-delete";
+import { PhoneInput } from "@/components/phone-input";
 import { SectionCard } from "@/components/section-card";
 import { SignaturePermissionToggle } from "@/components/signature-permission-toggle";
 import { TemplateEditor } from "@/components/template-editor";
@@ -243,7 +244,7 @@ export default async function EmailTemplatesPage() {
                       </label>
                       <label className={labelCls}>
                         Phone
-                        <input name="phone" defaultValue={s.phone ?? ""} className={input} />
+                        <PhoneInput name="phone" defaultValue={s.phone ?? ""} className={input} />
                       </label>
                       <button type="submit" className={`${btn} self-start sm:col-span-2`}>
                         Save
@@ -284,7 +285,7 @@ export default async function EmailTemplatesPage() {
               </label>
               <label className={labelCls}>
                 Phone
-                <input name="phone" placeholder="(312) 555-0148" className={input} />
+                <PhoneInput name="phone" placeholder="(312) 555-0148" className={input} />
               </label>
               <button type="submit" className={`${btn} self-start sm:col-span-2`}>
                 Add signature block

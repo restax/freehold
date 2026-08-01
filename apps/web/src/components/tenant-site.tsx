@@ -1,4 +1,5 @@
 import { CheckCircle, EnvelopeSimple, Phone } from "@phosphor-icons/react/dist/ssr";
+import { PhoneInput } from "@/components/phone-input";
 import type { TenantSiteConfig } from "@/lib/site-config";
 import { siteMenu } from "@/lib/site-menu";
 
@@ -245,7 +246,7 @@ export function TenantSiteView({
                     </label>
                     <label className={labelCls}>
                       Phone
-                      <input name="phone" className={inputCls} />
+                      <PhoneInput name="phone" className={inputCls} />
                     </label>
                   </div>
                   <label className={labelCls}>

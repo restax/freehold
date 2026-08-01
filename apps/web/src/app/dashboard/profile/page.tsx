@@ -3,6 +3,7 @@ import { EnvelopeSimple } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { Avatar } from "@/components/avatar";
 import { Badge } from "@/components/badges";
+import { PhoneInput } from "@/components/phone-input";
 import { SectionCard } from "@/components/section-card";
 import { addLicense, deleteLicense } from "@/lib/actions/licenses";
 import { disconnectNylas } from "@/lib/actions/nylas";
@@ -151,9 +152,8 @@ export default async function ProfilePage({
             </label>
             <label className={label}>
               Phone
-              <input
+              <PhoneInput
                 name="phone"
-                type="tel"
                 defaultValue={user.phone ?? ""}
                 placeholder="(312) 555-0148"
                 className={input}

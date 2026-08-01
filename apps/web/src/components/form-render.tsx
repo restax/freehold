@@ -1,3 +1,4 @@
+import { PhoneInput } from "@/components/phone-input";
 import {
   type FormCell,
   type FormField,
@@ -104,7 +105,7 @@ function FieldInput({ field, defaultValue }: { field: FormField; defaultValue?: 
             className={inputCls}
             aria-label={`${field.label} — email`}
           />
-          <input
+          <PhoneInput
             name={`${name}.phone`}
             placeholder="Phone"
             defaultValue={p.phone}
@@ -115,20 +116,13 @@ function FieldInput({ field, defaultValue }: { field: FormField; defaultValue?: 
       );
     }
     default:
+      if (field.type === "tel") {
+        return <PhoneInput {...common} defaultValue={asString} />;
+      }
       return (
         <input
           {...common}
-          type={
-            field.type === "email"
-              ? "email"
-              : field.type === "tel"
-                ? "tel"
-                : field.type === "date"
-                  ? "date"
-                  : field.type === "number"
-                    ? "text"
-                    : "text"
-          }
+          type={field.type === "email" ? "email" : field.type === "date" ? "date" : "text"}
           inputMode={field.type === "number" ? "numeric" : undefined}
           defaultValue={asString}
         />

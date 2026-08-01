@@ -1,6 +1,7 @@
 import { prisma, withTenant } from "@freehold/db";
 import { ContactEmailField } from "@/components/contact-email-field";
 import { PendingButton } from "@/components/pending-button";
+import { PhoneInput } from "@/components/phone-input";
 import { VendorOrderThread } from "@/components/vendor-order-thread";
 import { sendOrderMessageTC } from "@/lib/actions/vendor-order-messages";
 import {
@@ -413,7 +414,7 @@ function OrderContextFields({
       </label>
       <label className="flex flex-col gap-1 text-sm">
         Your callback number
-        <input name="requesterPhone" type="tel" placeholder="(555) 555-1234" className={field} />
+        <PhoneInput name="requesterPhone" placeholder="(312) 555-0148" className={field} />
       </label>
       <label className="flex flex-col gap-1 text-sm">
         Bill to
@@ -435,12 +436,7 @@ function OrderContextFields({
       </label>
       <label className="flex flex-col gap-1 text-sm">
         Billing phone
-        <input
-          name="billingPhone"
-          type="tel"
-          defaultValue={billing.phone ?? ""}
-          className={field}
-        />
+        <PhoneInput name="billingPhone" defaultValue={billing.phone ?? ""} className={field} />
       </label>
     </fieldset>
   );

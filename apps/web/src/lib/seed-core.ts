@@ -214,7 +214,7 @@ export async function seedTenantData(tenantId: string, userId: string) {
         name: "Jordan Bell (Sample)",
         category: "Buyer",
         email: "sample.buyer@freeholdtc.dev",
-        phone: "555-0101",
+        phone: "(312) 555-0101",
         isSample: true,
       },
     });
@@ -224,7 +224,7 @@ export async function seedTenantData(tenantId: string, userId: string) {
         name: "Casey Rivera (Sample)",
         category: "Agent",
         email: "sample.agent@freeholdtc.dev",
-        phone: "555-0102",
+        phone: "(217) 555-0102",
         rating: 5,
         isSample: true,
       },
@@ -235,7 +235,7 @@ export async function seedTenantData(tenantId: string, userId: string) {
         name: "Morgan Lee (Sample)",
         category: "Lender",
         email: "sample.lender@freeholdtc.dev",
-        phone: "555-0103",
+        phone: "(312) 555-0103",
         isSample: true,
       },
     });
@@ -245,7 +245,7 @@ export async function seedTenantData(tenantId: string, userId: string) {
         name: "Alexis Chen (Sample)",
         category: "Title",
         email: "sample.title@freeholdtc.dev",
-        phone: "555-0104",
+        phone: "(872) 555-0104",
         isSample: true,
       },
     });

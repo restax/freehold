@@ -8,6 +8,7 @@ import {
   UsersThree,
 } from "@phosphor-icons/react/dist/ssr";
 import { MultiSelect } from "@/components/multi-select";
+import { PhoneInput } from "@/components/phone-input";
 import {
   type Address,
   GRADE_CADENCE,
@@ -125,14 +126,18 @@ function PersonBlock({
             <Phone size={13} className="text-stone-400" aria-hidden />
             Cell
           </span>
-          <input name={`${prefix}Cell`} defaultValue={f("cell")} className={fieldCls} />
+          <PhoneInput name={`${prefix}Cell`} defaultValue={f("cell")} className={fieldCls} />
         </label>
         <label className={label}>
           <span className="flex items-center gap-1.5">
             <Phone size={13} className="text-stone-400" aria-hidden />
             Work phone
           </span>
-          <input name={`${prefix}WorkPhone`} defaultValue={f("workPhone")} className={fieldCls} />
+          <PhoneInput
+            name={`${prefix}WorkPhone`}
+            defaultValue={f("workPhone")}
+            className={fieldCls}
+          />
         </label>
         <label className={label}>
           <span className="flex items-center gap-1.5">
@@ -169,7 +174,7 @@ function PersonBlock({
               <Phone size={13} className="text-stone-400" aria-hidden />
               Additional phone
             </span>
-            <input name="extraPhone" defaultValue="" className={fieldCls} />
+            <PhoneInput name="extraPhone" defaultValue="" className={fieldCls} />
           </label>
         </div>
       )}

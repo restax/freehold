@@ -17,6 +17,7 @@ import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DangerDelete } from "@/components/danger-delete";
 import { HandbookGradeControl } from "@/components/handbook-grade";
 import { HandbookNotes } from "@/components/handbook-notes";
+import { PhoneInput } from "@/components/phone-input";
 import { RevealCredential } from "@/components/reveal-credential";
 import { RevealSkyslope } from "@/components/reveal-skyslope";
 import { SectionCard } from "@/components/section-card";
@@ -304,7 +305,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             </label>
             <label className={labelCls}>
               Phone
-              <input name="phone" defaultValue={client.phone ?? ""} className={input} />
+              <PhoneInput name="phone" defaultValue={client.phone ?? ""} className={input} />
             </label>
             {/* One field, so it takes the whole one-line address rather than
                 splitting into city/state/zip columns this form doesn't have. */}
@@ -606,7 +607,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
               </label>
               <label className={labelCls}>
                 Phone
-                <input name="phone" className={`${input} w-36`} />
+                <PhoneInput name="phone" className={`${input} w-36`} />
               </label>
               <button type="submit" className={btn}>
                 Add to roster

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { PhoneInput } from "@/components/phone-input";
 import { registerVendor } from "@/lib/actions/vendor";
 import { authClient } from "@/lib/auth-client";
 
@@ -75,7 +76,7 @@ export default function VendorRegisterPage() {
       </label>
       <label className="flex flex-col gap-1 text-sm">
         Phone (optional)
-        <input name="phone" className={field} />
+        <PhoneInput name="phone" className={field} />
       </label>
 
       <hr className="my-1 border-stone-100" />

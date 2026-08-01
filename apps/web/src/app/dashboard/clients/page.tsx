@@ -5,6 +5,7 @@ import { Fragment } from "react";
 import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { Badge } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
+import { PhoneInput } from "@/components/phone-input";
 import { SectionCard } from "@/components/section-card";
 import { createClient, updateClientEsign } from "@/lib/actions/clients";
 import {
@@ -191,7 +192,7 @@ export default async function ClientsPage({
                   </label>
                   <label className={label}>
                     Phone
-                    <input name="phone" className={input} />
+                    <PhoneInput name="phone" className={input} />
                   </label>
                   <EsignField />
                 </div>
@@ -239,7 +240,7 @@ export default async function ClientsPage({
                   </label>
                   <label className={label}>
                     Office phone
-                    <input name="phone" className={input} />
+                    <PhoneInput name="phone" className={input} />
                   </label>
                   <label className={label}>
                     Office email
@@ -305,7 +306,7 @@ export default async function ClientsPage({
                 </label>
                 <label className={label}>
                   Phone
-                  <input name="phone" className={input} />
+                  <PhoneInput name="phone" className={input} />
                 </label>
                 <EsignField />
               </div>

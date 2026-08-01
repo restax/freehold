@@ -1,6 +1,7 @@
 import { prisma } from "@freehold/db";
 import Link from "next/link";
 import QRCode from "qrcode";
+import { PhoneInput } from "@/components/phone-input";
 import { SectionCard } from "@/components/section-card";
 import { saveSiteConfig } from "@/lib/actions/website";
 import { parseSiteConfig, tenantSiteUrl } from "@/lib/site-config";
@@ -67,7 +68,7 @@ export default async function WebsitePage() {
             </label>
             <label className={labelCls}>
               Public phone
-              <input name="phone" defaultValue={site.phone ?? ""} className={input} />
+              <PhoneInput name="phone" defaultValue={site.phone ?? ""} className={input} />
             </label>
           </div>
           <label className={labelCls}>

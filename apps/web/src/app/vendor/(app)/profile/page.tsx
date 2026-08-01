@@ -1,6 +1,7 @@
 import { prisma } from "@freehold/db";
 import { adPriceConfigured, billingEnabled } from "@freehold/ee-billing";
 import { notFound } from "next/navigation";
+import { PhoneInput } from "@/components/phone-input";
 import { updateVendorProfile } from "@/lib/actions/vendor";
 import { createVendorAd, openAdBilling, startTrialAd } from "@/lib/actions/vendor-ads";
 import {
@@ -128,7 +129,7 @@ export default async function VendorProfilePage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm">
               Public phone
-              <input
+              <PhoneInput
                 name="publicPhone"
                 defaultValue={vendor.publicPhone ?? vendor.phone ?? ""}
                 className={field}
@@ -163,7 +164,11 @@ export default async function VendorProfilePage() {
           </legend>
           <label className="flex flex-col gap-1 text-sm">
             Client phone
-            <input name="clientPhone" defaultValue={vendor.clientPhone ?? ""} className={field} />
+            <PhoneInput
+              name="clientPhone"
+              defaultValue={vendor.clientPhone ?? ""}
+              className={field}
+            />
           </label>
           <label className="flex flex-col gap-1 text-sm">
             Client bio
