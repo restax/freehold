@@ -4,6 +4,7 @@ import { docusignAdapter } from "@freehold/integrations";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { CopyButton } from "@/components/copy-button";
+import { McpConnectorPanel } from "@/components/mcp-connector-panel";
 import { createSkillKey, readNewSkillKey } from "@/lib/actions/api-keys";
 import { connectErpnext, disconnectErpnext } from "@/lib/actions/erpnext";
 import { connectDocumenso, disconnectDocumenso } from "@/lib/actions/esign-config";
@@ -56,7 +57,7 @@ export default async function IntegrationsPage({
 }: {
   searchParams: Promise<{ storageOk?: string; storageError?: string; erpnextError?: string }>;
 }) {
-  const { tenantId, isAdmin } = await requireAdminTenant();
+  const { tenantId, isAdmin, userId } = await requireAdminTenant();
   const { storageOk, storageError, erpnextError } = await searchParams;
   const newSkillKey = await readNewSkillKey();
 
@@ -66,8 +67,9 @@ export default async function IntegrationsPage({
   ]);
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: tenantId },
-    select: { slug: true },
+    select: { slug: true, mcpEnabled: true },
   });
+  const mcpEnabled = org.mcpEnabled;
   const documenso = await documensoStatus(tenantId);
   const fub = await fubStatus(tenantId);
   const twenty = await twentyStatus(tenantId);
@@ -349,6 +351,14 @@ export default async function IntegrationsPage({
           </button>
         </form>
       ),
+    },
+    {
+      name: "Claude connector",
+      mono: "AI",
+      tone: mcpEnabled ? "active" : "setup",
+      status: mcpEnabled ? "On" : "Off",
+      body: "Connect this workspace to Claude directly, so you can ask about your files in any Claude conversation without pasting anything. Each person signs in with their own account and sees only what their role already lets them see. Off until the workspace owner turns it on.",
+      extra: <McpConnectorPanel tenantId={tenantId} userId={userId} isAdmin={isAdmin} />,
     },
     {
       name: "Claude Skill",

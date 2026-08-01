@@ -4,6 +4,7 @@ import { Avatar } from "@/components/avatar";
 import { MemberHandbookNotes } from "@/components/handbook-notes";
 import { SectionCard } from "@/components/section-card";
 import { addLicense, deleteLicense } from "@/lib/actions/licenses";
+import { updateMemberMcpRole } from "@/lib/actions/mcp-settings";
 import {
   cancelInvitation,
   inviteMember,
@@ -15,6 +16,7 @@ import {
 import { BILLING_ROLE_OPTIONS, billingRoleLabel } from "@/lib/billing-access";
 import { fmtDate } from "@/lib/format";
 import { licenseHealth } from "@/lib/licenses";
+import { MCP_ROLE_OPTIONS, mcpRoleLabel } from "@/lib/mcp-access";
 import { handbookState, seatState } from "@/lib/plans";
 import { requireAdminTenant } from "@/lib/tenant";
 import { btn, btnGhost, input, label, tableWrap, td, th, trHover } from "@/lib/ui";
@@ -49,6 +51,12 @@ const tierLabel = (t: number | null, role: string) =>
 
 export default async function TeamPage() {
   const { tenantId, userId, isAdmin } = await requireAdminTenant();
+  // The connector's master switch, so the Claude column can say "off" rather
+  // than offering a grant that would have no effect.
+  const { mcpEnabled } = await prisma.organization.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: { mcpEnabled: true },
+  });
   const [members, invitations, licenses] = await Promise.all([
     prisma.member.findMany({
       where: { organizationId: tenantId },
@@ -124,6 +132,7 @@ export default async function TeamPage() {
                 <th className={th}>Role</th>
                 <th className={th}>Compliance review</th>
                 <th className={th}>Billing</th>
+                <th className={th}>Claude</th>
                 <th className={th} />
               </tr>
             </thead>
@@ -236,6 +245,37 @@ export default async function TeamPage() {
                           className={`${input} px-2 py-1 text-xs`}
                         >
                           {BILLING_ROLE_OPTIONS.map(([value, text]) => (
+                            <option key={value} value={value}>
+                              {text}
+                            </option>
+                          ))}
+                        </select>
+                        <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                          Save
+                        </button>
+                      </form>
+                    )}
+                  </td>
+                  <td className={td}>
+                    {!mcpEnabled ? (
+                      // No point offering a per-person grant while the whole
+                      // connector is off — it would read as broken.
+                      <span className="text-stone-400">Connector off</span>
+                    ) : m.role === "owner" ? (
+                      <span className="text-stone-500">Full authority</span>
+                    ) : !isAdmin ? (
+                      <span className="text-stone-500">
+                        {mcpRoleLabel(m.role, m.mcpRole, mcpEnabled)}
+                      </span>
+                    ) : (
+                      <form action={updateMemberMcpRole} className="flex items-center gap-1">
+                        <input type="hidden" name="memberId" value={m.id} />
+                        <select
+                          name="mcpRole"
+                          defaultValue={m.mcpRole ?? "default"}
+                          className={`${input} px-2 py-1 text-xs`}
+                        >
+                          {MCP_ROLE_OPTIONS.map(([value, text]) => (
                             <option key={value} value={value}>
                               {text}
                             </option>
