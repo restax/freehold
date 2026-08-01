@@ -58,6 +58,10 @@ model User {
   vendorUsers            VendorUser[]
   clientReviews          ClientReview[]
   nylasGrant             NylasGrant?
+  oauthApplications      OauthApplication[]
+  oauthAccessTokens      OauthAccessToken[]
+  oauthConsents          OauthConsent[]
+  mcpConnections         McpConnection[]
 
   @@map("user")
 }
@@ -604,6 +608,129 @@ model Verification {
   @@map("verification")
 }
 
+// --- Better Auth mcp plugin (the Claude connector's OAuth server) ---
+//
+// Freehold is the OAuth *authorization server* for its own MCP connector, so
+// Claude can connect a workspace without anyone handling a raw key. These
+// three tables are Better Auth's; the model and field names are fixed by the
+// plugin's adapter lookups and must not be renamed. Note the capitalisation:
+// `Oauth…`, not `OAuth…`, because Prisma exposes the client property as
+// `prisma.oauthApplication` and that string is what the plugin asks for.
+//
+// Root tables with no RLS, like User and ApiKey: the bearer token IS the
+// capability and has to be resolved before any tenant context exists. What
+// the token may then *do* is decided per call against the live Member row
+// (lib/mcp-access.ts), not baked in at mint time.
+
+/// One registered OAuth client. Claude registers itself here through Dynamic
+/// Client Registration, which means a new row per fresh connection rather
+/// than one row per product — Anthropic's own docs warn about the resulting
+/// growth, so these are pruned on the nightly cron once no live token
+/// references them.
+model OauthApplication {
+  id           String    @id
+  name         String
+  icon         String?
+  metadata     String?
+  clientId     String    @unique @map("client_id")
+  clientSecret String?   @map("client_secret")
+  redirectUrls String    @map("redirect_urls")
+  type         String
+  disabled     Boolean?  @default(false)
+  /// Who registered it. Null for DCR clients, which register before anyone
+  /// has logged in — the user is bound at consent, not at registration.
+  userId       String?   @map("user_id")
+  user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @map("created_at")
+  updatedAt    DateTime  @map("updated_at")
+
+  accessTokens OauthAccessToken[]
+  consents     OauthConsent[]
+
+  @@index([userId])
+  @@map("oauth_application")
+}
+
+/// A live connection between one Claude client and one Freehold user. This is
+/// the row the Settings page lists as a connected session and deletes on
+/// revoke; dropping it is what actually cuts Claude off.
+model OauthAccessToken {
+  id                     String           @id
+  accessToken            String           @unique @map("access_token")
+  refreshToken           String           @unique @map("refresh_token")
+  accessTokenExpiresAt   DateTime         @map("access_token_expires_at")
+  refreshTokenExpiresAt  DateTime         @map("refresh_token_expires_at")
+  clientId               String           @map("client_id")
+  client                 OauthApplication @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  userId                 String?          @map("user_id")
+  user                   User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scopes                 String
+  createdAt              DateTime         @map("created_at")
+  updatedAt              DateTime         @map("updated_at")
+
+  @@index([clientId])
+  @@index([userId])
+  @@map("oauth_access_token")
+}
+
+/// Remembers that a user already approved a client for a set of scopes, so
+/// reconnecting doesn't re-prompt.
+model OauthConsent {
+  id           String           @id
+  clientId     String           @map("client_id")
+  client       OauthApplication @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  userId       String           @map("user_id")
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scopes       String
+  consentGiven Boolean          @map("consent_given")
+  createdAt    DateTime         @map("created_at")
+  updatedAt    DateTime         @map("updated_at")
+
+  @@index([clientId])
+  @@index([userId])
+  @@map("oauth_consent")
+}
+
+/// Which workspace a given Claude connection speaks for.
+///
+/// An OAuth token identifies a *person*, and a coordinator can belong to
+/// several workspaces — so the token alone doesn't say whose files Claude is
+/// allowed to read. The consent screen asks, and the answer lands here.
+/// Deliberately ours rather than a column on Better Auth's oauth_access_token:
+/// that table belongs to the plugin and may be migrated out from under us.
+///
+/// No RLS, following api_key and portal_link: this row has to be resolved
+/// *before* any tenant context exists, since resolving it is what establishes
+/// the tenant. Every read is keyed on the userId the bearer token proved, and
+/// the tenant it names is then used to scope everything downstream.
+///
+/// `revokedAt` is set by the Settings page and by the workspace kill switch.
+/// Rows are kept rather than deleted so a revoked connection stays visible as
+/// history — "Claude had access between these dates" is the question someone
+/// asks after the fact, and a deleted row can't answer it.
+model McpConnection {
+  id         String       @id @default(uuid())
+  tenantId   String       @map("tenant_id")
+  tenant     Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId     String       @map("user_id")
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The OAuth client this grant belongs to. Not a foreign key to
+  /// oauth_application: Dynamic Client Registration rows get pruned once no
+  /// live token references them, and that cleanup must not take the audit
+  /// trail with it.
+  clientId   String       @map("client_id")
+  /// What the client called itself at registration ("Claude"), kept so the
+  /// Settings list stays readable after the client row is pruned.
+  clientName String       @map("client_name")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  lastUsedAt DateTime?    @map("last_used_at")
+  revokedAt  DateTime?    @map("revoked_at")
+
+  @@unique([userId, clientId])
+  @@index([tenantId])
+  @@map("mcp_connection")
+}
+
 // --- Better Auth organization plugin (Organization = Freehold tenant) ---
 
 /// Cloud plan tier. Self-hosted installs stay on FREE semantics-wise but are
@@ -778,6 +905,7 @@ model Organization {
   clientReviews           ClientReview[]
   emails                  Email[]
   apiKeys                 ApiKey[]
+  mcpConnections          McpConnection[]
   invoices                Invoice[]
   invoiceLines            InvoiceLine[]
   invoicePayments         InvoicePayment[]

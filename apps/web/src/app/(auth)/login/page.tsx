@@ -5,9 +5,26 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 
+/**
+ * Where to land after a successful sign-in.
+ *
+ * Only same-site absolute paths are honoured. A `next` that names another
+ * host — or sneaks one in as "//evil.example" or "/\evil.example", both of
+ * which browsers resolve as protocol-relative — is discarded in favour of the
+ * dashboard. This parameter is reachable by anyone who can get a person to
+ * click a link, so it is an open-redirect hole if taken at face value.
+ */
+function safeNext(next: string | null): string {
+  if (!next?.startsWith("/")) return "/dashboard";
+  if (next.startsWith("//") || next.startsWith("/\\")) return "/dashboard";
+  return next;
+}
+
 function LoginForm() {
   const router = useRouter();
-  const verified = useSearchParams().get("verified") === "1";
+  const params = useSearchParams();
+  const verified = params.get("verified") === "1";
+  const next = safeNext(params.get("next"));
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +58,7 @@ function LoginForm() {
       setBusy(false);
       return;
     }
-    router.push("/dashboard");
+    router.push(next);
     router.refresh();
   }
 

@@ -2,7 +2,8 @@ import { prisma } from "@freehold/db";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError } from "better-auth/api";
-import { emailOTP, organization, twoFactor, username } from "better-auth/plugins";
+import { emailOTP, mcp, organization, twoFactor, username } from "better-auth/plugins";
+import { MCP_SCOPES, mcpResourceUrl } from "@/lib/mcp";
 import { adminAlert } from "@/lib/notify";
 import { platformEmailEnabled, sendPlatformEmail } from "@/lib/platform-email";
 import {
@@ -64,6 +65,35 @@ export const auth = betterAuth({
       minUsernameLength: USERNAME_MIN,
       maxUsernameLength: USERNAME_MAX,
       usernameValidator: (value) => usernameFormatError(normalizeUsername(value)) === null,
+    }),
+    // Freehold is its own OAuth authorization server, so a TC can connect
+    // their workspace to Claude without anyone handling a raw API key. The
+    // plugin serves discovery, Dynamic Client Registration, /authorize and
+    // /token under /api/auth/mcp/*; the MCP endpoint itself is /api/mcp.
+    //
+    // `resource` is set explicitly and must not be removed: the plugin would
+    // otherwise default it to the bare origin, and Anthropic requires the
+    // protected-resource metadata's `resource` to equal the connector URL the
+    // user actually typed, path included.
+    mcp({
+      loginPage: "/login",
+      resource: mcpResourceUrl(),
+      oidcConfig: {
+        // Required by the underlying OIDC options type. The mcp plugin
+        // overwrites it with the `loginPage` above, so keep the two equal —
+        // a mismatch here would be silently ignored, not flagged.
+        loginPage: "/login",
+        // Claude registers itself on each fresh connection rather than being
+        // pre-registered, so DCR has to be open. It is not an unauthenticated
+        // door into anything: registering a client grants nothing until a
+        // real person signs in and approves it on the consent screen.
+        allowDynamicClientRegistration: true,
+        consentPage: "/oauth/consent",
+        scopes: MCP_SCOPES,
+        // Anthropic sends S256 on every authorization request; accepting the
+        // plaintext challenge would only widen the attack surface.
+        allowPlainCodeChallengeMethod: false,
+      },
     }),
     emailOTP({
       otpLength: 6,
