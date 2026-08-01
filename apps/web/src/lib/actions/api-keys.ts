@@ -28,10 +28,23 @@ export async function readNewSkillKey(): Promise<string | null> {
  * mechanics as createApiKey, but named for what it is and surfaced back on
  * the Integrations card (once, via short-lived cookie) inside a paste-ready
  * Claude prompt.
+ *
+ * Gated on the same workspace switch as the connector. The switch means "this
+ * workspace allows an AI assistant to reach its data", and minting a key whose
+ * whole purpose is to be pasted into a chat is exactly that — so an owner who
+ * has said no must not be able to be overridden by an admin one card down.
+ *
+ * Checked here and not only in the UI: hiding a button is a presentation
+ * choice, and a server action is reachable by anyone who can post to it.
  */
 export async function createSkillKey(formData: FormData) {
   const { tenantId, isAdmin } = await requireAdminTenant();
   if (!isAdmin) return;
+  const org = await prisma.organization.findUnique({
+    where: { id: tenantId },
+    select: { mcpEnabled: true },
+  });
+  if (!org?.mcpEnabled) return;
   str(formData, "noop"); // plain form post, no payload
   const secret = `fh_live_${randomBytes(24).toString("hex")}`;
   const hash = createHash("sha256").update(secret).digest("hex");

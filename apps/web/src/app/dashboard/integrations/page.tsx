@@ -363,12 +363,24 @@ export default async function IntegrationsPage({
     {
       name: "Claude Skill",
       mono: "AI",
-      tone: apiKeys > 0 ? "active" : "setup",
-      status: apiKeys > 0 ? "Ready" : "One-click setup",
+      // The gate wins over "Ready": a card that reads Ready while its body
+      // says the workspace has it switched off is telling two stories.
+      tone: !mcpEnabled ? "setup" : apiKeys > 0 ? "active" : "setup",
+      status: !mcpEnabled ? "Off" : apiKeys > 0 ? "Ready" : "One-click setup",
       body: "Ask Claude about your own deals — what's closing this week, what's overdue, how a client is doing. One click creates your skill, then you paste a single prompt into Claude.",
       extra: (
         <div className="mt-3 flex flex-col gap-3">
-          {newSkillKey ? (
+          {/* Same gate as the connector, and it comes first: this prompt
+              carries a live key that is meant to be pasted into a chat, so
+              while the workspace says no AI access there is nothing here to
+              set up and nothing to copy — including a prompt minted moments
+              before the switch was turned off. */}
+          {!mcpEnabled ? (
+            <p className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs leading-relaxed text-stone-600">
+              Turned off for this workspace. The Claude connector card above controls whether an AI
+              assistant may reach this workspace, and it covers this too — turn it on there first.
+            </p>
+          ) : newSkillKey ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
               <p className="text-xs font-medium text-amber-800">
                 Your skill is ready. Copy this prompt and paste it into any Claude chat (or save it
