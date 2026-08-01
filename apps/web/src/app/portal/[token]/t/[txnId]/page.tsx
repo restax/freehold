@@ -11,6 +11,7 @@ import { StatusBadge } from "@/components/badges";
 import { portalVars, tenantAppearance } from "@/lib/appearance";
 import { fmtDate, fmtMoney, ROLE_LABEL } from "@/lib/format";
 import { resolveAgentPortalTxn } from "@/lib/portal";
+import { portalGroups } from "@/lib/portal-attachments";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,10 @@ export default async function AgentPortalTxnPage({
   const appearance = await tenantAppearance(link.tenantId);
   const today = fmtDate(new Date());
   const doneCount = txn.tasks.filter((t) => t.status === "DONE").length;
+  // What this client may see, grouped the way the coordinator filed it. The
+  // rules for "may see" live in lib/portal-attachments.ts.
+  const fileGroups = portalGroups(txn.attachments, txn.attachmentFolders, "agent");
+  const sharedCount = fileGroups.reduce((n, g) => n + g.shared.length, 0);
 
   return (
     <main
@@ -136,7 +141,7 @@ export default async function AgentPortalTxnPage({
               <FileText size={17} weight="bold" className="text-brand-600" aria-hidden />
               Files
             </h2>
-            {txn.documents.length > 0 && (
+            {sharedCount > 0 && (
               <a
                 href={`/portal/${token}/t/${txn.id}/zip`}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-stone-700"
@@ -146,26 +151,54 @@ export default async function AgentPortalTxnPage({
               </a>
             )}
           </div>
-          {txn.documents.length === 0 ? (
+          {fileGroups.length === 0 ? (
             <p className="text-sm text-stone-500">No files shared on this transaction yet.</p>
           ) : (
-            <ul className="flex flex-col gap-1 text-sm">
-              {txn.documents.map((d) => (
-                <li key={d.id}>
-                  <a
-                    href={`/portal/${link.token}/documents/${d.id}`}
-                    className="text-brand-600 hover:underline"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {d.filename}
-                  </a>{" "}
-                  <span className="text-xs text-stone-400">
-                    ({(d.sizeBytes / 1024).toFixed(0)} KB)
-                  </span>
-                </li>
+            <div className="flex flex-col gap-4">
+              {fileGroups.map((group) => (
+                <div key={group.folderId ?? "loose"}>
+                  {/* The heading is dropped when everything sits loose —
+                      one group called "Files" under a card already called
+                      "Files" is noise. */}
+                  {(fileGroups.length > 1 || group.folderId) && (
+                    <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-stone-400">
+                      {group.name}
+                    </h3>
+                  )}
+                  <ul className="flex flex-col gap-1 text-sm">
+                    {group.shared.map((item) => (
+                      <li key={item.id}>
+                        <a
+                          href={`/portal/${link.token}/documents/${item.document?.id}`}
+                          className="text-brand-600 hover:underline"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {item.document?.filename}
+                        </a>{" "}
+                        <span className="text-xs text-stone-400">
+                          ({((item.document?.sizeBytes ?? 0) / 1024).toFixed(0)} KB)
+                        </span>
+                      </li>
+                    ))}
+                    {/* What the file is still waiting on, where the
+                        coordinator chose to say so. Named plainly rather
+                        than styled as a warning: this is usually a nudge,
+                        not a problem. */}
+                    {group.awaiting.map((item) => (
+                      <li key={item.id} className="flex items-center gap-2 text-stone-500">
+                        <span
+                          aria-hidden
+                          className="inline-block h-1.5 w-1.5 shrink-0 rounded-full border border-stone-300"
+                        />
+                        {item.label}
+                        <span className="text-xs text-stone-400">still needed</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </section>
 

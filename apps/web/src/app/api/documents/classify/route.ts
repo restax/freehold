@@ -2,6 +2,7 @@ import { withTenant } from "@freehold/db";
 import { NextResponse } from "next/server";
 import { classifyDocument } from "@/lib/ai/classify";
 import { logAiUsage } from "@/lib/ai/usage";
+import { createRowForDocument } from "@/lib/attachment-rows";
 import { transactionHasPro } from "@/lib/plans";
 import { putObject } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
@@ -20,7 +21,7 @@ const MAX_BYTES = 10 * 1024 * 1024;
  * the file is still saved and we just return no suggestion.
  */
 export async function POST(req: Request) {
-  const { tenantId } = await requireTenant();
+  const { tenantId, session } = await requireTenant();
   const form = await req.formData().catch(() => null);
   const file = form?.get("file");
   const transactionId = String(form?.get("transactionId") ?? "");
@@ -31,6 +32,7 @@ export async function POST(req: Request) {
   const bytes = Buffer.from(await file.arrayBuffer());
   const filename = file.name || "document.pdf";
   const contentType = file.type || "application/pdf";
+  const uploaderName = session.user.name ?? session.user.email;
 
   // The transaction must belong to this tenant; store the bytes and the row.
   const { document, missingSlots, proEnabled } = await withTenant(tenantId, async (tx) => {
@@ -56,10 +58,23 @@ export async function POST(req: Request) {
         data: stored.data,
         storageKey: stored.storageKey,
         storageProvider: stored.storageProvider,
+        uploadedById: session.user.id,
+        uploadedByName: uploaderName,
       },
       select: { id: true },
     });
-    const missing = await tx.transactionRequiredDocument.findMany({
+    // The dropped file gets a row immediately, so it is in the list whether or
+    // not the coordinator ever acts on the suggestion. Accepting a suggestion
+    // moves the file onto the suggested row and clears this one.
+    await createRowForDocument(tx, {
+      tenantId,
+      transactionId,
+      documentId: document.id,
+      label: filename,
+      createdById: session.user.id,
+      createdByName: uploaderName,
+    });
+    const missing = await tx.transactionAttachment.findMany({
       where: { transactionId, documentId: null },
       orderBy: { sortOrder: "asc" },
       select: { id: true, label: true },

@@ -5,9 +5,9 @@ import { dependentDueDate, instantiatePlan, type PlanTaskTemplate } from "@freeh
 import { revalidatePath } from "next/cache";
 import { activityTitle, logActivity } from "@/lib/activity";
 import { resolveAssigneeRole } from "@/lib/assignee-roles";
+import { seedAttachmentRows } from "@/lib/attachment-rows";
 import { fireTaskTemplateEmail } from "@/lib/auto-emails";
 import { confirmed, dateOnly, oneOf, str } from "@/lib/forms";
-import { seedRequiredDocuments } from "@/lib/required-documents";
 import { guestMaySeeTransaction, requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
 
@@ -314,14 +314,16 @@ export async function applyActionPlan(formData: FormData) {
       }
     }
 
-    // Seed the required-documents checklist from the plan, skipping labels the
-    // file already lists (applying twice, or overlapping plans, shouldn't
-    // duplicate a slot).
-    await seedRequiredDocuments(
+    // Seed the expected documents from the plan, skipping labels the file
+    // already lists (applying twice, or overlapping plans, shouldn't duplicate
+    // a row).
+    await seedAttachmentRows(
       tx,
       tenantId,
       transactionId,
-      [...plan.documents].sort((a, b) => a.sortOrder - b.sortOrder).map((d) => d.label),
+      [...plan.documents]
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((d) => ({ label: d.label })),
     );
     return plan.name;
   });

@@ -710,7 +710,9 @@ model Organization {
   attachmentTemplateItems AttachmentTemplateItem[]
   dateTemplates           DateTemplate[]
   dateTemplateItems       DateTemplateItem[]
-  requiredDocuments       TransactionRequiredDocument[]
+  attachments             TransactionAttachment[]
+  attachmentFolders       AttachmentFolder[]
+  attachmentNotes         AttachmentNote[]
   complianceChecklists    ComplianceChecklist[]
   complianceItems         ComplianceItem[]
   transactionCompliances  TransactionCompliance[]
@@ -1633,7 +1635,8 @@ model Transaction {
   proEnabledBy           String?                       @map("pro_enabled_by")
   isSample               Boolean                       @default(false)
   parties                TransactionParty[]
-  requiredDocuments      TransactionRequiredDocument[]
+  attachments            TransactionAttachment[]
+  attachmentFolders      AttachmentFolder[]
   tasks                  Task[]
   documents              Document[]
   extractions            ContractExtraction[]
@@ -2179,7 +2182,7 @@ model ActionPlan {
 }
 
 /// A document a plan expects on the file — the checklist template. Applying the
-/// plan seeds one TransactionRequiredDocument per row alongside the tasks.
+/// plan seeds one TransactionAttachment per row alongside the tasks.
 model ActionPlanDocument {
   id           String       @id @default(uuid())
   tenantId     String       @map("tenant_id")
@@ -2260,7 +2263,7 @@ model TemplateGroup {
 
 /// A named, reusable list of documents a transaction should carry — the
 /// standalone version of what ActionPlanDocument seeds inline. Applying one
-/// (directly, or via a task template entry) seeds TransactionRequiredDocument
+/// (directly, or via a task template entry) seeds TransactionAttachment
 /// rows the same way.
 model AttachmentTemplate {
   id          String                   @id @default(uuid())
@@ -2290,6 +2293,10 @@ model AttachmentTemplateItem {
   label                String
   /// Optional items still ride along on the checklist but never block or nag.
   required             Boolean            @default(true)
+  /// Folder this item lands in when the template is applied. Matched by name
+  /// against the transaction's folders and created if absent, so one template
+  /// can lay out a whole filing structure. Null drops the row in ungrouped.
+  folderName           String?            @map("folder_name")
   /// Carries forward to the transaction's checklist slot when the template is
   /// applied — auto-reminders fire on a cadence until the slot is satisfied.
   remindEnabled        Boolean            @default(false) @map("remind_enabled")
@@ -2834,10 +2841,15 @@ model Document {
   /// (visibleToClient false); only the TC can promote it to the client.
   sourceOrderId   String?                       @map("source_order_id")
   sourceOrder     VendorOrder?                  @relation("OrderDocuments", fields: [sourceOrderId], references: [id], onDelete: SetNull)
+  /// Who put the file here. Denormalised alongside the id (the AuditLog
+  /// pattern) so the row still says who uploaded it after that person leaves
+  /// the workspace and their user row goes.
+  uploadedById    String?                       @map("uploaded_by_id")
+  uploadedByName  String?                       @map("uploaded_by_name")
   extractions     ContractExtraction[]
   envelopes       SignatureEnvelope[]
   complianceSlots ComplianceSlot[]
-  requiredSlots   TransactionRequiredDocument[]
+  attachments     TransactionAttachment[]
   emailedActivity TransactionActivity[]
   createdAt       DateTime                      @default(now())
 
@@ -2848,25 +2860,107 @@ model Document {
   @@map("document")
 }
 
-/// A slot on a transaction's required-documents checklist: an expected document
-/// (seeded from an applied plan, or added by hand) that is satisfied when a
-/// Document is linked to it. documentId null = still missing. Deleting the
-/// linked document just reopens the slot (SetNull), never the checklist item.
-model TransactionRequiredDocument {
-  id            String       @id @default(uuid())
-  tenantId      String       @map("tenant_id")
-  tenant        Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  transactionId String       @map("transaction_id")
-  transaction   Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+/// One row on a transaction's Attachments tab.
+///
+/// The row is the unit, and the file is optional — that inversion is the whole
+/// design. A row can be an expected document nobody has sent yet (documentId
+/// null), a file somebody dropped in with nothing expecting it, or an expected
+/// document that arrived. Previously only the first two existed, in two
+/// unrelated lists, which is why the tab read as three disconnected cards.
+///
+/// State is carried by nullable timestamps rather than an enum, so each answers
+/// "when", not just "whether":
+///   * completedAt — the row is satisfied. Independent of documentId: a
+///     disclosure signed in person is done with no file, and a file can be
+///     attached while the row still waits on a countersignature.
+///   * omittedAt   — not applicable to this deal. Keeps the row visible with
+///     its reason instead of deleting the history of having considered it.
+///
+/// Deleting the linked document empties the row (SetNull) rather than removing
+/// it — losing the file shouldn't lose the fact that the file was expected.
+model TransactionAttachment {
+  id            String            @id @default(uuid())
+  tenantId      String            @map("tenant_id")
+  tenant        Organization      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactionId String            @map("transaction_id")
+  transaction   Transaction       @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   label         String
-  documentId    String?      @map("document_id")
-  document      Document?    @relation(fields: [documentId], references: [id], onDelete: SetNull)
-  sortOrder     Int          @default(0) @map("sort_order")
-  createdAt     DateTime     @default(now())
+  documentId    String?           @map("document_id")
+  document      Document?         @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  folderId      String?           @map("folder_id")
+  folder        AttachmentFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  /// Required rows drive the "n of m received" count and the nags. A file
+  /// dropped in unprompted is not required — it's just here.
+  required      Boolean           @default(true)
+  completedAt   DateTime?         @map("completed_at")
+  omittedAt     DateTime?         @map("omitted_at")
+  omittedReason String?           @map("omitted_reason")
+  /// An attachment that lives somewhere else — a shared drive, a portal, an
+  /// MLS listing. Mutually exclusive with documentId in practice; the row
+  /// still counts toward completion.
+  webUrl        String?           @map("web_url")
+  /// Whether a row the file is still *waiting on* appears on the client
+  /// portal. Off by default and set per row: a checklist label is written
+  /// for the coordinator ("Seller's disclosure — chase Dana"), and pushing
+  /// the whole checklist at clients would leak internal process. A row that
+  /// already holds a document is governed by that document's own
+  /// visibleToClient instead — this only decides whether "still needed"
+  /// is something the client is told about.
+  visibleToClient Boolean         @default(false) @map("visible_to_client")
+  /// Per-party signature checkoff, shaped { "<partyRole>": "<ISO date>" }.
+  /// Deliberately not its own table: it is a handful of booleans that only
+  /// ever make sense in the context of this one row.
+  signatureState Json?            @map("signature_state")
+  createdById   String?           @map("created_by_id")
+  createdByName String?           @map("created_by_name")
+  notes         AttachmentNote[]
+  sortOrder     Int               @default(0) @map("sort_order")
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
 
   @@index([tenantId])
   @@index([transactionId])
-  @@map("transaction_required_document")
+  @@index([folderId])
+  @@map("transaction_attachment")
+}
+
+/// A folder on one transaction's Attachments tab ("Contract", "Listing").
+///
+/// Per-transaction rather than per-workspace: which folders a file needs
+/// depends on the deal, and a workspace-wide list would show every listing
+/// folder on every buy-side file. Templates seed them by name.
+model AttachmentFolder {
+  id            String                  @id @default(uuid())
+  tenantId      String                  @map("tenant_id")
+  tenant        Organization            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactionId String                  @map("transaction_id")
+  transaction   Transaction             @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  name          String
+  sortOrder     Int                     @default(0) @map("sort_order")
+  attachments   TransactionAttachment[]
+  createdAt     DateTime                @default(now())
+
+  @@unique([transactionId, name])
+  @@index([tenantId])
+  @@map("attachment_folder")
+}
+
+/// A comment on one attachment row — "waiting on the lender", "page 3 is
+/// unsigned". Internal to the workspace; never shown on a portal.
+model AttachmentNote {
+  id           String                @id @default(uuid())
+  tenantId     String                @map("tenant_id")
+  tenant       Organization          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  attachmentId String                @map("attachment_id")
+  attachment   TransactionAttachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+  body         String
+  authorId     String?               @map("author_id")
+  authorName   String?               @map("author_name")
+  createdAt    DateTime              @default(now())
+
+  @@index([tenantId])
+  @@index([attachmentId])
+  @@map("attachment_note")
 }
 
 /// One AI extraction run over a document. Nothing an extraction finds touches

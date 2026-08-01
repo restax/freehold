@@ -570,63 +570,6 @@ export async function removeTransactionParty(formData: FormData) {
   revalidatePath(`/dashboard/transactions/${id}`);
 }
 
-/**
- * The required-documents checklist on the Documents tab. Slots are seeded when
- * an action plan is applied and can be added by hand; a slot is "received" once
- * a Document on the file is linked to it.
- */
-export async function addRequiredDocument(formData: FormData) {
-  const { tenantId } = await requireTenant();
-  const id = str(formData, "id");
-  const label = str(formData, "label");
-  if (!id || !label) return;
-  await withTenant(tenantId, async (tx) => {
-    const max = await tx.transactionRequiredDocument.aggregate({
-      where: { transactionId: id },
-      _max: { sortOrder: true },
-    });
-    await tx.transactionRequiredDocument.create({
-      data: { tenantId, transactionId: id, label, sortOrder: (max._max.sortOrder ?? 0) + 1 },
-    });
-  });
-  revalidatePath(`/dashboard/transactions/${id}`);
-}
-
-export async function removeRequiredDocument(formData: FormData) {
-  const { tenantId } = await requireTenant();
-  const id = str(formData, "id");
-  const requiredId = str(formData, "requiredId");
-  if (!id || !requiredId) return;
-  await withTenant(tenantId, (tx) =>
-    tx.transactionRequiredDocument.deleteMany({ where: { id: requiredId, transactionId: id } }),
-  );
-  revalidatePath(`/dashboard/transactions/${id}`);
-}
-
-/** Link (or, with an empty documentId, unlink) a document to a checklist slot. */
-export async function setRequiredDocument(formData: FormData) {
-  const { tenantId } = await requireTenant();
-  const id = str(formData, "id");
-  const requiredId = str(formData, "requiredId");
-  if (!id || !requiredId) return;
-  const documentId = optStr(formData, "documentId");
-  await withTenant(tenantId, async (tx) => {
-    // Only accept a document that actually lives on this transaction.
-    if (documentId) {
-      const doc = await tx.document.findFirst({
-        where: { id: documentId, transactionId: id },
-        select: { id: true },
-      });
-      if (!doc) return;
-    }
-    await tx.transactionRequiredDocument.updateMany({
-      where: { id: requiredId, transactionId: id },
-      data: { documentId },
-    });
-  });
-  revalidatePath(`/dashboard/transactions/${id}`);
-}
-
 export async function deleteTransaction(formData: FormData) {
   const { tenantId, isAdmin, session } = await requireAdminTenant();
   const id = str(formData, "id");

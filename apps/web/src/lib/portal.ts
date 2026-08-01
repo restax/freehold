@@ -68,6 +68,27 @@ export async function resolvePortal(token: string) {
           orderBy: { createdAt: "desc" },
           select: { id: true, filename: true, sizeBytes: true, createdAt: true },
         },
+        // The rows behind those files, so the portal can show the same folder
+        // structure the coordinator sees — and, where they opted in, what the
+        // file is still waiting on. Visibility is decided in
+        // lib/portal-attachments.ts, not here: the query stays broad and the
+        // rules live in one tested place.
+        attachments: {
+          orderBy: { sortOrder: "asc" },
+          select: {
+            id: true,
+            label: true,
+            folderId: true,
+            sortOrder: true,
+            completedAt: true,
+            omittedAt: true,
+            visibleToClient: true,
+            document: {
+              select: { id: true, filename: true, sizeBytes: true, visibleToClient: true },
+            },
+          },
+        },
+        attachmentFolders: { orderBy: { sortOrder: "asc" } },
       },
     }),
   );
@@ -185,6 +206,25 @@ export async function resolveAgentPortalTxn(token: string, txnId: string) {
           orderBy: { createdAt: "desc" },
           select: { id: true, filename: true, sizeBytes: true, createdAt: true },
         },
+        // Same rows the coordinator files against, so the agent portal can
+        // show the same folder structure. Visibility is decided per audience
+        // in lib/portal-attachments.ts.
+        attachments: {
+          orderBy: { sortOrder: "asc" },
+          select: {
+            id: true,
+            label: true,
+            folderId: true,
+            sortOrder: true,
+            completedAt: true,
+            omittedAt: true,
+            visibleToClient: true,
+            document: {
+              select: { id: true, filename: true, sizeBytes: true, visibleToAgent: true },
+            },
+          },
+        },
+        attachmentFolders: { orderBy: { sortOrder: "asc" } },
       },
     }),
   );

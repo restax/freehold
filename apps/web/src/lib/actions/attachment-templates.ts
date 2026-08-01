@@ -4,14 +4,14 @@ import { withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logActivity } from "@/lib/activity";
+import { seedAttachmentRows } from "@/lib/attachment-rows";
 import { confirmed, optStr, str } from "@/lib/forms";
-import { seedRequiredDocuments } from "@/lib/required-documents";
 import { requireAdminTenant, requireTenant } from "@/lib/tenant";
 
 /**
  * Standalone document checklists — reusable, and attachable to any number of
  * task-template entries. Applying one (directly, or via the entry that
- * references it) seeds TransactionRequiredDocument rows the same way
+ * references it) seeds TransactionAttachment rows the same way
  * ActionPlanDocument always has.
  */
 
@@ -55,13 +55,23 @@ export async function addAttachmentTemplateItem(formData: FormData) {
   const attachmentTemplateId = str(formData, "attachmentTemplateId");
   const label = str(formData, "label");
   if (!attachmentTemplateId || !label) return;
+  // Naming a folder here is what lets one template lay out a filing
+  // structure rather than a flat list — it's matched by name and created on
+  // the transaction when the template is applied.
+  const folderName = optStr(formData, "folderName");
   await withTenant(tenantId, async (tx) => {
     const max = await tx.attachmentTemplateItem.aggregate({
       where: { attachmentTemplateId },
       _max: { sortOrder: true },
     });
     await tx.attachmentTemplateItem.create({
-      data: { tenantId, attachmentTemplateId, label, sortOrder: (max._max.sortOrder ?? 0) + 1 },
+      data: {
+        tenantId,
+        attachmentTemplateId,
+        label,
+        folderName: folderName?.trim() || null,
+        sortOrder: (max._max.sortOrder ?? 0) + 1,
+      },
     });
   });
   revalidatePath("/dashboard/templates");
@@ -125,11 +135,15 @@ export async function applyAttachmentTemplate(formData: FormData) {
       where: { id: attachmentTemplateId },
       include: { items: { orderBy: { sortOrder: "asc" } } },
     });
-    const added = await seedRequiredDocuments(
+    const added = await seedAttachmentRows(
       tx,
       tenantId,
       transactionId,
-      template.items.map((i) => i.label),
+      template.items.map((i) => ({
+        label: i.label,
+        required: i.required,
+        folderName: i.folderName,
+      })),
     );
     return { name: template.name, added };
   });

@@ -440,7 +440,7 @@ export default async function InvoicesPage({
           )}
           {feeUnsetCount > 0 && (
             <p className="mt-2 text-xs text-stone-400">
-              {`${feeUnsetCount} ${feeUnsetCount === 1 ? "file has" : "files have"} no expected fee set — set a standard fee on the client (or workspace default in Settings) and new files fill in automatically; existing files take a fee on their Dates & details tab.`}
+              {`${feeUnsetCount} ${feeUnsetCount === 1 ? "file has" : "files have"} no expected fee set — set a standard fee on the client (or workspace default in Settings) and new files fill in automatically; existing files take a fee on their Details tab.`}
             </p>
           )}
         </section>

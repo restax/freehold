@@ -10,18 +10,22 @@ import {
   CheckSquare,
   Clock,
   CurrencyDollar,
+  DotsThree,
   Envelope,
   FilePdf,
+  FolderSimple,
   Link as LinkIcon,
   ListBullets,
-  ListChecks,
   NotePencil,
   PaperPlaneTilt,
   PencilSimple,
+  PenNib,
   Phone,
+  Plus,
   PlusCircle,
   Receipt,
   ShieldCheck,
+  Sparkle,
   Tag,
   Textbox,
   Tray,
@@ -38,6 +42,7 @@ import { AgentsCommissions } from "@/components/agents-commissions";
 import { Avatar } from "@/components/avatar";
 import { Badge, EnvelopeBadge, ExtractionBadge } from "@/components/badges";
 import { Breadcrumbs } from "@/components/breadcrumbs";
+import { BulkSelectSummary } from "@/components/bulk-select-summary";
 import { CcEmailPill } from "@/components/cc-email-pill";
 import {
   ClosingDateCalendar,
@@ -49,6 +54,7 @@ import { DangerDelete } from "@/components/danger-delete";
 import { DocumentDropZone } from "@/components/document-drop-zone";
 import { EmailPortalLinkForm } from "@/components/email-portal-link-form";
 import { EmailTemplateSelect } from "@/components/email-template-select";
+import { EmptyState } from "@/components/empty-state";
 import { EntityPicker } from "@/components/entity-picker";
 import { ExtractButton } from "@/components/extract-button";
 import { HandbookNotes } from "@/components/handbook-notes";
@@ -57,17 +63,44 @@ import { InvoiceStatusTracker } from "@/components/invoice-status-tracker";
 import { KeyDateRow } from "@/components/key-date-row";
 import { LinkPartyForm } from "@/components/link-party-form";
 import { ListingDetailRow } from "@/components/listing-detail-row";
+import { PanelJump } from "@/components/panel-jump";
 import { PendingButton } from "@/components/pending-button";
+import { ScrollToHash } from "@/components/scroll-to-hash";
 import { SectionCard } from "@/components/section-card";
 import { SideBadge } from "@/components/side-badge";
 import { SideFields } from "@/components/side-fields";
+import { SplitPdfDialog } from "@/components/split-pdf-dialog";
 import { StatusSelect } from "@/components/status-select";
 import { TaskTable } from "@/components/task-table";
 import { TemplateEditor } from "@/components/template-editor";
+import { UploadOnChange } from "@/components/upload-on-change";
 import { VendorOrderTab } from "@/components/vendor-order-tab";
 import { VisibilityToggles } from "@/components/visibility-toggles";
 import { assignUser, unassignUser } from "@/lib/actions/assignees";
 import { applyAttachmentTemplate } from "@/lib/actions/attachment-templates";
+import {
+  addAttachmentNote,
+  addAttachmentRow,
+  bulkDeleteAttachments,
+  bulkEmailAttachments,
+  bulkIncludeAttachments,
+  bulkMoveAttachments,
+  bulkOmitAttachments,
+  bulkZipAttachments,
+  createAttachmentFolder,
+  deleteAttachmentFolder,
+  deleteAttachmentNote,
+  executeAttachmentSignatures,
+  linkAttachmentDocument,
+  removeAttachmentRow,
+  renameAttachmentFolder,
+  setAttachmentFolder,
+  setAttachmentOmitted,
+  setAttachmentSignatureTracking,
+  toggleAttachmentComplete,
+  toggleAttachmentPortalVisible,
+  toggleAttachmentSigner,
+} from "@/lib/actions/attachments";
 import {
   attachSlotDocument,
   reviewSlot,
@@ -95,6 +128,7 @@ import {
 } from "@/lib/actions/invoices";
 import { addParty, linkExtractedParty, removeParty } from "@/lib/actions/parties";
 import { setAssigneeFee } from "@/lib/actions/pay";
+import { combineDocuments, splitDocument } from "@/lib/actions/pdf-tools";
 import {
   createPortalLink,
   deletePortalLink,
@@ -114,15 +148,12 @@ import {
 } from "@/lib/actions/tasks";
 import { generateDocument } from "@/lib/actions/templates";
 import {
-  addRequiredDocument,
   confirmDateChange,
   deleteTransaction,
   proposeDateChange,
   removeCustomField,
-  removeRequiredDocument,
   removeTransactionParty,
   setCustomField,
-  setRequiredDocument,
   updateKeyDate,
   updateListingDetail,
   updateTransaction,
@@ -137,6 +168,7 @@ import {
   partyLabel,
 } from "@/lib/ai/contract-schema";
 import { transactionAlert } from "@/lib/alerts";
+import { attachmentState, groupAttachments, progressOf } from "@/lib/attachments";
 import { emailContextForTransaction, tcPhone } from "@/lib/auto-emails";
 import {
   displayState,
@@ -166,6 +198,12 @@ import { fmtCents } from "@/lib/pay";
 import { creditBalance, handbookState, transactionHasPro } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
 import { sideLabel, tenantSideLabels } from "@/lib/side-labels";
+import {
+  ROLE_ABBR,
+  readSignatureState,
+  signatureProgress,
+  signerParties,
+} from "@/lib/signature-tracking";
 import { PROSPECTING_TEMPLATE_GROUP } from "@/lib/starter-email-templates";
 import { resolveTaskColumns, TASK_COLUMNS, taskColumnGroups } from "@/lib/task-columns";
 import { buildTemplateMergeContext } from "@/lib/template-merge";
@@ -196,20 +234,38 @@ export const dynamic = "force-dynamic";
 const SIDES = Object.values(TransactionSide);
 const ROLES = Object.values(PartyRole);
 
-const TXN_TABS = [
+/**
+ * The tabs split into two rows by how often a coordinator reaches for them.
+ *
+ * The first row is the daily loop — the work of running a file — and is
+ * mirrored, in this order, by the Transactions submenu in the sidebar
+ * (see TXN_TAB_ITEMS in components/dashboard-nav.tsx). Keep the two in step:
+ * they read as one control, and an order that disagrees is worse than no
+ * submenu at all. The second row is the reference and set-up material you
+ * visit when something specific needs changing.
+ */
+/** Ties the row checkboxes to the bulk bar's form without nesting them. */
+const BULK_FORM_ID = "attachment-bulk";
+
+const TXN_TABS_PRIMARY = [
   ["tasks", "Tasks"],
   ["documents", "Attachments"],
-  ["vendors", "Vendors"],
-  ["billing", "Billing"],
-  ["compliance", "Compliance"],
-  ["dates", "Dates & details"],
-  ["participants", "Participants"],
-  ["team", "Team"],
   ["emails", "Emails"],
   ["notes", "Notes"],
+  ["dates", "Details"],
+] as const;
+
+const TXN_TABS_SECONDARY = [
+  ["participants", "Participants"],
+  ["vendors", "Vendors"],
+  ["team", "Team"],
+  ["compliance", "Compliance"],
+  ["billing", "Billing"],
   ["payout", "Payout"],
   ["misc", "Portals & misc"],
 ] as const;
+
+const TXN_TABS = [...TXN_TABS_PRIMARY, ...TXN_TABS_SECONDARY] as const;
 type TxnTab = (typeof TXN_TABS)[number][0];
 
 export default async function TransactionDetailPage({
@@ -222,6 +278,7 @@ export default async function TransactionDetailPage({
     emailTemplate?: string;
     emailTask?: string;
     licenseError?: string;
+    splitError?: string;
     dateTemplate?: string;
     emailTo?: string | string[];
     attachDoc?: string | string[];
@@ -243,6 +300,7 @@ export default async function TransactionDetailPage({
     emailTemplate,
     emailTask,
     licenseError,
+    splitError,
     dateTemplate,
     emailTo,
     attachDoc,
@@ -257,10 +315,26 @@ export default async function TransactionDetailPage({
         invoices: { orderBy: { number: "desc" } },
         intakeSubmissions: { orderBy: { createdAt: "desc" } },
         parties: { include: { contact: true }, orderBy: { createdAt: "asc" } },
-        requiredDocuments: {
+        attachments: {
           orderBy: { sortOrder: "asc" },
-          include: { document: { select: { id: true, filename: true } } },
+          include: {
+            document: {
+              select: {
+                id: true,
+                filename: true,
+                contentType: true,
+                sizeBytes: true,
+                createdAt: true,
+                uploadedByName: true,
+                visibleToAgent: true,
+                visibleToClient: true,
+                _count: { select: { extractions: true } },
+              },
+            },
+            notes: { orderBy: { createdAt: "desc" }, take: 20 },
+          },
         },
+        attachmentFolders: { orderBy: { sortOrder: "asc" } },
         tasks: {
           orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
           // The assignee and contact are columns the task table can show, so
@@ -390,6 +464,26 @@ export default async function TransactionDetailPage({
     }
     return out;
   };
+
+  // The Attachments tab is one list: every row, grouped into its folder, with
+  // progress per folder and across the file. See lib/attachments.ts for what
+  // counts as done and why omitted rows leave the denominator.
+  const attachmentGroups = groupAttachments(txn.attachments, txn.attachmentFolders);
+  const attachmentTotals = progressOf(txn.attachments);
+  const onlyUngrouped = attachmentGroups.length === 1 && attachmentGroups[0].folderId === null;
+  // Somewhere for a mis-filed document to go: the rows still waiting on one.
+  const emptyRows = txn.attachments.filter((a) => !a.documentId && !a.omittedAt);
+  // In the order the list actually shows them. currentDocs is in document
+  // insert order, which is *not* the order on screen once rows are grouped
+  // into folders — and "combine these, in this order" is only trustworthy if
+  // the order you can see is the order you get.
+  // Who can sign anything on this file. Derived from participants, so adding
+  // the buyer's agent makes them appear on every tracked row at once.
+  const signers = signerParties(txn.parties);
+  const pdfDocs = attachmentGroups
+    .flatMap((g) => g.rows)
+    .map((r) => r.document)
+    .filter((d): d is NonNullable<typeof d> => !!d && d.contentType === "application/pdf");
 
   // Contract-governed dates the coordinator has asked to change but that the
   // paperwork hasn't caught up with. Shown next to the date they'd replace.
@@ -871,6 +965,12 @@ export default async function TransactionDetailPage({
           <SectionCard
             title="Key dates"
             icon={<CalendarBlank size={15} weight="fill" aria-hidden />}
+            action={
+              <PanelJump
+                href={`/dashboard/transactions/${txn.id}?tab=dates`}
+                label="Open the Details tab"
+              />
+            }
             bodyClassName="p-3"
           >
             <dl className="flex flex-col gap-1.5 text-sm">
@@ -903,6 +1003,12 @@ export default async function TransactionDetailPage({
           <SectionCard
             title="Next deadlines"
             icon={<Clock size={15} weight="fill" aria-hidden />}
+            action={
+              <PanelJump
+                href={`/dashboard/transactions/${txn.id}?tab=tasks`}
+                label="Open the Tasks tab"
+              />
+            }
             bodyClassName="p-3"
           >
             <ul className="flex flex-col gap-1.5 text-sm">
@@ -931,6 +1037,12 @@ export default async function TransactionDetailPage({
           <SectionCard
             title="Listing details"
             icon={<Tag size={15} weight="fill" aria-hidden />}
+            action={
+              <PanelJump
+                href={`/dashboard/transactions/${txn.id}?tab=dates`}
+                label="Open the Details tab"
+              />
+            }
             bodyClassName="p-3"
           >
             <dl className="flex flex-col gap-1.5 text-sm">
@@ -969,6 +1081,12 @@ export default async function TransactionDetailPage({
             title="Participants"
             icon={<UsersThree size={15} weight="fill" aria-hidden />}
             count={txn.parties.length || undefined}
+            action={
+              <PanelJump
+                href={`/dashboard/transactions/${txn.id}?tab=participants`}
+                label="Open the Participants tab"
+              />
+            }
             bodyClassName="p-3"
           >
             {txn.parties.length > 0 ? (
@@ -1046,23 +1164,45 @@ export default async function TransactionDetailPage({
           </SectionCard>
         </aside>
         <div className="flex min-w-0 flex-col gap-3 xl:order-2">
-          <nav className="flex flex-wrap gap-1 border-b border-stone-200">
-            {TXN_TABS.filter(([key]) => !(!billing.view && key === "billing")).map(
-              ([key, labelText]) => (
+          {/* Two rows, because twelve tabs on one line wraps into an
+              indistinguishable block. The active one is filled and underlined
+              rather than merely un-greyed — at this count, "which tab am I on"
+              has to be answerable at a glance from across the row. */}
+          <nav className="flex flex-col gap-1 border-b border-stone-200 pb-1.5">
+            <div className="flex flex-wrap gap-1">
+              {TXN_TABS_PRIMARY.map(([key, labelText]) => (
                 <Link
                   key={key}
                   href={`/dashboard/transactions/${txn.id}?tab=${key}`}
                   aria-current={tab === key ? "page" : undefined}
-                  className={`rounded-t-lg px-3 py-2 text-sm transition-colors ${
+                  className={`rounded-lg border-b-2 px-3 py-1.5 text-sm transition-colors ${
                     tab === key
-                      ? "border border-b-0 border-stone-200 bg-white font-medium text-brand-800"
-                      : "text-stone-500 hover:text-stone-800"
+                      ? "border-brand-600 bg-brand-50 font-semibold text-brand-800"
+                      : "border-transparent text-stone-600 hover:bg-stone-100 hover:text-stone-900"
                   }`}
                 >
                   {labelText}
                 </Link>
-              ),
-            )}
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {TXN_TABS_SECONDARY.filter(([key]) => !(!billing.view && key === "billing")).map(
+                ([key, labelText]) => (
+                  <Link
+                    key={key}
+                    href={`/dashboard/transactions/${txn.id}?tab=${key}`}
+                    aria-current={tab === key ? "page" : undefined}
+                    className={`rounded-lg border-b-2 px-2.5 py-1 text-[13px] transition-colors ${
+                      tab === key
+                        ? "border-brand-600 bg-brand-50 font-semibold text-brand-800"
+                        : "border-transparent text-stone-500 hover:bg-stone-100 hover:text-stone-800"
+                    }`}
+                  >
+                    {labelText}
+                  </Link>
+                ),
+              )}
+            </div>
           </nav>
           {tab === "tasks" && (
             <SectionCard
@@ -1138,524 +1278,1074 @@ export default async function TransactionDetailPage({
           )}
           {tab === "documents" && (
             <div className="flex flex-col gap-4">
-              <DocumentDropZone transactionId={txn.id} linkAction={setRequiredDocument} />
+              {splitError && (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  {splitError}
+                </p>
+              )}
               <SectionCard
-                title="Required documents"
-                icon={<ListChecks size={15} weight="fill" aria-hidden />}
+                title="Attachments"
+                icon={<FilePdf size={15} weight="fill" aria-hidden />}
                 count={
-                  txn.requiredDocuments.length > 0
-                    ? `${txn.requiredDocuments.filter((r) => r.document).length} of ${txn.requiredDocuments.length} received`
+                  attachmentTotals.total > 0
+                    ? `${attachmentTotals.done} of ${attachmentTotals.total}`
                     : undefined
                 }
+                action={
+                  <span className="flex items-center gap-2">
+                    {txn.proFeaturesEnabled && (
+                      <span className="rounded-full bg-brand-600/10 px-2 py-0.5 text-xs font-medium text-brand-700">
+                        Pro AI on
+                      </span>
+                    )}
+                    {currentDocs.length > 0 && (
+                      // Lenders and clients ask for "the whole file" — one
+                      // download rather than clicking each row in turn.
+                      <a
+                        href={`/api/transactions/${txn.id}/documents/zip`}
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-500 transition-colors hover:text-brand-700"
+                      >
+                        <Archive size={14} aria-hidden />
+                        Download all
+                      </a>
+                    )}
+                  </span>
+                }
+                bodyClassName="p-0"
               >
-                <p className="mb-3 text-sm text-stone-500">
-                  The checklist for this file. Apply an action plan to fill it, or add your own.
-                  Attach an uploaded document to mark a slot received.
-                </p>
-                {txn.requiredDocuments.length === 0 ? (
-                  <p className="mb-3 text-sm text-stone-400">
-                    Nothing required yet — apply an action plan, or add one below.
-                  </p>
-                ) : (
-                  <ul className="mb-3 flex flex-col divide-y divide-stone-100">
-                    {txn.requiredDocuments.map((req) => (
-                      <li key={req.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
-                        <span
-                          aria-hidden
-                          className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] ${
-                            req.document
-                              ? "bg-brand-600 text-white"
-                              : "border border-dashed border-stone-300 text-stone-300"
-                          }`}
+                <ScrollToHash />
+                {/* One way in, at the top. The AI files it against the rows
+                    below; anything it can't place lands ungrouped rather than
+                    disappearing. */}
+                <div className="border-b border-stone-100 p-3">
+                  <DocumentDropZone transactionId={txn.id} linkAction={linkAttachmentDocument} />
+                </div>
+
+                {/* The bulk bar. The form is empty of controls — the
+                    checkboxes down the list point at it by id, and each
+                    button carries its own formAction, so the browser does
+                    the dispatch. */}
+                {txn.attachments.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 px-4 py-2">
+                    <form id={BULK_FORM_ID} action={bulkOmitAttachments} className="contents">
+                      <input type="hidden" name="id" value={txn.id} />
+                      <BulkSelectSummary formId={BULK_FORM_ID} />
+                      <span className="ml-auto flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="submit"
+                          formAction={bulkEmailAttachments}
+                          className={`${btnGhost} px-2 py-1 text-xs`}
                         >
-                          {req.document ? "✓" : ""}
-                        </span>
-                        <span className={`font-medium ${req.document ? "" : "text-stone-600"}`}>
-                          {req.label}
-                        </span>
-                        {req.document ? (
+                          Email
+                        </button>
+                        <button
+                          type="submit"
+                          formAction={bulkZipAttachments}
+                          className={`${btnGhost} px-2 py-1 text-xs`}
+                        >
+                          ZIP
+                        </button>
+                        {txn.attachmentFolders.length > 0 && (
                           <>
-                            <a
-                              href={`/api/documents/${req.document.id}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-brand-600 hover:underline"
+                            <select
+                              name="bulkFolderId"
+                              defaultValue=""
+                              aria-label="Move selected to folder"
+                              className={`${input} py-1 text-xs`}
                             >
-                              {req.document.filename}
-                            </a>
-                            <form action={setRequiredDocument} className="ml-auto">
-                              <input type="hidden" name="id" value={txn.id} />
-                              <input type="hidden" name="requiredId" value={req.id} />
-                              <input type="hidden" name="documentId" value="" />
-                              <button
-                                type="submit"
-                                className="text-xs text-stone-400 hover:text-stone-700"
-                              >
-                                detach
-                              </button>
-                            </form>
+                              <option value="">No folder</option>
+                              {txn.attachmentFolders.map((f) => (
+                                <option key={f.id} value={f.id}>
+                                  {f.name}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="submit"
+                              formAction={bulkMoveAttachments}
+                              className={`${btnGhost} px-2 py-1 text-xs`}
+                            >
+                              Move
+                            </button>
                           </>
-                        ) : (
-                          <>
-                            <span className="text-xs font-medium uppercase tracking-wide text-amber-600">
-                              Missing
-                            </span>
-                            {currentDocs.length > 0 && (
-                              <form
-                                action={setRequiredDocument}
-                                className="ml-auto flex items-center gap-1"
+                        )}
+                        <button
+                          type="submit"
+                          formAction={bulkOmitAttachments}
+                          className={`${btnGhost} px-2 py-1 text-xs`}
+                        >
+                          Omit
+                        </button>
+                        <button
+                          type="submit"
+                          formAction={bulkIncludeAttachments}
+                          className={`${btnGhost} px-2 py-1 text-xs`}
+                        >
+                          Include
+                        </button>
+                        <button
+                          type="submit"
+                          formAction={bulkDeleteAttachments}
+                          className="rounded-lg px-2 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-50"
+                        >
+                          Remove rows
+                        </button>
+                      </span>
+                    </form>
+                  </div>
+                )}
+
+                {attachmentGroups.length === 0 ? (
+                  <div className="p-6">
+                    <EmptyState
+                      title="Nothing on this file yet"
+                      hint="Drop a PDF above, or add what you're waiting for with “Add” below — an action plan or attachment template fills the list in one go."
+                    />
+                  </div>
+                ) : (
+                  attachmentGroups.map((group) => (
+                    <details
+                      key={group.folderId ?? "ungrouped"}
+                      open
+                      className="group border-b border-stone-100 last:border-0"
+                    >
+                      {/* With no folders in play the single "Ungrouped" header
+                          is pure restatement of the card's own count, so it
+                          collapses away and the rows read as one plain list. */}
+                      <summary
+                        className={`flex cursor-pointer select-none items-center gap-2 bg-stone-50/70 px-4 py-2 text-sm ${
+                          onlyUngrouped ? "hidden" : ""
+                        }`}
+                      >
+                        <span
+                          className="inline-block text-stone-400 transition-transform group-open:rotate-90"
+                          aria-hidden
+                        >
+                          ▸
+                        </span>
+                        <FolderSimple size={14} className="shrink-0 text-stone-400" aria-hidden />
+                        <span className="font-medium text-stone-700">{group.name}</span>
+                        <span className="ml-auto flex items-center gap-2 text-xs text-stone-500">
+                          <span className="tabular-nums">
+                            {group.progress.done}/{group.progress.total}
+                          </span>
+                          <span
+                            className={`rounded-full px-1.5 py-0.5 font-medium tabular-nums ${
+                              group.progress.pct === 100
+                                ? "bg-brand-600/10 text-brand-700"
+                                : "bg-stone-200/70 text-stone-600"
+                            }`}
+                          >
+                            {group.progress.pct}%
+                          </span>
+                        </span>
+                      </summary>
+                      {group.rows.length === 0 ? (
+                        <p className="px-4 py-3 text-sm text-stone-400">Nothing filed here yet.</p>
+                      ) : (
+                        <ul className="flex flex-col">
+                          {group.rows.map((row) => {
+                            const doc = row.document;
+                            const state = attachmentState(row);
+                            const full = doc ? docById.get(doc.id) : undefined;
+                            const latest = doc ? latestExtractionByDoc.get(doc.id) : undefined;
+                            const sent = doc ? sentDocs.get(doc.id) : undefined;
+                            const priors = full ? priorVersions(full) : [];
+                            return (
+                              <li
+                                key={row.id}
+                                id={doc ? `doc-${doc.id}` : `row-${row.id}`}
+                                // scroll-mt clears the sticky header when a
+                                // #doc-<id> link jumps here from the document
+                                // library.
+                                className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-stone-100 px-4 py-2.5 scroll-mt-24 transition-colors last:border-0 hover:bg-stone-50/60"
                               >
-                                <input type="hidden" name="id" value={txn.id} />
-                                <input type="hidden" name="requiredId" value={req.id} />
-                                <select
-                                  name="documentId"
-                                  defaultValue=""
-                                  className={`${input} py-1 text-xs`}
+                                {/* Selection for the bulk bar. `form=` rather
+                                    than nesting: this row already contains
+                                    forms, and a form inside a form is invalid
+                                    HTML that browsers silently drop. */}
+                                <input
+                                  type="checkbox"
+                                  form={BULK_FORM_ID}
+                                  name="rowIds"
+                                  value={row.id}
+                                  data-bytes={doc?.sizeBytes ?? 0}
+                                  aria-label={`Select ${row.label}`}
+                                  className="h-3.5 w-3.5 shrink-0 accent-brand-600"
+                                />
+                                {/* The tick is the row's own state, not a
+                                    read-out of whether a file is present —
+                                    plenty of rows are settled without one. */}
+                                <form action={toggleAttachmentComplete} className="flex">
+                                  <input type="hidden" name="id" value={txn.id} />
+                                  <input type="hidden" name="rowId" value={row.id} />
+                                  <button
+                                    type="submit"
+                                    aria-label={
+                                      state === "complete"
+                                        ? `Mark ${row.label} not received`
+                                        : `Mark ${row.label} received`
+                                    }
+                                    className={`grid h-5 w-5 shrink-0 place-items-center rounded text-[11px] transition-colors ${
+                                      state === "complete"
+                                        ? "bg-brand-600 text-white hover:bg-brand-500"
+                                        : state === "omitted"
+                                          ? "border border-stone-200 bg-stone-100 text-stone-400"
+                                          : "border border-dashed border-stone-300 text-transparent hover:border-brand-500"
+                                    }`}
+                                  >
+                                    {state === "complete" ? "✓" : state === "omitted" ? "—" : "✓"}
+                                  </button>
+                                </form>
+
+                                <span
+                                  className={`font-medium ${
+                                    state === "omitted"
+                                      ? "text-stone-400 line-through"
+                                      : doc
+                                        ? "text-stone-800"
+                                        : "text-amber-700"
+                                  }`}
                                 >
-                                  <option value="" disabled>
-                                    Attach a file…
+                                  {row.label}
+                                </span>
+
+                                {row.required && !doc && state === "pending" && (
+                                  <Badge tone="attention">Required</Badge>
+                                )}
+                                {!doc && row.visibleToClient && state !== "omitted" && (
+                                  <span
+                                    title="The client sees this listed as still needed"
+                                    className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-stone-500"
+                                  >
+                                    on portal
+                                  </span>
+                                )}
+                                {full && full.version > 1 && (
+                                  <span className="rounded bg-stone-100 px-1.5 py-0.5 text-xs font-medium text-stone-500">
+                                    v{full.version}
+                                  </span>
+                                )}
+                                {doc && doc._count.extractions > 0 && (
+                                  <Badge tone="success">extracted</Badge>
+                                )}
+                                {row.notes.length > 0 && (
+                                  <span className="inline-flex items-center gap-1 text-xs text-stone-400">
+                                    <ChatCircle size={12} aria-hidden />
+                                    {row.notes.length}
+                                  </span>
+                                )}
+                                {state === "omitted" && row.omittedReason && (
+                                  <span className="text-xs italic text-stone-400">
+                                    N/A — {row.omittedReason}
+                                  </span>
+                                )}
+
+                                {doc ? (
+                                  <span className="text-xs text-stone-400">
+                                    {(doc.sizeBytes / 1024).toFixed(0)} KB ·{" "}
+                                    {fmtDate(doc.createdAt)}
+                                    {doc.uploadedByName ? ` · ${doc.uploadedByName}` : ""}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-stone-400">
+                                    {state === "complete" ? "received — no file" : "no file yet"}
+                                  </span>
+                                )}
+
+                                {(() => {
+                                  const sig = readSignatureState(row.signatureState);
+                                  if (!sig || signers.length === 0) return null;
+                                  const prog = signatureProgress(sig, signers);
+                                  return (
+                                    <span className="flex items-center gap-1">
+                                      {signers.map((p) => {
+                                        const signed = Boolean(sig[p.id]);
+                                        return (
+                                          <form
+                                            key={p.id}
+                                            action={toggleAttachmentSigner}
+                                            className="flex"
+                                          >
+                                            <input type="hidden" name="id" value={txn.id} />
+                                            <input type="hidden" name="rowId" value={row.id} />
+                                            <input type="hidden" name="partyId" value={p.id} />
+                                            <button
+                                              type="submit"
+                                              title={`${p.contact?.name ?? ROLE_LABEL[p.role] ?? p.role} — ${
+                                                signed ? "signed" : "not signed yet"
+                                              }`}
+                                              className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] font-semibold transition-colors ${
+                                                signed
+                                                  ? "bg-brand-600 text-white hover:bg-brand-500"
+                                                  : "border border-dashed border-stone-300 text-stone-400 hover:border-brand-500 hover:text-brand-700"
+                                              }`}
+                                            >
+                                              {ROLE_ABBR[p.role] ?? "?"}
+                                            </button>
+                                          </form>
+                                        );
+                                      })}
+                                      {/* One click for the overwhelmingly
+                                          common case: it came back fully
+                                          signed. */}
+                                      {!prog.complete && (
+                                        <form action={executeAttachmentSignatures} className="flex">
+                                          <input type="hidden" name="id" value={txn.id} />
+                                          <input type="hidden" name="rowId" value={row.id} />
+                                          <button
+                                            type="submit"
+                                            className="ml-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700 transition-colors hover:text-brand-600"
+                                          >
+                                            Execute
+                                          </button>
+                                        </form>
+                                      )}
+                                    </span>
+                                  );
+                                })()}
+
+                                <span className="ml-auto flex items-center gap-3">
+                                  {doc && (
+                                    <>
+                                      {/* Straight to the compose form with this
+                                          file already ticked — the client or
+                                          the lender asked for this one
+                                          document, not the whole file. */}
+                                      <Link
+                                        href={`/dashboard/transactions/${txn.id}?tab=emails&attachDoc=${doc.id}`}
+                                        title={`Email ${doc.filename}`}
+                                        aria-label={`Email ${doc.filename}`}
+                                        className="text-stone-300 transition-colors hover:text-brand-700"
+                                      >
+                                        <Envelope size={15} aria-hidden />
+                                      </Link>
+                                      <VisibilityToggles
+                                        kind="document"
+                                        id={doc.id}
+                                        transactionId={txn.id}
+                                        visibleToAgent={doc.visibleToAgent}
+                                        visibleToClient={doc.visibleToClient}
+                                      />
+                                      <a
+                                        href={`/api/documents/${doc.id}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className={`${btnGhost} px-2.5 py-1 text-xs`}
+                                      >
+                                        View
+                                      </a>
+                                    </>
+                                  )}
+                                  {!doc && (
+                                    <form action={uploadDocument} className="flex">
+                                      <input type="hidden" name="transactionId" value={txn.id} />
+                                      <input type="hidden" name="rowId" value={row.id} />
+                                      <UploadOnChange ariaLabel={`Upload ${row.label}`} />
+                                    </form>
+                                  )}
+                                  {/* Everything that changes what the row
+                                      *means* lives here rather than as more
+                                      buttons on the row: a checklist of twenty
+                                      rows can't afford five controls each. */}
+                                  <details className="relative">
+                                    <summary
+                                      aria-label={`Actions for ${row.label}`}
+                                      className="flex cursor-pointer list-none items-center rounded px-1 text-stone-300 transition-colors hover:text-stone-700"
+                                    >
+                                      <DotsThree size={18} weight="bold" aria-hidden />
+                                    </summary>
+                                    <div className="absolute right-0 z-20 mt-1 flex w-64 flex-col gap-2 rounded-lg border border-stone-200 bg-white p-2.5 text-left shadow-lg">
+                                      {doc &&
+                                        emptyRows.filter((r) => r.id !== row.id).length > 0 && (
+                                          <form
+                                            action={linkAttachmentDocument}
+                                            className="flex flex-col gap-1"
+                                          >
+                                            <input type="hidden" name="id" value={txn.id} />
+                                            <input type="hidden" name="documentId" value={doc.id} />
+                                            <span className="text-xs font-medium text-stone-500">
+                                              Move file to
+                                            </span>
+                                            <span className="flex gap-1">
+                                              <select
+                                                name="rowId"
+                                                required
+                                                defaultValue=""
+                                                className={`${input} py-1 text-xs`}
+                                              >
+                                                <option value="" disabled>
+                                                  Choose a row…
+                                                </option>
+                                                {emptyRows
+                                                  .filter((r) => r.id !== row.id)
+                                                  .map((r) => (
+                                                    <option key={r.id} value={r.id}>
+                                                      {r.label}
+                                                    </option>
+                                                  ))}
+                                              </select>
+                                              <button
+                                                type="submit"
+                                                className={`${btnGhost} px-2 py-1 text-xs`}
+                                              >
+                                                Move
+                                              </button>
+                                            </span>
+                                          </form>
+                                        )}
+                                      <form
+                                        action={setAttachmentFolder}
+                                        className="flex flex-col gap-1"
+                                      >
+                                        <input type="hidden" name="id" value={txn.id} />
+                                        <input type="hidden" name="rowId" value={row.id} />
+                                        <span className="text-xs font-medium text-stone-500">
+                                          Folder
+                                        </span>
+                                        <span className="flex gap-1">
+                                          <select
+                                            name="folderId"
+                                            defaultValue={row.folderId ?? ""}
+                                            className={`${input} py-1 text-xs`}
+                                          >
+                                            <option value="">No folder</option>
+                                            {txn.attachmentFolders.map((f) => (
+                                              <option key={f.id} value={f.id}>
+                                                {f.name}
+                                              </option>
+                                            ))}
+                                          </select>
+                                          <button
+                                            type="submit"
+                                            className={`${btnGhost} px-2 py-1 text-xs`}
+                                          >
+                                            Set
+                                          </button>
+                                        </span>
+                                      </form>
+                                      <form
+                                        action={addAttachmentNote}
+                                        className="flex flex-col gap-1 border-t border-stone-100 pt-2"
+                                      >
+                                        <input type="hidden" name="id" value={txn.id} />
+                                        <input type="hidden" name="rowId" value={row.id} />
+                                        <span className="text-xs font-medium text-stone-500">
+                                          Add a note
+                                        </span>
+                                        <textarea
+                                          name="body"
+                                          rows={2}
+                                          required
+                                          placeholder="Waiting on the lender…"
+                                          className={`${input} text-xs`}
+                                        />
+                                        <button
+                                          type="submit"
+                                          className={`${btnGhost} self-start px-2 py-1 text-xs`}
+                                        >
+                                          Add note
+                                        </button>
+                                      </form>
+                                      {!doc && (
+                                        <form
+                                          action={toggleAttachmentPortalVisible}
+                                          className="border-t border-stone-100 pt-2"
+                                        >
+                                          <input type="hidden" name="id" value={txn.id} />
+                                          <input type="hidden" name="rowId" value={row.id} />
+                                          <button
+                                            type="submit"
+                                            className="text-xs font-medium text-brand-700 transition-colors hover:text-brand-600"
+                                          >
+                                            {row.visibleToClient
+                                              ? "Hide from the client portal"
+                                              : "Show on the client portal as still needed"}
+                                          </button>
+                                        </form>
+                                      )}
+                                      <form
+                                        action={setAttachmentSignatureTracking}
+                                        className="border-t border-stone-100 pt-2"
+                                      >
+                                        <input type="hidden" name="id" value={txn.id} />
+                                        <input type="hidden" name="rowId" value={row.id} />
+                                        <button
+                                          type="submit"
+                                          className="text-xs font-medium text-brand-700 transition-colors hover:text-brand-600"
+                                        >
+                                          {readSignatureState(row.signatureState)
+                                            ? "Stop tracking signatures"
+                                            : "Track signatures"}
+                                        </button>
+                                      </form>
+                                      <form
+                                        action={setAttachmentOmitted}
+                                        className="flex flex-col gap-1 border-t border-stone-100 pt-2"
+                                      >
+                                        <input type="hidden" name="id" value={txn.id} />
+                                        <input type="hidden" name="rowId" value={row.id} />
+                                        {state === "omitted" ? (
+                                          <button
+                                            type="submit"
+                                            className={`${btnGhost} self-start px-2 py-1 text-xs`}
+                                          >
+                                            Put back on the list
+                                          </button>
+                                        ) : (
+                                          <>
+                                            <span className="text-xs font-medium text-stone-500">
+                                              Not applicable
+                                            </span>
+                                            <input
+                                              name="reason"
+                                              placeholder="Reason (optional)"
+                                              className={`${input} py-1 text-xs`}
+                                            />
+                                            <button
+                                              type="submit"
+                                              className={`${btnGhost} self-start px-2 py-1 text-xs`}
+                                            >
+                                              Mark N/A
+                                            </button>
+                                          </>
+                                        )}
+                                      </form>
+                                      <form
+                                        action={removeAttachmentRow}
+                                        className="border-t border-stone-100 pt-2"
+                                      >
+                                        <input type="hidden" name="id" value={txn.id} />
+                                        <input type="hidden" name="rowId" value={row.id} />
+                                        <button
+                                          type="submit"
+                                          className="text-xs font-medium text-red-700 transition-colors hover:text-red-800"
+                                        >
+                                          Remove this row
+                                        </button>
+                                      </form>
+                                    </div>
+                                  </details>
+                                </span>
+
+                                {sent && (
+                                  <p className="w-full text-xs text-stone-400">
+                                    <Envelope size={11} className="mr-1 inline" aria-hidden />
+                                    {sent.summary} · {sent.actorName} · {fmtDate(sent.at)}
+                                  </p>
+                                )}
+
+                                {row.notes.length > 0 && (
+                                  <ul className="flex w-full flex-col gap-1 pl-8">
+                                    {row.notes.map((note) => (
+                                      <li
+                                        key={note.id}
+                                        className="flex items-start gap-2 text-xs text-stone-500"
+                                      >
+                                        <ChatCircle
+                                          size={12}
+                                          className="mt-0.5 shrink-0 text-stone-300"
+                                          aria-hidden
+                                        />
+                                        <span className="min-w-0 flex-1">
+                                          {note.body}
+                                          <span className="ml-1.5 text-stone-400">
+                                            — {note.authorName ?? "someone"},{" "}
+                                            {fmtDate(note.createdAt)}
+                                          </span>
+                                        </span>
+                                        <form action={deleteAttachmentNote}>
+                                          <input type="hidden" name="id" value={txn.id} />
+                                          <input type="hidden" name="noteId" value={note.id} />
+                                          <button
+                                            type="submit"
+                                            aria-label="Delete this note"
+                                            className="text-stone-300 transition-colors hover:text-red-600"
+                                          >
+                                            ✕
+                                          </button>
+                                        </form>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+
+                                {doc && (
+                                  <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 pl-8">
+                                    {doc.contentType === "application/pdf" &&
+                                      (proActive ? (
+                                        <span className="flex flex-wrap items-center gap-2">
+                                          <ExtractButton
+                                            action={runExtraction}
+                                            documentId={doc.id}
+                                            label={
+                                              latest ? "Extract again" : "Extract contract data"
+                                            }
+                                          />
+                                          {latest && (
+                                            <Link
+                                              href={`/dashboard/transactions/${txn.id}/extractions/${latest.id}`}
+                                              className="inline-flex items-center gap-1.5 text-xs hover:underline"
+                                            >
+                                              <ExtractionBadge status={latest.status} />
+                                              <span className="text-stone-400">
+                                                {fmtDate(latest.createdAt)}
+                                              </span>
+                                            </Link>
+                                          )}
+                                        </span>
+                                      ) : (
+                                        <span className="text-xs text-stone-400">
+                                          Enable pro features to extract
+                                        </span>
+                                      ))}
+                                    <details>
+                                      <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
+                                        Send for signature
+                                      </summary>
+                                      <form
+                                        action={sendForSignature}
+                                        className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
+                                      >
+                                        <input type="hidden" name="documentId" value={doc.id} />
+                                        <label className={label}>
+                                          Signer 1 name *
+                                          <input name="signer1Name" required className={input} />
+                                        </label>
+                                        <label className={label}>
+                                          Signer 1 email *
+                                          <input
+                                            name="signer1Email"
+                                            type="email"
+                                            required
+                                            className={input}
+                                          />
+                                        </label>
+                                        <label className={label}>
+                                          Signer 2 name
+                                          <input name="signer2Name" className={input} />
+                                        </label>
+                                        <label className={label}>
+                                          Signer 2 email
+                                          <input
+                                            name="signer2Email"
+                                            type="email"
+                                            className={input}
+                                          />
+                                        </label>
+                                        <button type="submit" className={btnGhost}>
+                                          Send
+                                        </button>
+                                      </form>
+                                    </details>
+                                    {doc.contentType === "application/pdf" && (
+                                      <SplitPdfDialog
+                                        action={splitDocument}
+                                        transactionId={txn.id}
+                                        documentId={doc.id}
+                                        filename={doc.filename}
+                                        folders={txn.attachmentFolders}
+                                      />
+                                    )}
+                                    <details>
+                                      <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
+                                        Replace with a new version
+                                      </summary>
+                                      <form
+                                        action={replaceDocument}
+                                        className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
+                                      >
+                                        <input type="hidden" name="id" value={doc.id} />
+                                        <label className={label}>
+                                          New file (PDF, max 10 MB)
+                                          <input
+                                            name="file"
+                                            type="file"
+                                            accept="application/pdf,.pdf"
+                                            required
+                                            className={input}
+                                          />
+                                        </label>
+                                        <button type="submit" className={btnGhost}>
+                                          Replace
+                                        </button>
+                                        <span className="pb-2 text-xs text-stone-400">
+                                          The current file becomes a prior version — nothing is
+                                          lost.
+                                        </span>
+                                      </form>
+                                    </details>
+                                    {priors.length > 0 && (
+                                      <details>
+                                        <summary className="cursor-pointer select-none text-xs text-stone-500 transition-colors hover:text-stone-700">
+                                          {priors.length} prior version
+                                          {priors.length === 1 ? "" : "s"}
+                                        </summary>
+                                        <ul className="mt-1.5 flex flex-col gap-1 border-l-2 border-stone-200 pl-3">
+                                          {priors.map((p) => (
+                                            <li
+                                              key={p.id}
+                                              className="flex flex-wrap items-center gap-2 text-xs"
+                                            >
+                                              <span className="rounded bg-stone-100 px-1.5 py-0.5 font-medium text-stone-500">
+                                                v{p.version}
+                                              </span>
+                                              <a
+                                                href={`/api/documents/${p.id}`}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="text-stone-500 hover:text-brand-600 hover:underline"
+                                              >
+                                                {p.filename}
+                                              </a>
+                                              <span className="text-stone-400">
+                                                {(p.sizeBytes / 1024).toFixed(0)} KB · replaced{" "}
+                                                {fmtDate(p.createdAt)}
+                                              </span>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </details>
+                                    )}
+                                    <DangerDelete
+                                      compact
+                                      action={deleteDocument}
+                                      label="Delete file"
+                                      description="Permanently deletes this file."
+                                      hidden={{ id: doc.id, transactionId: txn.id }}
+                                    />
+                                  </div>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </details>
+                  ))
+                )}
+
+                {/* Everything that puts a new row on the list, behind one
+                    control — three separate always-open forms competing for
+                    attention is what made this tab hard to read. */}
+                <details className="border-t border-stone-100">
+                  <summary className="flex cursor-pointer select-none items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
+                    <Plus size={14} weight="bold" aria-hidden />
+                    Add
+                  </summary>
+                  <div className="flex flex-col gap-3 border-t border-stone-100 bg-stone-50/60 p-4">
+                    <form action={addAttachmentRow} className="flex flex-wrap items-end gap-2">
+                      <input type="hidden" name="id" value={txn.id} />
+                      <label className={`${label} min-w-56 flex-1`}>
+                        Expect a document
+                        <input
+                          name="label"
+                          required
+                          placeholder="Lead paint disclosure"
+                          className={input}
+                        />
+                      </label>
+                      {txn.attachmentFolders.length > 0 && (
+                        <label className={label}>
+                          Folder
+                          <select name="folderId" defaultValue="" className={input}>
+                            <option value="">No folder</option>
+                            {txn.attachmentFolders.map((f) => (
+                              <option key={f.id} value={f.id}>
+                                {f.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                      <button type="submit" className={btnGhost}>
+                        Add row
+                      </button>
+                    </form>
+                    <form action={uploadDocument} className="flex flex-wrap items-end gap-2">
+                      <input type="hidden" name="transactionId" value={txn.id} />
+                      <label className={`${label} min-w-56 flex-1`}>
+                        Upload a file (PDF, max 10 MB)
+                        <input
+                          name="file"
+                          type="file"
+                          accept="application/pdf,.pdf"
+                          required
+                          className={input}
+                        />
+                      </label>
+                      <button type="submit" className={btnGhost}>
+                        Upload
+                      </button>
+                    </form>
+                    {attachmentTemplates.length > 0 && (
+                      <form
+                        action={applyAttachmentTemplate}
+                        className="flex flex-wrap items-end gap-2"
+                      >
+                        <input type="hidden" name="transactionId" value={txn.id} />
+                        <label className={`${label} min-w-56 flex-1`}>
+                          Apply an attachment template
+                          <select
+                            name="attachmentTemplateId"
+                            required
+                            className={input}
+                            defaultValue=""
+                          >
+                            <option value="" disabled>
+                              Choose a checklist…
+                            </option>
+                            {attachmentTemplates.map((at) => (
+                              <option key={at.id} value={at.id}>
+                                {at.name} ({at._count.items})
+                                {at.description ? ` — ${at.description}` : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button type="submit" className={btnGhost}>
+                          Apply
+                        </button>
+                      </form>
+                    )}
+                    {pdfDocs.length > 1 && (
+                      <form
+                        action={combineDocuments}
+                        className="flex flex-col gap-2 border-t border-stone-200 pt-3"
+                      >
+                        <input type="hidden" name="transactionId" value={txn.id} />
+                        <span className={label}>Combine PDFs into one</span>
+                        <span className="flex flex-wrap gap-x-4 gap-y-1">
+                          {pdfDocs.map((d) => (
+                            <label
+                              key={d.id}
+                              className="flex items-center gap-1.5 text-sm text-stone-600"
+                            >
+                              <input
+                                type="checkbox"
+                                name="documentIds"
+                                value={d.id}
+                                className="h-4 w-4"
+                              />
+                              {d.filename}
+                            </label>
+                          ))}
+                        </span>
+                        {/* Pages land in the order shown above, which is the
+                            order the list already reads in — a checkbox set
+                            has no order of its own to honour. */}
+                        <span className="flex flex-wrap items-end gap-2">
+                          <label className={`${label} min-w-48 flex-1`}>
+                            Name the combined file
+                            <input name="name" placeholder="Closing package" className={input} />
+                          </label>
+                          {txn.attachmentFolders.length > 0 && (
+                            <label className={label}>
+                              Folder
+                              <select name="folderId" defaultValue="" className={input}>
+                                <option value="">No folder</option>
+                                {txn.attachmentFolders.map((f) => (
+                                  <option key={f.id} value={f.id}>
+                                    {f.name}
                                   </option>
-                                  {currentDocs.map((d) => (
-                                    <option key={d.id} value={d.id}>
-                                      {d.filename}
-                                    </option>
-                                  ))}
-                                </select>
-                                <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
-                                  Attach
+                                ))}
+                              </select>
+                            </label>
+                          )}
+                          <button type="submit" className={btnGhost}>
+                            Combine
+                          </button>
+                        </span>
+                      </form>
+                    )}
+                    <div className="flex flex-col gap-2 border-t border-stone-200 pt-3">
+                      <form
+                        action={createAttachmentFolder}
+                        className="flex flex-wrap items-end gap-2"
+                      >
+                        <input type="hidden" name="id" value={txn.id} />
+                        <label className={`${label} min-w-56 flex-1`}>
+                          New folder
+                          <input name="name" required placeholder="Contract" className={input} />
+                        </label>
+                        <button type="submit" className={btnGhost}>
+                          Create
+                        </button>
+                      </form>
+                      {txn.attachmentFolders.map((folder) => (
+                        <div key={folder.id} className="flex flex-wrap items-center gap-2">
+                          <form
+                            action={renameAttachmentFolder}
+                            className="flex flex-1 items-center gap-1"
+                          >
+                            <input type="hidden" name="id" value={txn.id} />
+                            <input type="hidden" name="folderId" value={folder.id} />
+                            <FolderSimple
+                              size={14}
+                              className="shrink-0 text-stone-400"
+                              aria-hidden
+                            />
+                            <input
+                              name="name"
+                              defaultValue={folder.name}
+                              aria-label={`Rename ${folder.name}`}
+                              className={`${input} py-1 text-xs`}
+                            />
+                            <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                              Rename
+                            </button>
+                          </form>
+                          {/* Rows inside survive and fall back to ungrouped —
+                              a folder is an arrangement, not a container. */}
+                          <form action={deleteAttachmentFolder}>
+                            <input type="hidden" name="id" value={txn.id} />
+                            <input type="hidden" name="folderId" value={folder.id} />
+                            <button
+                              type="submit"
+                              className="text-xs font-medium text-red-700 transition-colors hover:text-red-800"
+                            >
+                              Delete
+                            </button>
+                          </form>
+                        </div>
+                      ))}
+                    </div>
+                    {templates.length > 0 && (
+                      <form action={generateDocument} className="flex flex-wrap items-end gap-2">
+                        <input type="hidden" name="transactionId" value={txn.id} />
+                        <label className={`${label} min-w-56 flex-1`}>
+                          Generate from a document template
+                          <select
+                            name="templateId"
+                            className={input}
+                            defaultValue={templates[0]?.id}
+                          >
+                            {templates.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button type="submit" className={btnGhost}>
+                          Generate PDF
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                </details>
+              </SectionCard>
+
+              {!proActive && (
+                <div className="rounded-xl border border-brand-200 bg-brand-50/60 px-4 py-3">
+                  <p className="text-sm font-medium text-brand-900">
+                    Pro AI is off for this transaction
+                  </p>
+                  <p className="mt-0.5 text-xs text-brand-800">
+                    Turn it on to extract contract data, auto-classify dropped documents, and
+                    dictate here. It stays on for this transaction.
+                  </p>
+                  <div className="mt-2">
+                    {credits > 0 ? (
+                      <form action={enableProFeatures}>
+                        <input type="hidden" name="transactionId" value={txn.id} />
+                        <button type="submit" className={btn}>
+                          Enable pro features · 1 credit ({credits} left)
+                        </button>
+                      </form>
+                    ) : (
+                      <Link href="/dashboard/billing" className={btn}>
+                        Buy credits to enable
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              )}
+              {!process.env.ANTHROPIC_API_KEY && (
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  No <code>ANTHROPIC_API_KEY</code> is configured — extraction runs will fail until
+                  one is added to <code>.env</code>.
+                </p>
+              )}
+
+              {txn.envelopes.length > 0 && (
+                <SectionCard
+                  title="Signature envelopes"
+                  icon={<PenNib size={15} weight="fill" aria-hidden />}
+                >
+                  <ul className="flex flex-col">
+                    {txn.envelopes.map((env) => {
+                      const signers = (env.signers as Array<{ name: string; email: string }>) ?? [];
+                      return (
+                        <li
+                          key={env.id}
+                          className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
+                        >
+                          <EnvelopeBadge status={env.status} />
+                          <span className="font-medium">{env.document.filename}</span>
+                          <span className="text-stone-500">
+                            {env.provider.toLowerCase()} · {signers.map((s) => s.name).join(", ")}
+                          </span>
+                          {env.error && <span className="text-xs text-red-600">{env.error}</span>}
+                          <span className="ml-auto flex items-center gap-2">
+                            {env.provider === "MANUAL" && env.status === "SENT" && (
+                              <form action={markEnvelopeSigned}>
+                                <input type="hidden" name="id" value={env.id} />
+                                <button type="submit" className={btnGhost}>
+                                  Mark signed
                                 </button>
                               </form>
                             )}
-                          </>
-                        )}
-                        <form action={removeRequiredDocument}>
-                          <input type="hidden" name="id" value={txn.id} />
-                          <input type="hidden" name="requiredId" value={req.id} />
-                          <button
-                            type="submit"
-                            aria-label={`Remove ${req.label} from the checklist`}
-                            className="text-xs text-stone-300 hover:text-red-600"
-                          >
-                            ✕
-                          </button>
-                        </form>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <form action={addRequiredDocument} className="flex flex-wrap items-end gap-2">
-                  <input type="hidden" name="id" value={txn.id} />
-                  <label className={`${label} min-w-56 flex-1`}>
-                    Add a required document
-                    <input
-                      name="label"
-                      required
-                      placeholder="Lead paint disclosure"
-                      className={input}
-                    />
-                  </label>
-                  <button type="submit" className={btnGhost}>
-                    Add
-                  </button>
-                </form>
-                {attachmentTemplates.length > 0 && (
-                  <form
-                    action={applyAttachmentTemplate}
-                    className="mt-3 flex flex-wrap items-end gap-2 border-t border-stone-100 pt-3"
-                  >
-                    <input type="hidden" name="transactionId" value={txn.id} />
-                    <label className={`${label} min-w-56 flex-1`}>
-                      Apply an attachment template
-                      <select
-                        name="attachmentTemplateId"
-                        required
-                        className={input}
-                        defaultValue=""
-                      >
-                        <option value="" disabled>
-                          Choose a checklist…
-                        </option>
-                        {attachmentTemplates.map((at) => (
-                          <option key={at.id} value={at.id}>
-                            {at.name} ({at._count.items})
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <button type="submit" className={btnGhost}>
-                      Apply
-                    </button>
-                  </form>
-                )}
-              </SectionCard>
-
-              <SectionCard
-                title="Attachments & contract extraction"
-                icon={<FilePdf size={15} weight="fill" aria-hidden />}
-                action={
-                  txn.proFeaturesEnabled ? (
-                    <span className="rounded-full bg-brand-600/10 px-2 py-0.5 text-xs font-medium text-brand-700">
-                      Pro AI on
-                    </span>
-                  ) : null
-                }
-              >
-                <p className="mb-3 text-sm text-stone-500">
-                  Upload the purchase contract and let AI pull every key date and figure —
-                  page-cited, and nothing is saved until you confirm it.
-                </p>
-                {!proActive && (
-                  <div className="mb-3 rounded-lg border border-brand-200 bg-brand-50/60 px-3 py-2.5">
-                    <p className="text-sm font-medium text-brand-900">
-                      Pro AI is off for this transaction
-                    </p>
-                    <p className="mt-0.5 text-xs text-brand-800">
-                      Turn it on to extract contract data, auto-classify dropped documents, and
-                      dictate here. It stays on for this transaction.
-                    </p>
-                    <div className="mt-2">
-                      {credits > 0 ? (
-                        <form action={enableProFeatures}>
-                          <input type="hidden" name="transactionId" value={txn.id} />
-                          <button type="submit" className={btn}>
-                            Enable pro features · 1 credit ({credits} left)
-                          </button>
-                        </form>
-                      ) : (
-                        <Link href="/dashboard/billing" className={btn}>
-                          Buy credits to enable
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {!process.env.ANTHROPIC_API_KEY && (
-                  <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                    No <code>ANTHROPIC_API_KEY</code> is configured — extraction runs will fail
-                    until one is added to <code>.env</code>.
-                  </p>
-                )}
-                {currentDocs.length > 0 && (
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <span className="text-xs text-stone-400">
-                      {currentDocs.length} file{currentDocs.length === 1 ? "" : "s"} on this
-                      transaction
-                    </span>
-                    {/* Lenders and clients ask for "the whole file" — one
-                        download rather than clicking each row in turn. */}
-                    <a
-                      href={`/api/transactions/${txn.id}/documents/zip`}
-                      className={`${btnGhost} inline-flex items-center gap-1.5`}
-                    >
-                      <Archive size={14} aria-hidden />
-                      Download all (.zip)
-                    </a>
-                  </div>
-                )}
-                {currentDocs.length > 0 && (
-                  <ul className="mb-4 flex flex-col">
-                    {currentDocs.map((doc) => (
-                      <li
-                        key={doc.id}
-                        className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 last:border-0"
-                      >
-                        <a
-                          href={`/api/documents/${doc.id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-medium text-brand-600 hover:underline"
-                        >
-                          {doc.filename}
-                        </a>
-                        {doc.version > 1 && (
-                          <span className="rounded bg-stone-100 px-1.5 py-0.5 text-xs font-medium text-stone-500">
-                            v{doc.version}
+                            {env.provider !== "MANUAL" && env.externalId && (
+                              <form action={refreshEnvelope}>
+                                <input type="hidden" name="id" value={env.id} />
+                                <button type="submit" className={btnGhost}>
+                                  Refresh status
+                                </button>
+                              </form>
+                            )}
+                            <DangerDelete
+                              compact
+                              action={deleteEnvelope}
+                              label="Delete"
+                              description="Removes this signature envelope."
+                              hidden={{ id: env.id, transactionId: txn.id }}
+                            />
                           </span>
-                        )}
-                        <span className="text-xs text-stone-400">
-                          {(doc.sizeBytes / 1024).toFixed(0)} KB · {fmtDate(doc.createdAt)}
-                        </span>
-                        {doc.contentType === "application/pdf" &&
-                          (proActive ? (
-                            <span className="flex flex-wrap items-center gap-2">
-                              <ExtractButton
-                                action={runExtraction}
-                                documentId={doc.id}
-                                label={
-                                  latestExtractionByDoc.has(doc.id)
-                                    ? "Extract again"
-                                    : "Extract contract data"
-                                }
-                              />
-                              {/* Already read once. Says so on the row rather
-                                  than leaving the button looking like the only
-                                  thing that ever happens here — and links
-                                  straight to that run, so re-extracting is a
-                                  deliberate choice, not the only option. */}
-                              {(() => {
-                                const latest = latestExtractionByDoc.get(doc.id);
-                                if (!latest) return null;
-                                return (
-                                  <Link
-                                    href={`/dashboard/transactions/${txn.id}/extractions/${latest.id}`}
-                                    className="inline-flex items-center gap-1.5 text-xs hover:underline"
-                                  >
-                                    <ExtractionBadge status={latest.status} />
-                                    <span className="text-stone-400">
-                                      {fmtDate(latest.createdAt)}
-                                    </span>
-                                  </Link>
-                                );
-                              })()}
-                            </span>
-                          ) : (
-                            <span className="rounded-lg bg-stone-100 px-2.5 py-1.5 text-xs text-stone-500">
-                              Enable pro features to extract
-                            </span>
-                          ))}
-                        <span className="ml-auto flex items-center gap-3">
-                          {/* Straight to the compose form with this file
-                              already ticked — the client or the lender asked
-                              for this one document, not the whole file. */}
-                          <Link
-                            href={`/dashboard/transactions/${txn.id}?tab=emails&attachDoc=${doc.id}`}
-                            title={`Email ${doc.filename}`}
-                            aria-label={`Email ${doc.filename}`}
-                            className="text-stone-300 transition-colors hover:text-brand-700"
-                          >
-                            <Envelope size={15} aria-hidden />
-                          </Link>
-                          <VisibilityToggles
-                            kind="document"
-                            id={doc.id}
-                            transactionId={txn.id}
-                            visibleToAgent={doc.visibleToAgent}
-                            visibleToClient={doc.visibleToClient}
-                          />
-                        </span>
-                        <div>
-                          <DangerDelete
-                            compact
-                            action={deleteDocument}
-                            label="Delete"
-                            description="Permanently deletes this file."
-                            hidden={{ id: doc.id, transactionId: txn.id }}
-                          />
-                        </div>
-                        {(() => {
-                          const sent = sentDocs.get(doc.id);
-                          if (!sent) return null;
-                          return (
-                            <p className="w-full text-xs text-stone-400">
-                              <Envelope size={11} className="mr-1 inline" aria-hidden />
-                              {sent.summary} · {sent.actorName} · {fmtDate(sent.at)}
-                            </p>
-                          );
-                        })()}
-                        <details className="w-full">
-                          <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
-                            Send for signature
-                          </summary>
-                          <form
-                            action={sendForSignature}
-                            className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
-                          >
-                            <input type="hidden" name="documentId" value={doc.id} />
-                            <label className={label}>
-                              Signer 1 name *
-                              <input name="signer1Name" required className={input} />
-                            </label>
-                            <label className={label}>
-                              Signer 1 email *
-                              <input name="signer1Email" type="email" required className={input} />
-                            </label>
-                            <label className={label}>
-                              Signer 2 name
-                              <input name="signer2Name" className={input} />
-                            </label>
-                            <label className={label}>
-                              Signer 2 email
-                              <input name="signer2Email" type="email" className={input} />
-                            </label>
-                            <button type="submit" className={btnGhost}>
-                              Send
-                            </button>
-                          </form>
-                        </details>
-                        <details className="w-full">
-                          <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
-                            Replace with a new version
-                          </summary>
-                          <form
-                            action={replaceDocument}
-                            className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
-                          >
-                            <input type="hidden" name="id" value={doc.id} />
-                            <label className={label}>
-                              New file (PDF, max 10 MB)
-                              <input
-                                name="file"
-                                type="file"
-                                accept="application/pdf,.pdf"
-                                required
-                                className={input}
-                              />
-                            </label>
-                            <button type="submit" className={btnGhost}>
-                              Replace
-                            </button>
-                            <span className="pb-2 text-xs text-stone-400">
-                              The current file becomes a prior version — nothing is lost.
-                            </span>
-                          </form>
-                        </details>
-                        {priorVersions(doc).length > 0 && (
-                          <details className="w-full">
-                            <summary className="cursor-pointer select-none text-xs text-stone-500 transition-colors hover:text-stone-700">
-                              {priorVersions(doc).length} prior version
-                              {priorVersions(doc).length === 1 ? "" : "s"}
-                            </summary>
-                            <ul className="mt-1.5 flex flex-col gap-1 border-l-2 border-stone-200 pl-3">
-                              {priorVersions(doc).map((p) => (
-                                <li
-                                  key={p.id}
-                                  className="flex flex-wrap items-center gap-2 text-xs"
-                                >
-                                  <span className="rounded bg-stone-100 px-1.5 py-0.5 font-medium text-stone-500">
-                                    v{p.version}
-                                  </span>
-                                  <a
-                                    href={`/api/documents/${p.id}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-stone-500 hover:text-brand-600 hover:underline"
-                                  >
-                                    {p.filename}
-                                  </a>
-                                  <span className="text-stone-400">
-                                    {(p.sizeBytes / 1024).toFixed(0)} KB · replaced{" "}
-                                    {fmtDate(p.createdAt)}
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                          </details>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <form action={uploadDocument} className="mb-4 flex flex-wrap items-end gap-2">
-                  <input type="hidden" name="transactionId" value={txn.id} />
-                  <label className={label}>
-                    Upload document (PDF, max 10 MB)
-                    <input
-                      name="file"
-                      type="file"
-                      accept="application/pdf,.pdf"
-                      required
-                      className={input}
-                    />
-                  </label>
-                  <button type="submit" className={btnGhost}>
-                    Upload
-                  </button>
-                </form>
-                {templates.length > 0 && (
-                  <form action={generateDocument} className="mb-4 flex flex-wrap items-end gap-2">
-                    <input type="hidden" name="transactionId" value={txn.id} />
-                    <label className={label}>
-                      Generate from template
-                      <select name="templateId" className={input} defaultValue={templates[0]?.id}>
-                        {templates.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <button type="submit" className={btnGhost}>
-                      Generate PDF
-                    </button>
-                  </form>
-                )}
-                {txn.envelopes.length > 0 && (
-                  <div className="mb-4">
-                    <h3 className="mb-1 text-sm font-medium text-stone-600">Signature envelopes</h3>
-                    <ul className="flex flex-col">
-                      {txn.envelopes.map((env) => {
-                        const signers =
-                          (env.signers as Array<{ name: string; email: string }>) ?? [];
-                        return (
-                          <li
-                            key={env.id}
-                            className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
-                          >
-                            <EnvelopeBadge status={env.status} />
-                            <span className="font-medium">{env.document.filename}</span>
-                            <span className="text-stone-500">
-                              {env.provider.toLowerCase()} · {signers.map((s) => s.name).join(", ")}
-                            </span>
-                            {env.error && <span className="text-xs text-red-600">{env.error}</span>}
-                            <span className="ml-auto flex items-center gap-2">
-                              {env.provider === "MANUAL" && env.status === "SENT" && (
-                                <form action={markEnvelopeSigned}>
-                                  <input type="hidden" name="id" value={env.id} />
-                                  <button type="submit" className={btnGhost}>
-                                    Mark signed
-                                  </button>
-                                </form>
-                              )}
-                              {env.provider !== "MANUAL" && env.externalId && (
-                                <form action={refreshEnvelope}>
-                                  <input type="hidden" name="id" value={env.id} />
-                                  <button type="submit" className={btnGhost}>
-                                    Refresh status
-                                  </button>
-                                </form>
-                              )}
-                              <DangerDelete
-                                compact
-                                action={deleteEnvelope}
-                                label="Delete"
-                                description="Removes this signature record (the provider envelope is not cancelled)."
-                                hidden={{ id: env.id, transactionId: txn.id }}
-                              />
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                )}
-                {txn.extractions.length > 0 && (
-                  <div>
-                    <h3 className="mb-1 text-sm font-medium text-stone-600">Extraction runs</h3>
-                    <ul className="flex flex-col">
-                      {txn.extractions.map((ex) => (
-                        <li
-                          key={ex.id}
-                          className="flex items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
-                        >
-                          <ExtractionBadge status={ex.status} />
-                          <span className="min-w-0 truncate font-medium text-stone-700">
-                            {ex.document.filename}
-                          </span>
-                          <span className="shrink-0 text-stone-500">
-                            {fmtDate(ex.createdAt)} · {ex._count.fields} fields · {ex.model}
-                          </span>
-                          <Link
-                            href={`/dashboard/transactions/${txn.id}/extractions/${ex.id}`}
-                            className="ml-auto text-brand-600 hover:underline"
-                          >
-                            {ex.status === "READY" ? "Review & apply" : "View"}
-                          </Link>
                         </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </SectionCard>
+                      );
+                    })}
+                  </ul>
+                </SectionCard>
+              )}
+
+              {txn.extractions.length > 0 && (
+                <SectionCard
+                  title="Recent extraction runs"
+                  icon={<Sparkle size={15} weight="fill" aria-hidden />}
+                >
+                  <ul className="flex flex-col">
+                    {txn.extractions.map((ex) => (
+                      <li
+                        key={ex.id}
+                        className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
+                      >
+                        <ExtractionBadge status={ex.status} />
+                        <span className="font-medium">{ex.document.filename}</span>
+                        <span className="text-xs text-stone-400">
+                          {ex.model} · {fmtDate(ex.createdAt)}
+                        </span>
+                        <Link
+                          href={`/dashboard/transactions/${txn.id}/extractions/${ex.id}`}
+                          className="ml-auto text-brand-600 hover:underline"
+                        >
+                          {ex.status === "READY" ? "Review & apply" : "View"}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </SectionCard>
+              )}
             </div>
           )}
           {tab === "vendors" && <VendorOrderTab tenantId={tenantId} transactionId={id} />}
@@ -3273,7 +3963,7 @@ export default async function TransactionDetailPage({
               <p className="mt-3 text-xs text-stone-400">
                 Edit notes in the{" "}
                 <Link href={`/dashboard/transactions/${txn.id}?tab=dates`} className="underline">
-                  Dates &amp; details
+                  Details
                 </Link>{" "}
                 tab.
               </p>

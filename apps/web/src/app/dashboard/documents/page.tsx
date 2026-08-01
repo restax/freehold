@@ -1,10 +1,13 @@
 import { withTenant } from "@freehold/db";
+import { FileArrowDown } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { AddressPill } from "@/components/address-pill";
 import { Badge } from "@/components/badges";
+import { type DocTreeFolder, DocumentTree } from "@/components/document-tree";
 import { EmptyState } from "@/components/empty-state";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
-import { btnGhost, card, input, tableWrap, td, th, trHover } from "@/lib/ui";
+import { btnGhost, card, input } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -30,19 +33,24 @@ function fmtSize(bytes: number): string {
 
 const LIMIT = 300;
 
+/** Iframe-previewable in a plain browser; everything else falls back to a download link. */
+function isPreviewable(contentType: string): boolean {
+  return contentType === "application/pdf" || contentType.startsWith("image/");
+}
+
 /**
- * Document library: every file across every transaction in one searchable
- * place. A read/find surface over the same Document rows the Documents tab
- * shows — upload still happens on a transaction (or via the upload-first
- * create flow); this is where they all live together.
+ * Document library: every file across every transaction, laid out as a file
+ * explorer — folders (transactions) on the left, a preview of the selected
+ * file on the right. A read/find surface over the same Document rows the
+ * transaction's Attachments tab shows; upload still happens there.
  */
 export default async function DocumentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; tx?: string }>;
+  searchParams: Promise<{ q?: string; tx?: string; doc?: string }>;
 }) {
   const { tenantId } = await requireTenant();
-  const { q, tx } = await searchParams;
+  const { q, tx, doc: selectedId } = await searchParams;
   const query = (q ?? "").trim();
   const txFilter = (tx ?? "").trim();
 
@@ -72,6 +80,34 @@ export default async function DocumentsPage({
   }));
 
   const filtered = Boolean(query || txFilter);
+
+  const folderOrder: string[] = [];
+  const folderMap = new Map<string, DocTreeFolder>();
+  for (const d of documents) {
+    if (!folderMap.has(d.transaction.id)) {
+      folderOrder.push(d.transaction.id);
+      folderMap.set(d.transaction.id, {
+        transactionId: d.transaction.id,
+        propertyAddress: d.transaction.propertyAddress,
+        files: [],
+      });
+    }
+    // biome-ignore lint/style/noNonNullAssertion: just set above
+    folderMap.get(d.transaction.id)!.files.push({
+      id: d.id,
+      filename: d.filename,
+      contentType: d.contentType,
+    });
+  }
+  const folders = folderOrder.map((id) => folderMap.get(id) as DocTreeFolder);
+
+  const selected = selectedId ? documents.find((d) => d.id === selectedId) : undefined;
+
+  const baseHref = `/dashboard/documents${
+    query || txFilter
+      ? `?${new URLSearchParams({ ...(query && { q: query }), ...(txFilter && { tx: txFilter }) }).toString()}`
+      : ""
+  }`;
 
   return (
     <div className="flex flex-col gap-4">
@@ -105,8 +141,8 @@ export default async function DocumentsPage({
         )}
       </form>
 
-      <section className={card}>
-        {documents.length === 0 ? (
+      {documents.length === 0 ? (
+        <section className={card}>
           <EmptyState
             title={filtered ? "No documents match" : "No documents yet"}
             hint={
@@ -115,60 +151,69 @@ export default async function DocumentsPage({
                 : "Upload a contract on any transaction — or drop one into “Start from a contract” — and every file lands here."
             }
           />
-        ) : (
-          <>
-            <div className={tableWrap}>
-              <table className="w-full">
-                <thead>
-                  <tr>
-                    <th className={th}>File</th>
-                    <th className={th}>Transaction</th>
-                    <th className={th}>Type</th>
-                    <th className={th}>Size</th>
-                    <th className={th}>Uploaded</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {documents.map((d) => (
-                    <tr key={d.id} className={trHover}>
-                      <td className={td}>
-                        <span className="flex flex-wrap items-center gap-2">
-                          <a
-                            href={`/api/documents/${d.id}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-medium text-brand-700 hover:text-brand-600"
-                          >
-                            {d.filename}
-                          </a>
-                          {d._count.extractions > 0 && <Badge tone="success">extracted</Badge>}
-                        </span>
-                      </td>
-                      <td className={td}>
-                        <Link
-                          href={`/dashboard/transactions/${d.transaction.id}`}
-                          className="text-brand-700 hover:text-brand-600"
-                        >
-                          {d.transaction.propertyAddress}
-                        </Link>
-                      </td>
-                      <td className={td}>{typeLabel(d.contentType)}</td>
-                      <td className={td}>{fmtSize(d.sizeBytes)}</td>
-                      <td className={td}>{fmtDate(d.createdAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {documents.length === LIMIT && (
-              <p className="mt-3 text-xs text-stone-400">
-                Showing the most recent {LIMIT}. Narrow with search or a transaction filter to find
-                older files.
-              </p>
+        </section>
+      ) : (
+        <div className="flex gap-6">
+          <DocumentTree folders={folders} selectedId={selected?.id} baseHref={baseHref} />
+
+          <div className="min-w-0 flex-1">
+            {selected ? (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <AddressPill
+                    href={`/dashboard/transactions/${selected.transaction.id}?tab=documents#doc-${selected.id}`}
+                  >
+                    {selected.transaction.propertyAddress}
+                  </AddressPill>
+                  <span className="inline-flex items-center rounded-lg bg-stone-100 px-2.5 py-1 text-sm font-medium text-stone-600">
+                    {typeLabel(selected.contentType)}
+                  </span>
+                  <span className="inline-flex items-center rounded-lg bg-stone-100 px-2.5 py-1 text-sm font-medium text-stone-600">
+                    {fmtSize(selected.sizeBytes)}
+                  </span>
+                  <span className="inline-flex items-center rounded-lg bg-stone-100 px-2.5 py-1 text-sm font-medium text-stone-600">
+                    {fmtDate(selected.createdAt)}
+                  </span>
+                  {selected._count.extractions > 0 && <Badge tone="success">extracted</Badge>}
+                  <a
+                    href={`/api/documents/${selected.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`${btnGhost} ml-auto gap-1.5`}
+                  >
+                    <FileArrowDown size={16} aria-hidden />
+                    Open
+                  </a>
+                </div>
+
+                <div className={`${card} overflow-hidden p-0`}>
+                  {isPreviewable(selected.contentType) ? (
+                    <iframe
+                      src={`/api/documents/${selected.id}`}
+                      title={selected.filename}
+                      className="h-[75vh] w-full"
+                    />
+                  ) : (
+                    <div className="flex h-[75vh] w-full items-center justify-center">
+                      <EmptyState
+                        title="No preview available"
+                        hint={`${selected.filename} can't be previewed in the browser — open it to download instead.`}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <section className={card}>
+                <EmptyState
+                  title="Pick a file"
+                  hint="Choose a document from the folder list on the left to preview it here."
+                />
+              </section>
             )}
-          </>
-        )}
-      </section>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

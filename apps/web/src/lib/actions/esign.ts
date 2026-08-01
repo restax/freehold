@@ -5,6 +5,7 @@ import { getEsignAdapter } from "@freehold/integrations";
 import { revalidatePath } from "next/cache";
 import { esignOverrides } from "@/lib/esign-config";
 import { confirmed, str } from "@/lib/forms";
+import { markEnvelopeSignaturesComplete } from "@/lib/signature-sync";
 import { getObjectBytes } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
@@ -124,6 +125,8 @@ export async function refreshEnvelope(formData: FormData) {
       }),
     );
     if (result.status === "COMPLETED") {
+      // The row that carries this document now knows it is signed.
+      await markEnvelopeSignaturesComplete(tenantId, envelope.transactionId, envelope.documentId);
       await emitWebhook(tenantId, "envelope.completed", {
         id: envelope.id,
         transactionId: envelope.transactionId,
@@ -156,6 +159,7 @@ export async function markEnvelopeSigned(formData: FormData) {
       data: { status: EnvelopeStatus.COMPLETED, completedAt: new Date() },
     });
   });
+  await markEnvelopeSignaturesComplete(tenantId, envelope.transactionId, envelope.documentId);
   await emitWebhook(tenantId, "envelope.completed", {
     id: envelope.id,
     transactionId: envelope.transactionId,

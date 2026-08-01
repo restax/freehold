@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Buildings,
   CalendarBlank,
+  CheckSquare,
   Compass,
   CreditCard,
   DownloadSimple,
@@ -17,9 +18,11 @@ import {
   House,
   type Icon,
   Lifebuoy,
+  ListChecks,
   ListDashes,
   LockKey,
   Microphone,
+  Note,
   PlugsConnected,
   Receipt,
   ShieldCheck,
@@ -30,7 +33,7 @@ import {
   UsersThree,
 } from "@phosphor-icons/react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { VOICE_OPEN_EVENT } from "@/components/voice-widget";
 import { isAdminPath } from "@/lib/nav-sections";
@@ -50,6 +53,27 @@ interface NavGroup {
   items: NavItem[];
 }
 
+const TRANSACTIONS_HREF = "/dashboard/transactions";
+
+/**
+ * The submenu under Transactions while a file is open — the same five leading
+ * tabs, in the same order, so the rail and the tab strip read as one control
+ * rather than two lists that happen to overlap. Deliberately duplicates the
+ * tabs: the rail is where the eye already is when arriving from elsewhere.
+ *
+ * Keep in step with TXN_TABS' first row in the transaction page.
+ */
+const TXN_TAB_ITEMS: Array<{ tab: string; label: string; icon: Icon }> = [
+  { tab: "tasks", label: "Tasks", icon: CheckSquare },
+  { tab: "documents", label: "Attachments", icon: Files },
+  { tab: "emails", label: "Emails", icon: EnvelopeSimple },
+  { tab: "notes", label: "Notes", icon: Note },
+  { tab: "dates", label: "Details", icon: ListChecks },
+];
+
+/** The tab a transaction opens on when the URL doesn't name one. */
+const DEFAULT_TXN_TAB = "tasks";
+
 const GROUPS: NavGroup[] = [
   {
     label: null,
@@ -58,11 +82,10 @@ const GROUPS: NavGroup[] = [
   {
     label: "Work",
     items: [
-      { href: "/dashboard/transactions", label: "Transactions", icon: House },
+      { href: TRANSACTIONS_HREF, label: "Transactions", icon: House },
       { href: "/dashboard/calendar", label: "Calendar", icon: CalendarBlank },
       { href: "/dashboard/contacts", label: "Contacts", icon: AddressBook },
       { href: "/dashboard/clients", label: "Clients", icon: Buildings },
-      { href: "/dashboard/documents", label: "Documents", icon: Files },
     ],
   },
   {
@@ -123,30 +146,36 @@ export const navLabelCls = "hidden lg:inline";
 
 function NavLink({
   item,
+  href,
   active,
   badge = 0,
   urgent = true,
+  indent = false,
 }: {
   item: NavItem;
+  /** Overrides item.href — Documents carries the current transaction along. */
+  href?: string;
   active: boolean;
   badge?: number;
   /** A support reply is waiting on a person; a queue of intake forms isn't. */
   urgent?: boolean;
+  /** Rendered as a child under its parent, e.g. Documents under Transactions. */
+  indent?: boolean;
 }) {
   const IconComponent = item.icon;
   return (
     <Link
-      href={item.href}
+      href={href ?? item.href}
       title={item.label}
       aria-current={active ? "page" : undefined}
-      className={`${navRowCls} ${
+      className={`${navRowCls} ${indent ? "lg:pl-8" : ""} ${
         active
           ? "bg-brand-50 font-medium text-brand-800"
           : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
       }`}
     >
       <IconComponent
-        size={16}
+        size={indent ? 14 : 16}
         weight={active ? "fill" : "regular"}
         className={`shrink-0 ${active ? "text-brand-700" : "text-stone-400"}`}
         aria-hidden
@@ -187,6 +216,33 @@ export function DashboardNav({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // The Transactions submenu changes shape with where you are. On the list it
+  // offers the whole document library; inside a file it mirrors that file's
+  // leading tabs, so the rail tracks the tab strip instead of going stale.
+  const txnMatch = pathname.match(/^\/dashboard\/transactions\/([^/]+)/);
+  const currentTxnId = txnMatch && txnMatch[1] !== "new" ? txnMatch[1] : null;
+  const currentTab = searchParams.get("tab") ?? DEFAULT_TXN_TAB;
+
+  const txnChildren = currentTxnId
+    ? TXN_TAB_ITEMS.map(({ tab, label, icon }) => ({
+        key: tab,
+        href: `/dashboard/transactions/${currentTxnId}?tab=${tab}`,
+        label,
+        icon,
+        active: currentTab === tab,
+      }))
+    : [
+        {
+          key: "documents",
+          href: "/dashboard/documents",
+          label: "Documents",
+          icon: Files,
+          active: pathname.startsWith("/dashboard/documents"),
+        },
+      ];
+
   const isActive = (href: string) =>
     href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
 
@@ -247,6 +303,11 @@ export function DashboardNav({
         .filter((g) => g.items.length > 0)
     : source;
 
+  // A guest's Transactions entry still shows, but the submenu under it doesn't:
+  // those destinations were never in GUEST_HREFS on their own, and nesting them
+  // under an allowed parent shouldn't smuggle them back in.
+  const showTxnChildren = !isGuest && !inAdmin;
+
   return (
     <nav className="flex shrink-0 flex-col">
       {groups.map((group) => (
@@ -257,13 +318,25 @@ export function DashboardNav({
             </p>
           )}
           {group.items.map((item) => (
-            <NavLink
-              key={item.href}
-              item={item}
-              active={isActive(item.href)}
-              badge={badgeFor(item.href)}
-              urgent={item.href !== FORMS_HREF}
-            />
+            <div key={item.href} className="flex flex-col gap-0.5">
+              <NavLink
+                item={item}
+                active={isActive(item.href)}
+                badge={badgeFor(item.href)}
+                urgent={item.href !== FORMS_HREF}
+              />
+              {showTxnChildren &&
+                item.href === TRANSACTIONS_HREF &&
+                txnChildren.map((child) => (
+                  <NavLink
+                    key={child.key}
+                    item={child}
+                    href={child.href}
+                    active={child.active}
+                    indent
+                  />
+                ))}
+            </div>
           ))}
           {/* Voice search isn't a page — it's the panel that lives on every
               screen — so the menu entry opens it where you already are. */}

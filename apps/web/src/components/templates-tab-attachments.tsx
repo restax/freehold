@@ -165,6 +165,11 @@ export async function TemplatesTabAttachments({
                     >
                       <span className={item.required ? "" : "text-stone-400"}>
                         {item.label}
+                        {item.folderName && (
+                          <span className="ml-1.5 rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-500">
+                            {item.folderName}
+                          </span>
+                        )}
                         {!item.required && <span className="ml-1.5 text-xs">(optional)</span>}
                       </span>
                       <span className="flex items-center gap-1">
@@ -210,11 +215,18 @@ export async function TemplatesTabAttachments({
                   ))}
                 </ul>
               )}
-              <form action={addAttachmentTemplateItem} className="flex items-end gap-2">
+              <form action={addAttachmentTemplateItem} className="flex flex-wrap items-end gap-2">
                 <input type="hidden" name="attachmentTemplateId" value={template.id} />
-                <label className={`${label} flex-1`}>
+                <label className={`${label} min-w-40 flex-1`}>
                   Add a document
                   <input name="label" required placeholder="Executed contract" className={input} />
+                </label>
+                {/* Optional, and matched by name: applying the template
+                    creates the folder on the transaction if it isn't there,
+                    so one template can lay out a whole filing structure. */}
+                <label className={label}>
+                  Folder
+                  <input name="folderName" placeholder="Contract" className={input} />
                 </label>
                 <button type="submit" className={btnGhost}>
                   Add
