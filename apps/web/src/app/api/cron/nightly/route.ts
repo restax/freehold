@@ -3,6 +3,7 @@ import { runScheduledBilling } from "@/lib/billing-schedule";
 import { runDailyBriefings } from "@/lib/daily-briefing";
 import { runOwnerExports } from "@/lib/export-run";
 import { runInvoiceReports } from "@/lib/invoice-report";
+import { pruneMcpClients } from "@/lib/mcp-prune";
 import { flushOutbox } from "@/lib/outbox";
 import { runReviewRequests } from "@/lib/review-requests";
 import { sweepExpiredExports } from "@/lib/storage";
@@ -36,6 +37,9 @@ export async function GET(req: Request) {
   // reports the drafts it just created.
   const scheduledBilling = await runScheduledBilling();
   const reviewRequests = await runReviewRequests();
+  // Dynamic Client Registration leaves a client row per connection attempt;
+  // this is the only thing that ever collects them.
+  const mcpPrune = await pruneMcpClients();
   return NextResponse.json({
     outbox,
     exports,
@@ -45,5 +49,6 @@ export async function GET(req: Request) {
     adRenewals,
     scheduledBilling,
     reviewRequests,
+    mcpPrune,
   });
 }
