@@ -17,6 +17,10 @@ export default function robots(): MetadataRoute.Robots {
           "/verify-email",
           "/two-factor",
           "/onboarding",
+          // Scratch space for reviewing generated assets before they are used
+          // anywhere. Public so it needs no sign-in, but nothing here is
+          // finished work and none of it should turn up in search results.
+          "/preview/",
         ],
       },
     ],
