@@ -33,6 +33,7 @@ export async function setWorkspaceMcpEnabled(formData: FormData) {
   await prisma.organization.update({ where: { id: tenantId }, data: { mcpEnabled: enabled } });
 
   let revoked = 0;
+  let revokedKeys = 0;
   if (!enabled) {
     const live = await prisma.mcpConnection.findMany({
       where: { tenantId, revokedAt: null },
@@ -50,6 +51,21 @@ export async function setWorkspaceMcpEnabled(formData: FormData) {
         where: { userId: c.userId, clientId: c.clientId },
       });
     }
+
+    // Claude Skill keys go too. Hiding the prompt is not enough: the key is
+    // the capability, and one already pasted into a chat keeps working
+    // wherever it was pasted. Leaving those live while the switch reads off
+    // would make it "off unless you were already allowed", which is the one
+    // thing a kill switch must not be.
+    //
+    // Scoped by name to the keys this feature mints. Keys created by hand in
+    // Settings belong to whatever the workspace wired them into — Zapier, a
+    // script — and are not this switch's business.
+    const keys = await prisma.apiKey.updateMany({
+      where: { tenantId, name: "Claude Skill", revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    revokedKeys = keys.count;
   }
 
   logAudit({
@@ -59,7 +75,13 @@ export async function setWorkspaceMcpEnabled(formData: FormData) {
     action: enabled ? "mcp.workspace_enabled" : "mcp.workspace_disabled",
     summary: enabled
       ? "Turned the Claude connector on for this workspace"
-      : `Turned the Claude connector off for this workspace${revoked ? `, disconnecting ${revoked}` : ""}`,
+      : [
+          "Turned the Claude connector off for this workspace",
+          revoked ? `disconnected ${revoked}` : null,
+          revokedKeys ? `revoked ${revokedKeys} skill key(s)` : null,
+        ]
+          .filter(Boolean)
+          .join(", "),
   });
 
   revalidatePath("/dashboard/integrations");

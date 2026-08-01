@@ -54,7 +54,7 @@ export async function McpConnectorPanel({
           </button>
           <span className="text-xs text-stone-500">
             {org.mcpEnabled
-              ? "On. Turning it off disconnects everyone immediately."
+              ? "On. Turning it off disconnects everyone immediately and revokes any Claude Skill keys."
               : "Off. Nobody in this workspace can connect Claude until you turn it on."}
           </span>
         </form>
