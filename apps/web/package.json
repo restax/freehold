@@ -23,6 +23,7 @@
     "@freehold/integrations": "workspace:^",
     "@freehold/vault": "workspace:^",
     "@freehold/workflows": "workspace:*",
+    "@modelcontextprotocol/server": "2.0.0",
     "@phosphor-icons/react": "^2.1.10",
     "@types/qrcode": "^1.5.6",
     "@vercel/analytics": "^2.0.1",
@@ -33,6 +34,7 @@
     "jszip": "^3.10.1",
     "livekit-client": "^2.20.2",
     "livekit-server-sdk": "^2.17.0",
+    "mcp-handler": "2.1.0",
     "next": "16.2.10",
     "pdf-lib": "^1.17.1",
     "posthog-js": "^1.404.1",
@@ -40,7 +42,8 @@
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "react-pdf": "^10.4.1",
-    "stripe": "^22.3.2"
+    "stripe": "^22.3.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",
