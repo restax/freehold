@@ -1,17 +1,16 @@
 import {
   AddressBook,
-  BuildingOffice,
   ChartLineUp,
   CheckCircle,
   EnvelopeSimple,
-  FileText,
-  GitBranch,
+  FilePdf,
+  Headset,
   ListChecks,
-  LockKey,
   MagnifyingGlass,
-  ShieldCheck,
-  Signature,
+  PaintBrush,
+  Phone,
   Sparkle,
+  Storefront,
   UploadSimple,
   UsersThree,
 } from "@phosphor-icons/react/dist/ssr";
@@ -25,41 +24,48 @@ import {
   MarketingFooter,
   MarketingNav,
 } from "@/components/marketing";
+import { ScreenshotFigure } from "@/components/screenshot-figure";
 import { VoiceDemo } from "@/components/voice-demo";
 import { getSession } from "@/lib/session";
 import brokerageDusk from "../../public/marketing/brokerage-dusk.jpg";
 import closingKeys from "../../public/marketing/closing-keys.jpg";
 import movingDay from "../../public/marketing/moving-day.jpg";
+import shotAgentPortal from "../../public/marketing/shots/shot-agent-portal.png";
+import shotContacts from "../../public/marketing/shots/shot-contacts.png";
+import shotIntakeForm from "../../public/marketing/shots/shot-intake-form.png";
+import shotThemes from "../../public/marketing/shots/shot-themes.png";
+import shotTransactions from "../../public/marketing/shots/shot-transactions.png";
+import shotVoice from "../../public/marketing/shots/shot-voice.png";
 import tcAtWork from "../../public/marketing/tc-at-work.jpg";
 
 export const metadata = {
-  title: "Freehold: the most complete TC system in the world",
+  title: "Freehold: the TC platform your clients will love",
   description:
-    "Every deal, every deadline, one place. AI reads the contract and builds the file. Free to self-host, easy on Freehold Cloud.",
+    "Freehold keeps every closing on track and every client in the loop. AI reads the contract and builds the file. Start free, no credit card.",
 };
 
 const CTA_PRIMARY = "Start free";
 
 /*
- * Marketing landing page. The extraction preview mirrors the product's
- * review screen with illustrative sample values; it is a styled mock of
- * our own UI, not a screenshot of anyone else's.
+ * Marketing landing page. The extraction preview and the order email are
+ * styled mocks of our own product with illustrative sample values; the
+ * screenshots are real captures of the product running sample data.
  */
 
 const VALUE_STRIP = [
   {
-    icon: Sparkle,
-    text: "No data entry. AI reads the contract and builds the file, every field page-cited.",
+    icon: UsersThree,
+    text: "Your clients follow their closing on a beautiful portal with your name on it, always current.",
     cls: "border-stone-200/70 bg-white",
   },
   {
-    icon: GitBranch,
-    text: "The whole product's code is public, not a crippled core.",
+    icon: Sparkle,
+    text: "AI is built in everywhere it helps, included in one monthly price. No add-ons, no meters.",
     cls: "border-brand-600/20 bg-brand-50/70",
   },
   {
-    icon: ShieldCheck,
-    text: "Every date, document, and credential reveal lands in the audit log.",
+    icon: Headset,
+    text: "30 days of hands-on onboarding at no charge, including moving you off your old system.",
     cls: "border-stone-200/70 bg-white",
   },
 ];
@@ -67,102 +73,142 @@ const VALUE_STRIP = [
 const EXTRACTION_STEPS = [
   {
     icon: UploadSimple,
-    title: "Upload",
-    body: "Drop in the signed PDF. That's the last time you type anything the contract already says.",
+    title: "Upload the contract",
+    body: "Drop in the signed PDF. That is the last time you type anything the contract already says.",
   },
   {
     icon: MagnifyingGlass,
-    title: "Review with citations",
-    body: "Each extracted field shows the exact page and clause it came from. Low-confidence fields are flagged, never silently filled.",
+    title: "Check its work",
+    body: "Every date, name, and number it found shows you the exact page it came from. Anything it wasn't sure about is clearly marked.",
   },
   {
     icon: CheckCircle,
-    title: "Apply to the file",
-    body: "Confirmed dates populate the transaction and create every dated deadline task in your action plan. The system does the chasing from there.",
+    title: "Approve, and the file builds itself",
+    body: "The dates land on the calendar, the deadlines become tasks, and the reminders are set. You review; it does the typing.",
   },
 ];
 
 const BENTO = [
   {
-    icon: AddressBook,
-    title: "CRM built in",
-    body: "Contacts, clients, and every party on the deal. Agents, lenders, and title stay living records, not lines in a spreadsheet.",
-    cls: "border border-stone-200/70 bg-white",
-  },
-  {
     icon: UsersThree,
-    title: "Branded client portals",
-    body: "Link-based portals where agents and sellers see checklist progress, parties, and documents. You choose what to share, revocable any time.",
+    title: "Client portals",
+    body: "Send one link and your client or their agent always knows exactly where the deal stands. No login for them to forget, and you choose what they see.",
     cls: "border border-brand-600/20 bg-brand-50/70",
   },
   {
-    icon: LockKey,
-    title: "Credential vault",
-    body: "MLS and lender logins stored envelope-encrypted, revealed on click, with every reveal written to the vault's audit log.",
+    icon: EnvelopeSimple,
+    title: "Email that files itself",
+    body: "Write to agents and clients right from the deal. When they reply, the reply lands on that deal too, not buried in your inbox.",
     cls: "border border-stone-200/70 bg-white",
   },
   {
-    icon: FileText,
-    title: "Documents and merge templates",
-    body: "Store every document on the file, and generate new ones from merge-field templates. Transaction data flows straight into a finished PDF.",
+    icon: FilePdf,
+    title: "Work with PDFs right here",
+    body: "Split a big scan into its documents, combine files into a closing package, and email any of them out in a few clicks.",
+    cls: "border border-stone-200/70 bg-white",
+  },
+  {
+    icon: AddressBook,
+    title: "Everyone in one place",
+    body: "Clients, agents, lenders, and title stay living records. Their numbers, emails, and history are always one tap away.",
     cls: "border border-stone-200/70 bg-white sm:col-span-2",
   },
   {
-    icon: Signature,
-    title: "E-sign, your client's way",
-    body: "Open-source Documenso built in, manual signing when you need it, and an adapter layer ready for other providers. Chosen per client behind one envelope interface.",
+    icon: Storefront,
+    title: "Order services from the file",
+    body: "Place an order with the title company, attorney, or photographer without retyping the deal. The details fill themselves in.",
     cls: "border border-stone-200/70 bg-white",
   },
   {
     icon: ChartLineUp,
-    title: "Pipeline dashboards",
-    body: "See every open file, its stage, and what's due next at a glance. Nothing hides in an inbox.",
+    title: "See everything at a glance",
+    body: "Every open file, its stage, and what is due next on one screen. Nothing hides in an inbox or a spreadsheet.",
     cls: "border border-stone-200/70 bg-white",
   },
   {
-    icon: EnvelopeSimple,
-    title: "Email that runs itself",
-    body: "Branded emails from your own address, replies threading back onto the file. Templates tied to tasks, automated intro and closing notes, quiet hours, voice dictation.",
+    icon: PaintBrush,
+    title: "Your brand everywhere",
+    body: "Pick your colours once and your dashboard, your emails, and your client portals all match. It looks like yours, because it is.",
     cls: "border border-stone-200/70 bg-white",
   },
   {
-    icon: BuildingOffice,
-    title: "Built for teams",
-    body: "Owners, admins, TCs, and assistants with role-based permissions. Invite by link. Destructive actions stay gated to the people you trust.",
+    icon: Phone,
+    title: "Help from a real person",
+    body: "A real phone number and live chat. No voicemail, no ticket queue. You call, a person answers.",
     cls: "border border-stone-200/70 bg-white",
   },
 ];
 
 const FAQ: Array<[string, string]> = [
   [
-    "How can all of this be free?",
-    "Freehold is source-available: the full product's code is public, and self-hosting it for your own organization costs nothing and always will. The license (Elastic License 2.0) forbids one thing — offering Freehold to others as a hosted service or under another brand. Freehold Cloud, the hosted version, has a real free tier (2 users, 5 active transactions) funded by the paid plans of teams that grow. We make money when you upgrade because you want to, not because your data is trapped.",
-  ],
-  [
-    "What happens when I hit the free limits?",
-    "Nothing scary. Everything you've entered stays readable and exportable forever. You just can't create a 6th active transaction until you close one out, upgrade, or move to your own server. Upgrading is a choice, never a ransom.",
+    "What does it cost?",
+    "Free for 2 users and 5 active closings, no credit card. Cloud Pro is $40 a month when you are running more than that, and the AI is included in the price on every paid plan. There are no contracts and nothing to cancel by phone.",
   ],
   [
     "Do I need to be technical?",
-    "No. Freehold Cloud is a website: sign up, upload a contract, work. Servers, backups, updates, and the AI are our job. Self-hosting is the option for brokerages with IT staff, and you can ignore it entirely.",
+    "No. Freehold is a website: sign up, upload a contract, work. Servers, backups, updates, and the AI are our job, not yours.",
+  ],
+  [
+    "What does switching look like?",
+    "Gentler than you'd think. Most TCs run their in-flight closings to the finish line in the old system and open new ones in Freehold, so nothing gets disrupted mid-deal. Your first 30 days include hands-on onboarding at no charge, and we help with the move.",
   ],
   [
     "Can I trust the AI with contracts?",
-    "The AI never gets the last word. Every extracted value shows the page and clause it came from, low-confidence values arrive unchecked, and nothing touches your file until you approve it. Your documents are never used to train AI models.",
+    "The AI never gets the last word. Everything it reads out of a contract shows you the page it came from, and nothing is saved to your file until you approve it. Your documents are never used to train AI models.",
   ],
   [
-    "Where does my data live, and can I leave?",
-    "On Cloud, in Freehold's database, exportable by you at any time with no contracts. Self-hosted, it never leaves your own server. Either way the full code is public and free to self-host, so leaving is always real, which keeps us honest.",
+    "What if I ever want to leave?",
+    "You download everything, records and documents, in one file, any time, on any plan. We keep customers by being good, not by making leaving hard.",
   ],
   [
-    "What does switching from my current system look like?",
-    "Most TCs run their in-flight files to closing in the old system and open new files in Freehold, so nothing gets disrupted mid-deal. Start with one file; the first ten are free. Importers for the big legacy platforms are on our roadmap.",
-  ],
-  [
-    "Do you pay people to recommend Freehold?",
-    "No, and we never will. Some TC platforms pay 20% recurring commissions to affiliates, which buys a lot of glowing recommendations in Facebook groups and never gets disclosed to you. That doesn't seem fair. Nobody earns a dime recommending Freehold, so when a TC vouches for us, the software earned it.",
+    "What support do I get?",
+    "A real phone number and live chat, answered by a person. No voicemail. And every new account gets 30 days of onboarding help included.",
   ],
 ];
+
+/**
+ * A sample of the order email Freehold writes when you order a service from
+ * the file. Illustrative values; styled like the product's own email preview.
+ */
+function OrderEmailCard() {
+  return (
+    <div className="overflow-hidden rounded-xl border border-stone-200/70 bg-white shadow-[0_12px_32px_-16px_rgba(28,25,23,0.25)]">
+      <div className="border-b border-stone-100 bg-stone-50 px-4 py-2.5">
+        <p className="text-xs font-medium uppercase tracking-wide text-stone-400">
+          Sample order email
+        </p>
+      </div>
+      <div className="flex flex-col gap-1.5 border-b border-stone-100 px-4 py-3 text-sm">
+        <p>
+          <span className="text-stone-400">To:</span>{" "}
+          <span className="text-stone-700">orders@firsttitle.example</span>
+        </p>
+        <p>
+          <span className="text-stone-400">Subject:</span>{" "}
+          <span className="font-medium text-stone-800">Title order: 412 Maple Avenue</span>
+        </p>
+      </div>
+      <div className="px-4 py-4 text-sm leading-relaxed text-stone-700">
+        <p>Hi Alexis,</p>
+        <p className="mt-2">
+          Please open title on 412 Maple Avenue, Springfield. Contract price $385,000, closing
+          September 12. Buyer is Jordan Bell, seller is the Caputo estate. The signed contract is
+          attached.
+        </p>
+        <p className="mt-2">Thank you!</p>
+        <p className="mt-2 text-stone-500">
+          Dana
+          <br />
+          Maplewood Transactions
+        </p>
+        <p className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-stone-50 px-2.5 py-1.5 text-xs text-stone-600">
+          <FilePdf size={14} aria-hidden className="text-brand-700" />
+          Purchase contract.pdf
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export default async function LandingPage() {
   const session = await getSession();
@@ -182,15 +228,11 @@ export default async function LandingPage() {
         <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-14 sm:px-6 lg:grid-cols-[6fr_6fr] lg:gap-14 lg:pb-24 lg:pt-24">
           <div>
             <h1 className="font-display max-w-xl text-5xl font-extrabold leading-[1.08] tracking-tight md:text-6xl">
-              Every deal,
-              <br />
-              every deadline,
-              <br />
-              <span className="text-brand-600">one place.</span>
+              Be the TC your clients <span className="text-brand-600">rave about.</span>
             </h1>
             <p className="mt-5 max-w-lg text-lg leading-relaxed text-stone-600">
-              The most complete TC platform. AI reads the contract and builds the file. Source open,
-              free to self-host.
+              Every closing on track, every client in the loop, and the typing done for you. Free to
+              start.
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <Link
@@ -199,17 +241,11 @@ export default async function LandingPage() {
               >
                 {CTA_PRIMARY}
               </Link>
-              <Link
-                href="/compare"
-                className="rounded-lg border border-stone-300 bg-white px-5 py-2.5 font-medium text-stone-700 shadow-xs transition hover:border-stone-400 hover:bg-stone-50 active:scale-[0.98]"
-              >
-                Self-host it
-              </Link>
               <a
                 href="/demo"
-                className="px-1 py-2.5 font-medium text-brand-700 transition hover:text-brand-600"
+                className="rounded-lg border border-stone-300 bg-white px-5 py-2.5 font-medium text-stone-700 shadow-xs transition hover:border-stone-400 hover:bg-stone-50 active:scale-[0.98]"
               >
-                Explore the live demo &rarr;
+                Try the live demo, no sign-up
               </a>
             </div>
           </div>
@@ -236,18 +272,18 @@ export default async function LandingPage() {
         </div>
       </div>
 
-      {/* Voice demo — hear the product rather than read about it */}
+      {/* Voice demo */}
       <section className="border-b border-stone-200/70 bg-stone-50">
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:gap-16">
           <div>
             <p className="text-sm font-medium text-brand-600">Try it right now</p>
             <h2 className="font-display mt-2 text-4xl font-extrabold tracking-tight md:text-5xl">
-              Don't read the pitch. Ask it.
+              Just ask for what you need.
             </h2>
             <p className="mt-4 max-w-md leading-relaxed text-stone-600">
-              Freehold has voice search built in — coordinators ask &ldquo;what's closing this
-              week&rdquo; and hear the answer from their own files. This is that same voice, pointed
-              at Freehold itself. Ask it anything, including what it can't do.
+              Coordinators ask Freehold things like &ldquo;what&rsquo;s closing this week?&rdquo;
+              out loud and hear the answer from their own files. This is that same voice, pointed at
+              Freehold itself. Ask it anything about the product.
             </p>
           </div>
           <VoiceDemo />
@@ -258,15 +294,15 @@ export default async function LandingPage() {
       <section id="extraction" className="border-b border-stone-200/70 bg-white">
         <div className="mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:py-24">
           <div>
-            <p className="text-sm font-medium text-brand-600">AI contract extraction</p>
+            <p className="text-sm font-medium text-brand-600">AI contract reading</p>
             <h2 className="font-display mt-2 text-4xl font-extrabold tracking-tight md:text-5xl">
-              No data entry. None.
+              Upload the contract. The file builds itself.
             </h2>
             <p className="mt-4 max-w-xl leading-relaxed text-stone-600">
-              Upload a purchase contract and Claude extracts the parties, price, deposits, and every
-              deadline-bearing date. It even computes the relative ones, like &quot;ten days from
-              the Effective Date,&quot; onto the calendar. Every field carries a page citation and a
-              confidence level. Nothing enters the record until a human confirms it.
+              Freehold reads the contract with Claude, cutting-edge AI, and pulls out the people,
+              the price, and every deadline, even the tricky ones like &quot;ten days from the
+              Effective Date.&quot; It is included on every paid plan at no extra charge, along with
+              every other place AI helps in Freehold. One monthly price covers all of it.
             </p>
           </div>
           <div className="flex flex-col">
@@ -294,20 +330,20 @@ export default async function LandingPage() {
       {/* Feature bento */}
       <section id="features" className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
         <h2 className="font-display max-w-2xl text-3xl font-extrabold leading-[1.15] tracking-tight md:text-4xl lg:text-5xl">
-          Everything a transaction coordinator runs in a day.
+          Everything you run in a day, in one place.
         </h2>
         <p className="mt-4 max-w-xl leading-relaxed text-stone-600">
-          Tasks, contacts, documents, signatures, and dates in one system, not scattered across
-          spreadsheets, inboxes, and PDFs.
+          Closings, clients, documents, and emails together, so you stop juggling spreadsheets,
+          inboxes, and sticky notes.
         </p>
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="rounded-xl bg-brand-700 p-6 text-white sm:col-span-2">
             <ListChecks size={26} weight="regular" aria-hidden className="text-white/85" />
-            <h3 className="mt-3 font-semibold">Transactions and action plans</h3>
+            <h3 className="mt-3 font-semibold">Templates for everything, all included</h3>
             <p className="mt-1.5 max-w-lg text-sm leading-relaxed text-white/90">
-              Unlimited transactions with custom fields, documents, and parties. Apply a checklist
-              template and every deadline task is dated from the contract automatically. Set it
-              once, run it on every file.
+              Checklists, email templates, intake forms, and document templates that fill themselves
+              in from the deal. Set them up once, or start from the library we include, and every
+              new closing starts itself.
             </p>
           </div>
           <div className="relative min-h-44 overflow-hidden rounded-xl border border-stone-200/70">
@@ -329,8 +365,61 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* Keep the workflow. Drop the invoice. */}
+      {/* A look inside: real screenshots */}
       <section className="border-y border-stone-200/70 bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
+          <h2 className="font-display max-w-xl text-3xl font-bold tracking-tight md:text-4xl">
+            A look inside
+          </h2>
+          <p className="mt-3 max-w-xl leading-relaxed text-stone-600">
+            Real screens from the product, close up. Click any of them to see the full view.
+          </p>
+          <div className="mt-10 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+            <ScreenshotFigure
+              src={shotTransactions}
+              crop
+              alt="The transactions list showing each closing, its stage, and its dates"
+              caption="Every closing, its stage, and its dates on one screen."
+            />
+            <ScreenshotFigure
+              src={shotContacts}
+              crop
+              alt="The contacts list with names, phone numbers, and emails"
+              caption="Everyone on your deals, one tap away."
+            />
+            <ScreenshotFigure
+              src={shotVoice}
+              crop
+              position="center top"
+              alt="The voice search window answering a question about the week's closings"
+              caption="Ask out loud. It answers from your files."
+            />
+            <ScreenshotFigure
+              src={shotAgentPortal}
+              crop
+              position="center top"
+              alt="The portal an agent sees: the property, its status, and the task checklist"
+              caption="What an agent sees from the link you send. Clients get their own view."
+            />
+            <ScreenshotFigure
+              src={shotIntakeForm}
+              crop
+              position="center top"
+              alt="A new listing intake form with address, price, and client questions"
+              caption="Agents send you new business through your own intake form."
+            />
+            <ScreenshotFigure
+              src={shotThemes}
+              crop
+              alt="The appearance settings with eight colour themes to pick from"
+              caption="Pick your colour once. Your dashboard, emails, and portals all match."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Straight to the price */}
+      <section className="border-b border-stone-200/70 bg-stone-50">
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:py-24">
           <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-stone-200/70">
             <Image
@@ -343,32 +432,33 @@ export default async function LandingPage() {
           </div>
           <div>
             <h2 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
-              Keep the workflow.
-              <br />
-              Drop the invoice.
+              The price, plainly.
             </h2>
             <p className="mt-3 max-w-md leading-relaxed text-stone-600">
-              Legacy TC platforms run $99 or more a month and make leaving painful. Freehold starts
-              free, and your data stays readable and exportable forever, on any plan.
+              Start free. When you are running more than five closings at a time, Cloud Pro is $40 a
+              month. That is the whole price: the AI, the portals, the templates, and support are
+              all in it.
             </p>
             <dl className="mt-7 grid grid-cols-3 gap-4">
               <div>
-                <dt className="sr-only">Self-hosted price</dt>
-                <dd className="font-display text-4xl font-bold tabular-nums text-brand-700">$0</dd>
-                <p className="mt-1 text-xs leading-snug text-stone-500">Self-hosted, forever</p>
+                <dt className="sr-only">Free active closings</dt>
+                <dd className="font-display text-4xl font-bold tabular-nums text-brand-700">5</dd>
+                <p className="mt-1 text-xs leading-snug text-stone-500">
+                  Active closings free, no credit card
+                </p>
               </div>
               <div>
                 <dt className="sr-only">Cloud Pro price</dt>
                 <dd className="font-display text-4xl font-bold tabular-nums text-brand-700">$40</dd>
                 <p className="mt-1 text-xs leading-snug text-stone-500">
-                  Cloud Pro monthly, 2 users included
+                  Cloud Pro monthly, AI included
                 </p>
               </div>
               <div>
-                <dt className="sr-only">Free active transactions</dt>
-                <dd className="font-display text-4xl font-bold tabular-nums text-brand-700">5</dd>
+                <dt className="sr-only">Days of included onboarding</dt>
+                <dd className="font-display text-4xl font-bold tabular-nums text-brand-700">30</dd>
                 <p className="mt-1 text-xs leading-snug text-stone-500">
-                  Active transactions free on Cloud
+                  Days of onboarding help, included
                 </p>
               </div>
             </dl>
@@ -382,7 +472,7 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* Built for the people who run closings (dark photo section) */}
+      {/* Communication (dark photo section) */}
       <section className="relative overflow-hidden">
         <Image
           src={tcAtWork}
@@ -398,125 +488,56 @@ export default async function LandingPage() {
         />
         <div className="relative mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
           <h2 className="max-w-md text-3xl font-semibold tracking-tight text-white md:text-4xl">
-            Built for the people who run closings.
+            The best-informed people in the deal are yours.
           </h2>
           <div className="mt-8 flex max-w-xl flex-col divide-y divide-white/15">
             <div className="py-4">
-              <h3 className="font-medium text-white">Transaction coordinators</h3>
+              <h3 className="font-medium text-white">Your clients</h3>
               <p className="mt-1 text-sm leading-relaxed text-stone-200">
-                Structured checklists, computed deadlines, and organized documents. Nothing slips,
-                even at volume.
+                They see their closing move forward on their portal and get the right email at the
+                right moment. Cared for between the milestones, not just at them.
               </p>
             </div>
             <div className="py-4">
-              <h3 className="font-medium text-white">Agents and teams</h3>
+              <h3 className="font-medium text-white">The agents</h3>
               <p className="mt-1 text-sm leading-relaxed text-stone-200">
-                Your TC shares a portal link and you always know exactly where the deal stands.
+                One link and they always know where the deal stands. The &quot;any update?&quot;
+                calls stop, because the answer is already in their hands.
               </p>
             </div>
             <div className="py-4">
-              <h3 className="font-medium text-white">Brokerages and title companies</h3>
+              <h3 className="font-medium text-white">You</h3>
               <p className="mt-1 text-sm leading-relaxed text-stone-200">
-                One structured back office, and your data is never held hostage.
+                Every email you send goes out from the file and every reply comes back to it. You
+                look on top of everything, because you are.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Why TCs and brokerages switch */}
-      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
-        <h2 className="max-w-md font-display text-3xl font-bold tracking-tight md:text-4xl">
-          Why TCs and brokerages switch
-        </h2>
-        <div className="mt-10 grid gap-x-12 gap-y-8 md:grid-cols-2">
-          <div className="border-l-2 border-stone-200 pl-5">
-            <h3 className="font-medium">AI that shows its work</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
-              Extraction cites the page and clause for every field. A confirmation screen puts field
-              and source side by side before anything is saved. Low confidence is flagged, never
-              silently filled.
+      {/* Vendor orders + sample email */}
+      <section className="border-b border-stone-200/70 bg-white">
+        <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:py-24">
+          <div>
+            <h2 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
+              Order title, photos, or an attorney without retyping a thing.
+            </h2>
+            <p className="mt-3 max-w-md leading-relaxed text-stone-600">
+              Pick who you are ordering from and Freehold writes the email from the deal itself: the
+              address, the price, the dates, the people, and the right documents attached. You read
+              it, maybe tweak a line, and send.
+            </p>
+            <p className="mt-3 max-w-md leading-relaxed text-stone-600">
+              When the reply comes back, it lands on the file, where the whole story of the deal
+              lives.
             </p>
           </div>
-          <div className="border-l-2 border-stone-200 pl-5">
-            <h3 className="font-medium">The code is the exit clause</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
-              The entire product's code is public and free to self-host. Leave Cloud any time and
-              run the same software on your own server, with your own data. No caps, no license
-              keys.
-            </p>
-          </div>
-          <div className="border-l-2 border-stone-200 pl-5">
-            <h3 className="font-medium">The system does the chasing</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
-              Apply an action plan and every deadline becomes a dated, assigned task. You stop
-              keeping the calendar in your head. The file keeps it for you.
-            </p>
-          </div>
-          <div className="border-l-2 border-stone-200 pl-5">
-            <h3 className="font-medium">Isolation you can prove</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
-              Every workspace's data is walled off with Postgres row-level security, enforced by the
-              database itself, not just the application code. Documents and credentials are
-              envelope-encrypted at the application layer — even direct database access yields
-              ciphertext.
-            </p>
-          </div>
+          <OrderEmailCard />
         </div>
       </section>
 
-      {/* Your data stays yours */}
-      <section className="border-y border-stone-200/70 bg-stone-50/70">
-        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
-          <h2 className="max-w-xl font-display text-3xl font-bold tracking-tight md:text-4xl">
-            Your data stays yours
-          </h2>
-          <p className="mt-3 max-w-2xl text-lg leading-relaxed text-stone-600">
-            Real business data deserves real guardrails — and a way out that never depends on us.
-          </p>
-          <div className="mt-10 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <h3 className="font-medium">Tied to your login</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
-                Your workspace is reachable only through your authenticated account, with optional
-                two-factor. One workspace can never see another's data — Postgres row-level security
-                enforces it in the database itself.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-medium">Encrypted, and never sold</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
-                Documents and credentials are envelope-encrypted at rest. We use your data to run
-                the service and nothing else — it's never sold or shared, and your documents are
-                never used to train AI models.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-medium">Your storage, your control</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
-                Keep every document in a cloud bucket you own — S3, R2, Backblaze, Wasabi, or MinIO.
-                Freehold reads and writes it, but the files live in your infrastructure, not ours.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-medium">Yours to take, any time</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
-                Download everything — records and documents — in one archive whenever you want, or
-                get an automatic nightly copy delivered to your own storage. Every morning, a
-                briefing of your active deals lands in your inbox — readable offline.
-              </p>
-            </div>
-          </div>
-          <p className="mt-10 max-w-3xl text-base leading-relaxed text-stone-500">
-            Think of it as insurance you hope never to need. We plan for the worst case the way
-            anyone sensible does — the open code, your own exports, and a briefing in your inbox
-            each morning mean your business keeps running even if your connection drops, your
-            storage fails, or Freehold itself goes away.
-          </p>
-        </div>
-      </section>
-
-      {/* Rotating hero: cheese (built to last) crossfades with then-vs-now (honest pricing) */}
+      {/* Rotating hero: cheese crossfades with then-vs-now. Keep the jokes. */}
       <section className="hero-crossfade relative min-h-[420px] overflow-hidden lg:min-h-[520px]">
         <div className="hero-slide absolute inset-0">
           <Image
@@ -530,9 +551,6 @@ export default async function LandingPage() {
             aria-hidden
             className="absolute inset-0 bg-gradient-to-t from-stone-950/85 via-stone-950/30 to-transparent"
           />
-          {/* Second scrim from the left: the headline sits over the busy half
-              of these photos, and the vertical gradient alone isn't enough to
-              keep white text legible against neon and clutter. */}
           <div
             aria-hidden
             className="absolute inset-0 bg-gradient-to-r from-stone-950/70 via-stone-950/20 to-transparent"
@@ -542,15 +560,15 @@ export default async function LandingPage() {
               Age cheese, <em className="italic">not</em> your software.
             </h2>
             <p className="mt-4 max-w-md text-sm leading-relaxed text-stone-200">
-              Most TC platforms were built a generation ago. Freehold ships every week — and you can
-              read the code.
+              Most TC platforms were built a generation ago, and it shows. Freehold gets better
+              every single week.
             </p>
             <p className="mt-5">
               <Link
                 href="/features"
                 className="text-sm font-medium text-white underline underline-offset-4 hover:text-brand-200"
               >
-                See what's already shipped →
+                See what&apos;s already shipped →
               </Link>
             </p>
           </div>
@@ -558,7 +576,7 @@ export default async function LandingPage() {
         <div className="hero-slide absolute inset-0">
           <Image
             src="/marketing/then-vs-now.jpg"
-            alt="Split image: a sprawling, empty tech office at dusk beside rows of glowing server racks on the left, one person working alone at a small desk in an apartment on the right"
+            alt="Split image: a sprawling tech office at dusk beside one person working alone at a small desk in an apartment"
             fill
             sizes="100vw"
             className="object-cover"
@@ -567,9 +585,6 @@ export default async function LandingPage() {
             aria-hidden
             className="absolute inset-0 bg-gradient-to-t from-stone-950/85 via-stone-950/30 to-transparent"
           />
-          {/* Second scrim from the left: the headline sits over the busy half
-              of these photos, and the vertical gradient alone isn't enough to
-              keep white text legible against neon and clutter. */}
           <div
             aria-hidden
             className="absolute inset-0 bg-gradient-to-r from-stone-950/70 via-stone-950/20 to-transparent"
@@ -579,22 +594,21 @@ export default async function LandingPage() {
               2006: a floor of engineers. <em className="italic">2026:</em> one guy and an API.
             </h2>
             <p className="mt-4 max-w-md text-sm leading-relaxed text-stone-200">
-              Software got cheaper to build. Most subscriptions never got cheaper to buy — ours
-              does.
+              Software got cheaper to build. Most subscriptions never got cheaper to buy. Ours did.
             </p>
             <p className="mt-5">
               <Link
                 href="/pricing"
                 className="text-sm font-medium text-white underline underline-offset-4 hover:text-brand-200"
               >
-                See pricing →
+                View pricing →
               </Link>
             </p>
           </div>
         </div>
       </section>
 
-      {/* Freehold Cloud sell */}
+      {/* We look after you */}
       <section className="border-t border-brand-600/15 bg-brand-50/50">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
           <div className="max-w-2xl">
@@ -602,48 +616,47 @@ export default async function LandingPage() {
               <CloudWordmark size="md" />
             </div>
             <h2 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
-              The parts you never wanted to think about, handled
+              We look after you, so you can look after them.
             </h2>
             <p className="mt-3 max-w-xl leading-relaxed text-stone-600">
-              Sign up, upload your first contract, and you're working. Everything below is our job,
-              not yours.
+              Sign up, upload your first contract, and you are working. Everything below comes with
+              the account.
             </p>
           </div>
           <div className="mt-10 grid gap-x-10 gap-y-8 sm:grid-cols-2">
             <div>
-              <h3 className="font-medium">Working in minutes, not weekends</h3>
+              <h3 className="font-medium">A real person answers</h3>
               <p className="mt-1.5 max-w-md text-sm leading-relaxed text-stone-600">
-                No server, no setup, no IT person. Open a browser, sign up, and your first file is
-                organized before lunch. Switching systems takes an afternoon, not a month.
+                Support is a real phone number and live chat. No voicemail, no ticket numbers. You
+                call for help, a person picks up.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium">30 days of onboarding, free</h3>
+              <p className="mt-1.5 max-w-md text-sm leading-relaxed text-stone-600">
+                We help you set up your templates, your portals, and your first files, and we help
+                you move off whatever system you are leaving. Included with every new account.
               </p>
             </div>
             <div>
               <h3 className="font-medium">AI included, no surprise bills</h3>
               <p className="mt-1.5 max-w-md text-sm leading-relaxed text-stone-600">
-                Contract reading is part of every plan, even Free. No API keys to buy, no usage
-                meters to watch, no separate AI subscription. One price covers it.
+                Contract reading, voice search, and every other place AI helps are part of the one
+                monthly price. Nothing extra to buy, no usage meter to watch.
               </p>
             </div>
             <div>
-              <h3 className="font-medium">Updates and backups, automatic</h3>
+              <h3 className="font-medium">A free listing on FindTCPros.com</h3>
               <p className="mt-1.5 max-w-md text-sm leading-relaxed text-stone-600">
-                New features and AI improvements land on Cloud first, without you lifting a finger.
-                Backups, security patches, and uptime are handled while you sleep.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-medium">Never locked in</h3>
-              <p className="mt-1.5 max-w-md text-sm leading-relaxed text-stone-600">
-                Your data exports any time and there are no contracts. Because Freehold is free to
-                self-host, the escape hatch is real. We keep you by being good, not by holding your
-                files.
+                Every paid account includes a free listing on FindTCPros.com, where agents go
+                looking for a transaction coordinator. A little more business, on us.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* For IT providers */}
+      {/* For IT providers: the one place the self-hosting story lives */}
       <section id="partners" className="border-t border-stone-200/70 bg-stone-50">
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:py-24">
           <div>
@@ -652,10 +665,11 @@ export default async function LandingPage() {
               Run Freehold for every brokerage you serve.
             </h2>
             <p className="mt-3 max-w-md leading-relaxed text-stone-600">
-              Because Freehold is free to self-host, you can host an isolated instance for each of
-              your brokerage clients today, on your infrastructure, under your brand. A partner
-              dashboard that manages fleets of instances, with per-client plans on one bill, is in
-              development.
+              The entire product&apos;s code is public, and hosting Freehold on your own servers is
+              free, forever. That means an IT team can run a private, isolated copy for each
+              brokerage it serves, under its own brand, and any customer can take their data and run
+              the same software themselves. If you are not an IT person, you never need to think
+              about any of this: it is simply why nobody&apos;s data is ever stuck here.
             </p>
             <a
               href="mailto:partners@freeholdtc.dev"
@@ -697,8 +711,41 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* FAQ */}
+      {/* Trust and security */}
       <section className="border-t border-stone-200/70 bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
+          <h2 className="max-w-xl font-display text-3xl font-bold tracking-tight md:text-4xl">
+            Your files are safe, and they are yours
+          </h2>
+          <div className="mt-10 grid gap-x-10 gap-y-8 sm:grid-cols-3">
+            <div>
+              <h3 className="font-medium">Locked up properly</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
+                Documents and saved logins are protected with cutting-edge database encryption, and
+                your workspace is reachable only through your own sign-in, with two-factor if you
+                want it.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium">Private, full stop</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
+                Your data is used to run your account and for nothing else. It is never sold, never
+                shared, and your documents are never used to train AI models.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium">Yours to take, any time</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
+                Download everything, records and documents, in one file whenever you like, on any
+                plan. No waiting period, no phone call, no fee.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="border-t border-stone-200/70 bg-stone-50/70">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
           <h2 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
             Fair questions
@@ -718,11 +765,11 @@ export default async function LandingPage() {
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
         <div className="rounded-3xl bg-[radial-gradient(80%_120%_at_50%_0%,#0b7a49_0%,#054f30_100%)] px-6 py-16 text-center sm:px-12">
           <h2 className="font-display mx-auto max-w-2xl text-3xl font-bold tracking-tight text-white md:text-4xl">
-            Free for 2 users and 5 active transactions — no credit card required.
+            Free for 2 users and 5 active closings. No credit card.
           </h2>
           <p className="mx-auto mt-4 max-w-xl leading-relaxed text-brand-50/90">
-            Hit a limit and your data stays readable and exportable forever. Upgrading is a choice,
-            never a ransom.
+            Start with one file and see how it feels. Your first 30 days include onboarding help
+            from a real person.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link
@@ -732,16 +779,10 @@ export default async function LandingPage() {
               {CTA_PRIMARY}
             </Link>
             <a
-              href="/pricing"
-              className="rounded-lg border border-white/30 px-5 py-2.5 font-medium text-white transition hover:border-white/60 hover:bg-white/10 active:scale-[0.98]"
-            >
-              View pricing
-            </a>
-            <a
               href="/demo"
               className="rounded-lg border border-white/30 px-5 py-2.5 font-medium text-white transition hover:border-white/60 hover:bg-white/10 active:scale-[0.98]"
             >
-              Explore the live demo
+              Try the live demo, no sign-up
             </a>
           </div>
         </div>
