@@ -1,8 +1,9 @@
 import {
+  Buildings,
   DownloadSimple,
-  FacebookLogo,
   Image as ImageIcon,
   Sparkle,
+  UserCircle,
   VideoCamera,
   YoutubeLogo,
 } from "@phosphor-icons/react/dist/ssr";
@@ -35,8 +36,8 @@ const DIR = "/marketing/social";
 export default async function AdminSocialPage() {
   if (!(await isOperator())) notFound();
 
-  const shortPosts = SOCIAL_POSTS.filter((p) => p.length === "short");
-  const longPosts = SOCIAL_POSTS.filter((p) => p.length === "long");
+  const byVoice = (voice: "founder" | "company", length: "short" | "long") =>
+    SOCIAL_POSTS.filter((p) => p.voice === voice && p.length === length);
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
@@ -53,43 +54,46 @@ export default async function AdminSocialPage() {
         </p>
       </div>
 
-      {/* Posts: short ------------------------------------------------------ */}
+      {/* Founder voice ----------------------------------------------------- */}
       <section className={card}>
-        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+        <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="flex items-center gap-2 font-medium">
-            <FacebookLogo size={17} weight="fill" className="text-brand-700" aria-hidden />
-            Short posts
-            <span className="text-sm font-normal text-stone-400">{shortPosts.length}</span>
+            <UserCircle size={18} weight="fill" className="text-brand-700" aria-hidden />
+            Founder voice
+            <span className="text-sm font-normal text-stone-400">
+              {byVoice("founder", "short").length + byVoice("founder", "long").length}
+            </span>
           </h2>
-          <p className="text-xs text-stone-500">
-            One or two lines. For dropping into a group thread without taking it over.
-          </p>
+          <p className="text-xs text-stone-500">Paul only. These say &ldquo;I built this&rdquo;.</p>
         </div>
-        <div className="grid gap-3 lg:grid-cols-2">
-          {shortPosts.map((p) => (
-            <PostCard key={p.id} post={p} />
-          ))}
-        </div>
+        <p className="mb-4 max-w-2xl text-sm leading-relaxed text-stone-600">
+          First person, from the person who made it. This is the voice that works in a group where
+          people are wary of being sold to, because it is someone asking for an opinion rather than
+          a brand talking.
+        </p>
+        <PostGrid title="Short" posts={byVoice("founder", "short")} />
+        <PostGrid title="Longer" posts={byVoice("founder", "long")} stacked />
       </section>
 
-      {/* Posts: long ------------------------------------------------------- */}
+      {/* Company voice ----------------------------------------------------- */}
       <section className={card}>
-        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+        <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="flex items-center gap-2 font-medium">
-            <FacebookLogo size={17} weight="fill" className="text-brand-700" aria-hidden />
-            Longer posts
-            <span className="text-sm font-normal text-stone-400">{longPosts.length}</span>
+            <Buildings size={18} weight="fill" className="text-brand-700" aria-hidden />
+            Company voice
+            <span className="text-sm font-normal text-stone-400">
+              {byVoice("company", "short").length + byVoice("company", "long").length}
+            </span>
           </h2>
-          <p className="text-xs text-stone-500">
-            For a post that has to earn its place. Read once before posting: they are written in
-            first person.
-          </p>
+          <p className="text-xs text-stone-500">For a sales rep, or the brand account.</p>
         </div>
-        <div className="flex flex-col gap-3">
-          {longPosts.map((p) => (
-            <PostCard key={p.id} post={p} wide />
-          ))}
-        </div>
+        <p className="mb-4 max-w-2xl text-sm leading-relaxed text-stone-600">
+          Same claims, no first-person authorship. Anyone on the team can post these without
+          pretending to have built the product. Use these on the Freehold page and anywhere a rep is
+          posting under their own name.
+        </p>
+        <PostGrid title="Short" posts={byVoice("company", "short")} />
+        <PostGrid title="Longer" posts={byVoice("company", "long")} stacked />
       </section>
 
       {/* Videos ------------------------------------------------------------ */}
@@ -250,6 +254,30 @@ export default async function AdminSocialPage() {
           pipeline and everything here is rebuilt from the current UI.
         </p>
       </section>
+    </div>
+  );
+}
+
+function PostGrid({
+  title,
+  posts,
+  stacked = false,
+}: {
+  title: string;
+  posts: SocialPost[];
+  stacked?: boolean;
+}) {
+  if (posts.length === 0) return null;
+  return (
+    <div className={stacked ? "mt-5" : ""}>
+      <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-stone-400">
+        {title} · {posts.length}
+      </h3>
+      <div className={stacked ? "flex flex-col gap-3" : "grid gap-3 lg:grid-cols-2"}>
+        {posts.map((p) => (
+          <PostCard key={p.id} post={p} wide={stacked} />
+        ))}
+      </div>
     </div>
   );
 }

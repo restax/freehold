@@ -19,6 +19,21 @@ describe("the post list", () => {
     expect(SOCIAL_POSTS.filter((p) => p.length === "long").length).toBeGreaterThanOrEqual(6);
   });
 
+  it("covers both voices, in both lengths", () => {
+    for (const voice of ["founder", "company"] as const) {
+      const mine = SOCIAL_POSTS.filter((p) => p.voice === voice);
+      expect(mine.length, voice).toBeGreaterThanOrEqual(10);
+      expect(
+        mine.some((p) => p.length === "short"),
+        voice,
+      ).toBe(true);
+      expect(
+        mine.some((p) => p.length === "long"),
+        voice,
+      ).toBe(true);
+    }
+  });
+
   it("keeps the short ones actually short", () => {
     // A group post that runs long gets scrolled past. Two lines, near enough.
     for (const p of SOCIAL_POSTS.filter((p) => p.length === "short")) {
@@ -80,6 +95,41 @@ describe("the promises these posts make", () => {
     for (const p of SOCIAL_POSTS) {
       expect(p.body, p.id).not.toContain("—");
       expect(p.body, p.id).not.toContain("–");
+    }
+  });
+});
+
+describe("who is speaking", () => {
+  const FIRST_PERSON_AUTHOR = [
+    /\bi built\b/i,
+    /\bi've built\b/i,
+    /\bi made\b/i,
+    /\bi've spent\b/i,
+    /\bthe system i\b/i,
+    /\bwhile building this\b/i,
+    /\bi'm asking\b/i,
+  ];
+
+  it("never has a company post claim to have built the product", () => {
+    // These get posted by a sales rep under the brand's name. A rep saying
+    // "I built this" is the single thing that would make the whole account
+    // read as fake, and it is an easy mistake to make when copy is edited.
+    for (const p of SOCIAL_POSTS.filter((p) => p.voice === "company")) {
+      for (const re of FIRST_PERSON_AUTHOR) {
+        expect(re.test(p.body), `${p.id}: ${re}`).toBe(false);
+      }
+    }
+  });
+
+  it("keeps the founder posts personal, which is the point of them", () => {
+    const founder = SOCIAL_POSTS.filter((p) => p.voice === "founder");
+    const personal = founder.filter((p) => FIRST_PERSON_AUTHOR.some((re) => re.test(p.body)));
+    expect(personal.length).toBeGreaterThan(0);
+  });
+
+  it("names the product in the company posts, since nobody knows it yet", () => {
+    for (const p of SOCIAL_POSTS.filter((p) => p.voice === "company")) {
+      expect(p.body, p.id).toMatch(/freehold/i);
     }
   });
 });

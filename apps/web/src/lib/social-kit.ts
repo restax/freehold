@@ -12,11 +12,19 @@
 
 export type PostLength = "short" | "long";
 
+/**
+ * Who is speaking. The founder posts are first person and only work coming
+ * from Paul; the company posts are what a sales rep can put in a group under
+ * the brand's name without pretending to have built the thing.
+ */
+export type PostVoice = "founder" | "company";
+
 export interface SocialPost {
   id: string;
   /** Where this one is aimed. Groups have different tolerances for a pitch. */
   audience: "Facebook group" | "Facebook page" | "YouTube" | "Anywhere";
   length: PostLength;
+  voice: PostVoice;
   /** What the post is for, shown as a chip so Paul can scan the list. */
   angle: string;
   body: string;
@@ -30,6 +38,7 @@ export const SOCIAL_POSTS: SocialPost[] = [
   // --- Short: one or two lines, for dropping into a group thread ----------
   {
     id: "s1",
+    voice: "founder",
     audience: "Facebook group",
     length: "short",
     angle: "Intro",
@@ -38,6 +47,7 @@ export const SOCIAL_POSTS: SocialPost[] = [
   },
   {
     id: "s2",
+    voice: "founder",
     audience: "Facebook group",
     length: "short",
     angle: "Client portal",
@@ -46,6 +56,7 @@ export const SOCIAL_POSTS: SocialPost[] = [
   },
   {
     id: "s3",
+    voice: "founder",
     audience: "Anywhere",
     length: "short",
     angle: "Contract reading",
@@ -54,6 +65,7 @@ export const SOCIAL_POSTS: SocialPost[] = [
   },
   {
     id: "s4",
+    voice: "founder",
     audience: "Facebook group",
     length: "short",
     angle: "Price",
@@ -62,6 +74,7 @@ export const SOCIAL_POSTS: SocialPost[] = [
   },
   {
     id: "s5",
+    voice: "founder",
     audience: "Anywhere",
     length: "short",
     angle: "Support",
@@ -69,6 +82,7 @@ export const SOCIAL_POSTS: SocialPost[] = [
   },
   {
     id: "s6",
+    voice: "founder",
     audience: "Facebook group",
     length: "short",
     angle: "Onboarding",
@@ -76,6 +90,7 @@ export const SOCIAL_POSTS: SocialPost[] = [
   },
   {
     id: "s7",
+    voice: "founder",
     audience: "Anywhere",
     length: "short",
     angle: "Voice search",
@@ -84,6 +99,7 @@ export const SOCIAL_POSTS: SocialPost[] = [
   },
   {
     id: "s8",
+    voice: "founder",
     audience: "Facebook group",
     length: "short",
     angle: "Try it",
@@ -92,6 +108,7 @@ export const SOCIAL_POSTS: SocialPost[] = [
   },
   {
     id: "s9",
+    voice: "founder",
     audience: "Anywhere",
     length: "short",
     angle: "Templates",
@@ -100,6 +117,7 @@ export const SOCIAL_POSTS: SocialPost[] = [
   },
   {
     id: "s10",
+    voice: "founder",
     audience: "Facebook page",
     length: "short",
     angle: "Branding",
@@ -108,6 +126,7 @@ export const SOCIAL_POSTS: SocialPost[] = [
   },
   {
     id: "s11",
+    voice: "founder",
     audience: "Anywhere",
     length: "short",
     angle: "PDFs",
@@ -116,6 +135,7 @@ export const SOCIAL_POSTS: SocialPost[] = [
   },
   {
     id: "s12",
+    voice: "founder",
     audience: "Facebook group",
     length: "short",
     angle: "Intake",
@@ -126,6 +146,7 @@ export const SOCIAL_POSTS: SocialPost[] = [
   // --- Long: for a post that earns its place in a group -------------------
   {
     id: "l1",
+    voice: "founder",
     audience: "Facebook group",
     length: "long",
     angle: "Founder intro",
@@ -142,6 +163,7 @@ Genuinely after honest feedback, including the parts you'd hate.`,
   },
   {
     id: "l2",
+    voice: "founder",
     audience: "Facebook group",
     length: "long",
     angle: "Client experience",
@@ -158,6 +180,7 @@ Free for your first 5 closings if you want to try it on a real file: ${SITE}`,
   },
   {
     id: "l3",
+    voice: "founder",
     audience: "Facebook group",
     length: "long",
     angle: "Data entry",
@@ -174,6 +197,7 @@ ${SITE}`,
   },
   {
     id: "l4",
+    voice: "founder",
     audience: "Facebook group",
     length: "long",
     angle: "Switching",
@@ -189,6 +213,7 @@ Free to start, no credit card: ${SITE}`,
   },
   {
     id: "l5",
+    voice: "founder",
     audience: "Facebook page",
     length: "long",
     angle: "What's included",
@@ -211,6 +236,7 @@ Start free, 5 active closings, no credit card: ${SITE}`,
   },
   {
     id: "l6",
+    voice: "founder",
     audience: "Facebook group",
     length: "long",
     angle: "Ask for feedback",
@@ -226,6 +252,7 @@ But I'd rather hear the thing I've missed.`,
   },
   {
     id: "l7",
+    voice: "founder",
     audience: "YouTube",
     length: "long",
     angle: "Video description",
@@ -245,6 +272,7 @@ Chapters:
   },
   {
     id: "l8",
+    voice: "founder",
     audience: "Anywhere",
     length: "long",
     angle: "Independent TCs",
@@ -258,6 +286,180 @@ Free for your first 5 closings, no credit card: ${SITE}
 
 And there's a free listing on FindTCPros.com with every paid account, where agents go looking for a coordinator.`,
     suggestedAsset: "card-portal.png",
+  },
+
+  // --- Company voice: for a sales rep posting under the brand's name -----
+  // Same claims, no first-person authorship. A rep saying "I built this"
+  // is the one thing that would make the whole account read as fake.
+  {
+    id: "c1",
+    voice: "company",
+    audience: "Facebook group",
+    length: "short",
+    angle: "Intro",
+    body: `Freehold is transaction management built specifically for coordinators. Every closing on one page, and a free plan that covers your first 5, no credit card: ${SITE}`,
+    suggestedAsset: "shot-dashboard.png",
+  },
+  {
+    id: "c2",
+    voice: "company",
+    audience: "Anywhere",
+    length: "short",
+    angle: "Client portal",
+    body: `At Freehold, we think a client should never have to ask where their closing stands. Every deal comes with a portal they can check any time: ${SITE}`,
+    suggestedAsset: "shot-client-portal.png",
+  },
+  {
+    id: "c3",
+    voice: "company",
+    audience: "Facebook group",
+    length: "short",
+    angle: "Contract reading",
+    body: `Freehold reads the purchase contract and fills the file in for you: the dates, the deadlines, the people. You approve it; it does the typing. ${SITE}`,
+    suggestedAsset: "card-contract.png",
+  },
+  {
+    id: "c4",
+    voice: "company",
+    audience: "Facebook page",
+    length: "short",
+    angle: "Price",
+    body: `One price, everything in it. Freehold is $40 a month with the AI, the portals, the templates, and support included. No per-transaction fees: ${SITE}`,
+    suggestedAsset: "card-price.png",
+  },
+  {
+    id: "c5",
+    voice: "company",
+    audience: "Anywhere",
+    length: "short",
+    angle: "Support",
+    body: `Freehold customers get a real phone number and live chat. No voicemail, no ticket queue. You call, a person answers: ${SITE}`,
+  },
+  {
+    id: "c6",
+    voice: "company",
+    audience: "Facebook group",
+    length: "short",
+    angle: "Onboarding",
+    body: `Every new Freehold account includes 30 days of onboarding at no charge, and that covers moving you off your current system: ${SITE}`,
+  },
+  {
+    id: "c7",
+    voice: "company",
+    audience: "Anywhere",
+    length: "short",
+    angle: "Voice search",
+    body: `Ask Freehold what's closing this week and it answers out loud, from your own files, then opens the right page: ${SITE}`,
+    suggestedAsset: "shot-voice.png",
+  },
+  {
+    id: "c8",
+    voice: "company",
+    audience: "Facebook group",
+    length: "short",
+    angle: "Try it",
+    body: `You can try Freehold right now with sample data. No sign-up, no email, nothing to cancel: ${SITE}/demo`,
+    suggestedAsset: "shot-transactions.png",
+  },
+  {
+    id: "c9",
+    voice: "company",
+    audience: "Anywhere",
+    length: "short",
+    angle: "Templates",
+    body: `Checklists, emails, intake forms, and document templates all come with Freehold, along with a starter library so nobody begins from a blank page: ${SITE}`,
+    suggestedAsset: "shot-templates.png",
+  },
+  {
+    id: "c10",
+    voice: "company",
+    audience: "Facebook page",
+    length: "short",
+    angle: "Branding",
+    body: `Your dashboard, your emails, and your client portals all carry your colours. Freehold looks like your business, because it is: ${SITE}`,
+    suggestedAsset: "shot-themes.png",
+  },
+  {
+    id: "c11",
+    voice: "company",
+    audience: "Anywhere",
+    length: "short",
+    angle: "Agents",
+    body: `Give every agent you work with a link to the deal. Freehold keeps it current, so the "any update?" calls stop coming: ${SITE}`,
+    suggestedAsset: "shot-client-portal.png",
+  },
+  {
+    id: "c12",
+    voice: "company",
+    audience: "Facebook group",
+    length: "short",
+    angle: "Free listing",
+    body: `Every paid Freehold account includes a free listing on FindTCPros.com, where agents go looking for a coordinator: ${SITE}`,
+  },
+
+  // Company voice, longer.
+  {
+    id: "cl1",
+    voice: "company",
+    audience: "Facebook group",
+    length: "long",
+    angle: "Relationships",
+    body: `At Freehold, we know how important relationships are in this business. A coordinator's reputation is built on how people feel working with them, not on how many boxes got ticked.
+
+That is why we built Freehold around communication first. Your clients get a portal with your name on it, showing exactly where their closing stands, updated as you work. Your agents get the same, so they stop calling for updates and start sending you referrals. Every email you send goes out from the file, and every reply comes back to it, so the whole story of a deal stays in one place.
+
+The rest of it is there too: AI that reads the purchase contract and fills in the file, templates for everything, PDF tools, and a full CRM. All in one monthly price.
+
+Free for your first 5 closings, no credit card: ${SITE}`,
+    suggestedAsset: "card-portal.png",
+  },
+  {
+    id: "cl2",
+    voice: "company",
+    audience: "Facebook page",
+    length: "long",
+    angle: "What it is",
+    body: `Freehold is transaction management built for the people who actually run closings.
+
+Every deal lives on one page: its dates, its checklist, its documents, and everyone involved. Upload the purchase contract and Freehold reads it, pulling out the deadlines and the parties so nobody retypes what the PDF already says. Nothing is saved until you approve it.
+
+Your clients and agents follow along on portals you control. Your emails send from the file and file themselves back onto it. Your checklists, email templates, intake forms, and document templates are all included, with a starter library to build from.
+
+Support is a real phone number answered by a person, and every new account gets 30 days of onboarding help at no charge.
+
+$40 a month with everything in it, or free for your first 5 active closings: ${SITE}`,
+    suggestedAsset: "cover-facebook.png",
+  },
+  {
+    id: "cl3",
+    voice: "company",
+    audience: "Facebook group",
+    length: "long",
+    angle: "Switching",
+    body: `Thinking about switching transaction management systems but dreading the move?
+
+Here is how it goes with Freehold. You finish your in-flight closings where they are and open new ones in Freehold. Nothing gets disrupted mid-deal. Within a few weeks the old system is empty and you cancel it.
+
+Your first 30 days include onboarding at no charge, and that includes helping you bring over your templates, your checklists, and your contacts. A real person walks you through it.
+
+And if Freehold ever stops being right for you, you download everything, records and documents, in one file, any time, on any plan. No waiting period and no phone call to cancel.
+
+Start free with 5 active closings, no credit card: ${SITE}`,
+  },
+  {
+    id: "cl4",
+    voice: "company",
+    audience: "Anywhere",
+    length: "long",
+    angle: "AI included",
+    body: `Every Freehold plan includes AI, at no extra charge and with no usage meters.
+
+That means the purchase contract gets read for you, with the dates, deadlines, and parties pulled out and shown with the page they came from. It means you can ask a question about your own files out loud and get an answer. It means the busywork that used to eat a morning is checked rather than typed.
+
+We think charging separately for that would be strange. It is part of the product, so it is part of the price.
+
+Freehold is $40 a month with everything included, and free for your first 5 active closings: ${SITE}`,
+    suggestedAsset: "card-contract.png",
   },
 ];
 
