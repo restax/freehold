@@ -906,6 +906,13 @@ model Organization {
   emails                  Email[]
   apiKeys                 ApiKey[]
   mcpConnections          McpConnection[]
+  /// Master switch for the Claude connector, owned by the subscriber.
+  ///
+  /// Off by default: connecting an AI assistant to a workspace full of client
+  /// addresses and deal terms is a decision somebody should make on purpose,
+  /// not discover they already made. Turning it off revokes every live
+  /// connection in this workspace rather than merely hiding the setting.
+  mcpEnabled              Boolean                       @default(false) @map("mcp_enabled")
   invoices                Invoice[]
   invoiceLines            InvoiceLine[]
   invoicePayments         InvoicePayment[]
@@ -933,6 +940,14 @@ model Member {
   /// money; "full" additionally sees team payout/comp data. Resolved by
   /// lib/billing-access.ts.
   billingRole       String?      @map("billing_role")
+  /// What this person's Claude connector may do, assigned from the Team page.
+  /// null = default by role (owner/admin read and write, member reads only,
+  /// guest nothing). "none" cuts a specific person off without disturbing
+  /// anyone else; "read" and "write" set it explicitly. Resolved by
+  /// lib/mcp-access.ts, and re-resolved on every tool call — so changing this
+  /// takes effect on the person's next message to Claude, not whenever their
+  /// token happens to expire.
+  mcpRole           String?      @map("mcp_role")
   /// Capability token for this person's subscribe-once personal calendar feed
   /// in this workspace (a user in two tenants gets a separate feed per one,
   /// same as everything else here — roles and assignments don't cross tenants).
