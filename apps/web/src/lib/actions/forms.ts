@@ -13,6 +13,7 @@ import {
   parseLayout,
   slugifyFormName,
 } from "@/lib/form-schema";
+import { formTemplate } from "@/lib/form-templates";
 import { confirmed, optStr, str } from "@/lib/forms";
 import { requireAdminTenant, requireTenant } from "@/lib/tenant";
 
@@ -37,29 +38,59 @@ async function uniqueSlug(
   }
 }
 
+/**
+ * Install a template as a new form.
+ *
+ * The template is only a starting layout — from here it is an ordinary form
+ * the TC edits, and nothing in the library can reach back into it. It starts
+ * as a draft, because a form that went live the moment it was created would
+ * be published before anyone had read a word of it.
+ *
+ * A workspace keeps one shared form per kind (Form's unique constraint), so
+ * installing a second template of a kind it already has is reported rather
+ * than surfacing as a database error.
+ */
 export async function createForm(formData: FormData) {
   const { tenantId } = await requireTenant();
-  const kindRaw = str(formData, "kind");
+  const template = formTemplate(str(formData, "templateId"));
+  const kindRaw = template?.kind ?? str(formData, "kind");
   if (!isFormKind(kindRaw)) return;
   const kind: FormKind = kindRaw;
-  const name = str(formData, "name") || FORM_KIND_LABEL[kind];
+  const name = str(formData, "name") || template?.name || FORM_KIND_LABEL[kind];
 
-  const form = await withTenant(tenantId, async (tx) => {
+  // Annotated so the two branches stay a discriminated union through withTenant.
+  type Created = { taken: { id: string } } | { form: { id: string } };
+  const result: Created = await withTenant(tenantId, async (tx): Promise<Created> => {
+    const taken = await tx.form.findFirst({
+      where: { kind, clientId: null },
+      select: { id: true },
+    });
+    if (taken) return { taken };
     const slug = await uniqueSlug(tx as never, slugifyFormName(name));
-    return tx.form.create({
+    const form = await tx.form.create({
       data: {
         tenantId,
         kind,
         name,
         slug,
-        title: name,
-        layout: defaultLayout(kind) as never,
+        title: template?.title || name,
+        ...(template?.intro && { description: template.intro }),
+        layout: (template ? template.layout() : defaultLayout(kind)) as never,
         status: "draft",
       },
     });
+    return { form };
   });
+
+  if ("taken" in result) {
+    redirect(
+      `/dashboard/forms?takenBy=${result.taken.id}&takenKind=${encodeURIComponent(
+        FORM_KIND_LABEL[kind] ?? kind,
+      )}`,
+    );
+  }
   revalidatePath("/dashboard/forms");
-  redirect(`/dashboard/forms/${form.id}`);
+  redirect(`/dashboard/forms/${result.form.id}`);
 }
 
 /**

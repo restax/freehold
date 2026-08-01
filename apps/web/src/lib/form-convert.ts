@@ -63,19 +63,25 @@ export function parseClientType(v: unknown): ClientTypeValue | null {
 }
 
 export type PartyRoleValue =
+  | "BUYER"
+  | "SELLER"
   | "BUYER_AGENT"
   | "LISTING_AGENT"
   | "ATTORNEY"
   | "LENDER"
-  | "TITLE_COMPANY";
+  | "TITLE_COMPANY"
+  | "INSPECTOR";
 
 /** Which mapped party key becomes which role on the file. */
 export const PARTY_ROLE_BY_KEY: Record<string, PartyRoleValue> = {
+  buyer: "BUYER",
+  seller: "SELLER",
   buyerAgent: "BUYER_AGENT",
   listingAgent: "LISTING_AGENT",
   attorney: "ATTORNEY",
   lender: "LENDER",
   titleCompany: "TITLE_COMPANY",
+  inspector: "INSPECTOR",
 };
 
 export interface PartyDraft extends PartyValue {
@@ -155,8 +161,11 @@ export interface TransactionDraft {
   zip: string | null;
   side: TransactionSideValue;
   purchasePrice: number | null;
+  listPrice: number | null;
   contractDate: Date | null;
   closeDate: Date | null;
+  listDate: Date | null;
+  expireDate: Date | null;
   mlsId: string | null;
   notes: string | null;
 }
@@ -175,11 +184,28 @@ export function transactionDraftFrom(values: Record<string, unknown>): Transacti
     zip: str(values.zip),
     side: parseSide(values.side) ?? "BUY_SIDE",
     purchasePrice: parseWholeNumber(values.purchasePrice),
+    listPrice: parseWholeNumber(values.listPrice),
     contractDate: parseDateOnly(values.contractDate),
     closeDate: parseDateOnly(values.closeDate),
+    // A listing form asks when the property goes live and when the agreement
+    // runs out; without these the two dates a listing is actually about would
+    // land in the notes as text nothing can sort or remind on.
+    listDate: parseDateOnly(values.listDate),
+    expireDate: parseDateOnly(values.expireDate),
     mlsId: str(values.mlsId),
     notes: str(values.notes),
   };
+}
+
+/**
+ * A listing submission is sell-side unless the form said otherwise — the
+ * question is usually not worth asking on a form that only exists because
+ * somebody took a listing.
+ */
+export function listingDraftFrom(values: Record<string, unknown>): TransactionDraft | null {
+  const draft = transactionDraftFrom(values);
+  if (!draft) return null;
+  return { ...draft, side: parseSide(values.side) ?? "SELL_SIDE" };
 }
 
 /**

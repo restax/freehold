@@ -14,11 +14,12 @@ import { completeExtraction, extractionModel } from "@/lib/ai/extraction-run";
 import { logAudit } from "@/lib/audit";
 import {
   clientDraftFrom,
+  listingDraftFrom,
   partiesFrom,
   transactionDraftFrom,
   unmappedAnswers,
 } from "@/lib/form-convert";
-import { isFormKind, MAPPED_FIELDS } from "@/lib/form-schema";
+import { type FormKind, isFormKind, MAPPED_FIELDS } from "@/lib/form-schema";
 import { str } from "@/lib/forms";
 import { contractCandidates, intakeAiRuns } from "@/lib/intake-ai";
 import { transactionHasPro } from "@/lib/plans";
@@ -42,7 +43,7 @@ function answersOf(submission: { data: unknown }): Record<string, unknown> {
 }
 
 /** The TC's own questions, appended to the record's notes rather than lost. */
-function notesFrom(kind: "client_intake" | "transaction_intake", values: Record<string, unknown>) {
+function notesFrom(kind: FormKind, values: Record<string, unknown>) {
   const extra = unmappedAnswers(
     values,
     MAPPED_FIELDS[kind].map((f) => f.key),
@@ -117,9 +118,12 @@ export async function convertSubmission(formData: FormData) {
     }
 
     // --- transaction ---
-    const draft = transactionDraftFrom(values);
+    // A listing and a contract both open a file; they differ in which side
+    // it defaults to and in which answers count as already-mapped.
+    const isListing = sub.formKind === "listing_intake";
+    const draft = isListing ? listingDraftFrom(values) : transactionDraftFrom(values);
     if (!draft) return { error: "This submission has no property address to open a file with." };
-    const notes = notesFrom("transaction_intake", values);
+    const notes = notesFrom(sub.formKind, values);
     // Only an identified submission has a client, and only a client can have
     // asked for their contracts to be read.
     const client = sub.clientId
@@ -137,8 +141,11 @@ export async function convertSubmission(formData: FormData) {
         zip: draft.zip,
         side: draft.side as TransactionSide,
         purchasePrice: draft.purchasePrice,
+        listPrice: draft.listPrice,
         contractDate: draft.contractDate,
         closeDate: draft.closeDate,
+        listDate: draft.listDate,
+        expireDate: draft.expireDate,
         mlsId: draft.mlsId,
         notes: [draft.notes, notes].filter(Boolean).join("\n\n") || null,
         // An identified submission already knows whose file this is.

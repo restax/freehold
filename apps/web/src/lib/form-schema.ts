@@ -17,13 +17,26 @@
  * app's module graph in.
  */
 
-export const FORM_KINDS = ["client_intake", "transaction_intake"] as const;
+export const FORM_KINDS = ["client_intake", "transaction_intake", "listing_intake"] as const;
 export type FormKind = (typeof FORM_KINDS)[number];
 
 export const FORM_KIND_LABEL: Record<string, string> = {
   client_intake: "New client",
-  transaction_intake: "New transaction",
+  transaction_intake: "New contract",
+  listing_intake: "New listing",
 };
+
+/**
+ * A listing and an executed contract are separate kinds rather than one
+ * "transaction" kind with two layouts, because a workspace keeps at most one
+ * shared form per kind (Form's @@unique on tenant+kind+client) and a TC needs
+ * both live at once — the listing goes out when the property hits the market,
+ * the contract form when it goes under contract. Both still convert into a
+ * Transaction; the kind decides what the form *asks*, not what it becomes.
+ */
+export function convertsToTransaction(kind: FormKind): boolean {
+  return kind === "transaction_intake" || kind === "listing_intake";
+}
 
 export function isFormKind(v: string): v is FormKind {
   return (FORM_KINDS as readonly string[]).includes(v);
@@ -155,10 +168,33 @@ export const MAPPED_FIELDS: Record<FormKind, MappedField[]> = {
     { key: "closeDate", label: "Closing date", type: "date", binds: "Close date" },
     { key: "mlsId", label: "MLS ID", type: "text", binds: "MLS ID" },
     { key: "contractFile", label: "Signed contract", type: "file", binds: "Document on the file" },
+    { key: "buyer", label: "Buyer", type: "party", binds: "Party — buyer" },
+    { key: "seller", label: "Seller", type: "party", binds: "Party — seller" },
     { key: "buyerAgent", label: "Buyer's agent", type: "party", binds: "Party — buyer's agent" },
     { key: "listingAgent", label: "Listing agent", type: "party", binds: "Party — listing agent" },
     { key: "attorney", label: "Attorney", type: "party", binds: "Party — attorney" },
     { key: "lender", label: "Lender", type: "party", binds: "Party — lender" },
+    { key: "titleCompany", label: "Title company", type: "party", binds: "Party — title company" },
+    { key: "inspector", label: "Inspection company", type: "party", binds: "Party — inspector" },
+    { key: "notes", label: "Anything else we should know?", type: "textarea", binds: "File notes" },
+  ],
+  // A listing is the same Transaction record seen earlier in its life, so the
+  // keys are deliberately the same ones — a form that asks for the address
+  // binds to the address whichever kind it is. What differs is which fields
+  // are worth asking for: list price and go-live date rather than purchase
+  // price and closing.
+  listing_intake: [
+    { key: "propertyAddress", label: "Property address", type: "text", binds: "Property address" },
+    { key: "city", label: "City", type: "text", binds: "City" },
+    { key: "state", label: "State", type: "text", binds: "State" },
+    { key: "zip", label: "ZIP", type: "text", binds: "ZIP" },
+    { key: "listPrice", label: "List price", type: "number", binds: "List price" },
+    { key: "listDate", label: "Date to go active", type: "date", binds: "List date" },
+    { key: "expireDate", label: "Listing expires", type: "date", binds: "Expiry date" },
+    { key: "mlsId", label: "MLS ID", type: "text", binds: "MLS ID" },
+    { key: "contractFile", label: "MLS data form", type: "file", binds: "Document on the file" },
+    { key: "seller", label: "Seller", type: "party", binds: "Party — seller" },
+    { key: "listingAgent", label: "Listing agent", type: "party", binds: "Party — listing agent" },
     { key: "titleCompany", label: "Title company", type: "party", binds: "Party — title company" },
     { key: "notes", label: "Anything else we should know?", type: "textarea", binds: "File notes" },
   ],
@@ -422,6 +458,31 @@ export function defaultLayout(kind: FormKind): FormLayout {
           cellFor("client_intake", "billingName"),
           cellFor("client_intake", "billingEmail"),
         ),
+      ],
+    });
+  }
+  if (kind === "listing_intake") {
+    return normalizeLayout({
+      rows: [
+        row("addr", cellFor("listing_intake", "propertyAddress", { required: true })),
+        row("city", cellFor("listing_intake", "city"), cellFor("listing_intake", "state")),
+        row("price", cellFor("listing_intake", "listPrice"), cellFor("listing_intake", "mlsId")),
+        row(
+          "dates",
+          cellFor("listing_intake", "listDate"),
+          cellFor("listing_intake", "expireDate"),
+        ),
+        row("sellerHead", {
+          id: "b_seller",
+          kind: "block",
+          type: "heading",
+          text: "Who are we listing for?",
+        }),
+        row("seller", cellFor("listing_intake", "seller")),
+        row("agent", cellFor("listing_intake", "listingAgent")),
+        row("mls", cellFor("listing_intake", "contractFile")),
+        row("div", { id: "b_div", kind: "block", type: "divider" }),
+        row("notes", cellFor("listing_intake", "notes")),
       ],
     });
   }

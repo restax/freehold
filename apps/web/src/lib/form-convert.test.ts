@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   clientDraftFrom,
+  listingDraftFrom,
   parseClientType,
   parseDateOnly,
   parseSide,
@@ -72,8 +73,11 @@ describe("transactionDraftFrom", () => {
       zip: "94965",
       side: "SELL_SIDE",
       purchasePrice: 1620000,
+      listPrice: null,
       contractDate: null,
       closeDate: new Date("2026-09-30T00:00:00.000Z"),
+      listDate: null,
+      expireDate: null,
       mlsId: null,
       notes: "Relocating.",
     });
@@ -86,6 +90,34 @@ describe("transactionDraftFrom", () => {
 
   it("falls back to buy side rather than inventing a side", () => {
     expect(transactionDraftFrom({ propertyAddress: "1 A St" })?.side).toBe("BUY_SIDE");
+  });
+
+  it("carries the listing columns a listing form fills in", () => {
+    const d = transactionDraftFrom({
+      propertyAddress: "1 A St",
+      listPrice: "$799,000",
+      listDate: "2026-08-15",
+      expireDate: "2026-11-15",
+    });
+    expect(d?.listPrice).toBe(799000);
+    expect(d?.listDate?.toISOString()).toBe("2026-08-15T00:00:00.000Z");
+    expect(d?.expireDate?.toISOString()).toBe("2026-11-15T00:00:00.000Z");
+  });
+});
+
+describe("listingDraftFrom", () => {
+  it("assumes sell side, because that is what taking a listing means", () => {
+    expect(listingDraftFrom({ propertyAddress: "1 A St" })?.side).toBe("SELL_SIDE");
+  });
+
+  it("still lets the form say otherwise", () => {
+    expect(listingDraftFrom({ propertyAddress: "1 A St", side: "Dual (both sides)" })?.side).toBe(
+      "DUAL",
+    );
+  });
+
+  it("refuses an addressless listing the same as any other file", () => {
+    expect(listingDraftFrom({ listPrice: "100" })).toBeNull();
   });
 });
 

@@ -5,6 +5,7 @@ import {
   FilePlus,
   Globe,
   House,
+  Signpost,
   UsersThree,
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
@@ -13,25 +14,26 @@ import { Badge } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
 import { SectionCard } from "@/components/section-card";
 import { createForm } from "@/lib/actions/forms";
-import {
-  FORM_KIND_LABEL,
-  FORM_KINDS,
-  type FormKind,
-  layoutFields,
-  parseLayout,
-} from "@/lib/form-schema";
+import { FORM_KIND_LABEL, FORM_KINDS, layoutFields, parseLayout } from "@/lib/form-schema";
+import { FORM_TEMPLATES } from "@/lib/form-templates";
 import { fmtDate } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
-import { btn, btnGhost, card, input, label, tableWrap, td, th, trHover } from "@/lib/ui";
+import { btn, btnGhost, card, input, tableWrap, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
 
 const KIND_ICON: Record<string, typeof Buildings> = {
   client_intake: UsersThree,
   transaction_intake: House,
+  listing_intake: Signpost,
 };
 
-export default async function FormsPage() {
+export default async function FormsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ takenBy?: string; takenKind?: string }>;
+}) {
+  const { takenBy, takenKind } = await searchParams;
   const { tenantId } = await requireTenant();
   const [forms, pending] = await withTenant(tenantId, async (tx) => [
     await tx.form.findMany({
@@ -43,6 +45,8 @@ export default async function FormsPage() {
     }),
     await tx.formSubmission.count({ where: { status: "new" } }),
   ]);
+  // The shared form of each kind, if the workspace already has one.
+  const sharedByKind = new Map(forms.filter((f) => f.clientId === null).map((f) => [f.kind, f]));
 
   return (
     <div className="flex flex-col gap-4">
@@ -67,33 +71,63 @@ export default async function FormsPage() {
         </Link>
       </div>
 
-      <SectionCard title="New form" icon={<FilePlus size={15} weight="fill" aria-hidden />}>
-        <div className="flex flex-wrap gap-2">
-          {FORM_KINDS.map((kind: FormKind) => {
-            const Icon = KIND_ICON[kind] ?? FileDashed;
+      {takenBy && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          You already have a {takenKind ?? "form"} form.{" "}
+          <Link href={`/dashboard/forms/${takenBy}`} className="font-medium underline">
+            Edit the one you have
+          </Link>{" "}
+          — or delete it first if you'd rather start again from a template.
+        </p>
+      )}
+
+      <SectionCard
+        title="Start from a template"
+        icon={<FilePlus size={15} weight="fill" aria-hidden />}
+      >
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {FORM_TEMPLATES.map((t) => {
+            const Icon = KIND_ICON[t.kind] ?? FileDashed;
+            const existing = sharedByKind.get(t.kind);
             return (
-              <form key={kind} action={createForm} className="flex items-end gap-2">
-                <input type="hidden" name="kind" value={kind} />
-                <label className={label}>
-                  <span className="flex items-center gap-1.5">
-                    <Icon size={13} className="text-stone-400" aria-hidden />
-                    {FORM_KIND_LABEL[kind]}
-                  </span>
+              <form
+                key={t.id}
+                action={createForm}
+                className="flex flex-col gap-1.5 rounded-lg border border-stone-200 p-3 transition-colors hover:border-brand-300"
+              >
+                <input type="hidden" name="templateId" value={t.id} />
+                <span className="flex items-center gap-1.5 text-sm font-medium text-stone-800">
+                  <Icon size={14} className="shrink-0 text-stone-400" aria-hidden />
+                  {t.name}
+                </span>
+                <span className="flex-1 text-xs leading-relaxed text-stone-500">
+                  {t.description}
+                </span>
+                <span className="flex items-center gap-2">
                   <input
                     name="name"
-                    className={`${input} w-56`}
-                    placeholder={`${FORM_KIND_LABEL[kind]} form`}
+                    aria-label={`Name for ${t.name}`}
+                    defaultValue={t.name}
+                    className={`${input} min-w-0 flex-1 py-1 text-xs`}
                   />
-                </label>
-                <button type="submit" className={btn}>
-                  Create
-                </button>
+                  <button type="submit" className={`${btn} shrink-0 px-2.5 py-1 text-xs`}>
+                    Use this
+                  </button>
+                </span>
+                {/* One shared form per kind, so say so before the click
+                    rather than after it. */}
+                {existing && (
+                  <span className="text-[11px] text-amber-700">
+                    You already have a {FORM_KIND_LABEL[t.kind]?.toLowerCase()} form.
+                  </span>
+                )}
               </form>
             );
           })}
         </div>
         <p className="mt-2 text-xs text-stone-400">
-          Starts from a sensible default you can rearrange — not a blank page.
+          A template is only a starting point — once it's yours, every question, heading and answer
+          is editable in the designer.
         </p>
       </SectionCard>
 
