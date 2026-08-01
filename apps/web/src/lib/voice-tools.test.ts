@@ -8,6 +8,7 @@ import {
   marketingInstructions,
   runVoiceTool,
   toolsForScope,
+  turnIsTerminal,
 } from "./voice-tools";
 
 const TENANT: VoiceScope = { kind: "tenant", tenantId: "t1", userId: "u1" };
@@ -207,5 +208,80 @@ describe("marketingInstructions", () => {
 
     const withoutPoints = marketingInstructions({ ...base, sellingPoints: "  " });
     expect(withoutPoints).not.toContain("Key things to weave in");
+  });
+});
+
+describe("turnIsTerminal", () => {
+  it("ends the loop when the turn only navigated and already said something", () => {
+    expect(turnIsTerminal(["navigate"], "Here's the Harbor Lane file.", "/dashboard/x")).toBe(true);
+  });
+
+  it("keeps going when a lookup ran too — its result IS the answer", () => {
+    expect(turnIsTerminal(["find_people", "navigate"], "Looking now.", "/dashboard/x")).toBe(false);
+    expect(turnIsTerminal(["search_transactions"], "One moment.", undefined)).toBe(false);
+  });
+
+  it("keeps going when the model navigated without saying anything", () => {
+    // Finishing here would return an empty reply — a silent widget.
+    expect(turnIsTerminal(["navigate"], "", "/dashboard/x")).toBe(false);
+    expect(turnIsTerminal(["navigate"], "   ", "/dashboard/x")).toBe(false);
+  });
+
+  it("keeps going when navigate refused (no path came back)", () => {
+    // navigate returns { error } for a page a guest may not reach; there is
+    // no destination, so the model still owes the user a real answer.
+    expect(turnIsTerminal(["navigate"], "Off we go.", undefined)).toBe(false);
+  });
+
+  it("never ends a turn that called nothing", () => {
+    expect(turnIsTerminal([], "Here you go.", "/dashboard/x")).toBe(false);
+  });
+});
+
+describe("navigate carries no data the model would need", () => {
+  // This is what makes turnIsTerminal safe: if navigate ever started
+  // returning facts, ending the loop on it would drop them from the answer.
+  it("returns only a path", async () => {
+    const result = (await runVoiceTool(TENANT, "navigate", { page: "invoices" })) as Record<
+      string,
+      unknown
+    >;
+    expect(Object.keys(result)).toEqual(["navigateTo"]);
+    expect(result.navigateTo).toBe("/dashboard/invoices");
+  });
+
+  it("refuses a page that isn't on the list, rather than inventing a path", async () => {
+    const result = (await runVoiceTool(TENANT, "navigate", { page: "../admin" })) as Record<
+      string,
+      unknown
+    >;
+    expect(result.navigateTo).toBeUndefined();
+    expect(result.error).toBeDefined();
+  });
+
+  it("keeps guests out of the pages their sidebar doesn't show", async () => {
+    const ok = (await runVoiceTool(GUEST, "navigate", { page: "transactions" })) as Record<
+      string,
+      unknown
+    >;
+    expect(ok.navigateTo).toBe("/dashboard/transactions");
+    for (const page of ["billing", "team", "clients", "contacts"]) {
+      const denied = (await runVoiceTool(GUEST, "navigate", { page })) as Record<string, unknown>;
+      expect(denied.navigateTo, page).toBeUndefined();
+    }
+  });
+
+  it("never sends a guest to a contact or client record", async () => {
+    // Guests coordinate files, not the CRM — the same rule find_people keeps.
+    const c = (await runVoiceTool(GUEST, "navigate", { contactId: "x" })) as Record<
+      string,
+      unknown
+    >;
+    const cl = (await runVoiceTool(GUEST, "navigate", { clientId: "x" })) as Record<
+      string,
+      unknown
+    >;
+    expect(c.navigateTo).toBeUndefined();
+    expect(cl.navigateTo).toBeUndefined();
   });
 });

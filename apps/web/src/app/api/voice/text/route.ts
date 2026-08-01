@@ -8,6 +8,7 @@ import {
   extractReferences,
   runVoiceTool,
   toolsForScope,
+  turnIsTerminal,
   type VoiceReference,
 } from "@/lib/voice-tools";
 
@@ -99,14 +100,15 @@ export async function POST(req: Request) {
       messages: convo,
     });
 
+    const said = res.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("")
+      .trim();
+
     if (res.stop_reason !== "tool_use") {
-      const reply = res.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .map((b) => b.text)
-        .join("")
-        .trim();
       return NextResponse.json({
-        reply: reply || "I'm not sure how to answer that one.",
+        reply: said || "I'm not sure how to answer that one.",
         navigateTo,
         references: dedupeReferences(references),
       });
@@ -116,26 +118,42 @@ export async function POST(req: Request) {
     // the results back for the next turn.
     convo.push({ role: "assistant", content: res.content });
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
-    for (const block of res.content) {
-      if (block.type === "tool_use") {
-        const result = await runVoiceTool(
-          scope,
-          block.name,
-          (block.input ?? {}) as Record<string, unknown>,
-        );
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: JSON.stringify(result),
-        });
-        if (block.name === "navigate" && result && typeof result === "object") {
-          const navigated = (result as { navigateTo?: unknown }).navigateTo;
-          if (typeof navigated === "string") navigateTo = navigated;
-        } else {
-          references.push(...extractReferences(result));
-        }
+    const calls = res.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+    for (const block of calls) {
+      const result = await runVoiceTool(
+        scope,
+        block.name,
+        (block.input ?? {}) as Record<string, unknown>,
+      );
+      toolResults.push({
+        type: "tool_result",
+        tool_use_id: block.id,
+        content: JSON.stringify(result),
+      });
+      if (block.name === "navigate" && result && typeof result === "object") {
+        const navigated = (result as { navigateTo?: unknown }).navigateTo;
+        if (typeof navigated === "string") navigateTo = navigated;
+      } else {
+        references.push(...extractReferences(result));
       }
     }
+
+    // See turnIsTerminal: a turn that only navigated has nothing left to feed
+    // back, so finish on the sentence the model already wrote alongside it.
+    if (
+      turnIsTerminal(
+        calls.map((c) => c.name),
+        said,
+        navigateTo,
+      )
+    ) {
+      return NextResponse.json({
+        reply: said,
+        navigateTo,
+        references: dedupeReferences(references),
+      });
+    }
+
     convo.push({ role: "user", content: toolResults });
   }
 

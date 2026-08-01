@@ -106,7 +106,7 @@ const TENANT_TOOLS: VoiceTool[] = [
   {
     name: "navigate",
     description:
-      "Take the user to a page in the app right now. Use when they say 'show me', 'take me to', 'open', or 'go to'. For a specific transaction, contact, or client, first look it up with search_transactions or find_people in this same turn to get its id, then pass that id here instead of page.",
+      "Open a page, or a specific record, in the app right now. Call this whenever the answer is about one particular transaction, contact, or client — not only when they say 'show me' or 'open'. Naming a record is asking for it. Look it up with search_transactions or find_people first to get its id, then pass that id here (instead of page) in the same turn. Skip it only when there is no single record involved: counts, deadlines across several files, or a list of unrelated things.",
     input_schema: {
       type: "object",
       properties: {
@@ -186,7 +186,28 @@ ${SPEAKING_STYLE}
 Always call a tool before answering a question about their data — never guess or
 rely on memory of earlier answers. If a lookup comes back empty, say so plainly.
 If asked something you have no tool for, say you can't help with that yet and
-suggest the dashboard. Keep it warm and quick.`;
+suggest the dashboard. Keep it warm and quick.
+
+This is a search box, so finding something and going there are the same act.
+Navigate to the record they NAMED, in the same turn you look it up — if they name
+a client, open the client, even though the lookup also returns that client's
+transactions. Those extra results are context for your answer, not a menu to
+offer them. Don't wait to be asked twice, and don't ask which one they meant when
+one of the matches is plainly the thing they said: pick the closest name match
+and go. Read the answer out as you go; the page opens behind you.
+
+Stay put only when there is no single record to open — counts, "what's due this
+week", or a genuine list of several unrelated things.
+
+Say your whole answer in the same message as the navigate call, not afterwards —
+navigate tells you nothing back, so anything you leave until after it just makes
+them wait longer. Make it a real answer ("That's the Harbor Lane file — closing
+Thursday the 30th"), not a progress report.
+
+Never offer to do something you could just do. And if you do ask ("want me to
+pull that up?") and they agree — "yes", "sure", "go ahead", or anything meaning
+it — do it in that turn: call the tool, don't ask again. Re-run whatever lookup
+you need for the id rather than saying you're not sure what they meant.`;
 
 const PORTAL_INSTRUCTIONS = `You are Freehold's voice assistant, speaking with a
 buyer, seller, or agent about their own transaction.
@@ -516,6 +537,29 @@ async function runPortalTool(token: string, name: string): Promise<unknown> {
   }
 
   return { error: "unknown_tool" };
+}
+
+/**
+ * Whether this tool-use turn can be the last one.
+ *
+ * `navigate` hands back a path and nothing else — there is no fact in its
+ * result the model could reason about on another pass. So when every call in
+ * a turn was navigate and the model already wrote its sentence alongside them,
+ * looping again buys nothing and costs a whole round trip. That round trip was
+ * a third of the wait on "find X and open it", which is the most common thing
+ * anyone asks this box.
+ *
+ * Both conditions matter. Without `said` we would return an empty reply; and a
+ * turn that also called a lookup still needs the next pass, because those
+ * results are exactly what the answer is made of.
+ */
+export function turnIsTerminal(
+  toolNames: readonly string[],
+  said: string,
+  navigateTo: string | undefined,
+): boolean {
+  if (!navigateTo || said.trim() === "") return false;
+  return toolNames.length > 0 && toolNames.every((n) => n === "navigate");
 }
 
 export interface VoiceReference {
