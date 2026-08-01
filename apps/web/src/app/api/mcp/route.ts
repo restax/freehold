@@ -3,6 +3,7 @@ import { createMcpHandler } from "mcp-handler";
 import { auth } from "@/lib/auth";
 import { type McpContext, resolveMcpContext } from "@/lib/mcp-session";
 import { type McpToolDef, READ_TOOLS, toolsFor } from "@/lib/mcp-tools";
+import { WRITE_TOOLS } from "@/lib/mcp-writes";
 
 /**
  * The Claude connector: a remote MCP server over Streamable HTTP.
@@ -19,7 +20,7 @@ export const dynamic = "force-dynamic";
 // fails as a timeout rather than hanging the caller's whole turn.
 export const maxDuration = 60;
 
-const ALL_TOOLS: McpToolDef[] = [...READ_TOOLS];
+const ALL_TOOLS: McpToolDef[] = [...READ_TOOLS, ...WRITE_TOOLS];
 
 /**
  * The 401 that starts the OAuth dance.
