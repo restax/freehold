@@ -148,3 +148,39 @@ describe("audience", () => {
     expect(portalVisibility(awaited, "agent")).toBe("hidden");
   });
 });
+
+describe("web-link rows", () => {
+  const link = row({ id: "L", label: "Photos", webUrl: "https://gallery.example.com/1" });
+
+  it("stays private until the coordinator shares it", () => {
+    expect(portalVisibility(link, "client")).toBe("hidden");
+  });
+
+  it("is shared, not 'still needed', once opted in", () => {
+    // Listing the photographer's gallery as outstanding would read as a
+    // request for the client to go and produce it.
+    const shown = { ...link, visibleToClient: true };
+    expect(portalVisibility(shown, "client")).toBe("shared");
+    expect(portalGroups([shown], [])[0].shared[0].webUrl).toBe("https://gallery.example.com/1");
+    expect(portalGroups([shown], [])[0].awaiting).toEqual([]);
+  });
+
+  it("is not offered to an agent portal", () => {
+    expect(portalVisibility({ ...link, visibleToClient: true }, "agent")).toBe("hidden");
+  });
+
+  it("stays out of the zip — there are no bytes to put in it", () => {
+    expect(portalDocumentIds([{ ...link, visibleToClient: true }])).toEqual([]);
+  });
+
+  it("an omitted link is hidden like anything else omitted", () => {
+    expect(
+      portalVisibility({ ...link, visibleToClient: true, omittedAt: new Date() }, "client"),
+    ).toBe("hidden");
+  });
+
+  it("prefers the document when a row somehow has both", () => {
+    const both = { ...link, visibleToClient: true, document: doc("d1") };
+    expect(portalGroups([both], [])[0].shared[0]).toMatchObject({ webUrl: null });
+  });
+});

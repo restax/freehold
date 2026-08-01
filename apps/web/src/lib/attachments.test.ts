@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   type AttachmentLike,
   attachmentState,
+  filterAttachments,
   groupAttachments,
+  linkLabel,
   progressOf,
+  safeExternalUrl,
   UNGROUPED_LABEL,
 } from "./attachments";
 
@@ -123,5 +126,92 @@ describe("groupAttachments", () => {
       total: 1,
       pct: 100,
     });
+  });
+});
+
+describe("safeExternalUrl", () => {
+  it("keeps a normal https link", () => {
+    expect(safeExternalUrl("https://example.org/deed.pdf")).toBe("https://example.org/deed.pdf");
+  });
+
+  it("upgrades a bare host rather than refusing it", () => {
+    expect(safeExternalUrl("drive.example.com/x")).toBe("https://drive.example.com/x");
+  });
+
+  it("rejects javascript: and data: — these land straight in an href", () => {
+    // A link the whole workspace can click is stored XSS if this leaks.
+    expect(safeExternalUrl("javascript:alert(1)")).toBeNull();
+    expect(safeExternalUrl("JavaScript:alert(1)")).toBeNull();
+    expect(safeExternalUrl("data:text/html,<script>alert(1)</script>")).toBeNull();
+    expect(safeExternalUrl("vbscript:msgbox(1)")).toBeNull();
+  });
+
+  it("rejects control characters used to smuggle a scheme past a parser", () => {
+    expect(safeExternalUrl("java\tscript:alert(1)")).toBeNull();
+    expect(safeExternalUrl("java\nscript:alert(1)")).toBeNull();
+  });
+
+  it("rejects file: and other non-web schemes", () => {
+    expect(safeExternalUrl("file:///etc/passwd")).toBeNull();
+    expect(safeExternalUrl("ftp://example.org")).toBeNull();
+  });
+
+  it("treats blank as absent", () => {
+    expect(safeExternalUrl("")).toBeNull();
+    expect(safeExternalUrl("   ")).toBeNull();
+    expect(safeExternalUrl(null)).toBeNull();
+  });
+});
+
+describe("linkLabel", () => {
+  it("shows the host without www", () => {
+    expect(linkLabel("https://www.dropbox.com/s/abc")).toBe("dropbox.com");
+  });
+
+  it("falls back to the raw string when unparseable", () => {
+    expect(linkLabel("not a url")).toBe("not a url");
+  });
+});
+
+describe("filterAttachments", () => {
+  const rows = [
+    row({ label: "Purchase agreement", completedAt: new Date() }),
+    row({ label: "Survey" }),
+    row({ label: "Lead paint", omittedAt: new Date() }),
+    { ...row({ label: "Scan" }), document: { filename: "title-commitment.pdf" } },
+  ];
+
+  it("matches the row label", () => {
+    expect(filterAttachments(rows, { q: "surv" }).map((r) => r.label)).toEqual(["Survey"]);
+  });
+
+  it("also matches the attached file name", () => {
+    // The row is called "Scan" but people search for what the file is.
+    expect(filterAttachments(rows, { q: "title-commit" }).map((r) => r.label)).toEqual(["Scan"]);
+  });
+
+  it("is case-insensitive", () => {
+    expect(filterAttachments(rows, { q: "SURVEY" })).toHaveLength(1);
+  });
+
+  it("hides completed rows on request", () => {
+    expect(filterAttachments(rows, { hideComplete: true }).map((r) => r.label)).not.toContain(
+      "Purchase agreement",
+    );
+  });
+
+  it("hides omitted rows on request", () => {
+    expect(filterAttachments(rows, { hideOmitted: true }).map((r) => r.label)).not.toContain(
+      "Lead paint",
+    );
+  });
+
+  it("combines a search with the filters", () => {
+    const out = filterAttachments(rows, { q: "a", hideComplete: true, hideOmitted: true });
+    expect(out.map((r) => r.label)).toEqual(["Scan"]);
+  });
+
+  it("returns everything when nothing is asked for", () => {
+    expect(filterAttachments(rows, {})).toHaveLength(4);
   });
 });

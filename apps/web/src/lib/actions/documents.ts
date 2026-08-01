@@ -16,11 +16,43 @@ export async function uploadDocument(formData: FormData) {
   // Guests upload to the files they cover — that's the work — but nowhere else.
   const { tenantId, session } = await requireTenant({ allowGuest: true });
   const transactionId = str(formData, "transactionId");
-  const file = formData.get("file");
-  if (!transactionId || !(file instanceof File) || file.size === 0) return;
-  if (file.size > MAX_BYTES) return;
+  if (!transactionId) return;
   if (!(await guestMaySeeTransaction(tenantId, session.user.id, transactionId))) return;
 
+  // A scanner hands over a dozen files at once and the input accepts them all.
+  // They're stored one at a time rather than in a single transaction: eleven
+  // files landing plus one over the size limit should keep the eleven, not
+  // reject the batch.
+  const files = formData
+    .getAll("file")
+    .filter((f): f is File => f instanceof File && f.size > 0 && f.size <= MAX_BYTES);
+  if (files.length === 0) return;
+  const rowId = str(formData, "rowId");
+  for (const file of files) {
+    await storeOneUpload({ tenantId, session, transactionId, file, rowId });
+  }
+  revalidatePath(`/dashboard/transactions/${transactionId}`);
+}
+
+/**
+ * One file: bytes to storage, a Document row, and the attachment row it fills.
+ *
+ * Not exported — a "use server" module hands every export to the browser, and
+ * this one takes a tenantId.
+ */
+async function storeOneUpload({
+  tenantId,
+  session,
+  transactionId,
+  file,
+  rowId,
+}: {
+  tenantId: string;
+  session: { user: { id: string; name?: string | null; email: string } };
+  transactionId: string;
+  file: File;
+  rowId: string;
+}) {
   const bytes = Buffer.from(await file.arrayBuffer());
   const filename = file.name || "document.pdf";
   const contentType = file.type || "application/octet-stream";
@@ -28,8 +60,9 @@ export async function uploadDocument(formData: FormData) {
 
   const uploaderName = session.user.name ?? session.user.email;
   // Uploading from a row's own button fills that row; uploading from the tab's
-  // Add menu has no row in mind and gets one of its own.
-  const rowId = str(formData, "rowId");
+  // Add menu has no row in mind and gets one of its own. With several files
+  // and a rowId, only the first can match — `documentId: null` stops the
+  // second from overwriting what the first just filed.
   const created = await withTenant(tenantId, async (tx) => {
     const doc = await tx.document.create({
       data: {
@@ -85,7 +118,6 @@ export async function uploadDocument(formData: FormData) {
     action: "document.uploaded",
     summary: `Uploaded ${filename}`,
   });
-  revalidatePath(`/dashboard/transactions/${transactionId}`);
 }
 
 /**

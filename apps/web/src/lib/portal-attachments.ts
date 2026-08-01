@@ -26,6 +26,7 @@ export interface PortalRow {
   completedAt?: Date | string | null;
   omittedAt?: Date | string | null;
   visibleToClient?: boolean;
+  webUrl?: string | null;
   document?: {
     id: string;
     filename: string;
@@ -46,6 +47,8 @@ export interface PortalItem {
   id: string;
   label: string;
   document: { id: string; filename: string; sizeBytes: number } | null;
+  /** Set instead of `document` when the row points somewhere else entirely. */
+  webUrl?: string | null;
 }
 
 export interface PortalGroup {
@@ -75,11 +78,15 @@ export function portalVisibility(
     const flag = audience === "agent" ? row.document.visibleToAgent : row.document.visibleToClient;
     return flag === false ? "hidden" : "shared";
   }
-  // "Still needed" is only ever offered to clients: the opt-in is literally
-  // a decision about what to tell the client, and quietly reusing it to
-  // publish the checklist to agents too would be a different decision the
-  // coordinator never made.
-  return audience === "client" && row.visibleToClient ? "awaiting" : "hidden";
+  // Neither of the two flags is offered to agents on a row with no document:
+  // the opt-in is literally a decision about what to tell the *client*, and
+  // quietly reusing it to publish to agents too would be a different decision
+  // the coordinator never made.
+  if (audience !== "client" || !row.visibleToClient) return "hidden";
+  // A link is a thing that exists, so it belongs with the shared items rather
+  // than under "still needed" — listing the photographer's gallery as
+  // outstanding would read as a request for the client to produce it.
+  return row.webUrl ? "shared" : "awaiting";
 }
 
 /**
@@ -127,6 +134,7 @@ export function portalGroups(
             sizeBytes: row.document.sizeBytes,
           }
         : null,
+      webUrl: row.document ? null : (row.webUrl ?? null),
     };
     groupFor(key)[where === "shared" ? "shared" : "awaiting"].push(item);
   }

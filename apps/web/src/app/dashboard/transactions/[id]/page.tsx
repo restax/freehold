@@ -81,6 +81,7 @@ import { applyAttachmentTemplate } from "@/lib/actions/attachment-templates";
 import {
   addAttachmentNote,
   addAttachmentRow,
+  addAttachmentWebLinks,
   bulkDeleteAttachments,
   bulkEmailAttachments,
   bulkIncludeAttachments,
@@ -94,9 +95,11 @@ import {
   linkAttachmentDocument,
   removeAttachmentRow,
   renameAttachmentFolder,
+  renameAttachmentRow,
   setAttachmentFolder,
   setAttachmentOmitted,
   setAttachmentSignatureTracking,
+  setAttachmentWebUrl,
   toggleAttachmentComplete,
   toggleAttachmentPortalVisible,
   toggleAttachmentSigner,
@@ -168,7 +171,13 @@ import {
   partyLabel,
 } from "@/lib/ai/contract-schema";
 import { transactionAlert } from "@/lib/alerts";
-import { attachmentState, groupAttachments, progressOf } from "@/lib/attachments";
+import {
+  attachmentState,
+  filterAttachments,
+  groupAttachments,
+  linkLabel,
+  progressOf,
+} from "@/lib/attachments";
 import { emailContextForTransaction, tcPhone } from "@/lib/auto-emails";
 import {
   displayState,
@@ -282,6 +291,8 @@ export default async function TransactionDetailPage({
     dateTemplate?: string;
     emailTo?: string | string[];
     attachDoc?: string | string[];
+    aq?: string;
+    aHide?: string | string[];
   }>;
 }) {
   const { tenantId, session } = await requireTenant({ allowGuest: true });
@@ -304,8 +315,21 @@ export default async function TransactionDetailPage({
     dateTemplate,
     emailTo,
     attachDoc,
+    aq,
+    aHide,
   } = await searchParams;
   const tab: TxnTab = (TXN_TABS.some(([t]) => t === tabRaw) ? tabRaw : "tasks") as TxnTab;
+  // Attachments search and filters live in the URL so the tab stays a server
+  // component and the state survives a mutation's revalidate — a client-side
+  // filter would reset itself every time somebody ticked a row.
+  const attachQuery = (aq ?? "").trim();
+  const attachHide = new Set(Array.isArray(aHide) ? aHide : aHide ? [aHide] : []);
+  const attachFilter = {
+    q: attachQuery,
+    hideComplete: attachHide.has("complete"),
+    hideOmitted: attachHide.has("omitted"),
+  };
+  const attachFiltered = attachQuery !== "" || attachHide.size > 0;
 
   const data = await withTenant(tenantId, async (tx) => {
     const txn = await tx.transaction.findUnique({
@@ -468,7 +492,27 @@ export default async function TransactionDetailPage({
   // The Attachments tab is one list: every row, grouped into its folder, with
   // progress per folder and across the file. See lib/attachments.ts for what
   // counts as done and why omitted rows leave the denominator.
-  const attachmentGroups = groupAttachments(txn.attachments, txn.attachmentFolders);
+  // Filtering happens before grouping so a folder that loses every row loses
+  // its heading too — see filterAttachments. The totals stay off the filtered
+  // set: "6 of 9" is a fact about the file, and a search that made it read
+  // "1 of 1" would be lying about the deal.
+  const attachmentGroupsAll = groupAttachments(
+    filterAttachments(txn.attachments, attachFilter),
+    txn.attachmentFolders,
+  );
+  // An empty folder normally stays visible — it's a statement that something
+  // is expected there. Under a filter it means the opposite, so a search that
+  // matched nothing in "Listing" drops the heading rather than implying it did.
+  const attachmentGroups = attachFiltered
+    ? attachmentGroupsAll.filter((g) => g.rows.length > 0)
+    : attachmentGroupsAll;
+  // Every count on the tab is a fact about the file, never about the filter.
+  // "Hide received" would otherwise turn a finished folder into "0/7 0%",
+  // which is the opposite of the truth and the one thing these numbers exist
+  // to tell you.
+  const trueProgress = new Map(
+    groupAttachments(txn.attachments, txn.attachmentFolders).map((g) => [g.folderId, g.progress]),
+  );
   const attachmentTotals = progressOf(txn.attachments);
   const onlyUngrouped = attachmentGroups.length === 1 && attachmentGroups[0].folderId === null;
   // Somewhere for a mis-filed document to go: the rows still waiting on one.
@@ -1321,6 +1365,65 @@ export default async function TransactionDetailPage({
                   <DocumentDropZone transactionId={txn.id} linkAction={linkAttachmentDocument} />
                 </div>
 
+                {/* Search and the two hide-filters. A plain GET form: the
+                    state belongs in the URL (shareable, survives every
+                    revalidate) and this needs no JavaScript at all. */}
+                {txn.attachments.length > 0 && (
+                  <form
+                    method="get"
+                    className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-stone-100 px-4 py-2"
+                  >
+                    <input type="hidden" name="tab" value="documents" />
+                    <label className="sr-only" htmlFor="attach-search">
+                      Search attachments
+                    </label>
+                    <input
+                      id="attach-search"
+                      name="aq"
+                      defaultValue={attachQuery}
+                      placeholder="Search this file…"
+                      className={`${input} w-56 py-1 text-xs`}
+                    />
+                    <label className="flex items-center gap-1.5 text-xs text-stone-600">
+                      <input
+                        type="checkbox"
+                        name="aHide"
+                        value="complete"
+                        defaultChecked={attachFilter.hideComplete}
+                        className="h-3.5 w-3.5 accent-brand-600"
+                      />
+                      Hide received
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-stone-600">
+                      <input
+                        type="checkbox"
+                        name="aHide"
+                        value="omitted"
+                        defaultChecked={attachFilter.hideOmitted}
+                        className="h-3.5 w-3.5 accent-brand-600"
+                      />
+                      Hide N/A
+                    </label>
+                    <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                      Apply
+                    </button>
+                    {attachFiltered && (
+                      <Link
+                        href={`/dashboard/transactions/${txn.id}?tab=documents`}
+                        className="text-xs text-stone-500 transition-colors hover:text-brand-700"
+                      >
+                        Clear
+                      </Link>
+                    )}
+                    {attachFiltered && (
+                      <span className="ml-auto text-xs text-stone-400">
+                        Showing {attachmentGroups.reduce((n, g) => n + g.rows.length, 0)} of{" "}
+                        {txn.attachments.length}
+                      </span>
+                    )}
+                  </form>
+                )}
+
                 {/* The bulk bar. The form is empty of controls — the
                     checkboxes down the list point at it by id, and each
                     button carries its own formAction, so the browser does
@@ -1397,359 +1500,474 @@ export default async function TransactionDetailPage({
 
                 {attachmentGroups.length === 0 ? (
                   <div className="p-6">
-                    <EmptyState
-                      title="Nothing on this file yet"
-                      hint="Drop a PDF above, or add what you're waiting for with “Add” below — an action plan or attachment template fills the list in one go."
-                    />
+                    {attachFiltered ? (
+                      <EmptyState
+                        title="Nothing matches"
+                        hint="Clear the search or the filters above to see the whole list again."
+                      />
+                    ) : (
+                      <EmptyState
+                        title="Nothing on this file yet"
+                        hint="Drop a PDF above, or add what you're waiting for with “Add” below — an action plan or attachment template fills the list in one go."
+                      />
+                    )}
                   </div>
                 ) : (
-                  attachmentGroups.map((group) => (
-                    <details
-                      key={group.folderId ?? "ungrouped"}
-                      open
-                      className="group border-b border-stone-100 last:border-0"
-                    >
-                      {/* With no folders in play the single "Ungrouped" header
+                  attachmentGroups.map((group) => {
+                    const progress = trueProgress.get(group.folderId) ?? group.progress;
+                    return (
+                      <details
+                        key={group.folderId ?? "ungrouped"}
+                        open
+                        className="group border-b border-stone-100 last:border-0"
+                      >
+                        {/* With no folders in play the single "Ungrouped" header
                           is pure restatement of the card's own count, so it
                           collapses away and the rows read as one plain list. */}
-                      <summary
-                        className={`flex cursor-pointer select-none items-center gap-2 bg-stone-50/70 px-4 py-2 text-sm ${
-                          onlyUngrouped ? "hidden" : ""
-                        }`}
-                      >
-                        <span
-                          className="inline-block text-stone-400 transition-transform group-open:rotate-90"
-                          aria-hidden
+                        <summary
+                          className={`flex cursor-pointer select-none items-center gap-2 bg-stone-50/70 px-4 py-2 text-sm ${
+                            onlyUngrouped ? "hidden" : ""
+                          }`}
                         >
-                          ▸
-                        </span>
-                        <FolderSimple size={14} className="shrink-0 text-stone-400" aria-hidden />
-                        <span className="font-medium text-stone-700">{group.name}</span>
-                        <span className="ml-auto flex items-center gap-2 text-xs text-stone-500">
-                          <span className="tabular-nums">
-                            {group.progress.done}/{group.progress.total}
-                          </span>
                           <span
-                            className={`rounded-full px-1.5 py-0.5 font-medium tabular-nums ${
-                              group.progress.pct === 100
-                                ? "bg-brand-600/10 text-brand-700"
-                                : "bg-stone-200/70 text-stone-600"
-                            }`}
+                            className="inline-block text-stone-400 transition-transform group-open:rotate-90"
+                            aria-hidden
                           >
-                            {group.progress.pct}%
+                            ▸
                           </span>
-                        </span>
-                      </summary>
-                      {group.rows.length === 0 ? (
-                        <p className="px-4 py-3 text-sm text-stone-400">Nothing filed here yet.</p>
-                      ) : (
-                        <ul className="flex flex-col">
-                          {group.rows.map((row) => {
-                            const doc = row.document;
-                            const state = attachmentState(row);
-                            const full = doc ? docById.get(doc.id) : undefined;
-                            const latest = doc ? latestExtractionByDoc.get(doc.id) : undefined;
-                            const sent = doc ? sentDocs.get(doc.id) : undefined;
-                            const priors = full ? priorVersions(full) : [];
-                            return (
-                              <li
-                                key={row.id}
-                                id={doc ? `doc-${doc.id}` : `row-${row.id}`}
-                                // scroll-mt clears the sticky header when a
-                                // #doc-<id> link jumps here from the document
-                                // library.
-                                className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-stone-100 px-4 py-2.5 scroll-mt-24 transition-colors last:border-0 hover:bg-stone-50/60"
-                              >
-                                {/* Selection for the bulk bar. `form=` rather
+                          <FolderSimple size={14} className="shrink-0 text-stone-400" aria-hidden />
+                          <span className="font-medium text-stone-700">{group.name}</span>
+                          <span className="ml-auto flex items-center gap-2 text-xs text-stone-500">
+                            <span className="tabular-nums">
+                              {progress.done}/{progress.total}
+                            </span>
+                            <span
+                              className={`rounded-full px-1.5 py-0.5 font-medium tabular-nums ${
+                                progress.pct === 100
+                                  ? "bg-brand-600/10 text-brand-700"
+                                  : "bg-stone-200/70 text-stone-600"
+                              }`}
+                            >
+                              {progress.pct}%
+                            </span>
+                          </span>
+                        </summary>
+                        {group.rows.length === 0 ? (
+                          <p className="px-4 py-3 text-sm text-stone-400">
+                            Nothing filed here yet.
+                          </p>
+                        ) : (
+                          <ul className="flex flex-col">
+                            {group.rows.map((row) => {
+                              const doc = row.document;
+                              const state = attachmentState(row);
+                              const full = doc ? docById.get(doc.id) : undefined;
+                              const latest = doc ? latestExtractionByDoc.get(doc.id) : undefined;
+                              const sent = doc ? sentDocs.get(doc.id) : undefined;
+                              const priors = full ? priorVersions(full) : [];
+                              return (
+                                <li
+                                  key={row.id}
+                                  id={doc ? `doc-${doc.id}` : `row-${row.id}`}
+                                  // scroll-mt clears the sticky header when a
+                                  // #doc-<id> link jumps here from the document
+                                  // library.
+                                  className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-stone-100 px-4 py-2.5 scroll-mt-24 transition-colors last:border-0 hover:bg-stone-50/60"
+                                >
+                                  {/* Selection for the bulk bar. `form=` rather
                                     than nesting: this row already contains
                                     forms, and a form inside a form is invalid
                                     HTML that browsers silently drop. */}
-                                <input
-                                  type="checkbox"
-                                  form={BULK_FORM_ID}
-                                  name="rowIds"
-                                  value={row.id}
-                                  data-bytes={doc?.sizeBytes ?? 0}
-                                  aria-label={`Select ${row.label}`}
-                                  className="h-3.5 w-3.5 shrink-0 accent-brand-600"
-                                />
-                                {/* The tick is the row's own state, not a
+                                  <input
+                                    type="checkbox"
+                                    form={BULK_FORM_ID}
+                                    name="rowIds"
+                                    value={row.id}
+                                    data-bytes={doc?.sizeBytes ?? 0}
+                                    aria-label={`Select ${row.label}`}
+                                    className="h-3.5 w-3.5 shrink-0 accent-brand-600"
+                                  />
+                                  {/* The tick is the row's own state, not a
                                     read-out of whether a file is present —
                                     plenty of rows are settled without one. */}
-                                <form action={toggleAttachmentComplete} className="flex">
-                                  <input type="hidden" name="id" value={txn.id} />
-                                  <input type="hidden" name="rowId" value={row.id} />
-                                  <button
-                                    type="submit"
-                                    aria-label={
-                                      state === "complete"
-                                        ? `Mark ${row.label} not received`
-                                        : `Mark ${row.label} received`
-                                    }
-                                    className={`grid h-5 w-5 shrink-0 place-items-center rounded text-[11px] transition-colors ${
-                                      state === "complete"
-                                        ? "bg-brand-600 text-white hover:bg-brand-500"
-                                        : state === "omitted"
-                                          ? "border border-stone-200 bg-stone-100 text-stone-400"
-                                          : "border border-dashed border-stone-300 text-transparent hover:border-brand-500"
+                                  <form action={toggleAttachmentComplete} className="flex">
+                                    <input type="hidden" name="id" value={txn.id} />
+                                    <input type="hidden" name="rowId" value={row.id} />
+                                    <button
+                                      type="submit"
+                                      aria-label={
+                                        state === "complete"
+                                          ? `Mark ${row.label} not received`
+                                          : `Mark ${row.label} received`
+                                      }
+                                      className={`grid h-5 w-5 shrink-0 place-items-center rounded text-[11px] transition-colors ${
+                                        state === "complete"
+                                          ? "bg-brand-600 text-white hover:bg-brand-500"
+                                          : state === "omitted"
+                                            ? "border border-stone-200 bg-stone-100 text-stone-400"
+                                            : "border border-dashed border-stone-300 text-transparent hover:border-brand-500"
+                                      }`}
+                                    >
+                                      {state === "complete" ? "✓" : state === "omitted" ? "—" : "✓"}
+                                    </button>
+                                  </form>
+
+                                  <span
+                                    className={`font-medium ${
+                                      state === "omitted"
+                                        ? "text-stone-400 line-through"
+                                        : doc
+                                          ? "text-stone-800"
+                                          : "text-amber-700"
                                     }`}
                                   >
-                                    {state === "complete" ? "✓" : state === "omitted" ? "—" : "✓"}
-                                  </button>
-                                </form>
+                                    {row.label}
+                                  </span>
 
-                                <span
-                                  className={`font-medium ${
-                                    state === "omitted"
-                                      ? "text-stone-400 line-through"
-                                      : doc
-                                        ? "text-stone-800"
-                                        : "text-amber-700"
-                                  }`}
-                                >
-                                  {row.label}
-                                </span>
+                                  {row.required && !doc && state === "pending" && (
+                                    <Badge tone="attention">Required</Badge>
+                                  )}
+                                  {!doc && row.visibleToClient && state !== "omitted" && (
+                                    <span
+                                      title={
+                                        row.webUrl
+                                          ? "The client can open this link from their portal"
+                                          : "The client sees this listed as still needed"
+                                      }
+                                      className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-stone-500"
+                                    >
+                                      on portal
+                                    </span>
+                                  )}
+                                  {full && full.version > 1 && (
+                                    <span className="rounded bg-stone-100 px-1.5 py-0.5 text-xs font-medium text-stone-500">
+                                      v{full.version}
+                                    </span>
+                                  )}
+                                  {doc && doc._count.extractions > 0 && (
+                                    <Badge tone="success">extracted</Badge>
+                                  )}
+                                  {row.notes.length > 0 && (
+                                    <span className="inline-flex items-center gap-1 text-xs text-stone-400">
+                                      <ChatCircle size={12} aria-hidden />
+                                      {row.notes.length}
+                                    </span>
+                                  )}
+                                  {state === "omitted" && row.omittedReason && (
+                                    <span className="text-xs italic text-stone-400">
+                                      N/A — {row.omittedReason}
+                                    </span>
+                                  )}
 
-                                {row.required && !doc && state === "pending" && (
-                                  <Badge tone="attention">Required</Badge>
-                                )}
-                                {!doc && row.visibleToClient && state !== "omitted" && (
-                                  <span
-                                    title="The client sees this listed as still needed"
-                                    className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-stone-500"
-                                  >
-                                    on portal
-                                  </span>
-                                )}
-                                {full && full.version > 1 && (
-                                  <span className="rounded bg-stone-100 px-1.5 py-0.5 text-xs font-medium text-stone-500">
-                                    v{full.version}
-                                  </span>
-                                )}
-                                {doc && doc._count.extractions > 0 && (
-                                  <Badge tone="success">extracted</Badge>
-                                )}
-                                {row.notes.length > 0 && (
-                                  <span className="inline-flex items-center gap-1 text-xs text-stone-400">
-                                    <ChatCircle size={12} aria-hidden />
-                                    {row.notes.length}
-                                  </span>
-                                )}
-                                {state === "omitted" && row.omittedReason && (
-                                  <span className="text-xs italic text-stone-400">
-                                    N/A — {row.omittedReason}
-                                  </span>
-                                )}
+                                  {/* Not everything on a file is a file. A
+                                    photographer's gallery or a county
+                                    recorder page belongs on the checklist
+                                    the same as a PDF does. */}
+                                  {row.webUrl && (
+                                    <a
+                                      href={row.webUrl}
+                                      target="_blank"
+                                      rel="noreferrer noopener"
+                                      title={row.webUrl}
+                                      className="inline-flex items-center gap-1 rounded bg-stone-100 px-1.5 py-0.5 text-xs text-stone-600 transition-colors hover:bg-stone-200 hover:text-brand-700"
+                                    >
+                                      <LinkIcon size={11} aria-hidden />
+                                      {linkLabel(row.webUrl)}
+                                    </a>
+                                  )}
 
-                                {doc ? (
-                                  <span className="text-xs text-stone-400">
-                                    {(doc.sizeBytes / 1024).toFixed(0)} KB ·{" "}
-                                    {fmtDate(doc.createdAt)}
-                                    {doc.uploadedByName ? ` · ${doc.uploadedByName}` : ""}
-                                  </span>
-                                ) : (
-                                  <span className="text-xs text-stone-400">
-                                    {state === "complete" ? "received — no file" : "no file yet"}
-                                  </span>
-                                )}
+                                  {doc ? (
+                                    <span className="text-xs text-stone-400">
+                                      {(doc.sizeBytes / 1024).toFixed(0)} KB ·{" "}
+                                      {fmtDate(doc.createdAt)}
+                                      {doc.uploadedByName ? ` · ${doc.uploadedByName}` : ""}
+                                    </span>
+                                  ) : (
+                                    !row.webUrl && (
+                                      <span className="text-xs text-stone-400">
+                                        {state === "complete"
+                                          ? "received — no file"
+                                          : "no file yet"}
+                                      </span>
+                                    )
+                                  )}
 
-                                {(() => {
-                                  const sig = readSignatureState(row.signatureState);
-                                  if (!sig || signers.length === 0) return null;
-                                  const prog = signatureProgress(sig, signers);
-                                  return (
-                                    <span className="flex items-center gap-1">
-                                      {signers.map((p) => {
-                                        const signed = Boolean(sig[p.id]);
-                                        return (
+                                  {(() => {
+                                    const sig = readSignatureState(row.signatureState);
+                                    if (!sig || signers.length === 0) return null;
+                                    const prog = signatureProgress(sig, signers);
+                                    return (
+                                      <span className="flex items-center gap-1">
+                                        {signers.map((p) => {
+                                          const signed = Boolean(sig[p.id]);
+                                          return (
+                                            <form
+                                              key={p.id}
+                                              action={toggleAttachmentSigner}
+                                              className="flex"
+                                            >
+                                              <input type="hidden" name="id" value={txn.id} />
+                                              <input type="hidden" name="rowId" value={row.id} />
+                                              <input type="hidden" name="partyId" value={p.id} />
+                                              <button
+                                                type="submit"
+                                                title={`${p.contact?.name ?? ROLE_LABEL[p.role] ?? p.role} — ${
+                                                  signed ? "signed" : "not signed yet"
+                                                }`}
+                                                className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] font-semibold transition-colors ${
+                                                  signed
+                                                    ? "bg-brand-600 text-white hover:bg-brand-500"
+                                                    : "border border-dashed border-stone-300 text-stone-400 hover:border-brand-500 hover:text-brand-700"
+                                                }`}
+                                              >
+                                                {ROLE_ABBR[p.role] ?? "?"}
+                                              </button>
+                                            </form>
+                                          );
+                                        })}
+                                        {/* One click for the overwhelmingly
+                                          common case: it came back fully
+                                          signed. */}
+                                        {!prog.complete && (
                                           <form
-                                            key={p.id}
-                                            action={toggleAttachmentSigner}
+                                            action={executeAttachmentSignatures}
                                             className="flex"
                                           >
                                             <input type="hidden" name="id" value={txn.id} />
                                             <input type="hidden" name="rowId" value={row.id} />
-                                            <input type="hidden" name="partyId" value={p.id} />
                                             <button
                                               type="submit"
-                                              title={`${p.contact?.name ?? ROLE_LABEL[p.role] ?? p.role} — ${
-                                                signed ? "signed" : "not signed yet"
-                                              }`}
-                                              className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[10px] font-semibold transition-colors ${
-                                                signed
-                                                  ? "bg-brand-600 text-white hover:bg-brand-500"
-                                                  : "border border-dashed border-stone-300 text-stone-400 hover:border-brand-500 hover:text-brand-700"
-                                              }`}
+                                              className="ml-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700 transition-colors hover:text-brand-600"
                                             >
-                                              {ROLE_ABBR[p.role] ?? "?"}
+                                              Execute
                                             </button>
                                           </form>
-                                        );
-                                      })}
-                                      {/* One click for the overwhelmingly
-                                          common case: it came back fully
-                                          signed. */}
-                                      {!prog.complete && (
-                                        <form action={executeAttachmentSignatures} className="flex">
-                                          <input type="hidden" name="id" value={txn.id} />
-                                          <input type="hidden" name="rowId" value={row.id} />
-                                          <button
-                                            type="submit"
-                                            className="ml-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700 transition-colors hover:text-brand-600"
-                                          >
-                                            Execute
-                                          </button>
-                                        </form>
-                                      )}
-                                    </span>
-                                  );
-                                })()}
+                                        )}
+                                      </span>
+                                    );
+                                  })()}
 
-                                <span className="ml-auto flex items-center gap-3">
-                                  {doc && (
-                                    <>
-                                      {/* Straight to the compose form with this
+                                  <span className="ml-auto flex items-center gap-3">
+                                    {doc && (
+                                      <>
+                                        {/* Straight to the compose form with this
                                           file already ticked — the client or
                                           the lender asked for this one
                                           document, not the whole file. */}
-                                      <Link
-                                        href={`/dashboard/transactions/${txn.id}?tab=emails&attachDoc=${doc.id}`}
-                                        title={`Email ${doc.filename}`}
-                                        aria-label={`Email ${doc.filename}`}
-                                        className="text-stone-300 transition-colors hover:text-brand-700"
-                                      >
-                                        <Envelope size={15} aria-hidden />
-                                      </Link>
-                                      <VisibilityToggles
-                                        kind="document"
-                                        id={doc.id}
-                                        transactionId={txn.id}
-                                        visibleToAgent={doc.visibleToAgent}
-                                        visibleToClient={doc.visibleToClient}
-                                      />
-                                      <a
-                                        href={`/api/documents/${doc.id}`}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className={`${btnGhost} px-2.5 py-1 text-xs`}
-                                      >
-                                        View
-                                      </a>
-                                    </>
-                                  )}
-                                  {!doc && (
-                                    <form action={uploadDocument} className="flex">
-                                      <input type="hidden" name="transactionId" value={txn.id} />
-                                      <input type="hidden" name="rowId" value={row.id} />
-                                      <UploadOnChange ariaLabel={`Upload ${row.label}`} />
-                                    </form>
-                                  )}
-                                  {/* Everything that changes what the row
+                                        <Link
+                                          href={`/dashboard/transactions/${txn.id}?tab=emails&attachDoc=${doc.id}`}
+                                          title={`Email ${doc.filename}`}
+                                          aria-label={`Email ${doc.filename}`}
+                                          className="text-stone-300 transition-colors hover:text-brand-700"
+                                        >
+                                          <Envelope size={15} aria-hidden />
+                                        </Link>
+                                        <VisibilityToggles
+                                          kind="document"
+                                          id={doc.id}
+                                          transactionId={txn.id}
+                                          visibleToAgent={doc.visibleToAgent}
+                                          visibleToClient={doc.visibleToClient}
+                                        />
+                                        <a
+                                          href={`/api/documents/${doc.id}`}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className={`${btnGhost} px-2.5 py-1 text-xs`}
+                                        >
+                                          View
+                                        </a>
+                                      </>
+                                    )}
+                                    {!doc && (
+                                      <form action={uploadDocument} className="flex">
+                                        <input type="hidden" name="transactionId" value={txn.id} />
+                                        <input type="hidden" name="rowId" value={row.id} />
+                                        <UploadOnChange ariaLabel={`Upload ${row.label}`} />
+                                      </form>
+                                    )}
+                                    {/* Everything that changes what the row
                                       *means* lives here rather than as more
                                       buttons on the row: a checklist of twenty
                                       rows can't afford five controls each. */}
-                                  <details className="relative">
-                                    <summary
-                                      aria-label={`Actions for ${row.label}`}
-                                      className="flex cursor-pointer list-none items-center rounded px-1 text-stone-300 transition-colors hover:text-stone-700"
-                                    >
-                                      <DotsThree size={18} weight="bold" aria-hidden />
-                                    </summary>
-                                    <div className="absolute right-0 z-20 mt-1 flex w-64 flex-col gap-2 rounded-lg border border-stone-200 bg-white p-2.5 text-left shadow-lg">
-                                      {doc &&
-                                        emptyRows.filter((r) => r.id !== row.id).length > 0 && (
-                                          <form
-                                            action={linkAttachmentDocument}
-                                            className="flex flex-col gap-1"
-                                          >
-                                            <input type="hidden" name="id" value={txn.id} />
-                                            <input type="hidden" name="documentId" value={doc.id} />
-                                            <span className="text-xs font-medium text-stone-500">
-                                              Move file to
-                                            </span>
-                                            <span className="flex gap-1">
-                                              <select
-                                                name="rowId"
-                                                required
-                                                defaultValue=""
-                                                className={`${input} py-1 text-xs`}
-                                              >
-                                                <option value="" disabled>
-                                                  Choose a row…
-                                                </option>
-                                                {emptyRows
-                                                  .filter((r) => r.id !== row.id)
-                                                  .map((r) => (
-                                                    <option key={r.id} value={r.id}>
-                                                      {r.label}
-                                                    </option>
-                                                  ))}
-                                              </select>
-                                              <button
-                                                type="submit"
-                                                className={`${btnGhost} px-2 py-1 text-xs`}
-                                              >
-                                                Move
-                                              </button>
-                                            </span>
-                                          </form>
-                                        )}
-                                      <form
-                                        action={setAttachmentFolder}
-                                        className="flex flex-col gap-1"
+                                    <details className="relative">
+                                      <summary
+                                        aria-label={`Actions for ${row.label}`}
+                                        className="flex cursor-pointer list-none items-center rounded px-1 text-stone-300 transition-colors hover:text-stone-700"
                                       >
-                                        <input type="hidden" name="id" value={txn.id} />
-                                        <input type="hidden" name="rowId" value={row.id} />
-                                        <span className="text-xs font-medium text-stone-500">
-                                          Folder
-                                        </span>
-                                        <span className="flex gap-1">
-                                          <select
-                                            name="folderId"
-                                            defaultValue={row.folderId ?? ""}
-                                            className={`${input} py-1 text-xs`}
-                                          >
-                                            <option value="">No folder</option>
-                                            {txn.attachmentFolders.map((f) => (
-                                              <option key={f.id} value={f.id}>
-                                                {f.name}
-                                              </option>
-                                            ))}
-                                          </select>
+                                        <DotsThree size={18} weight="bold" aria-hidden />
+                                      </summary>
+                                      <div className="absolute right-0 z-20 mt-1 flex w-64 flex-col gap-2 rounded-lg border border-stone-200 bg-white p-2.5 text-left shadow-lg">
+                                        {/* Rows arrive named by whatever made
+                                          them — a template's wording, or a
+                                          filename like "scan_0142.pdf". */}
+                                        <form
+                                          action={renameAttachmentRow}
+                                          className="flex flex-col gap-1"
+                                        >
+                                          <input type="hidden" name="id" value={txn.id} />
+                                          <input type="hidden" name="rowId" value={row.id} />
+                                          <span className="text-xs font-medium text-stone-500">
+                                            Name
+                                          </span>
+                                          <span className="flex gap-1">
+                                            <input
+                                              name="label"
+                                              required
+                                              defaultValue={row.label}
+                                              aria-label={`Rename ${row.label}`}
+                                              className={`${input} py-1 text-xs`}
+                                            />
+                                            <button
+                                              type="submit"
+                                              className={`${btnGhost} px-2 py-1 text-xs`}
+                                            >
+                                              Save
+                                            </button>
+                                          </span>
+                                        </form>
+                                        <form
+                                          action={setAttachmentWebUrl}
+                                          className="flex flex-col gap-1 border-t border-stone-100 pt-2"
+                                        >
+                                          <input type="hidden" name="id" value={txn.id} />
+                                          <input type="hidden" name="rowId" value={row.id} />
+                                          <span className="text-xs font-medium text-stone-500">
+                                            Web link
+                                          </span>
+                                          <span className="flex gap-1">
+                                            <input
+                                              name="webUrl"
+                                              type="url"
+                                              defaultValue={row.webUrl ?? ""}
+                                              placeholder="https://…"
+                                              aria-label={`Web link for ${row.label}`}
+                                              className={`${input} py-1 text-xs`}
+                                            />
+                                            <button
+                                              type="submit"
+                                              className={`${btnGhost} px-2 py-1 text-xs`}
+                                            >
+                                              Set
+                                            </button>
+                                          </span>
+                                        </form>
+                                        {doc &&
+                                          emptyRows.filter((r) => r.id !== row.id).length > 0 && (
+                                            <form
+                                              action={linkAttachmentDocument}
+                                              className="flex flex-col gap-1"
+                                            >
+                                              <input type="hidden" name="id" value={txn.id} />
+                                              <input
+                                                type="hidden"
+                                                name="documentId"
+                                                value={doc.id}
+                                              />
+                                              <span className="text-xs font-medium text-stone-500">
+                                                Move file to
+                                              </span>
+                                              <span className="flex gap-1">
+                                                <select
+                                                  name="rowId"
+                                                  required
+                                                  defaultValue=""
+                                                  className={`${input} py-1 text-xs`}
+                                                >
+                                                  <option value="" disabled>
+                                                    Choose a row…
+                                                  </option>
+                                                  {emptyRows
+                                                    .filter((r) => r.id !== row.id)
+                                                    .map((r) => (
+                                                      <option key={r.id} value={r.id}>
+                                                        {r.label}
+                                                      </option>
+                                                    ))}
+                                                </select>
+                                                <button
+                                                  type="submit"
+                                                  className={`${btnGhost} px-2 py-1 text-xs`}
+                                                >
+                                                  Move
+                                                </button>
+                                              </span>
+                                            </form>
+                                          )}
+                                        <form
+                                          action={setAttachmentFolder}
+                                          className="flex flex-col gap-1"
+                                        >
+                                          <input type="hidden" name="id" value={txn.id} />
+                                          <input type="hidden" name="rowId" value={row.id} />
+                                          <span className="text-xs font-medium text-stone-500">
+                                            Folder
+                                          </span>
+                                          <span className="flex gap-1">
+                                            <select
+                                              name="folderId"
+                                              defaultValue={row.folderId ?? ""}
+                                              className={`${input} py-1 text-xs`}
+                                            >
+                                              <option value="">No folder</option>
+                                              {txn.attachmentFolders.map((f) => (
+                                                <option key={f.id} value={f.id}>
+                                                  {f.name}
+                                                </option>
+                                              ))}
+                                            </select>
+                                            <button
+                                              type="submit"
+                                              className={`${btnGhost} px-2 py-1 text-xs`}
+                                            >
+                                              Set
+                                            </button>
+                                          </span>
+                                        </form>
+                                        <form
+                                          action={addAttachmentNote}
+                                          className="flex flex-col gap-1 border-t border-stone-100 pt-2"
+                                        >
+                                          <input type="hidden" name="id" value={txn.id} />
+                                          <input type="hidden" name="rowId" value={row.id} />
+                                          <span className="text-xs font-medium text-stone-500">
+                                            Add a note
+                                          </span>
+                                          <textarea
+                                            name="body"
+                                            rows={2}
+                                            required
+                                            placeholder="Waiting on the lender…"
+                                            className={`${input} text-xs`}
+                                          />
                                           <button
                                             type="submit"
-                                            className={`${btnGhost} px-2 py-1 text-xs`}
+                                            className={`${btnGhost} self-start px-2 py-1 text-xs`}
                                           >
-                                            Set
+                                            Add note
                                           </button>
-                                        </span>
-                                      </form>
-                                      <form
-                                        action={addAttachmentNote}
-                                        className="flex flex-col gap-1 border-t border-stone-100 pt-2"
-                                      >
-                                        <input type="hidden" name="id" value={txn.id} />
-                                        <input type="hidden" name="rowId" value={row.id} />
-                                        <span className="text-xs font-medium text-stone-500">
-                                          Add a note
-                                        </span>
-                                        <textarea
-                                          name="body"
-                                          rows={2}
-                                          required
-                                          placeholder="Waiting on the lender…"
-                                          className={`${input} text-xs`}
-                                        />
-                                        <button
-                                          type="submit"
-                                          className={`${btnGhost} self-start px-2 py-1 text-xs`}
-                                        >
-                                          Add note
-                                        </button>
-                                      </form>
-                                      {!doc && (
+                                        </form>
+                                        {!doc && (
+                                          <form
+                                            action={toggleAttachmentPortalVisible}
+                                            className="border-t border-stone-100 pt-2"
+                                          >
+                                            <input type="hidden" name="id" value={txn.id} />
+                                            <input type="hidden" name="rowId" value={row.id} />
+                                            <button
+                                              type="submit"
+                                              className="text-xs font-medium text-brand-700 transition-colors hover:text-brand-600"
+                                            >
+                                              {row.visibleToClient
+                                                ? "Hide from the client portal"
+                                                : row.webUrl
+                                                  ? "Share this link on the client portal"
+                                                  : "Show on the client portal as still needed"}
+                                            </button>
+                                          </form>
+                                        )}
                                         <form
-                                          action={toggleAttachmentPortalVisible}
+                                          action={setAttachmentSignatureTracking}
                                           className="border-t border-stone-100 pt-2"
                                         >
                                           <input type="hidden" name="id" value={txn.id} />
@@ -1758,271 +1976,256 @@ export default async function TransactionDetailPage({
                                             type="submit"
                                             className="text-xs font-medium text-brand-700 transition-colors hover:text-brand-600"
                                           >
-                                            {row.visibleToClient
-                                              ? "Hide from the client portal"
-                                              : "Show on the client portal as still needed"}
+                                            {readSignatureState(row.signatureState)
+                                              ? "Stop tracking signatures"
+                                              : "Track signatures"}
                                           </button>
                                         </form>
-                                      )}
-                                      <form
-                                        action={setAttachmentSignatureTracking}
-                                        className="border-t border-stone-100 pt-2"
-                                      >
-                                        <input type="hidden" name="id" value={txn.id} />
-                                        <input type="hidden" name="rowId" value={row.id} />
-                                        <button
-                                          type="submit"
-                                          className="text-xs font-medium text-brand-700 transition-colors hover:text-brand-600"
+                                        <form
+                                          action={setAttachmentOmitted}
+                                          className="flex flex-col gap-1 border-t border-stone-100 pt-2"
                                         >
-                                          {readSignatureState(row.signatureState)
-                                            ? "Stop tracking signatures"
-                                            : "Track signatures"}
-                                        </button>
-                                      </form>
-                                      <form
-                                        action={setAttachmentOmitted}
-                                        className="flex flex-col gap-1 border-t border-stone-100 pt-2"
-                                      >
-                                        <input type="hidden" name="id" value={txn.id} />
-                                        <input type="hidden" name="rowId" value={row.id} />
-                                        {state === "omitted" ? (
-                                          <button
-                                            type="submit"
-                                            className={`${btnGhost} self-start px-2 py-1 text-xs`}
-                                          >
-                                            Put back on the list
-                                          </button>
-                                        ) : (
-                                          <>
-                                            <span className="text-xs font-medium text-stone-500">
-                                              Not applicable
-                                            </span>
-                                            <input
-                                              name="reason"
-                                              placeholder="Reason (optional)"
-                                              className={`${input} py-1 text-xs`}
-                                            />
+                                          <input type="hidden" name="id" value={txn.id} />
+                                          <input type="hidden" name="rowId" value={row.id} />
+                                          {state === "omitted" ? (
                                             <button
                                               type="submit"
                                               className={`${btnGhost} self-start px-2 py-1 text-xs`}
                                             >
-                                              Mark N/A
+                                              Put back on the list
                                             </button>
-                                          </>
-                                        )}
-                                      </form>
-                                      <form
-                                        action={removeAttachmentRow}
-                                        className="border-t border-stone-100 pt-2"
-                                      >
-                                        <input type="hidden" name="id" value={txn.id} />
-                                        <input type="hidden" name="rowId" value={row.id} />
-                                        <button
-                                          type="submit"
-                                          className="text-xs font-medium text-red-700 transition-colors hover:text-red-800"
+                                          ) : (
+                                            <>
+                                              <span className="text-xs font-medium text-stone-500">
+                                                Not applicable
+                                              </span>
+                                              <input
+                                                name="reason"
+                                                placeholder="Reason (optional)"
+                                                className={`${input} py-1 text-xs`}
+                                              />
+                                              <button
+                                                type="submit"
+                                                className={`${btnGhost} self-start px-2 py-1 text-xs`}
+                                              >
+                                                Mark N/A
+                                              </button>
+                                            </>
+                                          )}
+                                        </form>
+                                        <form
+                                          action={removeAttachmentRow}
+                                          className="border-t border-stone-100 pt-2"
                                         >
-                                          Remove this row
-                                        </button>
-                                      </form>
-                                    </div>
-                                  </details>
-                                </span>
-
-                                {sent && (
-                                  <p className="w-full text-xs text-stone-400">
-                                    <Envelope size={11} className="mr-1 inline" aria-hidden />
-                                    {sent.summary} · {sent.actorName} · {fmtDate(sent.at)}
-                                  </p>
-                                )}
-
-                                {row.notes.length > 0 && (
-                                  <ul className="flex w-full flex-col gap-1 pl-8">
-                                    {row.notes.map((note) => (
-                                      <li
-                                        key={note.id}
-                                        className="flex items-start gap-2 text-xs text-stone-500"
-                                      >
-                                        <ChatCircle
-                                          size={12}
-                                          className="mt-0.5 shrink-0 text-stone-300"
-                                          aria-hidden
-                                        />
-                                        <span className="min-w-0 flex-1">
-                                          {note.body}
-                                          <span className="ml-1.5 text-stone-400">
-                                            — {note.authorName ?? "someone"},{" "}
-                                            {fmtDate(note.createdAt)}
-                                          </span>
-                                        </span>
-                                        <form action={deleteAttachmentNote}>
                                           <input type="hidden" name="id" value={txn.id} />
-                                          <input type="hidden" name="noteId" value={note.id} />
+                                          <input type="hidden" name="rowId" value={row.id} />
                                           <button
                                             type="submit"
-                                            aria-label="Delete this note"
-                                            className="text-stone-300 transition-colors hover:text-red-600"
+                                            className="text-xs font-medium text-red-700 transition-colors hover:text-red-800"
                                           >
-                                            ✕
+                                            Remove this row
                                           </button>
                                         </form>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                )}
+                                      </div>
+                                    </details>
+                                  </span>
 
-                                {doc && (
-                                  <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 pl-8">
-                                    {doc.contentType === "application/pdf" &&
-                                      (proActive ? (
-                                        <span className="flex flex-wrap items-center gap-2">
-                                          <ExtractButton
-                                            action={runExtraction}
-                                            documentId={doc.id}
-                                            label={
-                                              latest ? "Extract again" : "Extract contract data"
-                                            }
+                                  {sent && (
+                                    <p className="w-full text-xs text-stone-400">
+                                      <Envelope size={11} className="mr-1 inline" aria-hidden />
+                                      {sent.summary} · {sent.actorName} · {fmtDate(sent.at)}
+                                    </p>
+                                  )}
+
+                                  {row.notes.length > 0 && (
+                                    <ul className="flex w-full flex-col gap-1 pl-8">
+                                      {row.notes.map((note) => (
+                                        <li
+                                          key={note.id}
+                                          className="flex items-start gap-2 text-xs text-stone-500"
+                                        >
+                                          <ChatCircle
+                                            size={12}
+                                            className="mt-0.5 shrink-0 text-stone-300"
+                                            aria-hidden
                                           />
-                                          {latest && (
-                                            <Link
-                                              href={`/dashboard/transactions/${txn.id}/extractions/${latest.id}`}
-                                              className="inline-flex items-center gap-1.5 text-xs hover:underline"
+                                          <span className="min-w-0 flex-1">
+                                            {note.body}
+                                            <span className="ml-1.5 text-stone-400">
+                                              — {note.authorName ?? "someone"},{" "}
+                                              {fmtDate(note.createdAt)}
+                                            </span>
+                                          </span>
+                                          <form action={deleteAttachmentNote}>
+                                            <input type="hidden" name="id" value={txn.id} />
+                                            <input type="hidden" name="noteId" value={note.id} />
+                                            <button
+                                              type="submit"
+                                              aria-label="Delete this note"
+                                              className="text-stone-300 transition-colors hover:text-red-600"
                                             >
-                                              <ExtractionBadge status={latest.status} />
-                                              <span className="text-stone-400">
-                                                {fmtDate(latest.createdAt)}
-                                              </span>
-                                            </Link>
-                                          )}
-                                        </span>
-                                      ) : (
-                                        <span className="text-xs text-stone-400">
-                                          Enable pro features to extract
-                                        </span>
+                                              ✕
+                                            </button>
+                                          </form>
+                                        </li>
                                       ))}
-                                    <details>
-                                      <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
-                                        Send for signature
-                                      </summary>
-                                      <form
-                                        action={sendForSignature}
-                                        className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
-                                      >
-                                        <input type="hidden" name="documentId" value={doc.id} />
-                                        <label className={label}>
-                                          Signer 1 name *
-                                          <input name="signer1Name" required className={input} />
-                                        </label>
-                                        <label className={label}>
-                                          Signer 1 email *
-                                          <input
-                                            name="signer1Email"
-                                            type="email"
-                                            required
-                                            className={input}
-                                          />
-                                        </label>
-                                        <label className={label}>
-                                          Signer 2 name
-                                          <input name="signer2Name" className={input} />
-                                        </label>
-                                        <label className={label}>
-                                          Signer 2 email
-                                          <input
-                                            name="signer2Email"
-                                            type="email"
-                                            className={input}
-                                          />
-                                        </label>
-                                        <button type="submit" className={btnGhost}>
-                                          Send
-                                        </button>
-                                      </form>
-                                    </details>
-                                    {doc.contentType === "application/pdf" && (
-                                      <SplitPdfDialog
-                                        action={splitDocument}
-                                        transactionId={txn.id}
-                                        documentId={doc.id}
-                                        filename={doc.filename}
-                                        folders={txn.attachmentFolders}
-                                      />
-                                    )}
-                                    <details>
-                                      <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
-                                        Replace with a new version
-                                      </summary>
-                                      <form
-                                        action={replaceDocument}
-                                        className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
-                                      >
-                                        <input type="hidden" name="id" value={doc.id} />
-                                        <label className={label}>
-                                          New file (PDF, max 10 MB)
-                                          <input
-                                            name="file"
-                                            type="file"
-                                            accept="application/pdf,.pdf"
-                                            required
-                                            className={input}
-                                          />
-                                        </label>
-                                        <button type="submit" className={btnGhost}>
-                                          Replace
-                                        </button>
-                                        <span className="pb-2 text-xs text-stone-400">
-                                          The current file becomes a prior version — nothing is
-                                          lost.
-                                        </span>
-                                      </form>
-                                    </details>
-                                    {priors.length > 0 && (
-                                      <details>
-                                        <summary className="cursor-pointer select-none text-xs text-stone-500 transition-colors hover:text-stone-700">
-                                          {priors.length} prior version
-                                          {priors.length === 1 ? "" : "s"}
-                                        </summary>
-                                        <ul className="mt-1.5 flex flex-col gap-1 border-l-2 border-stone-200 pl-3">
-                                          {priors.map((p) => (
-                                            <li
-                                              key={p.id}
-                                              className="flex flex-wrap items-center gap-2 text-xs"
-                                            >
-                                              <span className="rounded bg-stone-100 px-1.5 py-0.5 font-medium text-stone-500">
-                                                v{p.version}
-                                              </span>
-                                              <a
-                                                href={`/api/documents/${p.id}`}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="text-stone-500 hover:text-brand-600 hover:underline"
+                                    </ul>
+                                  )}
+
+                                  {doc && (
+                                    <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 pl-8">
+                                      {doc.contentType === "application/pdf" &&
+                                        (proActive ? (
+                                          <span className="flex flex-wrap items-center gap-2">
+                                            <ExtractButton
+                                              action={runExtraction}
+                                              documentId={doc.id}
+                                              label={
+                                                latest ? "Extract again" : "Extract contract data"
+                                              }
+                                            />
+                                            {latest && (
+                                              <Link
+                                                href={`/dashboard/transactions/${txn.id}/extractions/${latest.id}`}
+                                                className="inline-flex items-center gap-1.5 text-xs hover:underline"
                                               >
-                                                {p.filename}
-                                              </a>
-                                              <span className="text-stone-400">
-                                                {(p.sizeBytes / 1024).toFixed(0)} KB · replaced{" "}
-                                                {fmtDate(p.createdAt)}
-                                              </span>
-                                            </li>
-                                          ))}
-                                        </ul>
+                                                <ExtractionBadge status={latest.status} />
+                                                <span className="text-stone-400">
+                                                  {fmtDate(latest.createdAt)}
+                                                </span>
+                                              </Link>
+                                            )}
+                                          </span>
+                                        ) : (
+                                          <span className="text-xs text-stone-400">
+                                            Enable pro features to extract
+                                          </span>
+                                        ))}
+                                      <details>
+                                        <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
+                                          Send for signature
+                                        </summary>
+                                        <form
+                                          action={sendForSignature}
+                                          className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
+                                        >
+                                          <input type="hidden" name="documentId" value={doc.id} />
+                                          <label className={label}>
+                                            Signer 1 name *
+                                            <input name="signer1Name" required className={input} />
+                                          </label>
+                                          <label className={label}>
+                                            Signer 1 email *
+                                            <input
+                                              name="signer1Email"
+                                              type="email"
+                                              required
+                                              className={input}
+                                            />
+                                          </label>
+                                          <label className={label}>
+                                            Signer 2 name
+                                            <input name="signer2Name" className={input} />
+                                          </label>
+                                          <label className={label}>
+                                            Signer 2 email
+                                            <input
+                                              name="signer2Email"
+                                              type="email"
+                                              className={input}
+                                            />
+                                          </label>
+                                          <button type="submit" className={btnGhost}>
+                                            Send
+                                          </button>
+                                        </form>
                                       </details>
-                                    )}
-                                    <DangerDelete
-                                      compact
-                                      action={deleteDocument}
-                                      label="Delete file"
-                                      description="Permanently deletes this file."
-                                      hidden={{ id: doc.id, transactionId: txn.id }}
-                                    />
-                                  </div>
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </details>
-                  ))
+                                      {doc.contentType === "application/pdf" && (
+                                        <SplitPdfDialog
+                                          action={splitDocument}
+                                          transactionId={txn.id}
+                                          documentId={doc.id}
+                                          filename={doc.filename}
+                                          folders={txn.attachmentFolders}
+                                        />
+                                      )}
+                                      <details>
+                                        <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 transition-colors marker:text-brand-600 hover:text-brand-600">
+                                          Replace with a new version
+                                        </summary>
+                                        <form
+                                          action={replaceDocument}
+                                          className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-stone-50 p-3"
+                                        >
+                                          <input type="hidden" name="id" value={doc.id} />
+                                          <label className={label}>
+                                            New file (PDF, max 10 MB)
+                                            <input
+                                              name="file"
+                                              type="file"
+                                              accept="application/pdf,.pdf"
+                                              required
+                                              className={input}
+                                            />
+                                          </label>
+                                          <button type="submit" className={btnGhost}>
+                                            Replace
+                                          </button>
+                                          <span className="pb-2 text-xs text-stone-400">
+                                            The current file becomes a prior version — nothing is
+                                            lost.
+                                          </span>
+                                        </form>
+                                      </details>
+                                      {priors.length > 0 && (
+                                        <details>
+                                          <summary className="cursor-pointer select-none text-xs text-stone-500 transition-colors hover:text-stone-700">
+                                            {priors.length} prior version
+                                            {priors.length === 1 ? "" : "s"}
+                                          </summary>
+                                          <ul className="mt-1.5 flex flex-col gap-1 border-l-2 border-stone-200 pl-3">
+                                            {priors.map((p) => (
+                                              <li
+                                                key={p.id}
+                                                className="flex flex-wrap items-center gap-2 text-xs"
+                                              >
+                                                <span className="rounded bg-stone-100 px-1.5 py-0.5 font-medium text-stone-500">
+                                                  v{p.version}
+                                                </span>
+                                                <a
+                                                  href={`/api/documents/${p.id}`}
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                  className="text-stone-500 hover:text-brand-600 hover:underline"
+                                                >
+                                                  {p.filename}
+                                                </a>
+                                                <span className="text-stone-400">
+                                                  {(p.sizeBytes / 1024).toFixed(0)} KB · replaced{" "}
+                                                  {fmtDate(p.createdAt)}
+                                                </span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </details>
+                                      )}
+                                      <DangerDelete
+                                        compact
+                                        action={deleteDocument}
+                                        label="Delete file"
+                                        description="Permanently deletes this file."
+                                        hidden={{ id: doc.id, transactionId: txn.id }}
+                                      />
+                                    </div>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </details>
+                    );
+                  })
                 )}
 
                 {/* Everything that puts a new row on the list, behind one
@@ -2065,17 +2268,55 @@ export default async function TransactionDetailPage({
                     <form action={uploadDocument} className="flex flex-wrap items-end gap-2">
                       <input type="hidden" name="transactionId" value={txn.id} />
                       <label className={`${label} min-w-56 flex-1`}>
-                        Upload a file (PDF, max 10 MB)
+                        Upload files (PDF, max 10 MB each)
                         <input
                           name="file"
                           type="file"
                           accept="application/pdf,.pdf"
+                          multiple
                           required
                           className={input}
                         />
                       </label>
                       <button type="submit" className={btnGhost}>
                         Upload
+                      </button>
+                      <span className="pb-2 text-xs text-stone-400">
+                        Each file gets its own row.
+                      </span>
+                    </form>
+                    {/* One per line, because they arrive several at a time in
+                        one email and a single-field form would be six round
+                        trips. */}
+                    <form action={addAttachmentWebLinks} className="flex flex-wrap items-end gap-2">
+                      <input type="hidden" name="id" value={txn.id} />
+                      <label className={`${label} min-w-56 flex-1`}>
+                        Add web links — one per line, or “Name | link”
+                        <textarea
+                          name="links"
+                          rows={2}
+                          required
+                          placeholder={
+                            "Photos | https://gallery.example.com/123\nhttps://recorder…"
+                          }
+                          className={input}
+                        />
+                      </label>
+                      {txn.attachmentFolders.length > 0 && (
+                        <label className={label}>
+                          Folder
+                          <select name="folderId" defaultValue="" className={input}>
+                            <option value="">No folder</option>
+                            {txn.attachmentFolders.map((f) => (
+                              <option key={f.id} value={f.id}>
+                                {f.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                      <button type="submit" className={btnGhost}>
+                        Add links
                       </button>
                     </form>
                     {attachmentTemplates.length > 0 && (

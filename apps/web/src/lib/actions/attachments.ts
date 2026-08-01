@@ -4,6 +4,7 @@ import { Prisma, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { resolveFolders } from "@/lib/attachment-rows";
+import { linkLabel, safeExternalUrl } from "@/lib/attachments";
 import { optStr, str } from "@/lib/forms";
 import {
   pruneSignatures,
@@ -62,6 +63,113 @@ export async function addAttachmentRow(formData: FormData) {
       },
     });
   });
+  revalidateTxn(id);
+}
+
+/**
+ * Add rows for things that live somewhere else — a Dropbox folder of photos,
+ * a county recorder page, a survey on the surveyor's own portal.
+ *
+ * One link per line, because a coordinator pasting from an email has several
+ * at once and typing them into one field each is the kind of friction that
+ * stops people recording them at all. A line may be "Label | url" or just a
+ * url, in which case the host stands in as the label.
+ */
+export async function addAttachmentWebLinks(formData: FormData) {
+  const { tenantId, session } = await requireTenant();
+  const id = str(formData, "id");
+  if (!id) return;
+  const folderId = optStr(formData, "folderId");
+
+  const parsed: { label: string; url: string }[] = [];
+  for (const line of str(formData, "links").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    // "Label | url" splits on the last bar so a label may contain one.
+    const bar = trimmed.lastIndexOf("|");
+    const rawUrl = bar === -1 ? trimmed : trimmed.slice(bar + 1);
+    const rawLabel = bar === -1 ? "" : trimmed.slice(0, bar).trim();
+    const url = safeExternalUrl(rawUrl);
+    if (!url) continue;
+    parsed.push({ label: rawLabel || linkLabel(url), url });
+  }
+  if (parsed.length === 0) return;
+
+  await withTenant(tenantId, async (tx) => {
+    const folder = folderId
+      ? await tx.attachmentFolder.findFirst({
+          where: { id: folderId, transactionId: id },
+          select: { id: true },
+        })
+      : null;
+    const max = await tx.transactionAttachment.aggregate({
+      where: { transactionId: id },
+      _max: { sortOrder: true },
+    });
+    let sortOrder = max._max.sortOrder ?? 0;
+    await tx.transactionAttachment.createMany({
+      data: parsed.map(({ label, url }) => ({
+        tenantId,
+        transactionId: id,
+        label,
+        webUrl: url,
+        folderId: folder?.id ?? null,
+        // A link is the thing itself, not a promise of one — nothing is
+        // outstanding once it's recorded.
+        required: false,
+        completedAt: new Date(),
+        sortOrder: ++sortOrder,
+        createdById: session.user.id,
+        createdByName: session.user.name ?? session.user.email,
+      })),
+    });
+  });
+  revalidateTxn(id);
+}
+
+/**
+ * Put a link on an existing row, or (with an empty url) take it off.
+ *
+ * Separate from the add path because the common case is a row that already
+ * exists — "Survey" is on the checklist and the surveyor sent a portal link
+ * instead of a PDF.
+ */
+export async function setAttachmentWebUrl(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  const rowId = str(formData, "rowId");
+  if (!id || !rowId) return;
+  const raw = optStr(formData, "webUrl");
+  // A url that fails validation clears nothing: silently blanking the field
+  // because of a typo would lose the link that was already there.
+  const url = raw === null ? null : safeExternalUrl(raw);
+  if (raw !== null && !url) return;
+  await withTenant(tenantId, (tx) =>
+    tx.transactionAttachment.updateMany({
+      where: { id: rowId, transactionId: id },
+      data: { webUrl: url },
+    }),
+  );
+  revalidateTxn(id);
+}
+
+/**
+ * Rename a row. The label is what the checklist reads as, and rows arrive
+ * named by whatever produced them — a template's wording, or a filename like
+ * "scan_0142.pdf" that says nothing about what the document is.
+ */
+export async function renameAttachmentRow(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  const rowId = str(formData, "rowId");
+  const label = str(formData, "label");
+  if (!id || !rowId || !label) return;
+  await withTenant(tenantId, (tx) =>
+    tx.transactionAttachment.updateMany({
+      where: { id: rowId, transactionId: id },
+      data: { label },
+    }),
+  );
   revalidateTxn(id);
 }
 

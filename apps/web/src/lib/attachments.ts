@@ -124,3 +124,73 @@ export function groupAttachments<T extends AttachmentLike>(
   }
   return groups;
 }
+
+/**
+ * Normalise a user-supplied external link, or reject it.
+ *
+ * The result goes straight into an `href`, so this is a security boundary and
+ * not a formatting nicety: a `javascript:` URL on a link the whole workspace
+ * can click is stored XSS. Only http and https get through. A bare
+ * "example.com" is upgraded rather than refused — typing the scheme isn't
+ * something anyone should have to remember.
+ */
+export function safeExternalUrl(raw: string | null | undefined): string | null {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return null;
+  // Control characters exist here only to smuggle a scheme past a parser
+  // ("java\tscript:"), so anything below 0x21 is refused outright.
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: rejecting them is the point
+  if (/[\u0000-\u0020]/.test(trimmed)) return null;
+  const candidate = /^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  if (!url.hostname) return null;
+  return url.toString();
+}
+
+/** How a link reads in a list — the host, not the whole URL. */
+export function linkLabel(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+export interface AttachmentFilter {
+  /** Matches the row label or its file's name, case-insensitively. */
+  q?: string;
+  hideComplete?: boolean;
+  hideOmitted?: boolean;
+}
+
+interface FilterableRow extends AttachmentLike {
+  document?: { filename?: string | null } | null;
+}
+
+/**
+ * Narrow the list before it is grouped.
+ *
+ * Filtering rows rather than groups means a folder that loses everything
+ * disappears along with its heading — a "Contract 0/0" heading left behind by
+ * a search is a folder the search is claiming to have found.
+ */
+export function filterAttachments<T extends FilterableRow>(
+  rows: readonly T[],
+  filter: AttachmentFilter,
+): T[] {
+  const needle = (filter.q ?? "").trim().toLowerCase();
+  return rows.filter((row) => {
+    const state = attachmentState(row);
+    if (filter.hideComplete && state === "complete") return false;
+    if (filter.hideOmitted && state === "omitted") return false;
+    if (!needle) return true;
+    const haystack = `${row.label ?? ""} ${row.document?.filename ?? ""}`.toLowerCase();
+    return haystack.includes(needle);
+  });
+}

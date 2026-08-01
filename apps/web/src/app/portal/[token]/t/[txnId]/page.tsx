@@ -166,21 +166,37 @@ export default async function AgentPortalTxnPage({
                     </h3>
                   )}
                   <ul className="flex flex-col gap-1 text-sm">
-                    {group.shared.map((item) => (
-                      <li key={item.id}>
-                        <a
-                          href={`/portal/${link.token}/documents/${item.document?.id}`}
-                          className="text-brand-600 hover:underline"
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {item.document?.filename}
-                        </a>{" "}
-                        <span className="text-xs text-stone-400">
-                          ({((item.document?.sizeBytes ?? 0) / 1024).toFixed(0)} KB)
-                        </span>
-                      </li>
-                    ))}
+                    {group.shared.map((item) =>
+                      // A shared row is either a file to open or a link to
+                      // somewhere else — a gallery, a recorder's page.
+                      item.document ? (
+                        <li key={item.id}>
+                          <a
+                            href={`/portal/${link.token}/documents/${item.document.id}`}
+                            className="text-brand-600 hover:underline"
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {item.document.filename}
+                          </a>{" "}
+                          <span className="text-xs text-stone-400">
+                            ({(item.document.sizeBytes / 1024).toFixed(0)} KB)
+                          </span>
+                        </li>
+                      ) : (
+                        <li key={item.id}>
+                          <a
+                            href={item.webUrl ?? "#"}
+                            className="text-brand-600 hover:underline"
+                            target="_blank"
+                            rel="noreferrer noopener"
+                          >
+                            {item.label}
+                          </a>{" "}
+                          <span className="text-xs text-stone-400">(link)</span>
+                        </li>
+                      ),
+                    )}
                     {/* What the file is still waiting on, where the
                         coordinator chose to say so. Named plainly rather
                         than styled as a warning: this is usually a nudge,

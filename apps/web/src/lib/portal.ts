@@ -83,6 +83,7 @@ export async function resolvePortal(token: string) {
             completedAt: true,
             omittedAt: true,
             visibleToClient: true,
+            webUrl: true,
             document: {
               select: { id: true, filename: true, sizeBytes: true, visibleToClient: true },
             },
@@ -219,6 +220,7 @@ export async function resolveAgentPortalTxn(token: string, txnId: string) {
             completedAt: true,
             omittedAt: true,
             visibleToClient: true,
+            webUrl: true,
             document: {
               select: { id: true, filename: true, sizeBytes: true, visibleToAgent: true },
             },
