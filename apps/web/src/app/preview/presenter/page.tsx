@@ -21,10 +21,24 @@ export const metadata: Metadata = {
 
 const SHOTS = [
   {
-    file: "/marketing/social/presenter/shot-1-presenting.png",
-    label: PRESENTER_PROMPTS.shots[0].label,
-    use: PRESENTER_PROMPTS.shots[0].use,
+    file: "/marketing/social/presenter/shot-1-freehold-onscreen.jpg",
+    label: "Presenting to camera, Freehold on the screen",
+    use: "Facebook page cover, video intro card",
     prompt: PRESENTER_PROMPTS.shots[0].prompt,
+    note:
+      "The laptop screen is a real screenshot of the transactions list, warped into " +
+      "perspective and composited in. It is not generated: an image model asked to " +
+      "draw a specific interface invents one, with plausible chrome and garbled text, " +
+      "which is the last thing a picture whose job is to show the software should do.",
+  },
+  {
+    file: "/marketing/social/presenter/shot-1-presenting.jpg",
+    label: "First pass, laptop turned away",
+    use: "Kept for comparison",
+    prompt: PRESENTER_PROMPTS.shots[0].prompt,
+    note:
+      "The original generation. Same woman — she was used as the character reference " +
+      "for the version above — but the screen faces away, so there is nothing to show.",
   },
 ];
 
@@ -50,8 +64,8 @@ export default function PresenterPreviewPage() {
             <Image
               src={shot.file}
               alt={shot.label}
-              width={2688}
-              height={1520}
+              width={2000}
+              height={1131}
               className="h-auto w-full"
               priority
             />
@@ -61,6 +75,7 @@ export default function PresenterPreviewPage() {
               <span className="font-medium">{shot.label}</span>
               <span className="text-stone-500"> — {shot.use}</span>
             </p>
+            <p className="max-w-2xl text-xs leading-relaxed text-stone-600">{shot.note}</p>
             <details>
               <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 hover:text-brand-600">
                 The prompt behind it
