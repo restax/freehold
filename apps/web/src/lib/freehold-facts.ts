@@ -48,7 +48,8 @@ transaction coordinators.
   storage, and one-click export of everything.
 - Integrations: Zapier (reaching Dotloop, DocuSign, thousands more), Follow Up
   Boss, Twenty CRM, ERPNext, the FindTCPros directory, calendar feeds, a REST
-  API with signed webhooks, and a Claude Skill.
+  API with signed webhooks, and a Claude connector (OAuth — sign in with your
+  own account, no key to paste).
 - Support: file a ticket from the sidebar on any page; it records which screen
   you were on.
 

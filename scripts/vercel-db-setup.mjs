@@ -62,6 +62,19 @@ await client.query(
 await client.query(
   `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO freehold_app`,
 );
+
+// The Claude Skill feature (a raw API key pasted into a chat prompt) was
+// removed in favour of the OAuth connector. Revoking here, not just deleting
+// the UI, because an already-minted key keeps working wherever it was pasted
+// until it's actually revoked. Matches 0 rows and is a no-op on every deploy
+// after the first.
+const revoked = await client.query(
+  `UPDATE api_key SET revoked_at = now() WHERE name = 'Claude Skill' AND revoked_at IS NULL`,
+);
+if (revoked.rowCount > 0) {
+  console.log(`vercel-db-setup: revoked ${revoked.rowCount} live Claude Skill key(s)`);
+}
+
 await client.end();
 console.log("vercel-db-setup: migrations deployed, grants applied");
 

@@ -3,9 +3,7 @@ import { billingEnabled } from "@freehold/ee-billing";
 import { docusignAdapter } from "@freehold/integrations";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { CopyButton } from "@/components/copy-button";
 import { McpConnectorPanel } from "@/components/mcp-connector-panel";
-import { createSkillKey, readNewSkillKey } from "@/lib/actions/api-keys";
 import { connectErpnext, disconnectErpnext } from "@/lib/actions/erpnext";
 import { connectDocumenso, disconnectDocumenso } from "@/lib/actions/esign-config";
 import { connectFub, disconnectFub, importFubContacts } from "@/lib/actions/fub";
@@ -35,23 +33,6 @@ function StatusPill({ tone, label }: { tone: Tone; label: string }) {
   return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>{label}</span>;
 }
 
-function skillPrompt(key: string): string {
-  const base = (process.env.BETTER_AUTH_URL ?? "http://localhost:3010").replace(/\/$/, "");
-  return `I manage real-estate transactions in Freehold. Use its REST API to answer questions about my workspace.
-
-Base URL: ${base}/api/v1
-Send this header with every request: Authorization: Bearer ${key}
-
-Endpoints:
-- GET /account — workspace overview and counts
-- GET /clients — clients with portal activity
-- GET /transactions — deals (filters: ?status=..., ?clientId=...)
-- GET /tasks — deadlines across all deals, soonest first
-- GET /contacts — CRM contacts with categories and A–D grades
-
-When I ask what's closing, what's due, or how a client is doing, fetch the data and answer concisely. Never repeat the API key back to me.`;
-}
-
 export default async function IntegrationsPage({
   searchParams,
 }: {
@@ -59,7 +40,6 @@ export default async function IntegrationsPage({
 }) {
   const { tenantId, isAdmin, userId } = await requireAdminTenant();
   const { storageOk, storageError, erpnextError } = await searchParams;
-  const newSkillKey = await readNewSkillKey();
 
   const [apiKeys, webhooks] = await Promise.all([
     withTenant(tenantId, (tx) => tx.apiKey.count({ where: { revokedAt: null } })),
@@ -359,83 +339,6 @@ export default async function IntegrationsPage({
       status: mcpEnabled ? "On" : "Off",
       body: "Connect this workspace to Claude directly, so you can ask about your files in any Claude conversation without pasting anything. Each person signs in with their own account and sees only what their role already lets them see. Off until the workspace owner turns it on.",
       extra: <McpConnectorPanel tenantId={tenantId} userId={userId} isAdmin={isAdmin} />,
-    },
-    {
-      name: "Claude Skill",
-      mono: "AI",
-      // The gate wins over "Ready": a card that reads Ready while its body
-      // says the workspace has it switched off is telling two stories.
-      tone: !mcpEnabled ? "setup" : apiKeys > 0 ? "active" : "setup",
-      status: !mcpEnabled ? "Off" : apiKeys > 0 ? "Ready" : "One-click setup",
-      body: "Ask Claude about your own deals — what's closing this week, what's overdue, how a client is doing. One click creates your skill, then you paste a single prompt into Claude.",
-      extra: (
-        <div className="mt-3 flex flex-col gap-3">
-          {/* Same gate as the connector, and it comes first: this prompt
-              carries a live key that is meant to be pasted into a chat, so
-              while the workspace says no AI access there is nothing here to
-              set up and nothing to copy — including a prompt minted moments
-              before the switch was turned off. */}
-          {!mcpEnabled ? (
-            <p className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs leading-relaxed text-stone-600">
-              Turned off for this workspace. The Claude connector card above controls whether an AI
-              assistant may reach this workspace, and it covers this too — turn it on there first.
-            </p>
-          ) : newSkillKey ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-              <p className="text-xs font-medium text-amber-800">
-                Your skill is ready. Copy this prompt and paste it into any Claude chat (or save it
-                as project instructions). For your safety it's shown only once — generate a fresh
-                one anytime.
-              </p>
-              <pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap rounded-md border border-amber-100 bg-white p-2.5 font-mono text-[11px] leading-relaxed text-stone-700">
-                {skillPrompt(newSkillKey)}
-              </pre>
-              <div className="mt-2">
-                <CopyButton text={skillPrompt(newSkillKey)} label="Copy prompt" />
-              </div>
-            </div>
-          ) : isAdmin ? (
-            <form action={createSkillKey}>
-              <button type="submit" className={btnGhost}>
-                {apiKeys > 0 ? "Generate a fresh skill prompt" : "Set up the Claude Skill"}
-              </button>
-            </form>
-          ) : (
-            <p className="text-xs text-stone-400">
-              Ask a workspace admin to set this up — it takes one click.
-            </p>
-          )}
-          <details className="group">
-            <summary className="cursor-pointer select-none text-xs font-medium text-brand-700 hover:text-brand-600">
-              How does this work? Is my data safe?
-            </summary>
-            <div className="mt-2 flex flex-col gap-2 rounded-lg bg-stone-50 p-3 text-xs leading-relaxed text-stone-600">
-              <p>
-                <strong className="text-stone-800">How it works.</strong> Setting up the skill (one
-                click for a workspace admin) creates a private access key and wraps it in a short
-                prompt. Paste that prompt into Claude once per conversation (or save it in a Claude
-                project so it's always on). From then on, questions like "what's closing this week?"
-                make Claude look at your live Freehold data and answer from it.
-              </p>
-              <p>
-                <strong className="text-stone-800">Is my data safe?</strong> The key works like a
-                password that mostly just <em>reads</em> your workspace — it can add a transaction
-                or contact if you ask, but it can never delete anything, by design. Everything
-                travels encrypted (HTTPS). Treat the prompt like a password: don't share it with
-                anyone you wouldn't give your login.
-              </p>
-              <p>
-                <strong className="text-stone-800">Changed your mind?</strong> Revoke the key any
-                time in{" "}
-                <Link href="/dashboard/settings" className="underline hover:text-brand-700">
-                  Settings → API keys
-                </Link>{" "}
-                and the prompt stops working instantly.
-              </p>
-            </div>
-          </details>
-        </div>
-      ),
     },
     {
       name: "Freehold API",
