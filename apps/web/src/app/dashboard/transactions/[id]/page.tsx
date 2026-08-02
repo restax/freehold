@@ -999,8 +999,14 @@ export default async function TransactionDetailPage({
         </p>
       )}
 
-      <div className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="flex flex-col gap-4 xl:order-1">
+      {/* items-start + sticky on the sidebar: the tab content (a 40+ row
+          task list, a long email thread) is routinely much taller than Key
+          dates/Participants/Custom fields, and without this the sidebar's
+          grid cell stretched to match, leaving a dead gap below the last
+          card while the tab content kept going. Same bug and fix as the
+          dashboard home rail. */}
+      <div className="grid items-start gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
+        <aside className="flex flex-col gap-4 xl:sticky xl:top-6 xl:order-1">
           {/* First in the sidebar, above the dates: this is what someone needs
               to have read *before* they act on the file, and anything further
               down gets scrolled past. Renders nothing when there is nothing
