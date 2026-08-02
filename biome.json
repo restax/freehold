@@ -7,6 +7,7 @@
       "!**/.next",
       "!**/dist",
       "!**/.turbo",
+      "!.claude/worktrees",
       "!**/.venv",
       "!**/__pycache__",
       "!docs/plan.html",
