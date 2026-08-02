@@ -101,7 +101,10 @@ export default async function IntegrationsPage({
     ).erpnextConfig,
   );
 
+  const branding = new Map((await prisma.integrationBranding.findMany()).map((b) => [b.key, b]));
+
   const cards: Array<{
+    key: string;
     name: string;
     category: Category;
     mono: string;
@@ -114,6 +117,7 @@ export default async function IntegrationsPage({
     extra?: ReactNode;
   }> = [
     {
+      key: "email",
       name: "Email & reply capture",
       category: "Communication",
       mono: "@",
@@ -126,6 +130,7 @@ export default async function IntegrationsPage({
       hrefLabel: "Open a transaction → Emails tab",
     },
     {
+      key: "documenso",
       name: "Documenso e-signatures",
       category: "E-signatures",
       mono: "Do",
@@ -170,6 +175,7 @@ export default async function IntegrationsPage({
         ),
     },
     {
+      key: "storage",
       name: "Document storage",
       category: "Storage & data",
       mono: "St",
@@ -231,6 +237,7 @@ export default async function IntegrationsPage({
         ),
     },
     {
+      key: "docusign",
       name: "DocuSign e-signatures",
       category: "E-signatures",
       mono: "DS",
@@ -245,6 +252,7 @@ export default async function IntegrationsPage({
     ...(opensignAvailable
       ? [
           {
+            key: "opensign",
             name: "OpenSign e-signatures",
             category: "E-signatures" as Category,
             mono: "OS",
@@ -263,6 +271,7 @@ export default async function IntegrationsPage({
         ]
       : []),
     {
+      key: "zapier",
       name: "Zapier",
       category: "Developers & automation",
       mono: "Z",
@@ -273,6 +282,7 @@ export default async function IntegrationsPage({
       hrefLabel: "Setup guide & recipes",
     },
     {
+      key: "fub",
       name: "Follow Up Boss",
       category: "CRM & leads",
       mono: "FB",
@@ -309,6 +319,7 @@ export default async function IntegrationsPage({
       ),
     },
     {
+      key: "twenty",
       name: "Twenty CRM",
       category: "CRM & leads",
       mono: "Tw",
@@ -349,6 +360,7 @@ export default async function IntegrationsPage({
       ),
     },
     {
+      key: "erpnext",
       name: "ERPNext",
       category: "Money",
       mono: "ER",
@@ -400,6 +412,7 @@ export default async function IntegrationsPage({
       ),
     },
     {
+      key: "mcp",
       name: "Claude connector",
       category: "Developers & automation",
       mono: "AI",
@@ -409,6 +422,7 @@ export default async function IntegrationsPage({
       extra: <McpConnectorPanel tenantId={tenantId} userId={userId} isAdmin={isAdmin} />,
     },
     {
+      key: "api",
       name: "Freehold API",
       category: "Developers & automation",
       mono: "{}",
@@ -419,6 +433,7 @@ export default async function IntegrationsPage({
       hrefLabel: "API reference",
     },
     {
+      key: "webhooks",
       name: "Signed webhooks",
       category: "Developers & automation",
       mono: "→",
@@ -429,6 +444,7 @@ export default async function IntegrationsPage({
       hrefLabel: "Manage webhooks",
     },
     {
+      key: "stripe",
       name: "Client invoicing (Stripe)",
       category: "Money",
       mono: "St",
@@ -439,6 +455,7 @@ export default async function IntegrationsPage({
       hrefLabel: "Open invoices",
     },
     {
+      key: "calendar",
       name: "Calendar feeds",
       category: "Communication",
       mono: "Ca",
@@ -449,6 +466,7 @@ export default async function IntegrationsPage({
       hrefLabel: "Share from a client's portals",
     },
     {
+      key: "csv-import",
       name: "CSV import",
       category: "Storage & data",
       mono: "⇥",
@@ -495,29 +513,51 @@ export default async function IntegrationsPage({
             count={items.length}
           >
             <div className="grid gap-4 md:grid-cols-2">
-              {items.map((c) => (
-                <section key={c.name} className={`${card} flex gap-4`}>
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-stone-100 font-display text-base font-bold text-stone-700">
-                    {c.mono}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-medium">{c.name}</h2>
-                      <StatusPill tone={c.tone} label={c.status} />
-                    </div>
-                    <p className="mt-1 text-sm leading-relaxed text-stone-600">{c.body}</p>
-                    {c.href && (
-                      <Link
-                        href={c.href}
-                        className="mt-2 inline-block text-sm font-medium text-brand-700 hover:text-brand-600"
-                      >
-                        {c.hrefLabel} →
-                      </Link>
+              {items.map((c) => {
+                const b = branding.get(c.key);
+                return (
+                  <section key={c.name} className={`${card} flex gap-4`}>
+                    {b?.logo ? (
+                      // biome-ignore lint/performance/noImgElement: an operator-uploaded data URL, not a bundled asset next/image can size.
+                      <img
+                        src={b.logo}
+                        alt=""
+                        className="h-11 w-11 shrink-0 rounded-xl border border-stone-200 object-contain p-1"
+                      />
+                    ) : (
+                      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-stone-100 font-display text-base font-bold text-stone-700">
+                        {c.mono}
+                      </span>
                     )}
-                    {c.extra}
-                  </div>
-                </section>
-              ))}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="font-medium">{c.name}</h2>
+                        <StatusPill tone={c.tone} label={c.status} />
+                        {b?.url && (
+                          <a
+                            href={b.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs font-medium text-stone-400 hover:text-brand-700"
+                          >
+                            Website ↗
+                          </a>
+                        )}
+                      </div>
+                      <p className="mt-1 text-sm leading-relaxed text-stone-600">{c.body}</p>
+                      {c.href && (
+                        <Link
+                          href={c.href}
+                          className="mt-2 inline-block text-sm font-medium text-brand-700 hover:text-brand-600"
+                        >
+                          {c.hrefLabel} →
+                        </Link>
+                      )}
+                      {c.extra}
+                    </div>
+                  </section>
+                );
+              })}
             </div>
           </SectionCard>
         );

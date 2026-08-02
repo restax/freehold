@@ -37,6 +37,10 @@ export async function updatePlatformSettings(formData: FormData) {
   // prompt is the checkbox's job — an empty textarea never means two things.
   const cloudPromptText = optStr(formData, "cloudPromptText") || null;
   const cloudPromptEnabled = formData.get("cloudPromptEnabled") === "on";
+  // Blank would mean the support page shows no number at all, which is worse
+  // than keeping the last one — so an empty submission is dropped rather than
+  // clearing the field.
+  const contactPhone = optStr(formData, "contactPhone");
 
   await prisma.platformSetting.upsert({
     where: { id: "singleton" },
@@ -52,6 +56,7 @@ export async function updatePlatformSettings(formData: FormData) {
       handbookStyleGuide,
       cloudPromptText,
       cloudPromptEnabled,
+      ...(contactPhone ? { contactPhone } : {}),
     },
     update: {
       founderCallsAvailable: formData.get("founderCallsAvailable") === "on",
@@ -66,6 +71,7 @@ export async function updatePlatformSettings(formData: FormData) {
       handbookStyleGuide,
       cloudPromptText,
       cloudPromptEnabled,
+      ...(contactPhone ? { contactPhone } : {}),
     },
   });
 

@@ -26,14 +26,24 @@ export function ListedToggle({ listed }: { listed: boolean }) {
         aria-checked={listed}
         aria-label={listed ? "Listed in the directory" : "Not listed in the directory"}
         disabled={pending}
-        className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-60 ${
+        className={`relative h-7 w-12 shrink-0 overflow-hidden rounded-full transition-colors disabled:opacity-60 ${
           listed ? "bg-brand-600" : "bg-stone-300"
         }`}
       >
+        {/*
+         * Positioned with an explicit left-1 rather than leaving left/top
+         * implicit, and translate-x-5 (not -6) from that base. With no
+         * explicit left, the browser's used-value for the thumb's static
+         * position landed at 24px (not 0) in testing, and translate-x-6 (24px)
+         * stacked on top of it — 48px of shift in a 48px-wide track, pushing
+         * the thumb entirely outside the pill and over the label text next to
+         * it. Pinning the base removes the ambiguity; overflow-hidden on the
+         * button above is the belt to that belt-and-braces.
+         */}
         <span
           aria-hidden
-          className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-            listed ? "translate-x-6" : "translate-x-1"
+          className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+            listed ? "translate-x-5" : "translate-x-0"
           }`}
         />
       </button>

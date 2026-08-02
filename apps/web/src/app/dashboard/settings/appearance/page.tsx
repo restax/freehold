@@ -1,6 +1,7 @@
 import { Flag, PaintBrushBroad, Rows, TextAa } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { SaveButton } from "@/components/save-button";
 import { SectionCard } from "@/components/section-card";
 import { ThemeChoice } from "@/components/theme-choice";
 import { saveAppearance } from "@/lib/actions/appearance";
@@ -236,9 +237,7 @@ export default async function AppearancePage() {
         </SectionCard>
 
         <div>
-          <button type="submit" className={btn}>
-            Save appearance
-          </button>
+          <SaveButton className={btn} label="Save appearance" />
         </div>
       </form>
     </div>

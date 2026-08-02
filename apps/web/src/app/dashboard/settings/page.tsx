@@ -2,6 +2,7 @@ import { prisma, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { Badge } from "@/components/badges";
 import { DangerDelete } from "@/components/danger-delete";
+import { SaveButton } from "@/components/save-button";
 import { SectionCard } from "@/components/section-card";
 import { SubmitOnChangeCheckbox } from "@/components/submit-on-change-checkbox";
 import { TwoFactorSettings } from "@/components/two-factor-settings";
@@ -418,9 +419,7 @@ async function OperatingStatesSection({ tenantId, userId }: { tenantId: string; 
             until someone licensed is assigned.
           </span>
         </label>
-        <button type="submit" className={btnGhost}>
-          Save enforcement
-        </button>
+        <SaveButton className={btnGhost} label="Save enforcement" />
       </form>
     </SectionCard>
   );
@@ -457,9 +456,7 @@ async function HolidayScheduleSection({ tenantId, userId }: { tenantId: string; 
             </label>
           ))}
         </div>
-        <button type="submit" className={`${btnGhost} self-start`}>
-          Save holiday schedule
-        </button>
+        <SaveButton className={`${btnGhost} self-start`} label="Save holiday schedule" />
       </form>
     </SectionCard>
   );
@@ -787,9 +784,7 @@ export default async function SettingsPage() {
                   suggested line you approve.
                 </p>
               </div>
-              <button type="submit" className={`${btnGhost} self-start`}>
-                Save billing defaults
-              </button>
+              <SaveButton className={`${btnGhost} self-start`} label="Save billing defaults" />
             </form>
           </SectionCard>
         )}
@@ -830,9 +825,7 @@ export default async function SettingsPage() {
                   ))}
                 </select>
               </label>
-              <button type="submit" className={btnGhost}>
-                Save
-              </button>
+              <SaveButton className={btnGhost} />
             </form>
           </SectionCard>
         )}
@@ -861,9 +854,7 @@ export default async function SettingsPage() {
               Sell side is called
               <input name="sellLabel" defaultValue={sideLabels.sell} className={input} />
             </label>
-            <button type="submit" className={btnGhost}>
-              Save wording
-            </button>
+            <SaveButton className={btnGhost} label="Save wording" />
           </form>
         </SectionCard>
 

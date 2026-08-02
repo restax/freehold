@@ -5,6 +5,7 @@ import { Badge } from "@/components/badges";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DangerDelete } from "@/components/danger-delete";
 import { EmptyState } from "@/components/empty-state";
+import { SaveButton } from "@/components/save-button";
 import { SectionCard } from "@/components/section-card";
 import {
   addChecklistItem,
@@ -163,9 +164,7 @@ export default async function ComplianceChecklistPage({
                 <option value="3">3 — three levels</option>
               </select>
             </label>
-            <button type="submit" className={btn}>
-              Save
-            </button>
+            <SaveButton className={btn} />
           </form>
         </SectionCard>
       )}

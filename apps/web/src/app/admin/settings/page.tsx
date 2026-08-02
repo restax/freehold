@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SaveButton } from "@/components/save-button";
 import { updatePlatformSettings } from "@/lib/actions/platform-settings";
 import { DEFAULT_CLOUD_PROMPT } from "@/lib/cloud-prompt";
 import { DEFAULT_SUMMARY_STYLE, SUMMARY_MODELS } from "@/lib/handbook/style";
@@ -36,6 +37,24 @@ export default async function AdminSettingsPage() {
       </div>
 
       <form action={updatePlatformSettings} className="flex flex-col gap-6">
+        <section className={card}>
+          <h2 className="mb-1 font-medium">Support</h2>
+          <p className="mb-4 text-sm text-stone-500">
+            Shown at the top of every workspace's Support page, so a TC stuck mid-closing has a
+            number to call rather than only a ticket.
+          </p>
+          <label className="flex flex-col gap-1 text-sm">
+            Contact phone
+            <input
+              type="tel"
+              name="contactPhone"
+              defaultValue={settings.contactPhone}
+              placeholder="774-240-4715"
+              className={`${field} w-56`}
+            />
+          </label>
+        </section>
+
         <section className={card}>
           <h2 className="mb-1 font-medium">Homepage voice demo — call the developer</h2>
           <p className="mb-4 text-sm text-stone-500">
@@ -221,12 +240,7 @@ export default async function AdminSettingsPage() {
         </section>
 
         <div>
-          <button
-            type="submit"
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
-          >
-            Save
-          </button>
+          <SaveButton className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700" />
         </div>
       </form>
     </main>

@@ -2,6 +2,7 @@ import { prisma, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { DangerDelete } from "@/components/danger-delete";
 import { PhoneInput } from "@/components/phone-input";
+import { SaveButton } from "@/components/save-button";
 import { SectionCard } from "@/components/section-card";
 import { SignaturePermissionToggle } from "@/components/signature-permission-toggle";
 import { TemplateEditor } from "@/components/template-editor";
@@ -246,9 +247,7 @@ export default async function EmailTemplatesPage() {
                         Phone
                         <PhoneInput name="phone" defaultValue={s.phone ?? ""} className={input} />
                       </label>
-                      <button type="submit" className={`${btn} self-start sm:col-span-2`}>
-                        Save
-                      </button>
+                      <SaveButton className={`${btn} self-start sm:col-span-2`} />
                     </form>
                   </details>
                 )}
@@ -370,9 +369,7 @@ export default async function EmailTemplatesPage() {
               />
             </div>
           </div>
-          <button type="submit" className={`${btn} self-start`}>
-            Save automated emails
-          </button>
+          <SaveButton className={`${btn} self-start`} label="Save automated emails" />
         </form>
         <form
           action={saveReviewDelay}
@@ -392,9 +389,7 @@ export default async function EmailTemplatesPage() {
               days after closing
             </span>
           </label>
-          <button type="submit" className={`${btnGhost} self-end px-3 py-1.5 text-xs`}>
-            Save
-          </button>
+          <SaveButton className={`${btnGhost} self-end px-3 py-1.5 text-xs`} />
         </form>
       </SectionCard>
     </div>

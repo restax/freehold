@@ -8,6 +8,7 @@ import { DangerDelete } from "@/components/danger-delete";
 import { HandbookGradeControl } from "@/components/handbook-grade";
 import { HandbookNotes } from "@/components/handbook-notes";
 import { RevealCredential } from "@/components/reveal-credential";
+import { SaveButton } from "@/components/save-button";
 import { SectionCard } from "@/components/section-card";
 import { addContactNote, deleteContact, logTouch, scheduleFollowUp } from "@/lib/actions/contacts";
 import { toggleTask } from "@/lib/actions/tasks";
@@ -540,9 +541,7 @@ export default async function ContactDetailPage({
                   <input name="url" placeholder="https://…" className={input} />
                 </label>
                 <div className="flex items-end lg:col-start-4">
-                  <button type="submit" className={btn}>
-                    Save encrypted
-                  </button>
+                  <SaveButton className={btn} label="Save encrypted" />
                 </div>
               </form>
               <p className="text-xs text-stone-400">

@@ -2,6 +2,7 @@ import { prisma } from "@freehold/db";
 import { adPriceConfigured, billingEnabled } from "@freehold/ee-billing";
 import { notFound } from "next/navigation";
 import { PhoneInput } from "@/components/phone-input";
+import { SaveButton } from "@/components/save-button";
 import { updateVendorProfile } from "@/lib/actions/vendor";
 import { createVendorAd, openAdBilling, startTrialAd } from "@/lib/actions/vendor-ads";
 import {
@@ -219,12 +220,10 @@ export default async function VendorProfilePage() {
           </span>
         </label>
         <div>
-          <button
-            type="submit"
+          <SaveButton
             className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
-          >
-            Save profile
-          </button>
+            label="Save profile"
+          />
         </div>
       </form>
 

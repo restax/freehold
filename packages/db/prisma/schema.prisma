@@ -1973,9 +1973,32 @@ model PlatformSetting {
   /// self-hosting is a supported choice, so an operator can remove the upsell
   /// from their install outright rather than only reword it.
   cloudPromptEnabled         Boolean   @default(true) @map("cloud_prompt_enabled")
+  /// The number shown at the top of every workspace's Support page — one
+  /// phone line for the whole platform, not per-tenant. Kept editable here
+  /// rather than hardcoded because it's the kind of thing that changes on a
+  /// provider switch, and a wrong number embedded across the app is worse
+  /// than a blank field.
+  contactPhone               String    @default("774-240-4715") @map("contact_phone")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
 
   @@map("platform_setting")
+}
+
+/// One card's worth of branding on /dashboard/integrations: an operator-
+/// uploaded logo and a link to the provider's own site. Platform-wide, not
+/// per-tenant — every workspace sees the same Documenso logo — so this is
+/// global config like PlatformSetting, not RLS-scoped data. `key` is the
+/// stable slug from lib/integration-catalog.ts (the list both this admin page
+/// and the dashboard integrations page read, so the two can't drift). A key
+/// with no row here just means nobody has uploaded a logo yet — the card
+/// falls back to its plain-letter mark.
+model IntegrationBranding {
+  key       String   @id
+  logo      String?
+  url       String?
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("integration_branding")
 }
 
 model WebhookEndpoint {

@@ -5,6 +5,7 @@ import { Badge } from "@/components/badges";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { DangerDelete } from "@/components/danger-delete";
 import { FormDesigner } from "@/components/form-designer";
+import { SaveButton } from "@/components/save-button";
 import { deleteForm, updateFormMeta, updateFormPlacement } from "@/lib/actions/forms";
 import { FORM_KIND_LABEL, type FormKind, isFormKind, parseLayout } from "@/lib/form-schema";
 import { tenantSiteUrl } from "@/lib/site-config";
@@ -110,9 +111,7 @@ export default async function FormDesignerPage({ params }: { params: Promise<{ i
             </label>
           </div>
           <div className="border-t border-stone-100 pt-3">
-            <button type="submit" className={btn}>
-              Save wording
-            </button>
+            <SaveButton className={btn} label="Save wording" />
           </div>
         </form>
       </details>
@@ -167,9 +166,7 @@ export default async function FormDesignerPage({ params }: { params: Promise<{ i
             </span>
           </label>
           <div className="border-t border-stone-100 pt-3">
-            <button type="submit" className={btn}>
-              Save placement
-            </button>
+            <SaveButton className={btn} label="Save placement" />
           </div>
         </form>
       </section>

@@ -2,6 +2,7 @@ import { prisma } from "@freehold/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Breadcrumbs } from "@/components/breadcrumbs";
+import { SaveButton } from "@/components/save-button";
 import { updateStateReference } from "@/lib/actions/state-reference";
 import { isOperator } from "@/lib/operator";
 import { btn, input, label as labelCls } from "@/lib/ui";
@@ -89,9 +90,7 @@ export default async function AdminStateDetailPage({
           Confirmed accurate
         </label>
         <div className="flex items-center gap-3 border-t border-stone-100 pt-3">
-          <button type="submit" className={btn}>
-            Save
-          </button>
+          <SaveButton className={btn} />
           <Link href="/admin/states" className="text-sm text-stone-400 hover:text-stone-600">
             Back to list
           </Link>

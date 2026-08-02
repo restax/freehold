@@ -7,7 +7,7 @@ import { str } from "@/lib/forms";
 import { adminAlert, postTicketAlert, postToSlackThread } from "@/lib/notify";
 import { isOperator } from "@/lib/operator";
 import { getSession } from "@/lib/session";
-import { requireTenant } from "@/lib/tenant";
+import { getMemberRole, requireTenant } from "@/lib/tenant";
 
 /**
  * Trouble tickets: filed from the sidebar widget on every dashboard page (one
@@ -157,6 +157,41 @@ export async function adminReplyToTicket(formData: FormData) {
 
   revalidatePath("/admin/tickets");
   revalidatePath(`/admin/tickets/${ticketId}`);
+}
+
+/**
+ * The tenant side of closing a ticket — no reply required, for the case
+ * where the answer already given was enough. Any member can close their own
+ * ticket; an admin can close anyone's in the workspace, matching the same
+ * split the ticket list itself already reads by (isAdmin ? all : own).
+ * Reopening is the same action with the opposite value — a closed ticket
+ * with new information in it should never dead-end back into the same
+ * "type and send" widget with nowhere for the reply to land.
+ */
+export async function setTicketStatusSelf(formData: FormData) {
+  const { tenantId, userId, session } = await requireTenant({ allowGuest: true });
+  const ticketId = str(formData, "ticketId");
+  const status = str(formData, "status");
+  if (!ticketId || (status !== "OPEN" && status !== "CLOSED")) return;
+
+  const role = await getMemberRole(tenantId, userId);
+  const isAdmin = role === "owner" || role === "admin";
+
+  await withTenant(tenantId, async (tx) => {
+    const ticket = await tx.supportTicket.findUnique({ where: { id: ticketId } });
+    if (!ticket || (!isAdmin && ticket.userId !== userId)) return;
+    await tx.supportTicket.update({
+      where: { id: ticketId },
+      data: { status: status as TicketStatus },
+    });
+  });
+
+  const link = await slackLinkFor(ticketId);
+  if (link && status === "CLOSED") {
+    postToSlackThread(link.slackChannel, link.slackThreadTs, `✅ Closed by ${session.user.email}`);
+  }
+
+  revalidatePath("/dashboard/support");
 }
 
 /** Operator-only: close or reopen a ticket without adding a reply. */

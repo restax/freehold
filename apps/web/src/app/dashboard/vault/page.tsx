@@ -2,6 +2,7 @@ import { withTenant } from "@freehold/db";
 import { Badge, type BadgeTone } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
 import { RevealCredential } from "@/components/reveal-credential";
+import { SaveButton } from "@/components/save-button";
 import { SectionCard } from "@/components/section-card";
 import { createCredential, deleteCredential } from "@/lib/actions/vault";
 import { fmtDate } from "@/lib/format";
@@ -104,9 +105,7 @@ export default async function VaultPage() {
             <input name="notes" className={input} />
           </label>
           <div className="flex items-end">
-            <button type="submit" className={btn}>
-              Save encrypted
-            </button>
+            <SaveButton className={btn} label="Save encrypted" />
           </div>
         </form>
       </details>

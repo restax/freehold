@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Avatar } from "@/components/avatar";
 import { Badge } from "@/components/badges";
 import { PhoneInput } from "@/components/phone-input";
+import { SaveButton } from "@/components/save-button";
 import { SectionCard } from "@/components/section-card";
 import { addLicense, deleteLicense } from "@/lib/actions/licenses";
 import { disconnectNylas } from "@/lib/actions/nylas";
@@ -159,9 +160,7 @@ export default async function ProfilePage({
                 className={input}
               />
             </label>
-            <button type="submit" className={btn}>
-              Save
-            </button>
+            <SaveButton className={btn} />
             <p className="w-full text-xs text-stone-400">
               Signed in as {user.email}. Your name and phone appear on the signature card of emails
               you send, and in templates as <code className="font-mono">{"{{tc_phone}}"}</code>.

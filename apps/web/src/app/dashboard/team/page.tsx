@@ -317,7 +317,7 @@ export default async function TeamPage() {
         ))}
 
       {isAdmin && (
-        <SectionCard title="Team licenses">
+        <SectionCard title="License & Expiration Tracker">
           <p className="mb-3 text-sm text-stone-500">
             The workspace's record of who is licensed where — some states require a licensed
             coordinator on every file. Each person can also manage their own from their profile.
