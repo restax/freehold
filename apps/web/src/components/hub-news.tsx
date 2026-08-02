@@ -42,7 +42,7 @@ function fmtNewsDate(iso: string): string {
 export async function HubNews() {
   const items = (await fetchHubFeed()) ?? FALLBACK;
   return (
-    <div className="max-w-2xl">
+    <div>
       <SectionCard
         title="System updates"
         action={

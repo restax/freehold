@@ -478,8 +478,6 @@ export default async function DashboardPage({
     <div className="flex flex-col gap-4">
       <DemoWelcome />
 
-      {hb.summary && <HandbookGlance text={me?.handbookSummary ?? null} pending={glanceStale} />}
-
       {licenseAlerts.length > 0 && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
           <Warning size={14} weight="fill" className="mr-1 inline text-amber-600" aria-hidden />
@@ -520,76 +518,97 @@ export default async function DashboardPage({
         </p>
       )}
 
-      {/* Quiet files, ahead of the day's panels: a file nobody has touched is
-          the thing most likely to go wrong, and it's invisible everywhere
-          else on this page. */}
-      {needsAttention.length > 0 && (
-        <SectionCard
-          title="Needs attention"
-          count={needsAttention.length}
-          icon={<Warning size={15} weight="fill" className="text-amber-600" aria-hidden />}
-          className="border-amber-300/70"
+      {/* Today at a glance and Needs attention side by side: the glance
+          paragraph is capped at max-w-prose and never fills a full-width
+          card on its own, so pairing it with the next panel instead of
+          stacking them is what actually uses the width, not a wider cap on
+          the paragraph. Falls back to a single column when only one of the
+          two is showing. */}
+      {(hb.summary || needsAttention.length > 0) && (
+        <div
+          className={
+            hb.summary && needsAttention.length > 0
+              ? "grid grid-cols-1 items-start gap-4 lg:grid-cols-2"
+              : ""
+          }
         >
-          <p className="mb-3 text-sm text-stone-500">
-            Open tasks the weekend is about to catch, quiet files, and files with a critical date
-            close enough that a quiet day matters.
-          </p>
-          <ul className="flex flex-col divide-y divide-stone-100">
-            {needsAttention.slice(0, 8).map((a) => (
-              <li key={a.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2">
-                <AddressPill href={`/dashboard/transactions/${a.id}`}>
-                  {a.propertyAddress}
-                </AddressPill>
-                {a.urgentTasks[0] &&
-                  (() => {
-                    const t = a.urgentTasks[0];
-                    // The highlight gets more pronounced as the weekend
-                    // closes in: still amber with two business days to go,
-                    // solid red once it's down to the wire.
-                    const critical = t.businessDaysAway <= 1;
-                    return (
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
-                          critical
-                            ? "bg-red-600 text-white animate-pulse"
-                            : "bg-amber-200 text-amber-900"
-                        }`}
-                      >
-                        {activityTitle(t.title, 24)} ·{" "}
-                        {t.calendarDaysAway === 0 ? "due today" : `due in ${t.calendarDaysAway}d`}
-                      </span>
-                    );
-                  })()}
-                {a.staleness.stale && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
-                    {a.staleness.quietDays}d quiet
-                  </span>
-                )}
-                {a.staleness.escalatedBy && (
-                  <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-600">
-                    {a.staleness.escalatedBy.label}{" "}
-                    {a.staleness.escalatedBy.daysAway === 0
-                      ? "today"
-                      : `in ${a.staleness.escalatedBy.daysAway}d`}
-                  </span>
-                )}
-                <span className="ml-auto text-xs text-stone-400">
-                  {a.lastActivity
-                    ? `${a.lastActivity.actorName} · ${a.lastActivity.summary}`
-                    : "never touched"}
-                </span>
-              </li>
-            ))}
-          </ul>
-          {needsAttention.length > 8 && (
-            <p className="mt-2 text-xs text-stone-400">
-              +{needsAttention.length - 8} more.{" "}
-              <Link href="/dashboard/transactions" className="text-brand-700 underline">
-                See all transactions
-              </Link>
-            </p>
+          {hb.summary && (
+            <HandbookGlance text={me?.handbookSummary ?? null} pending={glanceStale} />
           )}
-        </SectionCard>
+
+          {/* Quiet files: a file nobody has touched is the thing most likely
+              to go wrong, and it's invisible everywhere else on this page. */}
+          {needsAttention.length > 0 && (
+            <SectionCard
+              title="Needs attention"
+              count={needsAttention.length}
+              icon={<Warning size={15} weight="fill" className="text-amber-600" aria-hidden />}
+              className="border-amber-300/70"
+            >
+              <p className="mb-3 text-sm text-stone-500">
+                Open tasks the weekend is about to catch, quiet files, and files with a critical
+                date close enough that a quiet day matters.
+              </p>
+              <ul className="flex flex-col divide-y divide-stone-100">
+                {needsAttention.slice(0, 8).map((a) => (
+                  <li key={a.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2">
+                    <AddressPill href={`/dashboard/transactions/${a.id}`}>
+                      {a.propertyAddress}
+                    </AddressPill>
+                    {a.urgentTasks[0] &&
+                      (() => {
+                        const t = a.urgentTasks[0];
+                        // The highlight gets more pronounced as the weekend
+                        // closes in: still amber with two business days to go,
+                        // solid red once it's down to the wire.
+                        const critical = t.businessDaysAway <= 1;
+                        return (
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                              critical
+                                ? "bg-red-600 text-white animate-pulse"
+                                : "bg-amber-200 text-amber-900"
+                            }`}
+                          >
+                            {activityTitle(t.title, 24)} ·{" "}
+                            {t.calendarDaysAway === 0
+                              ? "due today"
+                              : `due in ${t.calendarDaysAway}d`}
+                          </span>
+                        );
+                      })()}
+                    {a.staleness.stale && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
+                        {a.staleness.quietDays}d quiet
+                      </span>
+                    )}
+                    {a.staleness.escalatedBy && (
+                      <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-600">
+                        {a.staleness.escalatedBy.label}{" "}
+                        {a.staleness.escalatedBy.daysAway === 0
+                          ? "today"
+                          : `in ${a.staleness.escalatedBy.daysAway}d`}
+                      </span>
+                    )}
+                    <span className="ml-auto text-xs text-stone-400">
+                      {a.lastActivity
+                        ? `${a.lastActivity.actorName} · ${a.lastActivity.summary}`
+                        : "never touched"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {needsAttention.length > 8 && (
+                <p className="mt-2 text-xs text-stone-400">
+                  +{needsAttention.length - 8} more.{" "}
+                  <Link href="/dashboard/transactions" className="text-brand-700 underline">
+                    See all transactions
+                  </Link>
+                </p>
+              )}
+            </SectionCard>
+          )}
+        </div>
       )}
 
       {/* Two columns: the day's work on the left (Today runs long, so it's
@@ -935,7 +954,11 @@ export default async function DashboardPage({
           <HubNews />
         </div>
 
-        <div className="flex flex-col gap-6">
+        {/* Sticky: the rail is always shorter than the day's task list, and
+            letting it end early left a dead patch of empty column beside a
+            long Today list. Pinning it near the top means it's still there
+            rather than trailing off into blank space. */}
+        <div className="flex flex-col gap-6 xl:sticky xl:top-6">
           {revenue && (
             <SectionCard
               title="Money"
