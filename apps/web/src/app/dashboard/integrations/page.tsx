@@ -1,9 +1,18 @@
 import { prisma, withTenant } from "@freehold/db";
 import { billingEnabled } from "@freehold/ee-billing";
 import { docusignAdapter, makeOpenSignAdapter } from "@freehold/integrations";
+import {
+  Code,
+  CurrencyDollar,
+  Database,
+  EnvelopeSimple,
+  Signature,
+  UsersThree,
+} from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { McpConnectorPanel } from "@/components/mcp-connector-panel";
+import { SectionCard } from "@/components/section-card";
 import { connectErpnext, disconnectErpnext } from "@/lib/actions/erpnext";
 import { connectDocumenso, disconnectDocumenso } from "@/lib/actions/esign-config";
 import { connectFub, disconnectFub, importFubContacts } from "@/lib/actions/fub";
@@ -23,6 +32,32 @@ import { btn, btnGhost, card, input, label as labelCls } from "@/lib/ui";
 export const dynamic = "force-dynamic";
 
 type Tone = "active" | "setup" | "included";
+
+type Category =
+  | "Communication"
+  | "E-signatures"
+  | "CRM & leads"
+  | "Money"
+  | "Storage & data"
+  | "Developers & automation";
+
+const CATEGORY_ORDER: Category[] = [
+  "Communication",
+  "E-signatures",
+  "CRM & leads",
+  "Money",
+  "Storage & data",
+  "Developers & automation",
+];
+
+const CATEGORY_ICON: Record<Category, typeof EnvelopeSimple> = {
+  Communication: EnvelopeSimple,
+  "E-signatures": Signature,
+  "CRM & leads": UsersThree,
+  Money: CurrencyDollar,
+  "Storage & data": Database,
+  "Developers & automation": Code,
+};
 
 function StatusPill({ tone, label }: { tone: Tone; label: string }) {
   const cls =
@@ -68,6 +103,7 @@ export default async function IntegrationsPage({
 
   const cards: Array<{
     name: string;
+    category: Category;
     mono: string;
     tone: Tone;
     status: string;
@@ -79,6 +115,7 @@ export default async function IntegrationsPage({
   }> = [
     {
       name: "Email & reply capture",
+      category: "Communication",
       mono: "@",
       tone: emailEnabled() ? "active" : "setup",
       status: emailEnabled() ? "Active" : "Needs setup",
@@ -90,6 +127,7 @@ export default async function IntegrationsPage({
     },
     {
       name: "Documenso e-signatures",
+      category: "E-signatures",
       mono: "Do",
       tone: (documenso.source ? "active" : "setup") as Tone,
       status:
@@ -133,6 +171,7 @@ export default async function IntegrationsPage({
     },
     {
       name: "Document storage",
+      category: "Storage & data",
       mono: "St",
       tone: (storage.source === "tenant" ? "active" : "included") as Tone,
       status:
@@ -193,6 +232,7 @@ export default async function IntegrationsPage({
     },
     {
       name: "DocuSign e-signatures",
+      category: "E-signatures",
       mono: "DS",
       tone: (docusignAdapter.available().ok ? "active" : "included") as Tone,
       status: docusignAdapter.available().ok ? "Active" : "Self-hosted option",
@@ -206,6 +246,7 @@ export default async function IntegrationsPage({
       ? [
           {
             name: "OpenSign e-signatures",
+            category: "E-signatures" as Category,
             mono: "OS",
             tone: "included" as Tone,
             status: opensign.connected ? "Ready" : "Included",
@@ -223,6 +264,7 @@ export default async function IntegrationsPage({
       : []),
     {
       name: "Zapier",
+      category: "Developers & automation",
       mono: "Z",
       tone: (webhooks > 0 ? "active" : "included") as Tone,
       status: webhooks > 0 ? "Active" : "Included",
@@ -232,6 +274,7 @@ export default async function IntegrationsPage({
     },
     {
       name: "Follow Up Boss",
+      category: "CRM & leads",
       mono: "FB",
       tone: (fub.connected ? "active" : "setup") as Tone,
       status: fub.connected ? "Connected" : "Needs connection",
@@ -267,6 +310,7 @@ export default async function IntegrationsPage({
     },
     {
       name: "Twenty CRM",
+      category: "CRM & leads",
       mono: "Tw",
       tone: (twenty.connected ? "active" : "setup") as Tone,
       status: twenty.connected ? "Connected" : "Needs connection",
@@ -306,6 +350,7 @@ export default async function IntegrationsPage({
     },
     {
       name: "ERPNext",
+      category: "Money",
       mono: "ER",
       tone: (erpnext ? "active" : "setup") as Tone,
       status: erpnext ? "Connected" : "Optional",
@@ -356,6 +401,7 @@ export default async function IntegrationsPage({
     },
     {
       name: "Claude connector",
+      category: "Developers & automation",
       mono: "AI",
       tone: mcpEnabled ? "active" : "setup",
       status: mcpEnabled ? "On" : "Off",
@@ -364,6 +410,7 @@ export default async function IntegrationsPage({
     },
     {
       name: "Freehold API",
+      category: "Developers & automation",
       mono: "{}",
       tone: apiKeys > 0 ? "active" : "setup",
       status: apiKeys > 0 ? `${apiKeys} active key${apiKeys === 1 ? "" : "s"}` : "No keys yet",
@@ -373,6 +420,7 @@ export default async function IntegrationsPage({
     },
     {
       name: "Signed webhooks",
+      category: "Developers & automation",
       mono: "→",
       tone: webhooks > 0 ? "active" : "setup",
       status: webhooks > 0 ? `${webhooks} endpoint${webhooks === 1 ? "" : "s"}` : "None configured",
@@ -382,6 +430,7 @@ export default async function IntegrationsPage({
     },
     {
       name: "Client invoicing (Stripe)",
+      category: "Money",
       mono: "St",
       tone: billingEnabled() ? "active" : "setup",
       status: billingEnabled() ? "Active" : "Needs Stripe keys",
@@ -391,6 +440,7 @@ export default async function IntegrationsPage({
     },
     {
       name: "Calendar feeds",
+      category: "Communication",
       mono: "Ca",
       tone: "included",
       status: "Included",
@@ -400,6 +450,7 @@ export default async function IntegrationsPage({
     },
     {
       name: "CSV import",
+      category: "Storage & data",
       mono: "⇥",
       tone: "included",
       status: "Included",
@@ -432,31 +483,45 @@ export default async function IntegrationsPage({
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{storageError}</p>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {cards.map((c) => (
-          <section key={c.name} className={`${card} flex gap-4`}>
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-stone-100 font-display text-base font-bold text-stone-700">
-              {c.mono}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-medium">{c.name}</h2>
-                <StatusPill tone={c.tone} label={c.status} />
-              </div>
-              <p className="mt-1 text-sm leading-relaxed text-stone-600">{c.body}</p>
-              {c.href && (
-                <Link
-                  href={c.href}
-                  className="mt-2 inline-block text-sm font-medium text-brand-700 hover:text-brand-600"
-                >
-                  {c.hrefLabel} →
-                </Link>
-              )}
-              {c.extra}
+      {CATEGORY_ORDER.map((category) => {
+        const items = cards.filter((c) => c.category === category);
+        if (items.length === 0) return null;
+        const Icon = CATEGORY_ICON[category];
+        return (
+          <SectionCard
+            key={category}
+            title={category}
+            icon={<Icon size={16} />}
+            count={items.length}
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              {items.map((c) => (
+                <section key={c.name} className={`${card} flex gap-4`}>
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-stone-100 font-display text-base font-bold text-stone-700">
+                    {c.mono}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="font-medium">{c.name}</h2>
+                      <StatusPill tone={c.tone} label={c.status} />
+                    </div>
+                    <p className="mt-1 text-sm leading-relaxed text-stone-600">{c.body}</p>
+                    {c.href && (
+                      <Link
+                        href={c.href}
+                        className="mt-2 inline-block text-sm font-medium text-brand-700 hover:text-brand-600"
+                      >
+                        {c.hrefLabel} →
+                      </Link>
+                    )}
+                    {c.extra}
+                  </div>
+                </section>
+              ))}
             </div>
-          </section>
-        ))}
-      </div>
+          </SectionCard>
+        );
+      })}
 
       <p className="text-xs text-stone-400">
         The public roadmap of upcoming integrations lives on{" "}
