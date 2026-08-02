@@ -167,28 +167,37 @@ describe("image refs", () => {
 });
 
 describe("blockHiddenReason", () => {
+  const ready = { hasPublicForms: true, hasIntakeForm: true };
+  const nothing = { hasPublicForms: false, hasIntakeForm: false };
+
   it("flags the blocks the renderer skips", () => {
-    expect(blockHiddenReason({ id: "a", type: "text" }, true)).toMatch(/Empty/);
-    expect(blockHiddenReason({ id: "a", type: "about" }, true)).toMatch(/Empty/);
-    expect(blockHiddenReason({ id: "s", type: "services", items: [] }, true)).toMatch(/Empty/);
-    expect(blockHiddenReason({ id: "i", type: "image" }, true)).toMatch(/No photo/);
-    expect(blockHiddenReason({ id: "q", type: "testimonial" }, true)).toMatch(/No quote/);
+    expect(blockHiddenReason({ id: "a", type: "text" }, ready)).toMatch(/Empty/);
+    expect(blockHiddenReason({ id: "a", type: "about" }, ready)).toMatch(/Empty/);
+    expect(blockHiddenReason({ id: "s", type: "services", items: [] }, ready)).toMatch(/Empty/);
+    expect(blockHiddenReason({ id: "i", type: "image" }, ready)).toMatch(/No photo/);
+    expect(blockHiddenReason({ id: "q", type: "testimonial" }, ready)).toMatch(/No quote/);
   });
 
   it("stays quiet once the block has what it needs", () => {
-    expect(blockHiddenReason({ id: "a", type: "text", body: "hi" }, true)).toBeNull();
-    expect(blockHiddenReason({ id: "s", type: "services", items: ["x"] }, true)).toBeNull();
-    expect(blockHiddenReason({ id: "i", type: "image", src: "u" }, true)).toBeNull();
-    expect(blockHiddenReason({ id: "q", type: "testimonial", quote: "q" }, true)).toBeNull();
+    expect(blockHiddenReason({ id: "a", type: "text", body: "hi" }, ready)).toBeNull();
+    expect(blockHiddenReason({ id: "s", type: "services", items: ["x"] }, ready)).toBeNull();
+    expect(blockHiddenReason({ id: "i", type: "image", src: "u" }, ready)).toBeNull();
+    expect(blockHiddenReason({ id: "q", type: "testimonial", quote: "q" }, ready)).toBeNull();
   });
 
   it("ties the forms block to whether anything is published", () => {
-    expect(blockHiddenReason({ id: "f", type: "forms" }, false)).toMatch(/publish a form/);
-    expect(blockHiddenReason({ id: "f", type: "forms" }, true)).toBeNull();
+    expect(blockHiddenReason({ id: "f", type: "forms" }, nothing)).toMatch(/publish a form/);
+    expect(blockHiddenReason({ id: "f", type: "forms" }, ready)).toBeNull();
   });
 
-  it("never hides hero or the contact form, which always render", () => {
-    expect(blockHiddenReason({ id: "h", type: "hero" }, false)).toBeNull();
-    expect(blockHiddenReason({ id: "r", type: "registration" }, false)).toBeNull();
+  it("ties the contact form to the workspace having a New client form", () => {
+    // The block renders that form, so without one the page shows nothing —
+    // and the fix is under Forms, which the message has to say.
+    expect(blockHiddenReason({ id: "r", type: "registration" }, nothing)).toMatch(/New client/);
+    expect(blockHiddenReason({ id: "r", type: "registration" }, ready)).toBeNull();
+  });
+
+  it("never hides the hero, which always renders", () => {
+    expect(blockHiddenReason({ id: "h", type: "hero" }, nothing)).toBeNull();
   });
 });

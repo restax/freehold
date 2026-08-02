@@ -3,6 +3,7 @@ import Link from "next/link";
 import QRCode from "qrcode";
 import { CustomDomainPanel } from "@/components/custom-domain-panel";
 import { PhoneInput } from "@/components/phone-input";
+import { SaveButton } from "@/components/save-button";
 import { SectionCard } from "@/components/section-card";
 import { SiteDesigner } from "@/components/site-designer";
 import { SitePreviewPane } from "@/components/site-preview-pane";
@@ -34,6 +35,15 @@ export default async function WebsitePage() {
   // nothing, and the designer says so rather than leaving the TC guessing.
   const publicFormCount = await withTenant(tenantId, (tx) =>
     tx.form.count({ where: { status: "published", showPublic: true, clientId: null } }),
+  );
+  // The contact-form block renders this one, so the designer can point
+  // straight at it rather than telling the TC to go hunting under Forms.
+  const intakeForm = await withTenant(tenantId, (tx) =>
+    tx.form.findFirst({
+      where: { kind: "client_intake", status: "published", showPublic: true, clientId: null },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    }),
   );
   const url = tenantSiteUrl(org.slug);
   // Self-hosters point their own wildcard DNS at their install and never need
@@ -161,9 +171,7 @@ export default async function WebsitePage() {
               </div>
               {isAdmin ? (
                 <div className="flex items-center gap-3">
-                  <button type="submit" className={btn}>
-                    Save
-                  </button>
+                  <SaveButton className={btn} />
                   <a
                     href={url}
                     target="_blank"
@@ -191,6 +199,7 @@ export default async function WebsitePage() {
                 initialBlocks={siteBlocks(site)}
                 slug={org.slug}
                 hasPublicForms={publicFormCount > 0}
+                intakeFormHref={intakeForm ? `/dashboard/forms/${intakeForm.id}` : null}
               />
             </SectionCard>
           )}

@@ -1,7 +1,16 @@
 import Link from "next/link";
 import { TenantSiteView } from "@/components/tenant-site";
 import { submitExampleLead } from "@/lib/actions/website";
+import { FORM_TEMPLATES } from "@/lib/form-templates";
 import type { TenantSiteConfig } from "@/lib/site-config";
+
+/**
+ * The demo has no database behind it, so its contact form is built from the
+ * same "New client" template a real workspace starts from. That keeps the
+ * example honest: what a visitor is asked here is what they'd be asked on a
+ * real site, rather than a set of fields only the marketing page has.
+ */
+const DEMO_INTAKE = FORM_TEMPLATES.find((t) => t.id === "basic_client");
 
 export const metadata = {
   title: "Example tenant website | Freehold",
@@ -47,6 +56,15 @@ export default async function ExampleSitePage({
         thanks={Boolean(thanks)}
         leadAction={submitExampleLead}
         hiddenFields={{}}
+        intakeForm={
+          DEMO_INTAKE
+            ? {
+                title: DEMO_INTAKE.title,
+                description: DEMO_INTAKE.intro,
+                layout: DEMO_INTAKE.layout(),
+              }
+            : null
+        }
         heroImageSrc="/site/site-team.jpg"
         about={{
           heading: "About us",

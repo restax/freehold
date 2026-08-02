@@ -1,5 +1,6 @@
 import { CheckCircle, EnvelopeSimple, Phone } from "@phosphor-icons/react/dist/ssr";
-import { PhoneInput } from "@/components/phone-input";
+import { FormBody } from "@/components/form-render";
+import type { FormLayout } from "@/lib/form-schema";
 import { type AboutBlock, type SiteBlock, siteBlocks, siteImageUrl } from "@/lib/site-blocks";
 import type { TenantSiteConfig } from "@/lib/site-config";
 import { siteMenu } from "@/lib/site-menu";
@@ -16,10 +17,6 @@ import { siteMenu } from "@/lib/site-menu";
  * their flat fields — same sections, same order, same markup as before.
  */
 
-const inputCls =
-  "w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100";
-const labelCls = "flex flex-col gap-1.5 text-sm font-medium text-stone-700";
-
 export function TenantSiteView({
   name,
   slug = "",
@@ -28,6 +25,7 @@ export function TenantSiteView({
   thanks,
   leadAction,
   hiddenFields,
+  intakeForm = null,
   heroImageSrc = "/site/site-hero.jpg",
   about,
   publicForms = [],
@@ -43,8 +41,19 @@ export function TenantSiteView({
   logoUrl?: string | null;
   site: TenantSiteConfig;
   thanks: boolean;
+  /** Where the contact-form block posts. */
   leadAction: (formData: FormData) => Promise<void>;
   hiddenFields: Record<string, string>;
+  /**
+   * The workspace's published New client form, rendered by the contact-form
+   * block. Passed in rather than fetched here so this component stays a pure
+   * renderer, and so the demo site can show the same shape without a database.
+   */
+  intakeForm?: {
+    title: string;
+    description: string | null;
+    layout: FormLayout;
+  } | null;
   /** Fallback hero photograph; a hero block's own image wins over it. */
   heroImageSrc?: string;
   /** The demo's hand-written "About us"; folded in as a block after the hero. */
@@ -77,9 +86,9 @@ export function TenantSiteView({
     hasServices: Boolean(servicesBlock && "items" in servicesBlock && servicesBlock.items.length),
     forms: publicForms,
     // Derived from the page itself: a site with no contact form shouldn't
-    // advertise one. Legacy sites land here identically, because
-    // defaultBlocks() only emits the block when showRegistration was set.
-    showRegistration: withAbout.some((b) => b.type === "registration"),
+    // advertise one — and the block only renders when there's a New client
+    // form behind it, so the menu has to agree or it links to nothing.
+    showRegistration: Boolean(intakeForm) && withAbout.some((b) => b.type === "registration"),
     formBase,
   });
 
@@ -289,23 +298,36 @@ export function TenantSiteView({
             );
 
           case "registration":
+            // The workspace's own New client form, not a form of ours. A
+            // transaction coordinator's new client is an agent, a team, or a
+            // brokerage — the questions worth asking are their office name,
+            // their brokerage and where invoices go, and those live in the
+            // form they can actually edit. With none published there is
+            // nothing to show; the designer says so rather than the page
+            // inventing questions.
+            if (!intakeForm) return null;
             return (
               <section
                 key={block.id}
                 id="work-with-us"
                 className="mx-auto max-w-6xl px-5 py-16 sm:px-8"
               >
-                <div className="grid items-center gap-10 lg:grid-cols-[6fr_5fr] lg:gap-14">
+                <div className="grid items-start gap-10 lg:grid-cols-[6fr_5fr] lg:gap-14">
                   <div>
                     <h2 className="font-display text-2xl font-bold tracking-tight">
-                      {block.heading || "Tell us about your move"}
+                      {block.heading || intakeForm.title}
                     </h2>
+                    {intakeForm.description && !thanks && (
+                      <p className="mt-2 leading-relaxed text-stone-600">
+                        {intakeForm.description}
+                      </p>
+                    )}
                     {thanks ? (
                       <p className="mt-5 rounded-2xl border border-brand-100 bg-brand-50 px-6 py-5 text-sm leading-relaxed text-brand-900">
-                        Thanks — you're on the list. {name} will reach out shortly.
+                        Thanks — we have it. {name} will look this over and be in touch.
                       </p>
                     ) : (
-                      <form action={leadAction} className="mt-6 flex flex-col gap-4">
+                      <form action={leadAction} className="mt-6 flex flex-col gap-5">
                         {Object.entries(hiddenFields).map(([k, v]) => (
                           <input key={k} type="hidden" name={k} value={v} />
                         ))}
@@ -318,38 +340,12 @@ export function TenantSiteView({
                           className="hidden"
                           aria-hidden
                         />
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <label className={labelCls}>
-                            Your name *
-                            <input name="name" required className={inputCls} />
-                          </label>
-                          <label className={labelCls}>
-                            I'm interested in
-                            <select name="interest" className={inputCls} defaultValue="">
-                              <option value="">Choose one…</option>
-                              <option value="BUYER">Buying</option>
-                              <option value="SELLER">Selling</option>
-                              <option value="OTHER">Something else</option>
-                            </select>
-                          </label>
-                          <label className={labelCls}>
-                            Email
-                            <input name="email" type="email" className={inputCls} />
-                          </label>
-                          <label className={labelCls}>
-                            Phone
-                            <PhoneInput name="phone" className={inputCls} />
-                          </label>
-                        </div>
-                        <label className={labelCls}>
-                          Anything we should know?
-                          <textarea name="message" rows={3} className={inputCls} />
-                        </label>
+                        <FormBody layout={intakeForm.layout} />
                         <button
                           type="submit"
                           className="self-start rounded-xl bg-brand-700 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 active:translate-y-px"
                         >
-                          Send
+                          Send to {name}
                         </button>
                       </form>
                     )}

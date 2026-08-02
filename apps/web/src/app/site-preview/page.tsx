@@ -1,6 +1,7 @@
 import { prisma, withTenant } from "@freehold/db";
 import type { Metadata } from "next";
 import { TenantSiteView } from "@/components/tenant-site";
+import { parseLayout } from "@/lib/form-schema";
 import { parseSiteConfig } from "@/lib/site-config";
 import { requireAdminTenant } from "@/lib/tenant";
 
@@ -38,6 +39,15 @@ export default async function SitePreview() {
       select: { slug: true, title: true, description: true },
     }),
   );
+  // Same New client form the live site renders, so the preview shows the
+  // questions visitors will actually be asked.
+  const intake = await withTenant(tenantId, (tx) =>
+    tx.form.findFirst({
+      where: { kind: "client_intake", status: "published", showPublic: true, clientId: null },
+      orderBy: { createdAt: "asc" },
+      select: { title: true, description: true, layout: true },
+    }),
+  );
 
   // The preview is a picture, not a working page: submitting the lead form
   // here would file the TC as their own lead. The pane also sets
@@ -57,6 +67,15 @@ export default async function SitePreview() {
       thanks={false}
       leadAction={inert}
       hiddenFields={{}}
+      intakeForm={
+        intake
+          ? {
+              title: intake.title,
+              description: intake.description,
+              layout: parseLayout(intake.layout),
+            }
+          : null
+      }
     />
   );
 }

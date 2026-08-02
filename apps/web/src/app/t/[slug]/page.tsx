@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { TenantSiteView } from "@/components/tenant-site";
-import { submitTenantLead } from "@/lib/actions/website";
+import { submitPublicForm } from "@/lib/actions/public-forms";
+import { parseLayout } from "@/lib/form-schema";
 import { onTenantHost } from "@/lib/host-routing";
 import { publicTenantWhere } from "@/lib/public-tenant";
 import { parseSiteConfig } from "@/lib/site-config";
@@ -60,6 +61,15 @@ export default async function TenantSite({ params, searchParams }: Props) {
       select: { slug: true, title: true, description: true },
     }),
   );
+  // The contact-form block renders the workspace's own New client form —
+  // their questions, editable under Forms — rather than a fixed set of ours.
+  const intake = await withTenant(org.id, (tx) =>
+    tx.form.findFirst({
+      where: { kind: "client_intake", status: "published", showPublic: true, clientId: null },
+      orderBy: { createdAt: "asc" },
+      select: { slug: true, title: true, description: true, layout: true },
+    }),
+  );
 
   if (!site.published) {
     return (
@@ -106,8 +116,19 @@ export default async function TenantSite({ params, searchParams }: Props) {
       publicForms={publicForms}
       formBase={onOwnHost ? "/f" : `/t/${org.slug}/f`}
       thanks={Boolean(thanks)}
-      leadAction={submitTenantLead}
-      hiddenFields={{ slug: org.slug }}
+      // The contact-form block posts through the same vetted path as
+      // /f/<form>: rate limiting, honeypot, and the submission review queue.
+      leadAction={submitPublicForm}
+      hiddenFields={intake ? { orgSlug: org.slug, formSlug: intake.slug } : {}}
+      intakeForm={
+        intake
+          ? {
+              title: intake.title,
+              description: intake.description,
+              layout: parseLayout(intake.layout),
+            }
+          : null
+      }
     />
   );
 }

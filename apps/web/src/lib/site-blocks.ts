@@ -36,7 +36,7 @@ export const SITE_BLOCK_LABEL: Record<SiteBlockType, string> = {
   about: "About",
   services: "Services",
   forms: "Intake forms",
-  registration: "Contact form",
+  registration: "New client form",
   text: "Text",
   image: "Image",
   testimonial: "Testimonial",
@@ -48,7 +48,7 @@ export const SITE_BLOCK_HINT: Record<SiteBlockType, string> = {
   about: "A heading and a paragraph about the business",
   services: "A checklist of what you handle",
   forms: "Cards linking the intake forms you've published",
-  registration: "The form new clients fill in to reach you",
+  registration: "Your New client form, so agents can sign up with you",
   text: "A free heading and paragraph, anywhere on the page",
   image: "A full-width photograph",
   testimonial: "A quote from a client, with attribution",
@@ -283,7 +283,7 @@ export function newSiteBlock(type: SiteBlockType, id: string): SiteBlock {
     case "forms":
       return { id, type, heading: "Get started" };
     case "registration":
-      return { id, type, heading: "Tell us about your move" };
+      return { id, type, heading: "Work with us" };
     case "text":
       return { id, type };
     case "image":
@@ -303,7 +303,10 @@ export function newSiteBlock(type: SiteBlockType, id: string): SiteBlock {
  * designer is broken. Kept here, next to the renderer's own skip conditions,
  * so the two can be checked against each other in one place.
  */
-export function blockHiddenReason(block: SiteBlock, hasPublicForms: boolean): string | null {
+export function blockHiddenReason(
+  block: SiteBlock,
+  available: { hasPublicForms: boolean; hasIntakeForm: boolean },
+): string | null {
   switch (block.type) {
     case "about":
     case "text":
@@ -315,11 +318,18 @@ export function blockHiddenReason(block: SiteBlock, hasPublicForms: boolean): st
     case "testimonial":
       return block.quote ? null : "No quote yet — add one to show it.";
     case "forms":
-      return hasPublicForms
+      return available.hasPublicForms
         ? null
         : "Nothing to list yet — publish a form to your public website and it appears here.";
+    case "registration":
+      // The block renders the workspace's New client form, so without one
+      // there is nothing to show. Named explicitly because the fix is in a
+      // different part of the app entirely.
+      return available.hasIntakeForm
+        ? null
+        : "Needs your New client form — create one under Forms and publish it to your website.";
     default:
-      // hero and registration always render something.
+      // The hero always renders something.
       return null;
   }
 }
@@ -348,7 +358,7 @@ export function defaultBlocks(site: TenantSiteConfig): SiteBlock[] {
   // the workspace has published a form to its public site, never by hand.
   blocks.push({ id: "forms", type: "forms", heading: "Get started" });
   if (site.showRegistration) {
-    blocks.push({ id: "registration", type: "registration", heading: "Tell us about your move" });
+    blocks.push({ id: "registration", type: "registration", heading: "Work with us" });
   }
   return blocks;
 }

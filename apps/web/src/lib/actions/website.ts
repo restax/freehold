@@ -2,14 +2,11 @@
 
 import { prisma, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { after } from "next/server";
 import { logAudit } from "@/lib/audit";
 import { customDomainError, normalizeCustomDomain } from "@/lib/domains";
 import { optStr, str } from "@/lib/forms";
-import { loadFubKey, sendFubLead } from "@/lib/fub";
-import { normalizeHost, onTenantHost } from "@/lib/host-routing";
+import { normalizeHost } from "@/lib/host-routing";
 import {
   parseSiteBlocks,
   referencedImageIds,
@@ -21,7 +18,6 @@ import {
 import { parseSiteConfig, type TenantSiteConfig } from "@/lib/site-config";
 import { deleteObject, putObject } from "@/lib/storage";
 import { requireAdminTenant } from "@/lib/tenant";
-import { loadTwentyConnection, sendTwentyLead } from "@/lib/twenty";
 import {
   addVercelDomain,
   removeVercelDomain,
@@ -375,67 +371,13 @@ async function sweepSiteImages(tenantId: string, keep: string[]): Promise<void> 
 }
 
 /**
- * Public new-client registration from a tenant's website. No session — the
- * tenant is identified by slug, and the form only works while the site is
- * published with registration on. A filled honeypot field drops the
- * submission silently.
+ * The website's contact form now posts to the workspace's own New client form
+ * (submitPublicForm in actions/public-forms.ts), so the hand-rolled lead
+ * intake that used to live here is gone. A transaction coordinator's new
+ * client is an agent, a team, or a brokerage — the questions worth asking are
+ * theirs to edit under Forms, not ours to hardcode. The CRM forward that used
+ * to happen here moved with it.
  */
-export async function submitTenantLead(formData: FormData) {
-  const slug = str(formData, "slug");
-  const name = str(formData, "name");
-  const email = optStr(formData, "email");
-  const phone = optStr(formData, "phone");
-  const interest = str(formData, "interest");
-  const message = optStr(formData, "message");
-  const honeypot = optStr(formData, "company_website");
-  if (!slug || !name || honeypot) return;
-
-  const org = await prisma.organization.findUnique({
-    where: { slug },
-    select: { id: true, siteConfig: true, customDomain: true },
-  });
-  const site = parseSiteConfig(org?.siteConfig);
-  if (!org || !site.published || !site.showRegistration) return;
-
-  const leadType = interest === "BUYER" ? "BUYER" : interest === "SELLER" ? "SELLER" : null;
-  await withTenant(org.id, async (tx) => {
-    const contact = await tx.contact.create({
-      data: {
-        tenantId: org.id,
-        name: name.slice(0, 200),
-        email,
-        phone,
-        category: "Website Lead",
-        categories: ["Website Lead"],
-        leadType,
-        notes: message ? `Website registration: ${message.slice(0, 2000)}` : null,
-      },
-    });
-    await tx.task.create({
-      data: {
-        tenantId: org.id,
-        contactId: contact.id,
-        title: `New website lead: ${contact.name}`,
-        dueDate: new Date(),
-        priority: "HIGH",
-      },
-    });
-  });
-  // Connected Follow Up Boss accounts get the lead too, through the events
-  // API so the tenant's FUB automations fire. Fire-and-forget.
-  after(async () => {
-    const key = await loadFubKey(org.id).catch(() => null);
-    if (key) await sendFubLead(key, { name, email, phone, message }).catch(() => {});
-    const conn = await loadTwentyConnection(org.id).catch(() => null);
-    if (conn) await sendTwentyLead(conn, { name, email, phone }).catch(() => {});
-  });
-
-  // On the workspace's own face — subdomain or custom domain — the site lives
-  // at "/"; direct apex previews at /t/<slug>. Getting this wrong on a custom
-  // domain would bounce the visitor to a path that host doesn't serve.
-  const host = (await headers()).get("host");
-  redirect(onTenantHost(host, slug, org.customDomain) ? "/?thanks=1" : `/t/${slug}?thanks=1`);
-}
 
 /** The /example-site demo form: nothing is stored, just the thanks state. */
 export async function submitExampleLead(formData: FormData) {

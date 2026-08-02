@@ -204,6 +204,7 @@ function SortableBlock({
   onRemove,
   slug,
   hasPublicForms,
+  intakeFormHref,
 }: {
   block: SiteBlock;
   expanded: boolean;
@@ -212,12 +213,16 @@ function SortableBlock({
   onRemove: () => void;
   slug: string;
   hasPublicForms: boolean;
+  intakeFormHref: string | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: block.id,
   });
   const rec = block as unknown as Record<string, unknown>;
-  const hidden = blockHiddenReason(block, hasPublicForms);
+  const hidden = blockHiddenReason(block, {
+    hasPublicForms,
+    hasIntakeForm: Boolean(intakeFormHref),
+  });
 
   return (
     <div
@@ -324,6 +329,22 @@ function SortableBlock({
               Lists the intake forms you've published to the public website — nothing to pick here.
             </p>
           )}
+          {block.type === "registration" && (
+            <p className="text-xs text-stone-400">
+              This shows your <strong className="font-medium text-stone-600">New client</strong>{" "}
+              form, so the questions are the ones you ask — office name, brokerage, where invoices
+              go.{" "}
+              {intakeFormHref ? (
+                <a href={intakeFormHref} className="font-medium text-brand-700 hover:underline">
+                  Edit that form →
+                </a>
+              ) : (
+                <a href="/dashboard/forms" className="font-medium text-brand-700 hover:underline">
+                  Create one under Forms →
+                </a>
+              )}
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -334,12 +355,15 @@ export function SiteDesigner({
   initialBlocks,
   slug,
   hasPublicForms,
+  intakeFormHref,
 }: {
   initialBlocks: SiteBlock[];
   /** Addresses uploaded photographs — /api/site-image/<slug>/<id>. */
   slug: string;
   /** Whether the Intake forms block has anything to list. */
   hasPublicForms: boolean;
+  /** Where to edit the New client form the contact-form block renders. */
+  intakeFormHref: string | null;
 }) {
   const [blocks, setBlocks] = useState<SiteBlock[]>(initialBlocks);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -450,6 +474,7 @@ export function SiteDesigner({
                 onRemove={() => mutate((b) => b.filter((x) => x.id !== block.id))}
                 slug={slug}
                 hasPublicForms={hasPublicForms}
+                intakeFormHref={intakeFormHref}
               />
             ))}
           </SortableContext>

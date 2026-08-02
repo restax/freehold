@@ -2,6 +2,7 @@
 
 import { prisma, type TenantTx, withTenant } from "@freehold/db";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { linkUsable } from "@/lib/form-access";
 import { trimKnownClientFields } from "@/lib/form-resolve";
 import {
@@ -13,8 +14,10 @@ import {
   submitterFrom,
   validateSubmission,
 } from "@/lib/form-schema";
+import { loadFubKey, sendFubLead } from "@/lib/fub";
 import { hashSource, sourceIp } from "@/lib/public-request";
 import { putObject } from "@/lib/storage";
+import { loadTwentyConnection, sendTwentyLead } from "@/lib/twenty";
 
 /**
  * Public form submission — the only unauthenticated write in the product
@@ -226,7 +229,46 @@ export async function submitPublicForm(formData: FormData) {
       ipHash,
     }),
   );
+
+  // A New client submission is a lead, so a connected CRM should hear about it
+  // — this is the path the website's contact form now takes, and dropping the
+  // forward on the way would quietly break Follow Up Boss and Twenty for any
+  // workspace relying on it. Fire-and-forget: a CRM being down must never cost
+  // somebody the form they just filled in.
+  if (form.kind === "client_intake") {
+    const lead = leadFieldsFrom(values);
+    if (lead.name) {
+      after(async () => {
+        const key = await loadFubKey(org.id).catch(() => null);
+        if (key) await sendFubLead(key, lead).catch(() => {});
+        const conn = await loadTwentyConnection(org.id).catch(() => null);
+        if (conn) await sendTwentyLead(conn, lead).catch(() => {});
+      });
+    }
+  }
+
   redirect(`/t/${orgSlug}/f/${formSlug}?sent=1`);
+}
+
+/**
+ * Pull name/email/phone out of a submission for the CRM forward.
+ *
+ * Reads the mapped answer keys (MAPPED_FIELDS in lib/form-schema.ts) rather
+ * than matching on labels, so it keeps working when a workspace renames
+ * "Name / office name" to whatever they call it. A form that dropped those
+ * fields yields no name, and the forward is skipped rather than sending a
+ * blank lead.
+ */
+function leadFieldsFrom(values: Record<string, unknown>): {
+  name: string;
+  email?: string;
+  phone?: string;
+} {
+  const str = (key: string): string | undefined => {
+    const raw = values[key];
+    return typeof raw === "string" && raw.trim() ? raw.trim() : undefined;
+  };
+  return { name: str("clientName") ?? "", email: str("email"), phone: str("phone") };
 }
 
 /**
