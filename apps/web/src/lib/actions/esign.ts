@@ -5,7 +5,7 @@ import { getEsignAdapter } from "@freehold/integrations";
 import { revalidatePath } from "next/cache";
 import { esignOverrides } from "@/lib/esign-config";
 import { confirmed, str } from "@/lib/forms";
-import { markEnvelopeSignaturesComplete } from "@/lib/signature-sync";
+import { markEnvelopeSignaturesComplete, writeBackSignedCopy } from "@/lib/signature-sync";
 import { getObjectBytes } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
@@ -128,8 +128,20 @@ export async function refreshEnvelope(formData: FormData) {
       }),
     );
     if (result.status === "COMPLETED") {
-      // The row that carries this document now knows it is signed.
+      // The row that carries this document now knows it is signed. Must run
+      // before the write-back below: that repoints TransactionAttachment to
+      // the new signed-copy Document, and this looks rows up by the old id.
       await markEnvelopeSignaturesComplete(tenantId, envelope.transactionId, envelope.documentId);
+      // OpenSign hands back a fetchable signed copy; other providers don't.
+      if (result.signedFileUrl) {
+        await writeBackSignedCopy(
+          tenantId,
+          envelope.transactionId,
+          envelope.documentId,
+          envelope.id,
+          result.signedFileUrl,
+        ).catch(() => {});
+      }
       await emitWebhook(tenantId, "envelope.completed", {
         id: envelope.id,
         transactionId: envelope.transactionId,

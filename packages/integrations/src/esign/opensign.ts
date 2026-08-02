@@ -123,18 +123,22 @@ async function uploadFile(sessionToken: string, filename: string, pdf: Buffer): 
  * session didn't find (tried docId/documentId/objectId/id, all either 400
  * or a silent empty result), so this reads the document straight off
  * Parse's own class REST API instead (`GET /classes/contracts_Document/id`),
- * which IS confirmed working. What's still inferred: SignedUrl as the
- * completion signal. It's a real field — createDocumentFromApp.js accepts
- * it as an optional input — but this session never drove a document through
- * an actual signature (that needs OpenSign's web client, not just the
- * server API) to confirm it's what gets set on completion. Confirm against
- * a real signed document before trusting this for anything that gates on
- * COMPLETED.
+ * which IS confirmed working. SignedUrl as the completion signal is now
+ * grounded in OpenSign's own server source (apps/OpenSignServer/cloud/
+ * parsefunction/DocumentBeforesave.js): it explicitly checks for SignedUrl
+ * transitioning from unset to set as *the* completion trigger (marks
+ * DocSentAt, updates counts). Confirmed by source, not yet by driving a
+ * document through an actual signature — that still needs OpenSign's web
+ * client. Also confirmed by source: OpenSign has no outbound webhook
+ * mechanism at all (grepped the whole cloud/ tree — only NotifyOnSignatures
+ * emails), so polling is not a Stage-1 shortcut, it's the only option. See
+ * apps/web/src/lib/signature-sync.ts's writeBackSignedCopy, driven from
+ * refreshEnvelope's poll in apps/web/src/lib/actions/esign.ts.
  */
 function mapStatus(
   doc: { SignedUrl?: string; IsDeclined?: boolean } | undefined,
 ): EnvelopeStatusResult {
-  if (doc?.SignedUrl) return { status: "COMPLETED" };
+  if (doc?.SignedUrl) return { status: "COMPLETED", signedFileUrl: doc.SignedUrl };
   if (doc?.IsDeclined) return { status: "DECLINED" };
   return { status: "SENT" };
 }

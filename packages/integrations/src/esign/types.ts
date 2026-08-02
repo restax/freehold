@@ -28,6 +28,8 @@ export type EnvelopeExternalStatus = "SENT" | "COMPLETED" | "DECLINED";
 export interface EnvelopeStatusResult {
   status: EnvelopeExternalStatus;
   detail?: string;
+  /** Set only when the provider hands back a fetchable signed copy on completion (OpenSign so far). */
+  signedFileUrl?: string;
 }
 
 export interface Availability {
