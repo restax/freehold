@@ -50,6 +50,9 @@ transaction coordinators.
   Boss, Twenty CRM, ERPNext, the FindTCPros directory, calendar feeds, a REST
   API with signed webhooks, and a Claude connector (OAuth — sign in with your
   own account, no key to paste).
+- E-signatures: included at no extra cost and nothing to connect, powered by
+  OpenSign, the open-source e-signature project. Bring your own Documenso or
+  DocuSign account instead if you prefer; the choice is per client.
 - Support: file a ticket from the sidebar on any page; it records which screen
   you were on.
 

@@ -209,9 +209,13 @@ export default async function IntegrationsPage({
             mono: "OS",
             tone: "included" as Tone,
             status: opensign.connected ? "Ready" : "Included",
+            // The "powered by OpenSign" wording is not just marketing: OpenSign
+            // is AGPL-3.0 and we run it as a service your signers interact with,
+            // so naming it and pointing at its source is the attribution that
+            // keeps us straight. Don't quietly drop it.
             body: opensign.connected
-              ? "Sending via Freehold's OpenSign. Documents go out for signature from any transaction's Documents tab; per-client provider choice on the client page."
-              : "Open-source e-signing, included at no extra setup — nothing to connect. The first document you send provisions your workspace's space automatically.",
+              ? "Sending via Freehold's OpenSign. Documents go out for signature from any transaction's Documents tab; per-client provider choice on the client page. Powered by OpenSign, the open-source e-signature project."
+              : "Open-source e-signing, included at no extra setup — nothing to connect. The first document you send provisions your workspace's space automatically. Powered by OpenSign, the open-source e-signature project.",
             href: "/dashboard/transactions",
             hrefLabel: "Send from a transaction",
           },
