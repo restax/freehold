@@ -5,7 +5,7 @@
  * credentials the provider needs, and why not when it doesn't.
  */
 
-export type EsignProviderId = "MANUAL" | "DOCUMENSO" | "DOCUSIGN";
+export type EsignProviderId = "MANUAL" | "DOCUMENSO" | "DOCUSIGN" | "OPENSIGN";
 
 export interface EnvelopeSigner {
   name: string;

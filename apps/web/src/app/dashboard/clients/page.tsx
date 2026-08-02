@@ -53,6 +53,7 @@ const ESIGN_LABEL: Record<string, string> = {
   MANUAL: "Manual / outside Freehold",
   DOCUMENSO: "Documenso",
   DOCUSIGN: "DocuSign",
+  OPENSIGN: "OpenSign",
 };
 
 /**

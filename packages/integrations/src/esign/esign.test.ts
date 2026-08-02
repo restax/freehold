@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { _documensoInternals, documensoAdapter, makeDocumensoAdapter } from "./documenso.js";
 import { _docusignInternals, docusignAdapter } from "./docusign.js";
 import { manualAdapter } from "./manual.js";
+import { _openSignInternals, makeOpenSignAdapter } from "./opensign.js";
 
 describe("availability gating", () => {
   it("manual is always available", () => {
@@ -19,6 +20,12 @@ describe("availability gating", () => {
     const bound = makeDocumensoAdapter({ url: "https://sign.example.com", token: "tok" });
     expect(bound.available().ok).toBe(true);
   });
+
+  it("opensign is unavailable without platform env config", () => {
+    const adapter = makeOpenSignAdapter();
+    expect(adapter.available().ok).toBe(false);
+    expect(adapter.available().reason).toContain("FREEHOLD_OPENSIGN_URL");
+  });
 });
 
 describe("status mapping", () => {
@@ -34,6 +41,28 @@ describe("status mapping", () => {
     expect(_docusignInternals.mapStatus("completed").status).toBe("COMPLETED");
     expect(_docusignInternals.mapStatus("voided").status).toBe("DECLINED");
     expect(_docusignInternals.mapStatus("delivered").status).toBe("SENT");
+  });
+
+  it("maps opensign document state", () => {
+    expect(_openSignInternals.mapStatus({ SignedUrl: "https://x/signed.pdf" }).status).toBe(
+      "COMPLETED",
+    );
+    expect(_openSignInternals.mapStatus({ IsDeclined: true }).status).toBe("DECLINED");
+    expect(_openSignInternals.mapStatus({}).status).toBe("SENT");
+    expect(_openSignInternals.mapStatus(undefined).status).toBe("SENT");
+  });
+});
+
+describe("opensign envelope flow", () => {
+  it("throws a clear error when called with no provisioned session", async () => {
+    const adapter = makeOpenSignAdapter();
+    await expect(
+      adapter.createEnvelope({
+        title: "Contract",
+        pdf: Buffer.from("%PDF-"),
+        signers: [{ name: "A", email: "a@example.com" }],
+      }),
+    ).rejects.toThrow(/no session/i);
   });
 });
 

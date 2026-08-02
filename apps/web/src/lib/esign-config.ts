@@ -1,6 +1,7 @@
-import { prisma } from "@freehold/db";
+import { type EsignProvider, prisma } from "@freehold/db";
 import type { DocumensoConfig, EsignOverrides } from "@freehold/integrations";
 import { decryptSecret, type EncryptedSecret, loadMasterKey } from "@freehold/vault";
+import { provisionOpenSignOrg } from "@/lib/opensign-config";
 
 /**
  * Per-tenant e-sign connections. Cloud tenants can't set env vars, so each
@@ -30,8 +31,19 @@ export async function loadDocumensoConnection(
   }
 }
 
-export async function esignOverrides(tenantId: string): Promise<EsignOverrides> {
-  return { documenso: await loadDocumensoConnection(tenantId) };
+/**
+ * `provider` gates the OpenSign branch: provisioning makes an external API
+ * call (and on first use, a DB write), so it only runs when the resolved
+ * provider is actually OPENSIGN — a Documenso send must never trigger it.
+ */
+export async function esignOverrides(
+  tenantId: string,
+  provider?: EsignProvider,
+): Promise<EsignOverrides> {
+  return {
+    documenso: await loadDocumensoConnection(tenantId),
+    opensign: provider === "OPENSIGN" ? await provisionOpenSignOrg(tenantId) : undefined,
+  };
 }
 
 /** Whether Documenso works for this tenant, and via which config source. */

@@ -62,7 +62,7 @@ export async function sendForSignature(formData: FormData) {
     }),
   );
 
-  const adapter = getEsignAdapter(provider, await esignOverrides(tenantId));
+  const adapter = getEsignAdapter(provider, await esignOverrides(tenantId, provider));
   const availability = adapter.available();
   try {
     if (!availability.ok) {
@@ -112,7 +112,10 @@ export async function refreshEnvelope(formData: FormData) {
   if (!envelope.externalId || envelope.provider === EsignProvider.MANUAL) return;
 
   try {
-    const adapter = getEsignAdapter(envelope.provider, await esignOverrides(tenantId));
+    const adapter = getEsignAdapter(
+      envelope.provider,
+      await esignOverrides(tenantId, envelope.provider),
+    );
     const result = await adapter.getStatus(envelope.externalId);
     await withTenant(tenantId, (tx) =>
       tx.signatureEnvelope.update({

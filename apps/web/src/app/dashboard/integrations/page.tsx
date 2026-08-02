@@ -1,6 +1,6 @@
 import { prisma, withTenant } from "@freehold/db";
 import { billingEnabled } from "@freehold/ee-billing";
-import { docusignAdapter } from "@freehold/integrations";
+import { docusignAdapter, makeOpenSignAdapter } from "@freehold/integrations";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { McpConnectorPanel } from "@/components/mcp-connector-panel";
@@ -14,6 +14,7 @@ import { emailEnabled } from "@/lib/email";
 import { parseErpnextConfig } from "@/lib/erpnext";
 import { documensoStatus } from "@/lib/esign-config";
 import { fubStatus } from "@/lib/fub";
+import { openSignStatus } from "@/lib/opensign-config";
 import { storageStatus } from "@/lib/storage-config";
 import { requireAdminTenant } from "@/lib/tenant";
 import { twentyStatus } from "@/lib/twenty";
@@ -51,6 +52,8 @@ export default async function IntegrationsPage({
   });
   const mcpEnabled = org.mcpEnabled;
   const documenso = await documensoStatus(tenantId);
+  const opensignAvailable = makeOpenSignAdapter().available().ok;
+  const opensign = opensignAvailable ? await openSignStatus(tenantId) : { connected: false };
   const fub = await fubStatus(tenantId);
   const twenty = await twentyStatus(tenantId);
   const storage = await storageStatus(tenantId);
@@ -199,6 +202,21 @@ export default async function IntegrationsPage({
       href: docusignAdapter.available().ok ? "/dashboard/transactions" : "/services",
       hrefLabel: docusignAdapter.available().ok ? "Send from a transaction" : "Setup & IT services",
     },
+    ...(opensignAvailable
+      ? [
+          {
+            name: "OpenSign e-signatures",
+            mono: "OS",
+            tone: "included" as Tone,
+            status: opensign.connected ? "Ready" : "Included",
+            body: opensign.connected
+              ? "Sending via Freehold's OpenSign. Documents go out for signature from any transaction's Documents tab; per-client provider choice on the client page."
+              : "Open-source e-signing, included at no extra setup — nothing to connect. The first document you send provisions your workspace's space automatically.",
+            href: "/dashboard/transactions",
+            hrefLabel: "Send from a transaction",
+          },
+        ]
+      : []),
     {
       name: "Zapier",
       mono: "Z",
