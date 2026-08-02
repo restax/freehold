@@ -87,15 +87,287 @@ async function parseRequest(
 export async function createOpenSignUser(
   email: string,
   password: string,
+  companyName = "Freehold workspace",
 ): Promise<{ orgId: string; sessionToken: string }> {
-  const res = await parseRequest("/users", {
+  // A bare `_User` is NOT a usable OpenSign account. OpenSign's own signup
+  // also creates a `partners_Tenant` and a `contracts_Users` extended-user row,
+  // and the rest of the product assumes both exist — without them a document
+  // sends and polls fine but the signer's page dies on `gettenant` /
+  // `getDocument` 403s (live-verified 2026-08-02, this is what it replaced).
+  //
+  // Those three writes are done here rather than by calling OpenSign's
+  // `usersignup` cloud function because that function is broken in the
+  // published image: it throws `ReferenceError: normalizeEmail is not defined`
+  // before doing anything. Re-implementing over the core REST API keeps this
+  // working on stock images and keeps the arm's-length AGPL boundary — we
+  // still only talk HTTP, never import their code.
+  // The tenant's OpenSign email is derived from its id, so it's the same every
+  // time. If the stored config is ever lost the account still exists, and a
+  // plain signup would 400 forever — leaving that workspace permanently unable
+  // to send. Recover the way OpenSign's own signup does: mint a session for the
+  // existing user with the master key (`/loginAs`) instead of creating a second
+  // account. The original password was random and discarded, so this is the
+  // only way back in.
+  const existingRes = await parseRequest(
+    `/users?where=${encodeURIComponent(JSON.stringify({ username: email }))}&limit=1`,
+    { method: "GET", masterKey: true },
+  );
+  const existing = (await existingRes.json()) as { results?: Array<{ objectId: string }> };
+  const priorId = existing.results?.[0]?.objectId;
+
+  const user = priorId
+    ? await (async () => {
+        const res = await parseRequest(`/loginAs?userId=${encodeURIComponent(priorId)}`, {
+          method: "POST",
+          masterKey: true,
+        });
+        return (await res.json()) as { objectId: string; sessionToken: string };
+      })()
+    : await (async () => {
+        const res = await parseRequest("/users", {
+          method: "POST",
+          masterKey: true,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: email, email, password, name: companyName }),
+        });
+        return (await res.json()) as { objectId: string; sessionToken: string };
+      })();
+
+  const userPtr = { __type: "Pointer", className: "_User", objectId: user.objectId };
+
+  // Reconnecting to an account that already has its tenant/extended-user rows
+  // must not duplicate them.
+  if (priorId) {
+    const where = encodeURIComponent(JSON.stringify({ UserId: userPtr }));
+    const extRes = await parseRequest(`/classes/contracts_Users?where=${where}&limit=1`, {
+      method: "GET",
+      masterKey: true,
+    });
+    const ext = (await extRes.json()) as { results?: unknown[] };
+    if (ext.results?.length) return { orgId: user.objectId, sessionToken: user.sessionToken };
+  }
+
+  const tenantRes = await parseRequest("/classes/partners_Tenant", {
     method: "POST",
     masterKey: true,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username: email, email, password }),
+    body: JSON.stringify({
+      UserId: userPtr,
+      CreatedBy: userPtr,
+      TenantName: companyName,
+      EmailAddress: email,
+      IsActive: true,
+    }),
   });
-  const json = (await res.json()) as { objectId: string; sessionToken: string };
-  return { orgId: json.objectId, sessionToken: json.sessionToken };
+  const tenant = (await tenantRes.json()) as { objectId: string };
+
+  await parseRequest("/classes/contracts_Users", {
+    method: "POST",
+    masterKey: true,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      UserId: userPtr,
+      // The class this lands in is `contracts_Users`; the role string has to
+      // agree with it (OpenSign derives one from the other by splitting on `_`).
+      UserRole: "contracts_Admin",
+      Email: email,
+      Name: companyName,
+      Company: companyName,
+      TenantId: { __type: "Pointer", className: "partners_Tenant", objectId: tenant.objectId },
+    }),
+  });
+
+  return { orgId: user.objectId, sessionToken: user.sessionToken };
+}
+
+/**
+ * A signer, as OpenSign actually wants it: a `contracts_Contactbook` row
+ * pointing at a real `_User`. Sending inline `{Name, Email}` objects instead
+ * looks like it works — the document is created and status polls fine — but
+ * OpenSign's own `DocumentAftersave.updateAclDoc` does
+ * `Signers.map(s => s.UserId)` and then reads `.objectId` off each, so an
+ * inline signer throws there and the document never gets a signer ACL. The
+ * signing page then 403s. Hence: provision first, reference by pointer.
+ */
+interface SignerContact {
+  contactId: string;
+  userId: string;
+}
+
+/** Look up a Parse `_User` by email, creating one if this is a new signer. */
+async function ensureParseUser(email: string, name: string): Promise<string> {
+  const where = encodeURIComponent(JSON.stringify({ email }));
+  const found = await parseRequest(`/users?where=${where}&limit=1`, {
+    method: "GET",
+    masterKey: true,
+  });
+  const existing = (await found.json()) as { results?: Array<{ objectId: string }> };
+  if (existing.results?.[0]) return existing.results[0].objectId;
+
+  // OpenSign's own guest-signup path (linkContactToDoc.js) sets password to
+  // the email. Mirrored rather than improved on: these accounts are reachable
+  // only through the tokenised signing link, and diverging would mean a signer
+  // who later lands in OpenSign's own UI can't get in the way OpenSign expects.
+  const created = await parseRequest("/users", {
+    method: "POST",
+    masterKey: true,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: email, email, password: email, name }),
+  });
+  const json = (await created.json()) as { objectId: string };
+  return json.objectId;
+}
+
+/**
+ * Find or create this tenant's Contactbook entry for a signer. Scoped by
+ * `CreatedBy` so two workspaces signing with the same person's email each get
+ * their own contact row — the same isolation boundary the rest of this
+ * adapter keeps.
+ */
+async function ensureSignerContact(
+  orgId: string,
+  signer: { name: string; email: string },
+): Promise<SignerContact> {
+  const email = signer.email.trim().toLowerCase();
+  const userId = await ensureParseUser(email, signer.name);
+  const createdBy = { __type: "Pointer", className: "_User", objectId: orgId };
+
+  const where = encodeURIComponent(JSON.stringify({ Email: email, CreatedBy: createdBy }));
+  const found = await parseRequest(`/classes/contracts_Contactbook?where=${where}&limit=1`, {
+    method: "GET",
+    masterKey: true,
+  });
+  const existing = (await found.json()) as { results?: Array<{ objectId: string }> };
+  if (existing.results?.[0]) return { contactId: existing.results[0].objectId, userId };
+
+  const created = await parseRequest("/classes/contracts_Contactbook", {
+    method: "POST",
+    masterKey: true,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      Name: signer.name,
+      Email: email,
+      UserId: { __type: "Pointer", className: "_User", objectId: userId },
+      CreatedBy: createdBy,
+      UserRole: "contracts_Guest",
+      IsDeleted: false,
+      ACL: {
+        [orgId]: { read: true, write: true },
+        [userId]: { read: true, write: true },
+      },
+    }),
+  });
+  const json = (await created.json()) as { objectId: string };
+  return { contactId: json.objectId, userId };
+}
+
+const WIDGET_W = 150;
+const WIDGET_H = 60;
+
+/**
+ * Page 1's size in PDF points, so signature boxes land on the page. Falls back
+ * to US Letter if the PDF can't be parsed — a wrong-but-plausible guess beats
+ * refusing to send.
+ */
+async function firstPageSize(pdf: Buffer): Promise<{ width: number; height: number }> {
+  try {
+    const { PDFDocument } = await import("pdf-lib");
+    const doc = await PDFDocument.load(new Uint8Array(pdf), { ignoreEncryption: true });
+    const page = doc.getPages()[0];
+    if (page) return page.getSize();
+  } catch {
+    // Malformed or encrypted PDF — fall through to the Letter default.
+  }
+  return { width: 612, height: 792 };
+}
+
+/**
+ * One signature widget per signer, stacked up from the bottom-left of page 1.
+ * OpenSign's own UI is a drag-and-drop field placer; Freehold has no such
+ * surface, and a document with no widget leaves the signer nothing to click,
+ * so every signer gets exactly one signature box.
+ *
+ * Positioned relative to the real page height rather than at a fixed offset:
+ * a hardcoded y is off-page on any document shorter than the assumed size,
+ * which puts the signer back to having nothing to click. Coordinates are
+ * unscaled PDF points measured from the top-left, matching what OpenSign's
+ * placer stores (it divides by scale before saving — PdfRequestFiles.jsx's
+ * dropObj).
+ */
+function signatureWidget(index: number, page: { width: number; height: number }) {
+  const margin = Math.min(60, page.width / 8);
+  // Stack upward from the bottom margin, clamped so many signers can't push a
+  // box off the top of a short page.
+  const fromBottom = margin + WIDGET_H + index * (WIDGET_H + 20);
+  const yPosition = Math.max(margin, page.height - fromBottom);
+  return {
+    pageNumber: 1,
+    pos: [
+      {
+        xPosition: margin,
+        yPosition,
+        isStamp: false,
+        key: index,
+        scale: 1,
+        zIndex: index + 1,
+        type: "signature",
+        options: { name: `signature-${index + 1}`, status: "required" },
+        Width: Math.min(WIDGET_W, page.width - margin * 2),
+        Height: WIDGET_H,
+      },
+    ],
+  };
+}
+
+/**
+ * This tenant's `contracts_Users` row — OpenSign's "extended user", which
+ * carries the tenant link. Every document must point at one via `ExtUserPtr`:
+ * `getDocument` does `delete document.ExtUserPtr.TenantId.FileAdapters`
+ * unguarded, so a document without it throws inside OpenSign's own handler,
+ * gets swallowed by its catch, and returns `{}` — the signing page then dies
+ * on `Cannot read properties of undefined`. Sending and polling are unaffected,
+ * which is why this only shows up when someone tries to sign.
+ *
+ * Created here if absent so workspaces provisioned before that was understood
+ * heal themselves on their next send instead of needing a manual repair.
+ */
+async function ensureExtUser(orgId: string, companyName: string): Promise<string> {
+  const userPtr = { __type: "Pointer", className: "_User", objectId: orgId };
+  const where = encodeURIComponent(JSON.stringify({ UserId: userPtr }));
+  const found = await parseRequest(`/classes/contracts_Users?where=${where}&limit=1`, {
+    method: "GET",
+    masterKey: true,
+  });
+  const existing = (await found.json()) as { results?: Array<{ objectId: string }> };
+  if (existing.results?.[0]) return existing.results[0].objectId;
+
+  const tenantRes = await parseRequest("/classes/partners_Tenant", {
+    method: "POST",
+    masterKey: true,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      UserId: userPtr,
+      CreatedBy: userPtr,
+      TenantName: companyName,
+      IsActive: true,
+    }),
+  });
+  const tenant = (await tenantRes.json()) as { objectId: string };
+
+  const extRes = await parseRequest("/classes/contracts_Users", {
+    method: "POST",
+    masterKey: true,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      UserId: userPtr,
+      UserRole: "contracts_Admin",
+      Name: companyName,
+      Company: companyName,
+      TenantId: { __type: "Pointer", className: "partners_Tenant", objectId: tenant.objectId },
+    }),
+  });
+  const ext = (await extRes.json()) as { objectId: string };
+  return ext.objectId;
 }
 
 /** Upload PDF bytes and get back a URL — Parse Server's core Files endpoint. */
@@ -165,6 +437,17 @@ export function makeOpenSignAdapter(override?: OpenSignConfig): EsignAdapter {
       const filename = title.toLowerCase().endsWith(".pdf") ? title : `${title}.pdf`;
       const url = await uploadFile(override.sessionToken, filename, pdf);
 
+      // Signers must exist as Contactbook rows before the document references
+      // them; see ensureSignerContact for why inline signers aren't enough.
+      const extUserId = await ensureExtUser(override.orgId, "Freehold workspace");
+      const page = await firstPageSize(pdf);
+
+      const contacts: Array<SignerContact & { email: string }> = [];
+      for (const signer of signers) {
+        const contact = await ensureSignerContact(override.orgId, signer);
+        contacts.push({ ...contact, email: signer.email.trim().toLowerCase() });
+      }
+
       const res = await parseRequest("/functions/createdocumentfromapp", {
         method: "POST",
         sessionToken: override.sessionToken,
@@ -173,16 +456,11 @@ export function makeOpenSignAdapter(override?: OpenSignConfig): EsignAdapter {
           document: {
             Name: title,
             URL: url,
-            // KNOWN GAP (2026-08-02): OpenSign expects these to be Pointers to
-            // contracts_Contactbook rows that each carry a UserId, not inline
-            // name/email objects. Inline works for send + status polling (both
-            // live-verified) but breaks the guest *signing* page: DocumentAftersave's
-            // updateAclDoc does Signers.map(i => i.UserId) then reads .objectId off
-            // each, so an inline signer throws and the doc never gets a signer ACL.
-            // Fixing properly means provisioning a Contactbook contact per signer
-            // before creating the document. Until then OpenSign can send and report
-            // status but a signer cannot actually complete a signature.
-            Signers: signers.map((s) => ({ Name: s.name, Email: s.email })),
+            Signers: contacts.map((c) => ({
+              __type: "Pointer",
+              className: "contracts_Contactbook",
+              objectId: c.contactId,
+            })),
             // Required even though createdocumentfromapp.js doesn't validate its
             // presence: every downstream guest-signing path (linkContactToDoc's
             // saveRoleContact) dereferences CreatedBy.objectId and throws if it's
@@ -190,14 +468,29 @@ export function makeOpenSignAdapter(override?: OpenSignConfig): EsignAdapter {
             // the doc, never at send time. Live-verified 2026-08-02: omitting this
             // sent successfully but crashed guest sign-in with a 403 downstream.
             CreatedBy: { __type: "Pointer", className: "_User", objectId: override.orgId },
-            // Also required for the guest-signing flow (recipientSignPdf / the
-            // login/<base64> link) to resolve who's allowed to sign — Signers
-            // alone drives createEnvelope's own status polling, but Placeholders
-            // is the field linkContactToDoc.js actually looks up by email.
-            Placeholders: signers.map((s, i) => ({
-              email: s.email,
+            // See ensureExtUser: without this the signing page cannot load the
+            // document at all, though sending and polling look perfectly fine.
+            ExtUserPtr: {
+              __type: "Pointer",
+              className: "contracts_Users",
+              objectId: extUserId,
+            },
+            // What the guest-signing page actually reads. `signerObjId`/`signerPtr`
+            // being pre-set is what lets linkContactToDoc.js short-circuit on its
+            // first branch instead of trying to invent a contact at sign time;
+            // `placeHolder` carries the widget the signer clicks.
+            Placeholders: contacts.map((c, i) => ({
+              Id: `${i + 1}`,
+              email: c.email,
               Role: `signer${i + 1}`,
               order: i + 1,
+              signerObjId: c.contactId,
+              signerPtr: {
+                __type: "Pointer",
+                className: "contracts_Contactbook",
+                objectId: c.contactId,
+              },
+              placeHolder: [signatureWidget(i, page)],
             })),
             SentToOthers: true,
             SendinOrder: false,

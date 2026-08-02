@@ -5,16 +5,23 @@
 # internet as-is, and never reuse APP_ID/MASTER_KEY in production.
 #
 #   docker compose -f docker-compose.opensign.yml up -d
-#   Server API root: http://localhost:8081/app
+#   Everything on one origin: http://localhost:8081
+#     - Parse API root:      http://localhost:8081/api/app
+#     - Signing pages:       http://localhost:8081/login/<token>
 #
 # Then in .env:
 #   FREEHOLD_OPENSIGN_URL=http://localhost:8081
-#   FREEHOLD_OPENSIGN_APP_ID=freehold-dev
+#   FREEHOLD_OPENSIGN_MOUNT=/api/app
+#   FREEHOLD_OPENSIGN_APP_ID=opensign
 #   FREEHOLD_OPENSIGN_MASTER_KEY=freehold-dev-master-key-not-for-production
 #
-# Only the server (Parse Server + its cloud code) runs here — OpenSign's own
-# web client and Caddy reverse proxy aren't needed since Freehold's own
-# dashboard is the UI; Freehold talks to the server's REST API directly.
+# Why the client and the reverse proxy are here even though Freehold's own
+# dashboard is the UI: Freehold sends and polls over the REST API, but the
+# *signer* is a member of the public who lands on OpenSign's own signing page.
+# That page is served by the `client` container, and it only works when client
+# and server share one origin — OpenSign's own deployment does this with Caddy,
+# and its guest-signing flow breaks with cross-origin 403s otherwise. Running
+# the server alone is enough to send a document but not to have anyone sign it.
 
 services:
   opensign-mongo:
@@ -29,20 +36,67 @@ services:
 
   opensign-server:
     image: opensign/opensignserver:main
-    ports:
-      - "8081:8080"
     depends_on:
       opensign-mongo:
         condition: service_healthy
     environment:
       NODE_ENV: development
-      APP_ID: freehold-dev
+      # MUST be `opensign`: the stock client image bakes this app id in at build
+      # time (only REACT_APP_SERVERURL is runtime-configurable in its entrypoint),
+      # so any other value makes every call from the signing page fail Parse's
+      # app-id check with a bare 403 `unauthorized`.
+      APP_ID: opensign
       appName: freehold_dev_opensign
       MASTER_KEY: freehold-dev-master-key-not-for-production
       MONGODB_URI: mongodb://opensign-mongo:27017/opensign
       PARSE_MOUNT: /app
-      SERVER_URL: http://localhost:8081/app
-      PUBLIC_URL: http://localhost:8081/
+      # Must be the *public* origin, not the container address: these are baked
+      # into the file/download URLs handed out to signers.
+      SERVER_URL: http://localhost:8081/api/app
+      PUBLIC_URL: http://localhost:8081
+      # OpenSign digitally signs the finished PDF, and refuses to complete a
+      # signature without a P12 certificate — `Buffer.from(undefined)` throws
+      # inside its signPdf handler and the signer just sees "something went
+      # wrong". This is a THROWAWAY self-signed cert for local development
+      # only: it is committed deliberately, protects nothing, and must never be
+      # used in production. Generate a real one for the live deployment:
+      #   openssl req -x509 -newkey rsa:2048 -keyout k.pem -out c.pem -days 3650 \
+      #     -nodes -subj "/CN=Your Co"
+      #   openssl pkcs12 -export -out cert.p12 -inkey k.pem -in c.pem -passout pass:SECRET
+      #   base64 -i cert.p12 | tr -d '\n'
+      PFX_BASE64: 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
+      PASS_PHRASE: freeholddev
+
+  opensign-client:
+    image: opensign/opensign:main
+    depends_on:
+      - opensign-server
+    environment:
+      REACT_APP_SERVERURL: http://localhost:8081/api/app
+      PUBLIC_URL: http://localhost:8081
+
+  opensign-proxy:
+    image: caddy:latest
+    depends_on:
+      - opensign-client
+      - opensign-server
+    ports:
+      - "8081:8081"
+    # /api/* is stripped and forwarded to Parse (whose own mount is /app), so
+    # the public path /api/app maps onto the server's /app.
+    configs:
+      - source: opensign_caddyfile
+        target: /etc/caddy/Caddyfile
+
+configs:
+  opensign_caddyfile:
+    content: |
+      :8081 {
+        handle_path /api/* {
+          reverse_proxy opensign-server:8080
+        }
+        reverse_proxy opensign-client:3000
+      }
 
 volumes:
   opensign_mongodata:

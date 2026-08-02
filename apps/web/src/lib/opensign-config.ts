@@ -63,11 +63,14 @@ export async function provisionOpenSignOrg(tenantId: string): Promise<OpenSignCo
       data: { openSignConfig: { orgId, enc: { ...encryptSecret(sessionToken, loadMasterKey()) } } },
     });
     return { orgId, sessionToken };
-  } catch {
-    // Provisioning failure surfaces the same way any other adapter failure
-    // does: available()/createEnvelope() throws, sendForSignature() records
-    // it on the envelope row rather than losing it. Nothing to do here but
-    // decline — a retry on the next send attempt is the recovery path.
+  } catch (err) {
+    // Provisioning failure surfaces to the user the same way any other adapter
+    // failure does: createEnvelope() throws, sendForSignature() records it on
+    // the envelope row rather than losing it, and a retry on the next send is
+    // the recovery path. But the envelope only gets the generic "no session"
+    // message, which says nothing about *why* — so log the real cause here or
+    // it is unrecoverable from the outside.
+    console.error(`OpenSign provisioning failed for tenant ${tenantId}:`, err);
     return undefined;
   }
 }
