@@ -1,7 +1,8 @@
 "use client";
 
 import { Desktop, DeviceMobile } from "@phosphor-icons/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { SITE_PREVIEW_REFRESH } from "@/lib/site-preview-events";
 
 /**
  * Live preview of the tenant's public site, shown beside the editor on
@@ -23,6 +24,16 @@ type Device = keyof typeof WIDTHS;
 
 export function SitePreviewPane({ src, published }: { src: string; published: boolean }) {
   const [device, setDevice] = useState<Device>("desktop");
+  // Bumped when the designer saves. Part of the iframe's key, so the frame is
+  // torn down and re-created — a plain re-render would leave the old document
+  // in place, showing the layout the tenant just replaced.
+  const [nonce, setNonce] = useState(0);
+  useEffect(() => {
+    const bump = () => setNonce((n) => n + 1);
+    window.addEventListener(SITE_PREVIEW_REFRESH, bump);
+    return () => window.removeEventListener(SITE_PREVIEW_REFRESH, bump);
+  }, []);
+
   // Tall enough to take in the whole page at a glance; the iframe scrolls for
   // the rest rather than growing the dashboard page without limit.
   const frameHeight = device === "desktop" ? 1400 : 1500;
@@ -65,7 +76,7 @@ export function SitePreviewPane({ src, published }: { src: string; published: bo
         style={{ height: frameHeight * scale }}
       >
         <iframe
-          key={device}
+          key={`${device}:${nonce}`}
           src={src}
           title="Website preview"
           // Non-interactive on purpose: this is a picture of the page, not a

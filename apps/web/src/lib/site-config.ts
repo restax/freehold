@@ -12,6 +12,16 @@ export interface TenantSiteConfig {
   /** Newline-separated list shown as service bullets. */
   services?: string;
   showRegistration?: boolean;
+  /**
+   * The page layout from the block designer. `unknown` rather than a block
+   * array on purpose: this is whatever JSON the column happens to hold, and
+   * typing it as an array would be a promise the database can't keep.
+   * siteBlocks() parses it defensively. Keeping it opaque also leaves this a
+   * plain settings module with no dependency on lib/site-blocks.ts, which
+   * imports *this* file. Absent on a site that has never been arranged, which
+   * is what makes the legacy fields above the fallback rather than dead weight.
+   */
+  blocks?: unknown;
 }
 
 export function parseSiteConfig(raw: unknown): TenantSiteConfig {

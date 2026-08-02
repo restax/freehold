@@ -793,13 +793,30 @@ model Organization {
   /// Workspace email signature + global footer: {signature, footer} —
   /// appended to every outgoing branded email.
   emailSettings            Json?                    @map("email_settings")
-  /// Tenant mini-site at <slug>.<root>: {published, tagline, about, phone, email, services, showRegistration}.
+  /// Tenant mini-site at <slug>.<root>: {published, tagline, about, phone, email,
+  /// services, showRegistration, blocks}. `blocks` is the ordered page layout from
+  /// the designer (lib/site-blocks.ts); the flat fields above are what sites made
+  /// before the designer existed still render from.
   siteConfig               Json?                    @map("site_config")
   /// Look-and-feel choices, all optional with sensible defaults:
   /// {theme, portalFont, priorityColors:{HIGH,CRITICAL}, rowHighlight:{scope,color}}.
   /// theme + portalFont style the client portal; priorityColors + rowHighlight
   /// tint the internal task lists. Null = Freehold defaults (forest/green).
   appearanceConfig         Json?                    @map("appearance_config")
+  /// A domain the workspace owns, serving the same public surface as
+  /// <slug>.<root>: the mini-site, public forms, and portal links. Unique
+  /// because a hostname resolves to exactly one workspace — that uniqueness is
+  /// what stops one workspace from claiming a domain another is already using.
+  /// Stored lowercase and without a port; lib/host-routing.ts normalises before
+  /// matching.
+  customDomain             String?                  @unique @map("custom_domain")
+  /// "pending" (added, DNS not confirmed yet) | "active" (serving) | "error".
+  /// Only "active" routes: an unconfirmed domain must not serve a workspace's
+  /// page, or claiming someone else's hostname would be enough to sit on it.
+  customDomainStatus       String?                  @map("custom_domain_status")
+  /// Last thing the domain provider told us — the DNS record still missing, or
+  /// why verification failed. Shown verbatim to the admin, never parsed.
+  customDomainNote         String?                  @map("custom_domain_note")
   /// Per-tenant Documenso connection: {url, enc:{ciphertext,iv,tag,wrappedKey,wrapIv,wrapTag,keyVersion}}.
   /// Token encrypted with VAULT_MASTER_KEY; null = use server-wide env default.
   documensoConfig          Json?                    @map("documenso_config")
@@ -925,6 +942,7 @@ model Organization {
   invoiceEmailLogs         InvoiceEmailLog[]
   clientCreditEntries      ClientCreditEntry[]
   webhookEndpoints         WebhookEndpoint[]
+  siteImages               SiteImage[]
 
   @@map("organization")
 }
@@ -1272,6 +1290,32 @@ model Form {
   @@unique([tenantId, kind, clientId])
   @@index([tenantId])
   @@map("form")
+}
+
+/// A photograph a workspace uploaded for its public website — hero shots and
+/// full-width image blocks. Separate from Document on purpose: Document rows
+/// are private transaction files served through authenticated routes, while
+/// these are deliberately public and cached hard by the browser. Keeping them
+/// apart means the public image route is structurally incapable of serving a
+/// client's contract, rather than relying on a flag being right.
+///
+/// The bytes follow the same three-driver contract as Document (lib/storage.ts):
+/// storageKey set (S3 / tenant S3) or data set (inline Postgres), whichever the
+/// deployment is configured for.
+model SiteImage {
+  id              String       @id @default(uuid())
+  tenantId        String       @map("tenant_id")
+  tenant          Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  filename        String
+  contentType     String       @map("content_type")
+  sizeBytes       Int          @map("size_bytes")
+  data            Bytes?
+  storageKey      String?      @map("storage_key")
+  storageProvider String?      @map("storage_provider")
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  @@index([tenantId])
+  @@map("site_image")
 }
 
 /// One filled-in form. The layout it was filled against is snapshotted here,

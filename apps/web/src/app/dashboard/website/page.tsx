@@ -1,13 +1,17 @@
-import { prisma } from "@freehold/db";
+import { prisma, withTenant } from "@freehold/db";
 import Link from "next/link";
 import QRCode from "qrcode";
+import { CustomDomainPanel } from "@/components/custom-domain-panel";
 import { PhoneInput } from "@/components/phone-input";
 import { SectionCard } from "@/components/section-card";
+import { SiteDesigner } from "@/components/site-designer";
 import { SitePreviewPane } from "@/components/site-preview-pane";
 import { saveSiteConfig } from "@/lib/actions/website";
+import { siteBlocks } from "@/lib/site-blocks";
 import { parseSiteConfig, tenantSiteUrl } from "@/lib/site-config";
 import { requireAdminTenant } from "@/lib/tenant";
 import { btn, input, label as labelCls } from "@/lib/ui";
+import { vercelDomainsConfigured } from "@/lib/vercel-domains";
 
 export const dynamic = "force-dynamic";
 
@@ -15,10 +19,26 @@ export default async function WebsitePage() {
   const { tenantId, isAdmin } = await requireAdminTenant();
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: tenantId },
-    select: { name: true, slug: true, logo: true, siteConfig: true },
+    select: {
+      name: true,
+      slug: true,
+      logo: true,
+      siteConfig: true,
+      customDomain: true,
+      customDomainStatus: true,
+      customDomainNote: true,
+    },
   });
   const site = parseSiteConfig(org.siteConfig);
+  // The Intake forms block lists these; with none published it renders
+  // nothing, and the designer says so rather than leaving the TC guessing.
+  const publicFormCount = await withTenant(tenantId, (tx) =>
+    tx.form.count({ where: { status: "published", showPublic: true, clientId: null } }),
+  );
   const url = tenantSiteUrl(org.slug);
+  // Self-hosters point their own wildcard DNS at their install and never need
+  // this; the card simply isn't there when no domain provider is configured.
+  const domainsAvailable = vercelDomainsConfigured();
   const qrSvg = await QRCode.toString(url, { type: "svg", margin: 1, width: 200 });
   const qrPng = await QRCode.toDataURL(url, { margin: 1, width: 900 });
 
@@ -43,121 +63,158 @@ export default async function WebsitePage() {
       </div>
 
       <div className="grid items-start gap-4 xl:grid-cols-2">
-        <SectionCard title="Page content">
-          <p className="mb-4 text-sm text-stone-500">
-            Until you publish, the address shows a plain client-portal entry page.
-          </p>
-          <form action={saveSiteConfig} className="flex flex-col gap-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className={labelCls}>
-                Tagline
-                <input
-                  name="tagline"
-                  defaultValue={site.tagline ?? ""}
-                  placeholder="Transaction coordination that closes on time"
-                  className={input}
-                />
-              </label>
-              <label className={labelCls}>
-                Public email
-                <input
-                  name="email"
-                  type="email"
-                  defaultValue={site.email ?? ""}
-                  placeholder="hello@yourbusiness.com"
-                  className={input}
-                />
-              </label>
-              <label className={labelCls}>
-                Public phone
-                <PhoneInput name="phone" defaultValue={site.phone ?? ""} className={input} />
-              </label>
-            </div>
-            <label className={labelCls}>
-              About your business
-              <textarea
-                name="about"
-                rows={3}
-                defaultValue={site.about ?? ""}
-                placeholder={`${org.name} keeps real-estate transactions on track — contracts, deadlines, and closings handled end to end.`}
-                className={input}
-              />
-            </label>
-            <div className="grid items-end gap-4 sm:grid-cols-2">
-              <label className={labelCls}>
-                Logo (PNG/JPEG/WebP, up to 1 MB)
-                <input
-                  type="file"
-                  name="logo"
-                  accept="image/png,image/jpeg,image/webp"
-                  className="text-sm text-stone-600 file:mr-3 file:rounded-lg file:border-0 file:bg-stone-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-stone-700 hover:file:bg-stone-200"
-                />
-              </label>
-              {org.logo && (
-                <div className="flex items-center gap-4">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={org.logo}
-                    alt="Current logo"
-                    className="h-10 w-auto max-w-36 rounded border border-stone-200 bg-white object-contain p-1"
+        <div className="flex flex-col gap-4">
+          <SectionCard title="Page content">
+            <p className="mb-4 text-sm text-stone-500">
+              Until you publish, the address shows a plain client-portal entry page.
+            </p>
+            <form action={saveSiteConfig} className="flex flex-col gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className={labelCls}>
+                  Tagline
+                  <input
+                    name="tagline"
+                    defaultValue={site.tagline ?? ""}
+                    placeholder="Transaction coordination that closes on time"
+                    className={input}
                   />
-                  <label className="flex items-center gap-2 text-sm text-stone-600">
-                    <input type="checkbox" name="removeLogo" />
-                    Remove logo
-                  </label>
-                </div>
-              )}
-            </div>
-            <label className={labelCls}>
-              Services (one per line)
-              <textarea
-                name="services"
-                rows={4}
-                defaultValue={site.services ?? ""}
-                placeholder={
-                  "Contract-to-close coordination\nListing management\nCompliance & document management"
-                }
-                className={input}
-              />
-            </label>
-            <div className="flex flex-wrap items-center gap-6">
-              <label className="flex items-center gap-2 text-sm font-medium text-stone-700">
-                <input type="checkbox" name="published" defaultChecked={site.published ?? false} />
-                Publish the site
-              </label>
-              <label className="flex items-center gap-2 text-sm font-medium text-stone-700">
-                <input
-                  type="checkbox"
-                  name="showRegistration"
-                  defaultChecked={site.showRegistration ?? true}
-                />
-                Allow new-client registration
-              </label>
-            </div>
-            {isAdmin ? (
-              <div className="flex items-center gap-3">
-                <button type="submit" className={btn}>
-                  Save
-                </button>
-                <a
-                  href={url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sm font-medium text-brand-700 hover:underline"
-                >
-                  View site →
-                </a>
+                </label>
+                <label className={labelCls}>
+                  Public email
+                  <input
+                    name="email"
+                    type="email"
+                    defaultValue={site.email ?? ""}
+                    placeholder="hello@yourbusiness.com"
+                    className={input}
+                  />
+                </label>
+                <label className={labelCls}>
+                  Public phone
+                  <PhoneInput name="phone" defaultValue={site.phone ?? ""} className={input} />
+                </label>
               </div>
-            ) : (
-              <p className="text-sm text-stone-400">Only workspace admins can edit the website.</p>
-            )}
-          </form>
-        </SectionCard>
+              <label className={labelCls}>
+                About your business
+                <textarea
+                  name="about"
+                  rows={3}
+                  defaultValue={site.about ?? ""}
+                  placeholder={`${org.name} keeps real-estate transactions on track — contracts, deadlines, and closings handled end to end.`}
+                  className={input}
+                />
+              </label>
+              <div className="grid items-end gap-4 sm:grid-cols-2">
+                <label className={labelCls}>
+                  Logo (PNG/JPEG/WebP, up to 1 MB)
+                  <input
+                    type="file"
+                    name="logo"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="text-sm text-stone-600 file:mr-3 file:rounded-lg file:border-0 file:bg-stone-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-stone-700 hover:file:bg-stone-200"
+                  />
+                </label>
+                {org.logo && (
+                  <div className="flex items-center gap-4">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={org.logo}
+                      alt="Current logo"
+                      className="h-10 w-auto max-w-36 rounded border border-stone-200 bg-white object-contain p-1"
+                    />
+                    <label className="flex items-center gap-2 text-sm text-stone-600">
+                      <input type="checkbox" name="removeLogo" />
+                      Remove logo
+                    </label>
+                  </div>
+                )}
+              </div>
+              <label className={labelCls}>
+                Services (one per line)
+                <textarea
+                  name="services"
+                  rows={4}
+                  defaultValue={site.services ?? ""}
+                  placeholder={
+                    "Contract-to-close coordination\nListing management\nCompliance & document management"
+                  }
+                  className={input}
+                />
+              </label>
+              <div className="flex flex-wrap items-center gap-6">
+                <label className="flex items-center gap-2 text-sm font-medium text-stone-700">
+                  <input
+                    type="checkbox"
+                    name="published"
+                    defaultChecked={site.published ?? false}
+                  />
+                  Publish the site
+                </label>
+                <label className="flex items-center gap-2 text-sm font-medium text-stone-700">
+                  <input
+                    type="checkbox"
+                    name="showRegistration"
+                    defaultChecked={site.showRegistration ?? true}
+                  />
+                  Allow new-client registration
+                </label>
+              </div>
+              {isAdmin ? (
+                <div className="flex items-center gap-3">
+                  <button type="submit" className={btn}>
+                    Save
+                  </button>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm font-medium text-brand-700 hover:underline"
+                  >
+                    View site →
+                  </a>
+                </div>
+              ) : (
+                <p className="text-sm text-stone-400">
+                  Only workspace admins can edit the website.
+                </p>
+              )}
+            </form>
+          </SectionCard>
+
+          {isAdmin && (
+            <SectionCard title="Page layout">
+              <p className="mb-4 text-sm text-stone-500">
+                Drag a section by its handle to move it, click its name to edit what it says. The
+                preview updates when you save.
+              </p>
+              <SiteDesigner
+                initialBlocks={siteBlocks(site)}
+                slug={org.slug}
+                hasPublicForms={publicFormCount > 0}
+              />
+            </SectionCard>
+          )}
+        </div>
 
         <SectionCard title="Preview" className="xl:sticky xl:top-6">
           <SitePreviewPane src="/site-preview" published={Boolean(site.published)} />
         </SectionCard>
       </div>
+
+      {isAdmin && domainsAvailable && (
+        <SectionCard title="Your own domain">
+          <CustomDomainPanel
+            domain={org.customDomain}
+            status={org.customDomainStatus}
+            note={org.customDomainNote}
+            // Not stored, so the A-vs-CNAME instruction falls back to counting
+            // labels — right for .com, wrong for a bare .co.uk. The provider's
+            // own guidance comes through `note` when that happens.
+            apexName={null}
+            subdomainUrl={url}
+          />
+        </SectionCard>
+      )}
 
       <SectionCard title="QR code">
         <p className="mb-4 text-sm text-stone-500">

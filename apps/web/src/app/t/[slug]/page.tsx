@@ -4,6 +4,8 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { TenantSiteView } from "@/components/tenant-site";
 import { submitTenantLead } from "@/lib/actions/website";
+import { onTenantHost } from "@/lib/host-routing";
+import { publicTenantWhere } from "@/lib/public-tenant";
 import { parseSiteConfig } from "@/lib/site-config";
 
 export const dynamic = "force-dynamic";
@@ -15,8 +17,8 @@ type Props = {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const org = await prisma.organization.findUnique({
-    where: { slug },
+  const org = await prisma.organization.findFirst({
+    where: publicTenantWhere(slug),
     select: { name: true, siteConfig: true },
   });
   const site = parseSiteConfig(org?.siteConfig);
@@ -41,9 +43,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function TenantSite({ params, searchParams }: Props) {
   const { slug } = await params;
   const { thanks } = await searchParams;
-  const org = await prisma.organization.findUnique({
-    where: { slug },
-    select: { id: true, name: true, logo: true, siteConfig: true },
+  // `slug` is a workspace slug on <slug>.<root>, or a hostname when the
+  // workspace serves this page from its own domain — see lib/public-tenant.ts.
+  const org = await prisma.organization.findFirst({
+    where: publicTenantWhere(slug),
+    select: { id: true, name: true, slug: true, logo: true, siteConfig: true, customDomain: true },
   });
   if (!org) notFound();
   const site = parseSiteConfig(org.siteConfig);
@@ -85,22 +89,25 @@ export default async function TenantSite({ params, searchParams }: Props) {
     );
   }
 
-  // On the workspace's own host, middleware rewrote acme.<root>/ to here and
-  // the browser's URL is still the subdomain, so /f/<form> resolves. Reached
-  // at the apex as /t/<slug>, it doesn't — the links need the prefix.
-  const host = (await headers()).get("host") ?? "";
-  const onOwnHost = host.startsWith(`${slug}.`);
+  // On the workspace's own face — subdomain or custom domain — the browser's
+  // URL is already theirs, so /f/<form> resolves. Reached at the apex as
+  // /t/<slug>, it doesn't: the links need the prefix.
+  const host = (await headers()).get("host");
+  const onOwnHost = onTenantHost(host, org.slug, org.customDomain);
 
   return (
     <TenantSiteView
       name={org.name}
+      // Always the real slug, never the URL segment: it addresses uploaded
+      // photographs, which live under the workspace, not under its hostname.
+      slug={org.slug}
       logoUrl={org.logo}
       site={site}
       publicForms={publicForms}
-      formBase={onOwnHost ? "/f" : `/t/${slug}/f`}
+      formBase={onOwnHost ? "/f" : `/t/${org.slug}/f`}
       thanks={Boolean(thanks)}
       leadAction={submitTenantLead}
-      hiddenFields={{ slug }}
+      hiddenFields={{ slug: org.slug }}
     />
   );
 }

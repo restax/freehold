@@ -125,6 +125,53 @@ export type SiteBlock =
   | ImageBlock
   | TestimonialBlock;
 
+/**
+ * Uploaded photographs are stored as `siteimg:<id>` rather than a finished
+ * URL. The URL contains the workspace slug, and a workspace that renames
+ * itself would otherwise silently break every image on its own page — the
+ * blocks would still hold the old address. Storing the id and building the
+ * address at render time means the page follows the rename.
+ *
+ * Anything that isn't a `siteimg:` ref is treated as a literal URL, so a TC
+ * who already hosts a photo elsewhere can still paste its address.
+ */
+export const SITE_IMAGE_PREFIX = "siteimg:";
+
+/** What the designer stores on a block after an upload. */
+export function siteImageRef(id: string): string {
+  return `${SITE_IMAGE_PREFIX}${id}`;
+}
+
+/** The SiteImage id inside a ref, or null when `src` is a plain URL. */
+export function siteImageId(src: string | undefined): string | null {
+  if (!src?.startsWith(SITE_IMAGE_PREFIX)) return null;
+  const id = src.slice(SITE_IMAGE_PREFIX.length).trim();
+  return id || null;
+}
+
+/** The address to actually put in an `<img src>`. */
+export function siteImageUrl(src: string | undefined, slug: string): string | undefined {
+  if (!src) return undefined;
+  const id = siteImageId(src);
+  if (!id) return src;
+  return `/api/site-image/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`;
+}
+
+/** Every uploaded image a page still points at — the rest can be swept. */
+export function referencedImageIds(blocks: SiteBlock[]): string[] {
+  const ids = new Set<string>();
+  for (const b of blocks) {
+    const src = b.type === "hero" ? b.imageSrc : b.type === "image" ? b.src : undefined;
+    const id = siteImageId(src);
+    if (id) ids.add(id);
+  }
+  return [...ids];
+}
+
+/** Upload rules, shared so the designer and the server agree on the limits. */
+export const SITE_IMAGE_MAX_BYTES = 4_000_000;
+export const SITE_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
+
 function str(v: unknown): string | undefined {
   return typeof v === "string" && v.trim() ? v.trim() : undefined;
 }
@@ -243,6 +290,37 @@ export function newSiteBlock(type: SiteBlockType, id: string): SiteBlock {
       return { id, type };
     case "testimonial":
       return { id, type };
+  }
+}
+
+/**
+ * Why a block would render nothing, or null if it will show.
+ *
+ * The designer lists blocks the page doesn't necessarily display: an Image
+ * with no photo, a Testimonial with no quote, and an Intake forms block on a
+ * workspace that hasn't published any form all render as nothing. Without
+ * this the TC adds a section, saves, sees no change, and concludes the
+ * designer is broken. Kept here, next to the renderer's own skip conditions,
+ * so the two can be checked against each other in one place.
+ */
+export function blockHiddenReason(block: SiteBlock, hasPublicForms: boolean): string | null {
+  switch (block.type) {
+    case "about":
+    case "text":
+      return block.heading || block.body ? null : "Empty — add a heading or some text to show it.";
+    case "services":
+      return block.items.length > 0 ? null : "Empty — add at least one service to show it.";
+    case "image":
+      return block.src ? null : "No photo yet — choose one to show it.";
+    case "testimonial":
+      return block.quote ? null : "No quote yet — add one to show it.";
+    case "forms":
+      return hasPublicForms
+        ? null
+        : "Nothing to list yet — publish a form to your public website and it appears here.";
+    default:
+      // hero and registration always render something.
+      return null;
   }
 }
 

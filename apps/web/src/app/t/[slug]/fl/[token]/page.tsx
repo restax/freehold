@@ -6,6 +6,7 @@ import { FormBody } from "@/components/form-render";
 import { submitIdentifiedForm } from "@/lib/actions/public-forms";
 import { linkRejection, prefillFromClient } from "@/lib/form-access";
 import { layoutFields, parseLayout } from "@/lib/form-schema";
+import { publicTenantWhere } from "@/lib/public-tenant";
 
 export const dynamic = "force-dynamic";
 // A capability URL should never be indexed or cached anywhere.
@@ -27,9 +28,11 @@ export default async function FormLinkPage({ params, searchParams }: Props) {
   const { slug, token } = await params;
   const { sent, invalid } = await searchParams;
 
-  const org = await prisma.organization.findUnique({
-    where: { slug },
-    select: { id: true, name: true },
+  // `slug` is a workspace slug, or a hostname when the workspace serves its
+  // forms from its own domain — see lib/public-tenant.ts.
+  const org = await prisma.organization.findFirst({
+    where: publicTenantWhere(slug),
+    select: { id: true, name: true, slug: true },
   });
   if (!org) notFound();
 
@@ -117,7 +120,7 @@ export default async function FormLinkPage({ params, searchParams }: Props) {
             )}
             <form action={submitIdentifiedForm} className="flex flex-col gap-5">
               <input type="hidden" name="token" value={token} />
-              <input type="hidden" name="orgSlug" value={slug} />
+              <input type="hidden" name="orgSlug" value={org.slug} />
               <FormBody layout={layout} values={values} />
               <div className="border-t border-stone-100 pt-4">
                 <button

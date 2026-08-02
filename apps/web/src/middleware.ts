@@ -1,20 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { RESERVED_SLUGS } from "@/lib/reserved-slugs";
+import { routeForHost } from "@/lib/host-routing";
 
 /**
- * Tenant subdomains: acme.freeholdtc.dev is the client-facing face of the
- * "acme" workspace. Only the portal surface lives there — the bare subdomain
- * shows a branded entry page and /portal/<token> links work unchanged; any
- * other path bounces to the apex, where the app itself lives.
+ * Host-based routing. The rules live in lib/host-routing.ts (pure, unit
+ * tested); this file only turns a decision into a Next response.
  *
  * The root host comes from BETTER_AUTH_URL, so this works identically for a
- * self-hosted install that points wildcard DNS at itself, and does nothing
- * when requests arrive on the root host.
- *
- * `vendor.<root>` is special: it is the FreeholdVendors site, so it rewrites
- * to /vendor/* rather than to a tenant portal. It is a reserved subdomain here
- * AND a reserved workspace slug (see tenantSlugAvailable) so no workspace can
- * ever claim it.
+ * self-hosted install pointing wildcard DNS at itself, and does nothing when
+ * requests arrive on the root host.
  */
 function rootHost(): string | null {
   const url = process.env.BETTER_AUTH_URL;
@@ -28,53 +21,22 @@ function rootHost(): string | null {
 
 export function middleware(req: NextRequest) {
   const root = rootHost();
-  const host = req.headers.get("host");
-  if (!root || !host || host === root || !host.endsWith(`.${root}`)) {
-    return NextResponse.next();
-  }
-  const slug = host.slice(0, -(root.length + 1));
-  const { pathname, search, protocol } = req.nextUrl;
+  const route = routeForHost(req.headers.get("host"), root, req.nextUrl.pathname);
 
-  // The vendor site: everything on vendor.<root> is served from /vendor/*.
-  // A bare visit lands on the vendor dashboard (which itself gates to login).
-  if (slug === "vendor") {
-    if (pathname.startsWith("/vendor/")) return NextResponse.next();
-    // Public vendor pages are canonical on the apex (freeholdtc.dev/v/<slug>),
-    // so a /v/ link from the vendor site bounces there rather than 404ing
-    // under the /vendor/* rewrite.
-    if (pathname.startsWith("/v/")) {
+  switch (route.kind) {
+    case "rewrite": {
+      const url = req.nextUrl.clone();
+      url.pathname = route.pathname;
+      return NextResponse.rewrite(url);
+    }
+    case "redirect-root": {
+      const { pathname, search, protocol } = req.nextUrl;
+      // `root` is non-null here: routeForHost only returns this when it had one.
       return NextResponse.redirect(`${protocol}//${root}${pathname}${search}`, 308);
     }
-    const url = req.nextUrl.clone();
-    url.pathname = pathname === "/" ? "/vendor/dashboard" : `/vendor${pathname}`;
-    return NextResponse.rewrite(url);
+    default:
+      return NextResponse.next();
   }
-
-  if (!slug || slug.includes(".") || RESERVED_SLUGS.has(slug)) {
-    return NextResponse.next();
-  }
-
-  if (pathname === "/") {
-    const url = req.nextUrl.clone();
-    url.pathname = `/t/${slug}`;
-    return NextResponse.rewrite(url);
-  }
-  // Public intake forms belong to the tenant's own face: acme.<root>/f/<form>
-  // serves the same page as /t/acme/f/<form> rather than bouncing to the apex.
-  // /fl/<token> is the emailed capability link for the same forms.
-  if (pathname.startsWith("/f/") || pathname.startsWith("/fl/")) {
-    const url = req.nextUrl.clone();
-    url.pathname = `/t/${slug}${pathname}`;
-    return NextResponse.rewrite(url);
-  }
-  // Portal and review links don't need the slug in the path — the token
-  // alone resolves the tenant — so they pass through unchanged rather than
-  // bouncing to the apex, keeping the branded acme.<root> URL that was
-  // actually emailed.
-  if (pathname.startsWith("/portal/") || pathname.startsWith("/r/")) {
-    return NextResponse.next();
-  }
-  return NextResponse.redirect(`${protocol}//${root}${pathname}${search}`, 308);
 }
 
 export const config = {

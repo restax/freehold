@@ -49,6 +49,7 @@ export default async function SitePreview() {
   return (
     <TenantSiteView
       name={org.name}
+      slug={org.slug}
       logoUrl={org.logo}
       site={site}
       publicForms={publicForms}

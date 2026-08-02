@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  blockHiddenReason,
   defaultBlocks,
   linesOf,
   newSiteBlock,
   normalizeSiteBlocks,
   parseSiteBlocks,
+  referencedImageIds,
   type SiteBlock,
   siteBlocks,
+  siteImageId,
+  siteImageRef,
+  siteImageUrl,
 } from "./site-blocks";
 
 describe("parseSiteBlocks", () => {
@@ -120,5 +125,70 @@ describe("helpers", () => {
     for (const type of ["hero", "about", "services", "text", "image", "testimonial"] as const) {
       expect(newSiteBlock(type, "gen")).toMatchObject({ id: "gen", type });
     }
+  });
+});
+
+describe("image refs", () => {
+  it("round-trips an uploaded image id", () => {
+    expect(siteImageId(siteImageRef("abc-123"))).toBe("abc-123");
+  });
+
+  it("treats anything else as a literal URL, not a ref", () => {
+    expect(siteImageId("https://example.com/a.jpg")).toBeNull();
+    expect(siteImageId(undefined)).toBeNull();
+    // A prefix with nothing after it is a broken ref, not an empty-id ref.
+    expect(siteImageId("siteimg:")).toBeNull();
+  });
+
+  it("addresses uploads through the tenant's slug and passes URLs through", () => {
+    expect(siteImageUrl(siteImageRef("img1"), "acme")).toBe("/api/site-image/acme/img1");
+    expect(siteImageUrl("https://example.com/a.jpg", "acme")).toBe("https://example.com/a.jpg");
+    expect(siteImageUrl(undefined, "acme")).toBeUndefined();
+  });
+
+  it("escapes the slug and id rather than letting them shape the path", () => {
+    expect(siteImageUrl(siteImageRef("a/b"), "x y")).toBe("/api/site-image/x%20y/a%2Fb");
+  });
+
+  it("collects the uploads a layout still points at, ignoring pasted URLs", () => {
+    const blocks: SiteBlock[] = [
+      { id: "h", type: "hero", imageSrc: siteImageRef("one") },
+      { id: "i1", type: "image", src: siteImageRef("two") },
+      { id: "i2", type: "image", src: "https://example.com/x.jpg" },
+      { id: "i3", type: "image", src: siteImageRef("one") },
+      { id: "t", type: "text", heading: "no image here" },
+    ];
+    expect(referencedImageIds(blocks).sort()).toEqual(["one", "two"]);
+  });
+
+  it("reports nothing referenced for an empty layout, so a sweep clears everything", () => {
+    expect(referencedImageIds([])).toEqual([]);
+  });
+});
+
+describe("blockHiddenReason", () => {
+  it("flags the blocks the renderer skips", () => {
+    expect(blockHiddenReason({ id: "a", type: "text" }, true)).toMatch(/Empty/);
+    expect(blockHiddenReason({ id: "a", type: "about" }, true)).toMatch(/Empty/);
+    expect(blockHiddenReason({ id: "s", type: "services", items: [] }, true)).toMatch(/Empty/);
+    expect(blockHiddenReason({ id: "i", type: "image" }, true)).toMatch(/No photo/);
+    expect(blockHiddenReason({ id: "q", type: "testimonial" }, true)).toMatch(/No quote/);
+  });
+
+  it("stays quiet once the block has what it needs", () => {
+    expect(blockHiddenReason({ id: "a", type: "text", body: "hi" }, true)).toBeNull();
+    expect(blockHiddenReason({ id: "s", type: "services", items: ["x"] }, true)).toBeNull();
+    expect(blockHiddenReason({ id: "i", type: "image", src: "u" }, true)).toBeNull();
+    expect(blockHiddenReason({ id: "q", type: "testimonial", quote: "q" }, true)).toBeNull();
+  });
+
+  it("ties the forms block to whether anything is published", () => {
+    expect(blockHiddenReason({ id: "f", type: "forms" }, false)).toMatch(/publish a form/);
+    expect(blockHiddenReason({ id: "f", type: "forms" }, true)).toBeNull();
+  });
+
+  it("never hides hero or the contact form, which always render", () => {
+    expect(blockHiddenReason({ id: "h", type: "hero" }, false)).toBeNull();
+    expect(blockHiddenReason({ id: "r", type: "registration" }, false)).toBeNull();
   });
 });

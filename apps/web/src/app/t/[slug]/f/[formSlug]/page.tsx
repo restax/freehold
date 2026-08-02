@@ -6,6 +6,7 @@ import { FormBody } from "@/components/form-render";
 import { identifyForForm } from "@/lib/actions/form-identify";
 import { submitPublicForm } from "@/lib/actions/public-forms";
 import { layoutFields, parseLayout } from "@/lib/form-schema";
+import { publicTenantWhere } from "@/lib/public-tenant";
 
 export const dynamic = "force-dynamic";
 
@@ -28,9 +29,11 @@ type Props = {
  * out here, not a redirect, so its existence isn't advertised.
  */
 async function load(slug: string, formSlug: string) {
-  const org = await prisma.organization.findUnique({
-    where: { slug },
-    select: { id: true, name: true, logo: true },
+  // `slug` is a workspace slug, or a hostname when the workspace serves its
+  // forms from its own domain — see lib/public-tenant.ts.
+  const org = await prisma.organization.findFirst({
+    where: publicTenantWhere(slug),
+    select: { id: true, name: true, slug: true, logo: true },
   });
   if (!org) return null;
   const form = await withTenant(org.id, (tx) => tx.form.findFirst({ where: { slug: formSlug } }));
@@ -120,7 +123,7 @@ export default async function PublicFormPage({ params, searchParams }: Props) {
               </p>
             )}
             <form action={identifyForForm} className="flex flex-col gap-4">
-              <input type="hidden" name="orgSlug" value={slug} />
+              <input type="hidden" name="orgSlug" value={org.slug} />
               <input type="hidden" name="formSlug" value={formSlug} />
               <input
                 type="text"
@@ -172,7 +175,7 @@ export default async function PublicFormPage({ params, searchParams }: Props) {
               </p>
             )}
             <form action={submitPublicForm} className="flex flex-col gap-5">
-              <input type="hidden" name="orgSlug" value={slug} />
+              <input type="hidden" name="orgSlug" value={org.slug} />
               <input type="hidden" name="formSlug" value={formSlug} />
               {/* Honeypot — hidden from people, irresistible to bots. */}
               <input

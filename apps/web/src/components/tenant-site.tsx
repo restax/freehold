@@ -1,6 +1,6 @@
 import { CheckCircle, EnvelopeSimple, Phone } from "@phosphor-icons/react/dist/ssr";
 import { PhoneInput } from "@/components/phone-input";
-import { type AboutBlock, type SiteBlock, siteBlocks } from "@/lib/site-blocks";
+import { type AboutBlock, type SiteBlock, siteBlocks, siteImageUrl } from "@/lib/site-blocks";
 import type { TenantSiteConfig } from "@/lib/site-config";
 import { siteMenu } from "@/lib/site-menu";
 
@@ -22,6 +22,7 @@ const labelCls = "flex flex-col gap-1.5 text-sm font-medium text-stone-700";
 
 export function TenantSiteView({
   name,
+  slug = "",
   logoUrl,
   site,
   thanks,
@@ -33,6 +34,12 @@ export function TenantSiteView({
   formBase = "/f",
 }: {
   name: string;
+  /**
+   * The workspace slug, used to address uploaded photographs
+   * (/api/site-image/<slug>/<id>). Blank on /example-site, which is fictional
+   * and only ever uses static images.
+   */
+  slug?: string;
   logoUrl?: string | null;
   site: TenantSiteConfig;
   thanks: boolean;
@@ -160,7 +167,7 @@ export function TenantSiteView({
                   )}
                 </div>
                 <img
-                  src={block.imageSrc || heroImageSrc}
+                  src={siteImageUrl(block.imageSrc, slug) || heroImageSrc}
                   alt=""
                   className="aspect-[16/10] w-full rounded-2xl object-cover"
                 />
@@ -221,7 +228,7 @@ export function TenantSiteView({
             return (
               <section key={block.id} className="mx-auto max-w-6xl px-5 pb-16 sm:px-8">
                 <img
-                  src={block.src}
+                  src={siteImageUrl(block.src, slug)}
                   alt={block.alt ?? ""}
                   className="aspect-[21/9] w-full rounded-2xl object-cover"
                 />
