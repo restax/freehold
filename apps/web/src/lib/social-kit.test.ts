@@ -1,11 +1,14 @@
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ASSET_GROUPS, DEMO_VIDEOS, PRESENTER_PROMPTS, SOCIAL_POSTS } from "./social-kit";
+import { ASSET_GROUPS, PRESENTER_PROMPTS, SOCIAL_POSTS } from "./social-kit";
 
 const PUBLIC_SOCIAL = join(process.cwd(), "public", "marketing", "social");
-const onDisk = new Set(readdirSync(PUBLIC_SOCIAL));
-const videosOnDisk = new Set(readdirSync(join(PUBLIC_SOCIAL, "video")));
+const topLevel = new Set(readdirSync(PUBLIC_SOCIAL));
+// Assets may live one level down (e.g. "presenter/shot-1.jpg"); check both.
+const onDisk = {
+  has: (file: string) => topLevel.has(file) || existsSync(join(PUBLIC_SOCIAL, file)),
+};
 
 describe("the post list", () => {
   it("has unique ids", () => {
@@ -150,22 +153,9 @@ describe("the asset manifest", () => {
 
   it("ships every screenshot that exists, so none is quietly forgotten", () => {
     const listed = new Set(ASSET_GROUPS.flatMap((g) => g.items.map((i) => i.file)));
-    for (const f of onDisk) {
+    for (const f of topLevel) {
       if (f.startsWith("shot-")) expect(listed.has(f), f).toBe(true);
     }
-  });
-});
-
-describe("the demo videos", () => {
-  it("point at real files, with their narration script beside them", () => {
-    for (const v of DEMO_VIDEOS) {
-      expect(videosOnDisk.has(v.file), v.file).toBe(true);
-      expect(videosOnDisk.has(v.script), v.script).toBe(true);
-    }
-  });
-
-  it("are short enough for social", () => {
-    for (const v of DEMO_VIDEOS) expect(v.seconds, v.file).toBeLessThan(90);
   });
 });
 

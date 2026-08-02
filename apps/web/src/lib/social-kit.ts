@@ -79,6 +79,7 @@ export const SOCIAL_POSTS: SocialPost[] = [
     length: "short",
     angle: "Support",
     body: `Support is a real phone number and live chat. A person answers. That shouldn't be a feature in 2026, but here we are. ${SITE}`,
+    suggestedAsset: "presenter/shot-3-on-phone.jpg",
   },
   {
     id: "s6",
@@ -334,6 +335,7 @@ And there's a free listing on FindTCPros.com with every paid account, where agen
     length: "short",
     angle: "Support",
     body: `Freehold customers get a real phone number and live chat. No voicemail, no ticket queue. You call, a person answers: ${SITE}`,
+    suggestedAsset: "presenter/shot-3-on-phone.jpg",
   },
   {
     id: "c6",
@@ -501,6 +503,18 @@ export const ASSET_GROUPS: AssetGroup[] = [
     ],
   },
   {
+    title: "Presenter photos",
+    note: "The same woman across every shot, for posts that want a face rather than a screenshot. The laptop screens are real product screenshots, composited in, not generated.",
+    items: [
+      { file: "presenter/shot-1-freehold-onscreen.jpg", label: "Presenting, homepage on screen" },
+      {
+        file: "presenter/shot-2-portal-onscreen.jpg",
+        label: "At the laptop, client portal on screen",
+      },
+      { file: "presenter/shot-3-on-phone.jpg", label: "On a support call" },
+    ],
+  },
+  {
     title: "Screenshots",
     note: "Real captures of the product with sample data. Copy any of them straight into a post.",
     items: [
@@ -520,40 +534,6 @@ export const ASSET_GROUPS: AssetGroup[] = [
       { file: "shot-voice.png", label: "Voice search" },
       { file: "shot-invoices.png", label: "Invoices" },
     ],
-  },
-];
-
-export interface DemoVideo {
-  file: string;
-  title: string;
-  seconds: number;
-  script: string;
-}
-
-export const DEMO_VIDEOS: DemoVideo[] = [
-  {
-    file: "freehold-01-tour.mp4",
-    title: "A quick tour",
-    seconds: 19,
-    script: "vo-01-tour.txt",
-  },
-  {
-    file: "freehold-02-attachments.mp4",
-    title: "Documents and the checklist",
-    seconds: 35,
-    script: "vo-02-attachments.txt",
-  },
-  {
-    file: "freehold-03-voice.mp4",
-    title: "Just ask for what you need",
-    seconds: 24,
-    script: "vo-03-voice.txt",
-  },
-  {
-    file: "freehold-04-portal.mp4",
-    title: "What your client sees",
-    seconds: 12,
-    script: "vo-04-portal.txt",
   },
 ];
 

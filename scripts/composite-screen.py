@@ -9,7 +9,7 @@ from PIL import Image
 from scipy import ndimage
 
 PHOTO = "/tmp/presenter-blank.png"
-SHOT = "/Users/paul/Documents/Coding/TC Website/apps/web/public/marketing/shots/shot-transactions.png"
+SHOT = "/tmp/shot-hero.png"
 OUT = "/tmp/presenter-composited.png"
 
 photo = Image.open(PHOTO).convert("RGB")

@@ -27,16 +27,12 @@ import {
 import { ScreenshotFigure } from "@/components/screenshot-figure";
 import { VoiceDemo } from "@/components/voice-demo";
 import { getSession } from "@/lib/session";
-import brokerageDusk from "../../public/marketing/brokerage-dusk.jpg";
-import closingKeys from "../../public/marketing/closing-keys.jpg";
-import movingDay from "../../public/marketing/moving-day.jpg";
 import shotAgentPortal from "../../public/marketing/shots/shot-agent-portal.png";
 import shotContacts from "../../public/marketing/shots/shot-contacts.png";
 import shotIntakeForm from "../../public/marketing/shots/shot-intake-form.png";
 import shotThemes from "../../public/marketing/shots/shot-themes.png";
 import shotTransactions from "../../public/marketing/shots/shot-transactions.png";
 import shotVoice from "../../public/marketing/shots/shot-voice.png";
-import tcAtWork from "../../public/marketing/tc-at-work.jpg";
 
 export const metadata = {
   title: "Freehold: the TC platform your clients will love",
@@ -346,15 +342,6 @@ export default async function LandingPage() {
               new closing starts itself.
             </p>
           </div>
-          <div className="relative min-h-44 overflow-hidden rounded-xl border border-stone-200/70">
-            <Image
-              src={closingKeys}
-              alt="House keys resting on a signed closing document"
-              fill
-              sizes="(min-width: 1024px) 33vw, 100vw"
-              className="object-cover"
-            />
-          </div>
           {BENTO.map(({ icon: Icon, title, body, cls }) => (
             <div key={title} className={`rounded-xl p-6 ${cls}`}>
               <Icon size={26} weight="regular" aria-hidden className="text-brand-700" />
@@ -420,26 +407,17 @@ export default async function LandingPage() {
 
       {/* Straight to the price */}
       <section className="border-b border-stone-200/70 bg-stone-50">
-        <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:py-24">
-          <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-stone-200/70">
-            <Image
-              src={movingDay}
-              alt="Moving boxes on the doorstep of a home with a green front door"
-              fill
-              sizes="(min-width: 1024px) 50vw, 100vw"
-              className="object-cover"
-            />
-          </div>
+        <div className="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6 lg:py-24">
           <div>
             <h2 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
               The price, plainly.
             </h2>
-            <p className="mt-3 max-w-md leading-relaxed text-stone-600">
+            <p className="mx-auto mt-3 max-w-md leading-relaxed text-stone-600">
               Start free. When you are running more than five closings at a time, Cloud Pro is $40 a
               month. That is the whole price: the AI, the portals, the templates, and support are
               all in it.
             </p>
-            <dl className="mt-7 grid grid-cols-3 gap-4">
+            <dl className="mx-auto mt-7 grid max-w-xl grid-cols-3 gap-4">
               <div>
                 <dt className="sr-only">Free active closings</dt>
                 <dd className="font-display text-4xl font-bold tabular-nums text-brand-700">5</dd>
@@ -472,20 +450,8 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* Communication (dark photo section) */}
-      <section className="relative overflow-hidden">
-        <Image
-          src={tcAtWork}
-          alt="A transaction coordinator reviewing paperwork at a desk"
-          fill
-          sizes="100vw"
-          className="object-cover"
-        />
-        <div aria-hidden className="absolute inset-0 bg-stone-900/60" />
-        <div
-          aria-hidden
-          className="absolute inset-0 bg-gradient-to-r from-stone-900/80 via-stone-900/50 to-transparent"
-        />
+      {/* Communication (dark section) */}
+      <section className="relative overflow-hidden bg-[linear-gradient(165deg,#1c1917_0%,#292524_60%,#1c1917_100%)]">
         <div className="relative mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
           <h2 className="max-w-md text-3xl font-semibold tracking-tight text-white md:text-4xl">
             The best-informed people in the deal are yours.
@@ -679,15 +645,6 @@ export default async function LandingPage() {
             </a>
           </div>
           <div className="flex flex-col gap-4">
-            <div className="relative aspect-[21/9] overflow-hidden rounded-xl border border-stone-200/70">
-              <Image
-                src={brokerageDusk}
-                alt="A brokerage office interior at dusk"
-                fill
-                sizes="(min-width: 1024px) 50vw, 100vw"
-                className="object-cover"
-              />
-            </div>
             <div className="rounded-xl border border-stone-200/70 bg-white p-5">
               <h3 className="text-sm font-medium">Isolated instances</h3>
               <p className="mt-1 text-sm leading-relaxed text-stone-600">
