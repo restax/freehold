@@ -173,7 +173,32 @@ export function makeOpenSignAdapter(override?: OpenSignConfig): EsignAdapter {
           document: {
             Name: title,
             URL: url,
+            // KNOWN GAP (2026-08-02): OpenSign expects these to be Pointers to
+            // contracts_Contactbook rows that each carry a UserId, not inline
+            // name/email objects. Inline works for send + status polling (both
+            // live-verified) but breaks the guest *signing* page: DocumentAftersave's
+            // updateAclDoc does Signers.map(i => i.UserId) then reads .objectId off
+            // each, so an inline signer throws and the doc never gets a signer ACL.
+            // Fixing properly means provisioning a Contactbook contact per signer
+            // before creating the document. Until then OpenSign can send and report
+            // status but a signer cannot actually complete a signature.
             Signers: signers.map((s) => ({ Name: s.name, Email: s.email })),
+            // Required even though createdocumentfromapp.js doesn't validate its
+            // presence: every downstream guest-signing path (linkContactToDoc's
+            // saveRoleContact) dereferences CreatedBy.objectId and throws if it's
+            // missing — a failure that only surfaces once a signer actually opens
+            // the doc, never at send time. Live-verified 2026-08-02: omitting this
+            // sent successfully but crashed guest sign-in with a 403 downstream.
+            CreatedBy: { __type: "Pointer", className: "_User", objectId: override.orgId },
+            // Also required for the guest-signing flow (recipientSignPdf / the
+            // login/<base64> link) to resolve who's allowed to sign — Signers
+            // alone drives createEnvelope's own status polling, but Placeholders
+            // is the field linkContactToDoc.js actually looks up by email.
+            Placeholders: signers.map((s, i) => ({
+              email: s.email,
+              Role: `signer${i + 1}`,
+              order: i + 1,
+            })),
             SentToOthers: true,
             SendinOrder: false,
           },
