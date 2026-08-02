@@ -5,7 +5,11 @@ import { getEsignAdapter } from "@freehold/integrations";
 import { revalidatePath } from "next/cache";
 import { esignOverrides } from "@/lib/esign-config";
 import { confirmed, str } from "@/lib/forms";
-import { markEnvelopeSignaturesComplete, writeBackSignedCopy } from "@/lib/signature-sync";
+import {
+  markEnvelopeSignaturesComplete,
+  notifySignerLinks,
+  writeBackSignedCopy,
+} from "@/lib/signature-sync";
 import { getObjectBytes } from "@/lib/storage";
 import { requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
@@ -88,6 +92,15 @@ export async function sendForSignature(formData: FormData) {
       provider,
       signers,
     });
+    // Providers with no notification pipeline of their own (OpenSign) hand
+    // back a link per signer; providers with a real hosted account
+    // (Documenso/DocuSign) don't, because they already emailed the signer
+    // themselves — see CreateEnvelopeResult.signerLinks.
+    if (result.signerLinks?.length) {
+      await notifySignerLinks(tenantId, doc.transactionId, doc.filename, result.signerLinks).catch(
+        () => {},
+      );
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await withTenant(tenantId, (tx) =>

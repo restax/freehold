@@ -51,6 +51,27 @@ describe("status mapping", () => {
     expect(_openSignInternals.mapStatus({}).status).toBe("SENT");
     expect(_openSignInternals.mapStatus(undefined).status).toBe("SENT");
   });
+
+  it("builds the guest-signing link the way GuestLogin.jsx decodes it", () => {
+    const prevUrl = process.env.FREEHOLD_OPENSIGN_URL;
+    const prevAppId = process.env.FREEHOLD_OPENSIGN_APP_ID;
+    process.env.FREEHOLD_OPENSIGN_URL = "https://sign.example.com/";
+    process.env.FREEHOLD_OPENSIGN_APP_ID = "opensign";
+    try {
+      const url = _openSignInternals.signInUrl("doc123", "signer@example.com");
+      expect(url).toBe(
+        `https://sign.example.com/login/${Buffer.from("doc123/signer@example.com").toString("base64")}`,
+      );
+      const [docId, email] = Buffer.from(url.split("/login/")[1], "base64").toString().split("/");
+      expect(docId).toBe("doc123");
+      expect(email).toBe("signer@example.com");
+    } finally {
+      if (prevUrl === undefined) delete process.env.FREEHOLD_OPENSIGN_URL;
+      else process.env.FREEHOLD_OPENSIGN_URL = prevUrl;
+      if (prevAppId === undefined) delete process.env.FREEHOLD_OPENSIGN_APP_ID;
+      else process.env.FREEHOLD_OPENSIGN_APP_ID = prevAppId;
+    }
+  });
 });
 
 describe("opensign envelope flow", () => {

@@ -21,6 +21,15 @@ export interface CreateEnvelopeInput {
 export interface CreateEnvelopeResult {
   /** Provider-side id; null for providers with no external system (MANUAL). */
   externalId: string | null;
+  /**
+   * Direct per-signer links, set only by providers that don't email the
+   * signer themselves. Documenso/DocuSign are real hosted accounts that
+   * notify signers natively, so this stays undefined for them — Freehold
+   * would just be duplicating a notification that already went out. OpenSign
+   * is the one provider Freehold operates itself with no mail configured, so
+   * it hands these back and app code is responsible for notifying.
+   */
+  signerLinks?: Array<{ email: string; url: string }>;
 }
 
 export type EnvelopeExternalStatus = "SENT" | "COMPLETED" | "DECLINED";

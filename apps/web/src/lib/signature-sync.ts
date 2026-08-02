@@ -1,7 +1,10 @@
-import { withTenant } from "@freehold/db";
+import { prisma, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
+import { emailEnabled, sendTenantEmail } from "@/lib/email";
+import { renderEmailHtml } from "@/lib/email-template";
 import { readSignatureState, signAll, signerParties } from "@/lib/signature-tracking";
 import { putObject } from "@/lib/storage";
+import { parseAppearance, resolveEmailAccent } from "@/lib/theme";
 
 /**
  * An e-signature envelope came back complete, so whatever it signed is signed.
@@ -102,4 +105,41 @@ export async function writeBackSignedCopy(
     });
   });
   revalidatePath(`/dashboard/transactions/${transactionId}`);
+}
+
+/**
+ * Email each signer their direct link, for providers whose `createEnvelope`
+ * came back with `signerLinks` — today, only OpenSign. Documenso/DocuSign are
+ * real hosted accounts that notify signers natively; adding a second email
+ * on top would be a duplicate, not a fix, so this is never called for them.
+ *
+ * Best-effort per recipient: one bad address must not lose the others, and a
+ * mail outage must not turn a successful send into an ERROR envelope — the
+ * document is genuinely out for signature either way, just harder to find.
+ */
+export async function notifySignerLinks(
+  tenantId: string,
+  transactionId: string,
+  documentTitle: string,
+  signerLinks: Array<{ email: string; url: string }>,
+): Promise<void> {
+  if (!emailEnabled() || signerLinks.length === 0) return;
+  const org = await prisma.organization.findUnique({
+    where: { id: tenantId },
+    select: { name: true, appearanceConfig: true },
+  });
+  if (!org) return;
+  const accent = resolveEmailAccent(parseAppearance(org.appearanceConfig));
+
+  for (const { email, url } of signerLinks) {
+    const body = `You have a document to sign: **${documentTitle}**.\n\n[Open and sign it](${url})\n\nThis link is yours alone — please don't forward it.`;
+    await sendTenantEmail({
+      tenantId,
+      transactionId,
+      to: email,
+      subject: `Please sign: ${documentTitle}`,
+      body,
+      html: renderEmailHtml({ tenantName: org.name, body, accent }),
+    }).catch(() => {});
+  }
 }

@@ -53,6 +53,17 @@ function mount(): string {
   return (process.env.FREEHOLD_OPENSIGN_MOUNT ?? "/app").replace(/\/$/, "");
 }
 
+/**
+ * The signing page's own login link — same origin as the API (FREEHOLD_OPENSIGN_URL,
+ * not the mounted API path), decoded client-side by GuestLogin.jsx as
+ * `atob(base64).split("/")`. Live-verified 2026-08-02.
+ */
+function signInUrl(docId: string, email: string): string {
+  const base = envBase();
+  const token = Buffer.from(`${docId}/${email}`).toString("base64");
+  return `${base?.url ?? ""}/login/${token}`;
+}
+
 async function parseRequest(
   path: string,
   init: RequestInit & { sessionToken?: string; masterKey?: boolean } = {},
@@ -498,7 +509,20 @@ export function makeOpenSignAdapter(override?: OpenSignConfig): EsignAdapter {
         }),
       });
       const json = (await res.json()) as { result: { objectId: string } };
-      return { externalId: json.result.objectId };
+      const externalId = json.result.objectId;
+      return {
+        externalId,
+        // OpenSign has no outbound mail configured (it's arm's-length
+        // infrastructure Freehold operates, not a hosted account with its
+        // own notification pipeline — see createOpenSignUser's comment), so
+        // there's no other way a signer finds out this exists. This is the
+        // exact link the guest-signing flow expects: base64("<docId>/<email>"),
+        // matching OpenSignServer's createBatchDocs.js signPdf construction.
+        signerLinks: contacts.map((c) => ({
+          email: c.email,
+          url: signInUrl(externalId, c.email),
+        })),
+      };
     },
 
     async getStatus(externalId) {
@@ -515,4 +539,4 @@ export function makeOpenSignAdapter(override?: OpenSignConfig): EsignAdapter {
 
 export const openSignAdapter: EsignAdapter = makeOpenSignAdapter();
 
-export const _openSignInternals = { mapStatus };
+export const _openSignInternals = { mapStatus, signInUrl };
