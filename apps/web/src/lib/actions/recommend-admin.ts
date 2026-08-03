@@ -64,16 +64,25 @@ export async function sendRecommendationFromAdmin(formData: FormData) {
       where: { slug: CRM_SOURCE_ORG_SLUG },
       select: { id: true },
     });
+    if (!org) console.error("sendRecommendationFromAdmin: no org with slug", CRM_SOURCE_ORG_SLUG);
     const conn = org ? await loadTwentyConnection(org.id) : null;
+    if (!conn) console.error("sendRecommendationFromAdmin: no Twenty connection for org", org?.id);
     if (conn) {
       const person = await sendTwentyLead(conn, { name, email, phone: phone || null }).catch(
-        () => ({ ok: false }) as const,
+        (err) => {
+          console.error("sendRecommendationFromAdmin: sendTwentyLead threw", err);
+          return { ok: false } as const;
+        },
       );
       if (person.ok) {
         crmSyncedAt = new Date();
         if (note && person.id) {
-          await sendTwentyNote(conn, person.id, note).catch(() => {});
+          await sendTwentyNote(conn, person.id, note).catch((err) =>
+            console.error("sendRecommendationFromAdmin: sendTwentyNote threw", err),
+          );
         }
+      } else {
+        console.error("sendRecommendationFromAdmin: sendTwentyLead not ok");
       }
     }
   }

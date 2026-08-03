@@ -34,7 +34,8 @@ export async function loadTwentyConnection(tenantId: string): Promise<TwentyConn
   if (!stored) return null;
   try {
     return { url: stored.url, apiKey: decryptSecret(stored.enc, loadMasterKey()) };
-  } catch {
+  } catch (err) {
+    console.error("loadTwentyConnection: decrypt failed", err);
     return null;
   }
 }
@@ -134,10 +135,18 @@ export async function sendTwentyLead(
       }),
       signal: AbortSignal.timeout(10_000),
     });
-    if (!res.ok) return { ok: false };
+    if (!res.ok) {
+      console.error(
+        "sendTwentyLead: non-ok response",
+        res.status,
+        await res.text().catch(() => ""),
+      );
+      return { ok: false };
+    }
     const body = (await res.json()) as { data?: { createPerson?: { id?: string } } };
     return { ok: true, id: body.data?.createPerson?.id };
-  } catch {
+  } catch (err) {
+    console.error("sendTwentyLead: threw", err);
     return { ok: false };
   }
 }
