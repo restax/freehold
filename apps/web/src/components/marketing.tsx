@@ -137,6 +137,14 @@ export function MarketingFooter() {
           <ul className="mt-3 flex flex-col gap-2 text-sm text-stone-500">
             <li>
               <a
+                href="https://github.com/restax/freehold"
+                className="transition-colors hover:text-stone-900"
+              >
+                GitHub
+              </a>
+            </li>
+            <li>
+              <a
                 href="https://github.com/restax/freehold/blob/main/docs/SELF-HOSTING.md"
                 className="transition-colors hover:text-stone-900"
               >
@@ -174,6 +182,11 @@ export function MarketingFooter() {
             <li>
               <Link href="/signup" className="transition-colors hover:text-stone-900">
                 Create an account
+              </Link>
+            </li>
+            <li>
+              <Link href="/recommend" className="transition-colors hover:text-stone-900">
+                Recommend a friend
               </Link>
             </li>
             <li>
