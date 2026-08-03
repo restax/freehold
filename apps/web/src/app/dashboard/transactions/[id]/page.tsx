@@ -1036,6 +1036,7 @@ export default async function TransactionDetailPage({
               to say, so it never becomes furniture people learn to ignore. */}
           <HandbookRecap notes={handbookPool} grades={handbookGrades} />
           <SectionCard
+            tour="txn-key-dates"
             title="Key dates"
             icon={<CalendarBlank size={15} weight="fill" aria-hidden />}
             action={
@@ -1279,6 +1280,7 @@ export default async function TransactionDetailPage({
           </nav>
           {tab === "tasks" && (
             <SectionCard
+              tour="txn-tasks"
               title="Tasks"
               icon={<CheckSquare size={15} weight="fill" aria-hidden />}
               count={`${openCount} open`}
@@ -1357,6 +1359,7 @@ export default async function TransactionDetailPage({
                 </p>
               )}
               <SectionCard
+                tour="txn-attachments"
                 title="Attachments"
                 icon={<FilePdf size={15} weight="fill" aria-hidden />}
                 count={

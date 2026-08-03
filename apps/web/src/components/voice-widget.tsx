@@ -236,7 +236,10 @@ export function VoiceWidget({ portalToken }: { portalToken?: string }) {
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
+    <div
+      data-tour="voice-widget"
+      className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3"
+    >
       {open && (
         <div className="flex w-80 flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-xl">
           <div className="flex items-center justify-between bg-brand-700 px-4 py-3 text-white">

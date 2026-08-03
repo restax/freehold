@@ -2,6 +2,7 @@ import { prisma, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { DashboardNav } from "@/components/dashboard-nav";
+import { DemoTour } from "@/components/demo-tour";
 import { DemoWatermark } from "@/components/demo-watermark";
 import { Wordmark } from "@/components/marketing";
 import { SessionGuard } from "@/components/session-guard";
@@ -139,6 +140,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
       style={{ ...themeVars, ...priorityVars(appearance) } as React.CSSProperties}
     >
       {isDemoTenant && <DemoWatermark />}
+      {/* In the layout rather than a page: the tour walks a dozen routes, and
+          a page-mounted tour would unmount (and stop talking) on the first
+          navigation it makes. */}
+      {isDemoTenant && <DemoTour />}
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:shadow-md"

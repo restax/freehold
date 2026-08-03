@@ -335,7 +335,7 @@ export default async function ProfilePage({
         </SectionCard>
       )}
 
-      <SectionCard title="Your licenses">
+      <SectionCard title="Your licenses" tour="profile-licenses">
         <p className="mb-3 text-sm text-stone-500">
           States where you hold a license, with an optional uploaded copy. Some states require a
           licensed coordinator on every file — your workspace's rules live in Settings.

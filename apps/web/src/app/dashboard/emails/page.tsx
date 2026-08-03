@@ -294,7 +294,7 @@ export default async function EmailTemplatesPage() {
         )}
       </SectionCard>
 
-      <SectionCard title="Template library">
+      <SectionCard title="Template library" tour="email-templates">
         <p className="text-sm text-stone-500">
           Reusable email templates now live in the Templates hub, grouped and one click from any
           task.{" "}

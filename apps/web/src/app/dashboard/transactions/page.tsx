@@ -436,7 +436,7 @@ export default async function TransactionsPage({
           narrows the list and reads the result in one glance, instead of
           scrolling past a panel to see what it did. */}
       <div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
-        <form className={`${card} flex flex-col gap-4`}>
+        <form data-tour="txn-filters" className={`${card} flex flex-col gap-4`}>
           <input type="hidden" name="view" value={view} />
           {filters.q && <input type="hidden" name="q" value={filters.q} />}
           <div className="flex items-center justify-between">

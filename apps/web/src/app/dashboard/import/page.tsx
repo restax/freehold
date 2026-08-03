@@ -166,7 +166,7 @@ export default async function ImportPage() {
         </section>
       )}
 
-      <SectionCard title="Your data">
+      <SectionCard title="Your data" tour="data-export">
         <p className="mb-3 text-sm text-stone-500">
           Everything in this workspace — transactions, contacts, clients, tasks, and every document
           — as one ZIP you can take anywhere. Freehold is source-available, so this export plus the{" "}

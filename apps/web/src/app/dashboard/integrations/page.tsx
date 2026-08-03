@@ -516,7 +516,11 @@ export default async function IntegrationsPage({
               {items.map((c) => {
                 const b = branding.get(c.key);
                 return (
-                  <section key={c.name} className={`${card} flex gap-4`}>
+                  <section
+                    key={c.name}
+                    data-tour={`integration-${c.key}`}
+                    className={`${card} flex gap-4`}
+                  >
                     {b?.logo ? (
                       // biome-ignore lint/performance/noImgElement: an operator-uploaded data URL, not a bundled asset next/image can size.
                       <img

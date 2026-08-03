@@ -22,6 +22,7 @@ export function SectionCard({
   children,
   className = "",
   bodyClassName = "p-4",
+  tour,
 }: {
   title: string;
   /** Hover text on the title, for a section whose name needs a sentence. */
@@ -36,9 +37,16 @@ export function SectionCard({
   className?: string;
   /** Set to "" when the body supplies its own padding, e.g. a full-bleed table. */
   bodyClassName?: string;
+  /**
+   * Anchor id for the demo tour's spotlight (lib/demo-tour.ts). An attribute
+   * rather than a class or a structural selector, because markup gets
+   * refactored and an explicit anchor is a contract that survives it.
+   */
+  tour?: string;
 }) {
   return (
     <section
+      data-tour={tour}
       className={`overflow-hidden rounded-xl border border-stone-200/80 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04)] ${className}`}
     >
       <header className="flex items-center gap-2 border-b border-stone-200/80 bg-[var(--section-header)] px-4 py-2.5">

@@ -5,7 +5,6 @@ import { after } from "next/server";
 import { AddressPill } from "@/components/address-pill";
 import { StatusBadge, statusDot } from "@/components/badges";
 import { RangeSwitch, TopClientsChart, VolumeChart } from "@/components/dashboard-charts";
-import { DemoWelcome } from "@/components/demo-welcome";
 import { EmptyState } from "@/components/empty-state";
 import { HandbookGlance } from "@/components/handbook-glance";
 import { HubNews } from "@/components/hub-news";
@@ -99,7 +98,7 @@ async function GuestDashboard({ tenantId, userId }: { tenantId: string; userId: 
         <h1 className="font-display text-2xl font-bold tracking-tight">Your files</h1>
       </div>
       <div className="columns-1 gap-6 lg:columns-2 [&>*]:mb-6 [&>*]:break-inside-avoid">
-        <SectionCard title="Assigned to you">
+        <SectionCard title="Assigned to you" tour="day-assigned">
           <p className="mb-3 text-xs text-stone-400">
             You're working these files as outside coverage. You see only what you've been assigned.
           </p>
@@ -476,8 +475,6 @@ export default async function DashboardPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <DemoWelcome />
-
       {licenseAlerts.length > 0 && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
           <Warning size={14} weight="fill" className="mr-1 inline text-amber-600" aria-hidden />
@@ -824,7 +821,7 @@ export default async function DashboardPage({
             </SectionCard>
           )}
           {/* Week agenda */}
-          <SectionCard title="Next 7 days">
+          <SectionCard title="Next 7 days" tour="day-week">
             {agendaDays.length === 0 ? (
               <p className="text-sm text-stone-500">No deadlines or closings on the horizon.</p>
             ) : (

@@ -56,7 +56,9 @@ export default async function AdminSocialPage() {
               {byVoice("founder", "short").length + byVoice("founder", "long").length}
             </span>
           </h2>
-          <p className="text-xs text-stone-500">Founder only. These say &ldquo;I built this&rdquo;.</p>
+          <p className="text-xs text-stone-500">
+            Founder only. These say &ldquo;I built this&rdquo;.
+          </p>
         </div>
         <p className="mb-4 max-w-2xl text-sm leading-relaxed text-stone-600">
           First person, from the person who made it. This is the voice that works in a group where

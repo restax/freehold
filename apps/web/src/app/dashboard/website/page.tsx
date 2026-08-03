@@ -211,7 +211,7 @@ export default async function WebsitePage() {
       </div>
 
       {isAdmin && domainsAvailable && (
-        <SectionCard title="Your own domain">
+        <SectionCard title="Your own domain" tour="website-domain">
           <CustomDomainPanel
             domain={org.customDomain}
             status={org.customDomainStatus}
