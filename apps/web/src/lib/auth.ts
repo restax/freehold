@@ -6,6 +6,7 @@ import { emailOTP, mcp, organization, twoFactor, username } from "better-auth/pl
 import { MCP_SCOPES, mcpResourceUrl } from "@/lib/mcp";
 import { adminAlert } from "@/lib/notify";
 import { platformEmailEnabled, sendPlatformEmail } from "@/lib/platform-email";
+import { enforceSessionLimit } from "@/lib/session-limit";
 import {
   checkUsernameAvailability,
   normalizeUsername,
@@ -51,6 +52,16 @@ export const auth = betterAuth({
         "Reset your Freehold password",
         `We received a request to reset your Freehold password. Click the link below to choose a new one:\n\n${url}\n\nThis link expires in an hour. If you didn't request it, ignore this email — your password is unchanged.`,
       );
+    },
+  },
+  // Extra Session columns for the concurrent-desktop-session limit (see
+  // lib/session-limit.ts) — better-auth strips any field the adapter writes
+  // that isn't declared here, even though it's a real Prisma column.
+  session: {
+    additionalFields: {
+      deviceType: { type: "string", required: false, input: false },
+      revoked: { type: "boolean", required: false, defaultValue: false, input: false },
+      revokedReason: { type: "string", required: false, input: false },
     },
   },
   socialProviders,
@@ -128,6 +139,23 @@ export const auth = betterAuth({
         },
         after: async (user) => {
           adminAlert(`🆕 New Freehold signup: ${user.name} <${user.email}>`);
+        },
+      },
+    },
+    session: {
+      create: {
+        // Concurrent-desktop-session limit (Free/Pro only — see
+        // lib/session-limit.ts): classifies this session's device type and,
+        // for a non-exempt desktop sign-in, revokes any other live desktop
+        // session for this user from a different IP. ipAddress/userAgent are
+        // already resolved onto `session` by the time this runs.
+        before: async (session) => {
+          const { deviceType } = await enforceSessionLimit({
+            userId: session.userId,
+            ipAddress: (session as { ipAddress?: string }).ipAddress ?? null,
+            userAgent: (session as { userAgent?: string }).userAgent ?? null,
+          });
+          return { data: { deviceType } };
         },
       },
     },

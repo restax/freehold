@@ -348,7 +348,10 @@ export default async function AdminPage() {
         <h2 className="mb-1 font-medium">Coupons</h2>
         <p className="mb-3 text-xs text-stone-400">
           Codes work at checkout (customers type them) and can be applied to a workspace's active
-          subscription below — discounts hit upcoming months.
+          subscription below — discounts hit upcoming months. Check "Forever" for a locked-in price
+          that survives a later list-price increase (e.g. a launch discount) — after creating one,
+          find its Coupon ID in the Stripe dashboard (Product catalog → Coupons) to put in an env
+          var for auto-apply at checkout.
         </p>
         <form action={adminCreateCoupon} className="mb-4 flex flex-wrap items-end gap-3">
           <label className={labelCls}>
@@ -380,6 +383,10 @@ export default async function AdminPage() {
               required
               className={`${input} w-20`}
             />
+          </label>
+          <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
+            <input type="checkbox" name="forever" className="accent-brand-600" />
+            Forever (ignores Months)
           </label>
           <label className={labelCls}>
             Uses

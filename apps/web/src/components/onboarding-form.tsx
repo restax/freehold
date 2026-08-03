@@ -3,6 +3,7 @@
 import { tenantSlug } from "@freehold/db/slug";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { beginSignupTrial } from "@/lib/actions/billing";
 import { seedSampleData } from "@/lib/actions/sample-data";
 import { seedDefaultTemplatesFor } from "@/lib/actions/templates";
 import { authClient } from "@/lib/auth-client";
@@ -33,6 +34,9 @@ export function OnboardingForm() {
     // screen because an optional step (activation, sample seeding) failed.
     try {
       await authClient.organization.setActive({ organizationId: data.id });
+      // Every new workspace starts on a full-Pro trial, no card — see
+      // startSignupTrial in comp.ts for how and why.
+      await beginSignupTrial(data.id);
       // Default email templates always seed — they're built-ins, not sample data.
       await seedDefaultTemplatesFor(data.id);
       if (withSample) {

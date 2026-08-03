@@ -7,6 +7,7 @@ import { pruneMcpClients } from "@/lib/mcp-prune";
 import { flushOutbox } from "@/lib/outbox";
 import { runReviewRequests } from "@/lib/review-requests";
 import { sweepExpiredExports } from "@/lib/storage";
+import { runTrialDowngrades } from "@/lib/trial-downgrade";
 import { runVendorAdRenewals } from "@/lib/vendor-ad-renewals";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +41,7 @@ export async function GET(req: Request) {
   // Dynamic Client Registration leaves a client row per connection attempt;
   // this is the only thing that ever collects them.
   const mcpPrune = await pruneMcpClients();
+  const trialDowngrades = await runTrialDowngrades();
   return NextResponse.json({
     outbox,
     exports,
@@ -50,5 +52,6 @@ export async function GET(req: Request) {
     scheduledBilling,
     reviewRequests,
     mcpPrune,
+    trialDowngrades,
   });
 }

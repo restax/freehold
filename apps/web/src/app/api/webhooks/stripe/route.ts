@@ -120,6 +120,10 @@ export async function POST(req: Request) {
           subscriptionStatus: update.status,
           // Lock on a failed renewal; clear the lock the moment Stripe reports paid again.
           billingSuspendedAt: update.suspended ? new Date() : null,
+          // A real subscription supersedes any comp/trial override — a paid tier
+          // starting mid-trial shouldn't keep looking "comped" in admin. No-op
+          // if compTier is already null.
+          ...(update.tier !== "FREE" ? { compTier: null, compExpiresAt: null } : {}),
         },
       })
       .catch(() => {

@@ -43,6 +43,11 @@ model User {
   createdAt              DateTime              @default(now())
   updatedAt              DateTime              @updatedAt
   twoFactorEnabled       Boolean?              @map("two_factor_enabled")
+  /// Lifetime count of "signed in from a different location" kicks (Free/Pro
+  /// concurrent-desktop-session limit only — never incremented on Business).
+  /// No reset window by design; purely a display metric until it earns
+  /// enforcement — at 10, the dashboard shows an at-risk banner.
+  sessionKickCount       Int                   @default(0) @map("session_kick_count")
   twoFactors             TwoFactor[]
   sessions               Session[]
   accounts               Account[]
@@ -526,8 +531,18 @@ model Session {
   activeOrganizationId String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+  /// "desktop" | "mobile", classified from userAgent at creation. Drives the
+  /// concurrent-desktop-session limit — see session.create.before in auth.ts.
+  deviceType           String?  @map("device_type")
+  /// Set true when a newer desktop session from a different IP superseded
+  /// this one. expiresAt is also backdated to now on revoke, so ordinary
+  /// session lookups already treat it as dead; this flag exists so the
+  /// polling client can tell "kicked" apart from "just expired".
+  revoked              Boolean  @default(false) @map("revoked")
+  revokedReason        String?  @map("revoked_reason")
 
   @@index([userId])
+  @@index([userId, deviceType, revoked])
   @@map("session")
 }
 
@@ -757,9 +772,10 @@ model Organization {
   voiceQuotaResetAt        DateTime?                @map("voice_quota_reset_at")
   /// Prepaid AI credits (Cloud Free only). Spending one credit permanently
   /// unlocks pro AI features on a single transaction. Paid tiers ignore this —
-  /// their AI is unmetered. New workspaces start with 2; topped up by purchase
-  /// or coupon. The balance of record; every change is mirrored to CreditLedger.
-  aiCredits                Int                      @default(2) @map("ai_credits")
+  /// their AI is unmetered. New workspaces start with 0 — Free carries no
+  /// included AI; topped up only by purchase or coupon. The balance of
+  /// record; every change is mirrored to CreditLedger.
+  aiCredits                Int                      @default(0) @map("ai_credits")
   /// Operator override for this tenant's contract-extraction model. When set,
   /// heavy or costly workspaces run extraction on a cheaper model instead of
   /// the default. Null = platform default (FREEHOLD_AI_MODEL / Opus).

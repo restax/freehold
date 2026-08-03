@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { DashboardNav } from "@/components/dashboard-nav";
 import { DemoWatermark } from "@/components/demo-watermark";
 import { Wordmark } from "@/components/marketing";
+import { SessionGuard } from "@/components/session-guard";
 import { SignOutButton } from "@/components/sign-out-button";
 import { SupportTicketWidget } from "@/components/support-ticket-widget";
 import { TopBar } from "@/components/top-bar";
@@ -16,6 +17,7 @@ import { directoryNudgeDue, readDirectoryConfig } from "@/lib/directory";
 import { getTenantPlan, isCloud } from "@/lib/plans";
 import { getPlatformSettings } from "@/lib/platform-settings";
 import { getSession, listTenants } from "@/lib/session";
+import { hasBusinessMembership, SESSION_KICK_RISK_THRESHOLD } from "@/lib/session-limit";
 import { supportUnreadCount } from "@/lib/support-unread";
 import { GUEST_ROLE, getMemberRole } from "@/lib/tenant";
 import { btn } from "@/lib/ui";
@@ -109,6 +111,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const isDemoTenant = active?.slug === DEMO_SLUG;
 
+  // Persistent nudge once someone's account has racked up
+  // SESSION_KICK_RISK_THRESHOLD concurrent-session kicks — no enforcement
+  // yet, just a heads-up before it earns one. Business is exempt from the
+  // limit entirely, so it never sees this.
+  const userRow = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { sessionKickCount: true },
+  });
+  const sessionAtRisk =
+    (userRow?.sessionKickCount ?? 0) >= SESSION_KICK_RISK_THRESHOLD &&
+    !(await hasBusinessMembership(session.user.id));
+
   // The colour theme paints the whole dashboard the same way it paints the
   // portal: the tokens cover the brand ramp *and* the shaded section strips,
   // top bar and address pills, so one choice moves every themed surface.
@@ -190,12 +204,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
           flex item defaults to min-width:auto, which is what was pushing the
           whole page into a horizontal scroll on a narrow window. */}
         <main id="main" className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          {sessionAtRisk && (
+            <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              This account has been signed out of another location {SESSION_KICK_RISK_THRESHOLD}+
+              times for a new sign-in — Pro allows only one desktop session at a time. If that keeps
+              happening, this account risks being locked out. Business removes this limit.
+            </p>
+          )}
           <div className="mx-auto max-w-[1920px]">{children}</div>
         </main>
       </div>
       {/* Lives in the layout so voice search is one press away on every
           dashboard page, not just a destination you have to navigate to. */}
       <VoiceWidget />
+      <SessionGuard />
     </div>
   );
 }

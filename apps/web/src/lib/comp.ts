@@ -119,3 +119,29 @@ export async function revokeComp(tenantId: string): Promise<void> {
     data: { compTier: null, compExpiresAt: null },
   });
 }
+
+/** Days a brand-new signup gets full Pro before it lapses to Free. */
+export const SIGNUP_TRIAL_DAYS = 14;
+
+/**
+ * Every new signup starts here: full Pro (AI, voice, Handbook) with no card,
+ * for SIGNUP_TRIAL_DAYS. Reuses the comp-override mechanism rather than a
+ * dedicated schema field — the moment compExpiresAt passes, every existing
+ * read path (getTenantPlan, portalClientLimit, handbookState, proAllowed)
+ * already falls back to planTier (FREE) with no new enforcement code. The
+ * nightly runTrialDowngrades sweep (lib/trial-downgrade.ts) later clears
+ * compTier/compExpiresAt explicitly once the trial lapses unconverted, mostly
+ * so the org stops looking "comped" and to trigger the trial-ended email.
+ */
+export async function startSignupTrial(tenantId: string): Promise<void> {
+  const compExpiresAt = new Date();
+  compExpiresAt.setDate(compExpiresAt.getDate() + SIGNUP_TRIAL_DAYS);
+  await prisma.organization.update({
+    where: { id: tenantId },
+    data: {
+      compTier: "PRO",
+      compExpiresAt,
+      seatLimit: PLAN_INFO.PRO.includedSeats,
+    },
+  });
+}

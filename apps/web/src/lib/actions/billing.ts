@@ -11,16 +11,31 @@ import {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logAudit } from "@/lib/audit";
-import { redeemCompCode } from "@/lib/comp";
+import { redeemCompCode, startSignupTrial } from "@/lib/comp";
 import { redeemCreditCoupon } from "@/lib/credit-coupons";
 import { oneOf, str } from "@/lib/forms";
 import { launchCouponId } from "@/lib/launch-offer";
 import { PAYMENTS_PAUSED } from "@/lib/payments-paused";
 import { CREDIT_PACK_SIZES } from "@/lib/plans";
-import { requireAdminTenant } from "@/lib/tenant";
+import { requireAdminTenant, requireTenant } from "@/lib/tenant";
 
 function baseUrl(): string {
   return process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
+}
+
+/**
+ * Grant the new-signup Pro trial. Called right after workspace creation
+ * (onboarding form), so tenantId comes from the client — membership is
+ * verified before any write, same pattern as seedSampleData.
+ */
+export async function beginSignupTrial(tenantId: string) {
+  const { userId } = await requireTenant();
+  const membership = await prisma.member.findFirst({
+    where: { organizationId: tenantId, userId },
+    select: { id: true },
+  });
+  if (!membership) return;
+  await startSignupTrial(tenantId);
 }
 
 export async function startUpgrade(formData: FormData) {
@@ -39,9 +54,9 @@ export async function startUpgrade(formData: FormData) {
     customerEmail: session.user.email,
     existingCustomerId: org.stripeCustomerId,
     baseUrl: baseUrl(),
-    // Launch discount: auto-applied while the offer is live, so early signups
-    // lock in 50% off without typing a code.
-    couponId: launchCouponId(),
+    // Launch discount: auto-applied while that tier's offer is live, so early
+    // signups lock in the discount without typing a code.
+    couponId: launchCouponId(tier),
   });
   // Cart tracking for the operator analytics panel; never blocks checkout.
   await prisma.checkoutAttempt

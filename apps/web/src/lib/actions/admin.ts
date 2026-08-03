@@ -14,10 +14,13 @@ import { dateOnly, optStr, str } from "@/lib/forms";
 import { isOperator } from "@/lib/operator";
 import { requireTenant } from "@/lib/tenant";
 
-/** Operator: create a discount promotion code ($ off or free, N months). */
+/** Operator: create a discount promotion code ($ off or free, N months — or forever). */
 export async function adminCreateCoupon(formData: FormData) {
   if (!(await isOperator()) || !billingEnabled()) return;
   const code = str(formData, "code").trim().toUpperCase().replace(/\s+/g, "");
+  // "Forever" (a locked-in price that survives a later list-price increase)
+  // skips the month count entirely rather than picking an arbitrarily large one.
+  const forever = formData.get("forever") === "on";
   const months = Math.max(1, Math.min(24, Number(str(formData, "months")) || 1));
   const kind = str(formData, "kind"); // "amount" | "free"
   const amount = Number(optStr(formData, "amount") ?? 0);
@@ -34,6 +37,7 @@ export async function adminCreateCoupon(formData: FormData) {
   await createDiscountCoupon({
     code,
     months,
+    forever,
     maxRedemptions,
     ...(expiresAt ? { expiresAt } : {}),
     ...(kind === "free" ? { freeMonths: true } : { amountOffUsd: amount }),

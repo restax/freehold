@@ -29,32 +29,34 @@ export const PLAN_INFO: Record<
     priceMonthly: 0,
     includedSeats: 1,
     activeTransactionLimit: 2,
-    portalClientLimit: 15,
+    portalClientLimit: 5,
     voiceSessionsPerMonth: 0,
     handbook: false,
   },
   PRO: {
     label: "Pro",
-    priceMonthly: 40,
+    priceMonthly: 50,
     includedSeats: 2,
-    activeTransactionLimit: 50,
-    portalClientLimit: 50,
+    activeTransactionLimit: 8,
+    portalClientLimit: null,
     voiceSessionsPerMonth: 100,
     handbook: true,
   },
   BUSINESS: {
     label: "Business",
-    priceMonthly: 85,
+    priceMonthly: 80,
     includedSeats: 10,
-    activeTransactionLimit: 100,
-    portalClientLimit: 100,
+    activeTransactionLimit: null,
+    portalClientLimit: null,
     voiceSessionsPerMonth: 300,
     handbook: true,
   },
 };
 
-/** Credits a brand-new Free workspace starts with (mirrors the DB default). */
-export const FREE_STARTING_CREDITS = 2;
+/** Credits a brand-new Free workspace starts with (mirrors the DB default).
+ *  Zero: Free carries no included AI — buying a credit pack is the only way
+ *  to try AI without upgrading to Pro. */
+export const FREE_STARTING_CREDITS = 0;
 
 /**
  * Buyable credit packs. `credits` doubles as the pack key and maps to the
@@ -82,6 +84,8 @@ export interface TenantPlan {
   activeTransactionLimit: number | null;
   /** True when the effective tier comes from a complimentary grant, not Stripe. */
   comped: boolean;
+  /** When the comp grant lapses (null = comped indefinitely, or not comped at all). */
+  compExpiresAt: Date | null;
   /** True when the workspace is locked for a failed renewal (Cloud only). */
   suspended: boolean;
 }
@@ -92,7 +96,7 @@ function compIsActive(compTier: PlanTier | null, compExpiresAt: Date | null): bo
 }
 
 /** The tier that actually governs limits: a live comp overrides planTier. */
-function effectiveTier(org: {
+export function effectiveTier(org: {
   planTier: PlanTier;
   compTier: PlanTier | null;
   compExpiresAt: Date | null;
@@ -125,6 +129,7 @@ export async function getTenantPlan(tenantId: string): Promise<TenantPlan> {
     stripeSubscriptionId: org.stripeSubscriptionId,
     activeTransactionLimit: PLAN_INFO[tier].activeTransactionLimit,
     comped,
+    compExpiresAt: comped ? org.compExpiresAt : null,
     // A comp always beats a stale suspension flag; otherwise honor the lock on Cloud.
     suspended: !comped && isCloud() && org.billingSuspendedAt != null,
   };

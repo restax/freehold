@@ -45,6 +45,9 @@ export default async function BillingPage({
   ]);
   const freeMetered = isCloud() && plan.tier === "FREE";
   const info = PLAN_INFO[plan.tier];
+  const daysLeft = plan.compExpiresAt
+    ? Math.max(1, Math.ceil((plan.compExpiresAt.getTime() - Date.now()) / 86400000))
+    : null;
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
@@ -91,7 +94,17 @@ export default async function BillingPage({
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{creditError}</p>
       )}
 
-      {plan.comped && (
+      {plan.comped && plan.compExpiresAt && (
+        <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800">
+          <strong>
+            {info.label} trial — {daysLeft} day{daysLeft === 1 ? "" : "s"} left.
+          </strong>{" "}
+          Full access, no card needed yet. Add a card any time to keep {info.label} going after that
+          — you'll land on Free otherwise, no data lost.
+        </p>
+      )}
+
+      {plan.comped && !plan.compExpiresAt && (
         <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800">
           You're on a <strong>complimentary {info.label}</strong> plan — full access, no charge. No
           credit card is needed while this is active.
