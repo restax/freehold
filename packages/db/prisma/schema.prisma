@@ -1501,11 +1501,23 @@ model ClientReview {
 /// time the tracked link in the email is opened (see app/rec/[token]/route.ts);
 /// null forever means it was never opened.
 model FriendRecommendation {
-  id        String    @id @default(uuid())
-  email     String
-  token     String    @unique
-  sentAt    DateTime  @default(now()) @map("sent_at")
-  clickedAt DateTime? @map("clicked_at")
+  id    String  @id @default(uuid())
+  /// Set only on an operator-sent recommendation (the /admin/recommendations
+  /// form) — the public /recommend form only ever collects an email.
+  name  String?
+  email String
+  phone String?
+  /// Operator's own context on this lead, not shown in the email — pushed
+  /// to Twenty CRM as a Note on the created Person, if one is entered.
+  note  String?
+  token String  @unique
+
+  sentAt      DateTime  @default(now()) @map("sent_at")
+  clickedAt   DateTime? @map("clicked_at")
+  /// Set once this lead has been pushed to Twenty CRM (Acme Brokers Inc's
+  /// connection). Null forever means it was never synced, either because it
+  /// came from the public form (no CRM push attempted) or the sync failed.
+  crmSyncedAt DateTime? @map("crm_synced_at")
 
   @@index([sentAt])
   @@map("friend_recommendation")

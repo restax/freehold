@@ -112,11 +112,16 @@ export async function fetchTwentyPeople(
   return people.slice(0, max);
 }
 
-/** Create a person in Twenty — used to push website leads across. */
+/**
+ * Create a person in Twenty — used to push website leads across, and the
+ * recommend-a-friend admin form. Returns the created person's id (needed to
+ * attach a note) alongside the plain ok/fail the website-lead path already
+ * relies on.
+ */
 export async function sendTwentyLead(
   conn: TwentyConnection,
   lead: { name: string; email?: string | null; phone?: string | null },
-): Promise<boolean> {
+): Promise<{ ok: boolean; id?: string }> {
   const [firstName, ...rest_] = lead.name.split(" ");
   try {
     const res = await fetch(`${rest(conn.url)}/people`, {
@@ -129,7 +134,42 @@ export async function sendTwentyLead(
       }),
       signal: AbortSignal.timeout(10_000),
     });
-    return res.ok;
+    if (!res.ok) return { ok: false };
+    const body = (await res.json()) as { data?: { createPerson?: { id?: string } } };
+    return { ok: true, id: body.data?.createPerson?.id };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/**
+ * Attach a note to an existing person — Twenty's standard object model has
+ * no free-text field on Person itself, so a note is its own object plus a
+ * NoteTarget join row linking it to the person.
+ */
+export async function sendTwentyNote(
+  conn: TwentyConnection,
+  personId: string,
+  body: string,
+): Promise<boolean> {
+  try {
+    const noteRes = await fetch(`${rest(conn.url)}/notes`, {
+      method: "POST",
+      headers: headers(conn.apiKey),
+      body: JSON.stringify({ title: "From freeholdtc.dev/recommend", body }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!noteRes.ok) return false;
+    const note = (await noteRes.json()) as { data?: { createNote?: { id?: string } } };
+    const noteId = note.data?.createNote?.id;
+    if (!noteId) return false;
+    const targetRes = await fetch(`${rest(conn.url)}/noteTargets`, {
+      method: "POST",
+      headers: headers(conn.apiKey),
+      body: JSON.stringify({ noteId, personId }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    return targetRes.ok;
   } catch {
     return false;
   }
