@@ -78,7 +78,7 @@ export const TOUR_CHAPTERS: TourChapter[] = [
   {
     id: "platform",
     title: "The platform",
-    blurb: "Integrations, security, moving your data, and how support works.",
+    blurb: "What it connects to, and how Claude fits in securely.",
   },
 ];
 
@@ -199,8 +199,8 @@ export const TOUR_STOPS: TourStop[] = [
   {
     id: "out-threading",
     chapter: "out",
-    route: "/dashboard/emails",
-    anchors: ["email-signature", "email-templates"],
+    route: "@firstTransaction?tab=emails",
+    anchors: ["txn-emails", "txn-header"],
     title: "Replies come back to the file",
     narration:
       "Here is the part that changes your day. When someone replies, the reply lands back on the transaction, not buried in your inbox. Your inbox stops being the system of record.",
@@ -246,8 +246,8 @@ export const TOUR_STOPS: TourStop[] = [
   {
     id: "clients-portal",
     chapter: "clients",
-    route: "/dashboard/clients",
-    anchors: ["clients-table", "clients-new"],
+    route: "@firstTransaction?tab=misc",
+    anchors: ["txn-portals", "txn-header"],
     title: "Their own portal",
     narration:
       "Every client and every buyer or seller can get a portal with your name on it. They watch the closing move forward on a private link, with no password to forget, and you choose exactly what they see.",
@@ -335,43 +335,7 @@ export const TOUR_STOPS: TourStop[] = [
     anchors: ["integration-mcp"],
     title: "Ask Claude about your own deals",
     narration:
-      "You can connect your workspace to Claude and ask it about your own files in plain English. On the security: you approve the connection yourself, your owner can switch it off for the whole workspace or one person, it is read only until you allow more, and you can revoke it at any moment.",
-  },
-  {
-    id: "platform-import",
-    chapter: "platform",
-    route: "/dashboard/import",
-    anchors: ["import-csv", "import-sample", "import-page"],
-    title: "Bringing your book across",
-    narration:
-      "This demo seat is an ordinary team member, so the import is locked, which is exactly the point: only an owner or admin can bulk load data. In your own workspace, moving in is a spreadsheet away. Your whole contact book, matched on email so nothing duplicates.",
-  },
-  {
-    id: "platform-export",
-    chapter: "platform",
-    route: "/dashboard/import",
-    anchors: ["data-export", "import-sample", "import-page"],
-    title: "Your data stays yours",
-    narration:
-      "Export is owner only for the same reason: your whole book in one file is not something every seat should be able to take. As owner you download everything, records and documents, any time, on any plan. Connect your own storage and a full copy lands there nightly.",
-  },
-  {
-    id: "platform-support",
-    chapter: "platform",
-    route: "/dashboard/support",
-    anchors: ["support-form"],
-    title: "A real person answers",
-    narration:
-      "Support is a real phone number and live chat, answered by a person. No voicemail and no ticket queue. Every new account also gets thirty days of hands on help, including moving you off your old system, at no charge.",
-  },
-  {
-    id: "platform-billing",
-    chapter: "platform",
-    route: "/dashboard/billing",
-    anchors: ["billing-plan"],
-    title: "What it costs",
-    narration:
-      "Every signup starts on the full product free for fourteen days, with no card. After that it is fifty dollars a month, everything included, cancel in two clicks. That is the end of the tour. Have a look around.",
+      "You can connect your workspace to Claude and ask about your own files in plain English. You approve the connection, your owner can switch it off for anyone, it stays read only until you allow more, and you can revoke it any time. There is so much more. We hope to see you soon.",
   },
 ];
 

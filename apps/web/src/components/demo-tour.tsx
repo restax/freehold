@@ -231,8 +231,16 @@ export function DemoTour() {
         }
         want = txnHref.current + suffix;
       }
-      // Compare paths only: the tab lives in the query, which usePathname drops.
-      if (pathname !== want.split("?")[0]) {
+      // The tab lives in the query, which usePathname drops — comparing paths
+      // alone means a stop that only changes ?tab= (dates -> tasks -> docs on
+      // the same transaction) never actually navigates: the path already
+      // matches, so the push above is skipped and the page is stuck showing
+      // whichever tab the first stop of the streak landed on. Compare the
+      // query too, read live from useSearchParams rather than the router's
+      // held state, so it also self-corrects if something else changed it.
+      const [wantPath, wantQuery] = want.split("?");
+      const wantTab = new URLSearchParams(wantQuery ?? "").get("tab");
+      if (pathname !== wantPath || searchParams.get("tab") !== wantTab) {
         router.push(want);
         return;
       }
@@ -248,7 +256,7 @@ export function DemoTour() {
     })();
 
     return () => ac.abort();
-  }, [phase, stop, pathname, router]);
+  }, [phase, stop, pathname, router, searchParams]);
 
   // Narration. Keyed on the stop's identity rather than on anything that
   // changes during a stop, and it re-points the element only when the clip

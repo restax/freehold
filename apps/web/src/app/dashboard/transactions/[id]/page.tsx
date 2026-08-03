@@ -3878,6 +3878,7 @@ export default async function TransactionDetailPage({
               <SectionCard
                 title="Send an email"
                 icon={<PaperPlaneTilt size={15} weight="fill" aria-hidden />}
+                tour="txn-emails"
               >
                 {!emailEnabled() ? (
                   <p className="text-sm text-stone-500">
@@ -4358,6 +4359,7 @@ export default async function TransactionDetailPage({
               <SectionCard
                 title="Client portal links"
                 icon={<LinkIcon size={15} weight="fill" aria-hidden />}
+                tour="txn-portals"
               >
                 <p className="mb-3 text-sm text-stone-500">
                   Share a read-only view of this transaction — text or email the link to your buyer,

@@ -9,9 +9,12 @@ import {
 import { INTEGRATION_CATALOG } from "./integration-catalog";
 
 describe("the demo tour script", () => {
-  it("shows about thirty things, which is the point of it", () => {
-    expect(TOUR_STOPS.length).toBeGreaterThanOrEqual(28);
-    expect(TOUR_STOPS.length).toBeLessThanOrEqual(34);
+  it("shows around two dozen things, which is the point of it", () => {
+    // Trimmed from 31 to 27: the tour now ends after the Claude connector
+    // stop rather than walking through import/export/support/billing too —
+    // long enough to prove the product, short enough that someone finishes it.
+    expect(TOUR_STOPS.length).toBeGreaterThanOrEqual(24);
+    expect(TOUR_STOPS.length).toBeLessThanOrEqual(29);
   });
 
   it("gives every stop a unique id, since the id is also its audio filename", () => {
