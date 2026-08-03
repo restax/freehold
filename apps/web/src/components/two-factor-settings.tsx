@@ -111,7 +111,7 @@ export function TwoFactorSettings({ enabled: initialEnabled }: { enabled: boolea
               1. Scan with your authenticator app
             </p>
             {qr && (
-              // eslint-disable-next-line @next/next/no-img-element
+              // biome-ignore lint/performance/noImgElement: the QR is a data: URL minted by better-auth, and next/image cannot optimise a data URL
               <img
                 src={qr}
                 alt="TOTP enrollment QR code"

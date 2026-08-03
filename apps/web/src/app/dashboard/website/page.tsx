@@ -126,7 +126,7 @@ export default async function WebsitePage() {
                 </label>
                 {org.logo && (
                   <div className="flex items-center gap-4">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    {/* biome-ignore lint/performance/noImgElement: org.logo is a free-form URL, so its host cannot be known ahead of time */}
                     <img
                       src={org.logo}
                       alt="Current logo"

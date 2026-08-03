@@ -1,4 +1,5 @@
 import { CheckCircle, EnvelopeSimple, Phone } from "@phosphor-icons/react/dist/ssr";
+import Image from "next/image";
 import { FormBody } from "@/components/form-render";
 import type { FormLayout } from "@/lib/form-schema";
 import { type AboutBlock, type SiteBlock, siteBlocks, siteImageUrl } from "@/lib/site-blocks";
@@ -98,7 +99,7 @@ export function TenantSiteView({
       <header className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-3 px-5 py-5 sm:px-8">
         <div className="flex items-center gap-3">
           {logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
+            // biome-ignore lint/performance/noImgElement: a tenant's logo URL is free-form, so its host cannot be allowlisted ahead of time
             <img
               src={logoUrl}
               alt={`${name} logo`}
@@ -175,6 +176,9 @@ export function TenantSiteView({
                     </a>
                   )}
                 </div>
+                {/* biome-ignore lint/performance/noImgElement: siteImageUrl returns the
+                    caller's own string when it is not an uploaded image, so this can be
+                    any external URL */}
                 <img
                   src={siteImageUrl(block.imageSrc, slug) || heroImageSrc}
                   alt=""
@@ -236,6 +240,8 @@ export function TenantSiteView({
             if (!block.src) return null;
             return (
               <section key={block.id} className="mx-auto max-w-6xl px-5 pb-16 sm:px-8">
+                {/* biome-ignore lint/performance/noImgElement: same as the hero
+                    above, this can resolve to a tenant-supplied external URL */}
                 <img
                   src={siteImageUrl(block.src, slug)}
                   alt={block.alt ?? ""}
@@ -350,9 +356,15 @@ export function TenantSiteView({
                       </form>
                     )}
                   </div>
-                  <img
+                  {/* The one image on this page with a known, local source, so
+                      it is the one that can be optimised. The others take a
+                      tenant-supplied URL that next/image would refuse at
+                      runtime unless its host were allowlisted. */}
+                  <Image
                     src="/site/site-keys.jpg"
                     alt=""
+                    width={1600}
+                    height={1062}
                     className="hidden aspect-[3/2] w-full rounded-2xl object-cover lg:block"
                   />
                 </div>

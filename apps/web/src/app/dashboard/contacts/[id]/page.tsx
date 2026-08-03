@@ -170,7 +170,7 @@ export default async function ContactDetailPage({
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="flex items-center gap-2.5 text-xl font-semibold">
             {contact.photoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
+              // biome-ignore lint/performance/noImgElement: photoUrl is a free-form URL the user typed, so next/image would need its host allowlisted and would throw at runtime otherwise
               <img
                 src={contact.photoUrl}
                 alt=""
