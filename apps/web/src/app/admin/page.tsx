@@ -147,6 +147,9 @@ export default async function AdminPage() {
           <Link href="/admin/messages" className={btnGhost}>
             Critical messages
           </Link>
+          <Link href="/admin/recommendations" className={btnGhost}>
+            Recommendations
+          </Link>
           <Link href="/admin/integrations" className={btnGhost}>
             Integration branding
           </Link>

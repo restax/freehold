@@ -7,7 +7,12 @@ export function platformEmailEnabled(): boolean {
   return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM_DOMAIN);
 }
 
-export async function sendPlatformEmail(to: string, subject: string, text: string): Promise<void> {
+export async function sendPlatformEmail(
+  to: string,
+  subject: string,
+  text: string,
+  html?: string,
+): Promise<void> {
   if (!platformEmailEnabled()) throw new Error("Platform email is not configured.");
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -20,6 +25,7 @@ export async function sendPlatformEmail(to: string, subject: string, text: strin
       to: [to],
       subject,
       text,
+      ...(html ? { html } : {}),
     }),
   });
   if (!res.ok) throw new Error(`Platform email failed: ${res.status}`);

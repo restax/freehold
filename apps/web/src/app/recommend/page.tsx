@@ -1,10 +1,18 @@
-import { ChatCircleText, GithubLogo, Star } from "@phosphor-icons/react/dist/ssr";
+import { ChatCircleText, GithubLogo, PaperPlaneTilt, Star } from "@phosphor-icons/react/dist/ssr";
 import { MarketingFooter, MarketingNav } from "@/components/marketing";
+import { sendRecommendation } from "@/lib/actions/recommend";
 
 export const metadata = {
   title: "Recommend Freehold | Freehold",
   description:
     "Freehold pays no affiliate commissions: recommendations are earned or they don't happen. If we've earned yours, here's where it helps most.",
+};
+
+const SEND_ERROR: Record<string, string> = {
+  invalid: "That doesn't look like a valid email address.",
+  limit: "Too many sent from here recently. Try again in a few minutes.",
+  unavailable: "Sending isn't configured on this instance right now.",
+  send: "The email didn't go out. Try again in a moment.",
 };
 
 const WAYS = [
@@ -31,7 +39,13 @@ const WAYS = [
   },
 ];
 
-export default function RecommendPage() {
+export default async function RecommendPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sent?: string; error?: string }>;
+}) {
+  const { sent, error } = await searchParams;
+
   return (
     <main className="bg-stone-50 text-stone-900">
       <MarketingNav />
@@ -47,7 +61,60 @@ export default function RecommendPage() {
           something, and here's where it helps most.
         </p>
 
-        <div className="mt-10 flex flex-col gap-4">
+        <div className="mt-8 max-w-xl rounded-xl border border-brand-600/25 bg-white p-6">
+          <p className="flex items-center gap-1.5 font-display font-bold">
+            <PaperPlaneTilt size={17} weight="fill" className="text-brand-600" aria-hidden />
+            Send them the demo
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-stone-600">
+            Know one TC who'd want this? Give us their email and we'll send a short, honest
+            introduction with a link to the live demo. One email, nothing else follows.
+          </p>
+          {sent === "1" ? (
+            <p className="mt-4 rounded-lg bg-brand-50 px-3 py-2 text-sm font-medium text-brand-800">
+              Sent. Thanks for passing it along.
+            </p>
+          ) : (
+            <form action={sendRecommendation} className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <label className="sr-only" htmlFor="friendEmail">
+                Friend's email
+              </label>
+              <input
+                id="friendEmail"
+                name="friendEmail"
+                type="email"
+                required
+                placeholder="their@email.com"
+                className="w-full flex-1 rounded-lg border border-stone-300 px-3 py-2 text-sm shadow-xs focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20"
+              />
+              {/* Honeypot: invisible to a person, filled by most simple bots. */}
+              <input
+                type="text"
+                name="website"
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                className="absolute left-[-9999px] h-0 w-0 opacity-0"
+              />
+              <button
+                type="submit"
+                className="shrink-0 rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-[var(--color-brand-fg)] shadow-xs transition hover:bg-brand-600 active:scale-[0.98]"
+              >
+                Send
+              </button>
+            </form>
+          )}
+          {error && (
+            <p className="mt-3 text-sm text-red-700">
+              {SEND_ERROR[error] ?? "Something went wrong. Try again."}
+            </p>
+          )}
+        </div>
+
+        <p className="mt-10 max-w-xl text-sm font-medium text-stone-500">
+          Or, other ways that help:
+        </p>
+        <div className="mt-3 flex flex-col gap-4">
           {WAYS.map((way) => {
             const IconComponent = way.icon;
             return (

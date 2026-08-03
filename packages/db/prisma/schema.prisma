@@ -1495,6 +1495,22 @@ model ClientReview {
   @@map("client_review")
 }
 
+/// One row per "recommend Freehold to a friend" send from the public
+/// /recommend page. Platform-wide like VendorAd: no tenant, no RLS, visible
+/// only to operators on /admin/recommendations. clickedAt is set the first
+/// time the tracked link in the email is opened (see app/rec/[token]/route.ts);
+/// null forever means it was never opened.
+model FriendRecommendation {
+  id        String    @id @default(uuid())
+  email     String
+  token     String    @unique
+  sentAt    DateTime  @default(now()) @map("sent_at")
+  clickedAt DateTime? @map("clicked_at")
+
+  @@index([sentAt])
+  @@map("friend_recommendation")
+}
+
 /// One row per "is this email one of yours?" check on a public form.
 ///
 /// The public form tells a visitor whether their address is already a
