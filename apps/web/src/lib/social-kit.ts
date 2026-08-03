@@ -14,7 +14,7 @@ export type PostLength = "short" | "long";
 
 /**
  * Who is speaking. The founder posts are first person and only work coming
- * from Paul; the company posts are what a sales rep can put in a group under
+ * from the founder; the company posts are what a sales rep can put in a group under
  * the brand's name without pretending to have built the thing.
  */
 export type PostVoice = "founder" | "company";
@@ -25,7 +25,7 @@ export interface SocialPost {
   audience: "Facebook group" | "Facebook page" | "YouTube" | "Anywhere";
   length: PostLength;
   voice: PostVoice;
-  /** What the post is for, shown as a chip so Paul can scan the list. */
+  /** What the post is for, shown as a chip so the operator can scan the list. */
   angle: string;
   body: string;
   /** Which asset to attach, by file name in /marketing/social. */

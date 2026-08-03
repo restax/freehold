@@ -61,7 +61,7 @@ describe("role defaults, with no grant recorded", () => {
 
 describe("an explicit grant", () => {
   it("cuts one person off without touching their role", () => {
-    // The case Paul asked for: switch it off for a specific user. An admin
+    // The case the user asked for: switch it off for a specific user. An admin
     // stays an admin everywhere else in the product.
     expect(mcpCapability("admin", "none", ON)).toEqual(NO_MCP_ACCESS);
     expect(mcpCapability("member", "none", ON)).toEqual(NO_MCP_ACCESS);

@@ -169,7 +169,7 @@ granted itself.
 
 **Setup**, beyond the usual secrets:
 
-The dial target is a bare **SIP username** (e.g. `paulslazas`), not a phone
+The dial target is a bare **SIP username** (e.g. `founderuser`), not a phone
 number and not a full `sip:user@host` URI. LiveKit Cloud's own hosted "phone
 numbers" product turned out to be **inbound-only** — dialing out through one
 requires a real PSTN carrier outbound trunk plus, for US local numbers, an
@@ -185,7 +185,7 @@ not in `FOUNDER_CALL_DESTINATION` — the API rejects a full URI there with
    `lk sip outbound create --name "..." --address sip.linphone.org --numbers "<any number already on the project>"`
    (`--numbers` sets the caller ID; a free SIP provider generally doesn't
    care what it is, but the API requires something be set).
-2. Set `FOUNDER_CALL_DESTINATION` (the bare username, e.g. `paulslazas`) and
+2. Set `FOUNDER_CALL_DESTINATION` (the bare username, e.g. `founderuser`) and
    `FOUNDER_SIP_TRUNK_ID` (the trunk's ID from step 1) in `secrets.env`, then
    `lk agent update-secrets --secrets-file secrets.env`.
 

@@ -3,7 +3,7 @@ import type { StateClosingModel } from "@freehold/db";
 /**
  * Baseline data for StateReference, seeded once per state (never overwrites
  * a row that already exists — see seedStateReferences in
- * lib/actions/state-reference.ts). Supplied by Paul 2026-07-31 as a
+ * lib/actions/state-reference.ts). Supplied 2026-07-31 as a
  * best-effort baseline, not confirmed accurate state by state — that's what
  * StateReference.verified tracks as each one gets checked in /admin/states.
  */

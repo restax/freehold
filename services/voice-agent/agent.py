@@ -75,7 +75,7 @@ LLM_MODEL = os.environ.get("FREEHOLD_VOICE_MODEL", "claude-sonnet-4-6")
 # The homepage demo's "call the developer" feature. Both unset means the tool
 # is simply never usable — nothing in this file assumes they're present.
 #
-# A bare SIP username (e.g. "paulslazas"), NOT a full "sip:user@host" URI and
+# A bare SIP username (e.g. "founderuser"), NOT a full "sip:user@host" URI and
 # NOT a phone number: LiveKit's own hosted numbers turned out to be
 # inbound-only, so this dials a SIP account instead of going through the PSTN
 # — no carrier, no E911/compliance step, no per-minute billing. The host lives

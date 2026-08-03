@@ -16,7 +16,7 @@ describe("the post list", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("gives Paul the 20 posts he asked for, in both lengths", () => {
+  it("gives the operator the 20 posts requested, in both lengths", () => {
     expect(SOCIAL_POSTS.length).toBeGreaterThanOrEqual(20);
     expect(SOCIAL_POSTS.filter((p) => p.length === "short").length).toBeGreaterThanOrEqual(8);
     expect(SOCIAL_POSTS.filter((p) => p.length === "long").length).toBeGreaterThanOrEqual(6);

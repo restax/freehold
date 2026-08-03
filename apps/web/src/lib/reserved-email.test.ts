@@ -28,7 +28,7 @@ describe("isUndeliverableAddress", () => {
 
   it("lets real addresses through, including the sample catchall", () => {
     expect(isUndeliverableAddress("sample.buyer@freeholdtc.dev")).toBe(false);
-    expect(isUndeliverableAddress("paul.slazas@gmail.com")).toBe(false);
+    expect(isUndeliverableAddress("jordan.rivera@gmail.com")).toBe(false);
     expect(isUndeliverableAddress("delivered@resend.dev")).toBe(false);
   });
 
