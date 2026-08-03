@@ -60,7 +60,7 @@ export function VoiceDemo() {
 
       if (res.status === 429) {
         const body = (await res.json()) as { message?: string };
-        setNote(body.message ?? "The demo is busy right now — try again shortly.");
+        setNote(body.message ?? "The demo is busy right now. Try again shortly.");
         setState("blocked");
         return;
       }
@@ -117,7 +117,7 @@ export function VoiceDemo() {
       await room.localParticipant.setMicrophoneEnabled(true);
       setState("live");
     } catch {
-      setNote("Couldn't start the demo — your browser may have blocked the microphone.");
+      setNote("Couldn't start the demo. Your browser may have blocked the microphone.");
       setState("error");
     }
   }
@@ -135,8 +135,8 @@ export function VoiceDemo() {
         <div className="min-w-0 flex-1">
           <p className="font-display font-bold">Ask about Freehold, out loud</p>
           <p className="mt-0.5 text-sm leading-relaxed text-stone-600">
-            The same voice built into the product — here it answers about Freehold itself. Ask what
-            it costs, whether it self-hosts, anything.
+            The same voice built into the product, answering about Freehold itself. Ask what it
+            costs, whether it self-hosts, anything.
           </p>
         </div>
       </div>

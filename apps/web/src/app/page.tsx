@@ -27,17 +27,22 @@ import {
 import { ScreenshotFigure } from "@/components/screenshot-figure";
 import { VoiceDemo } from "@/components/voice-demo";
 import { getSession } from "@/lib/session";
+import brokerageDusk from "../../public/marketing/brokerage-dusk.jpg";
+import closingKeys from "../../public/marketing/closing-keys.jpg";
+import movingDay from "../../public/marketing/moving-day.jpg";
+import screenDashboard from "../../public/marketing/screens/dashboard-day.png";
 import shotAgentPortal from "../../public/marketing/shots/shot-agent-portal.png";
 import shotContacts from "../../public/marketing/shots/shot-contacts.png";
 import shotIntakeForm from "../../public/marketing/shots/shot-intake-form.png";
 import shotThemes from "../../public/marketing/shots/shot-themes.png";
 import shotTransactions from "../../public/marketing/shots/shot-transactions.png";
 import shotVoice from "../../public/marketing/shots/shot-voice.png";
+import tcAtWork from "../../public/marketing/tc-at-work.jpg";
 
 export const metadata = {
-  title: "Freehold: the TC platform your clients will love",
+  title: "Transaction Coordination & Management Software | Freehold",
   description:
-    "Freehold keeps every closing on track and every client in the loop. AI reads the contract and builds the file. Start free, no credit card.",
+    "The TC platform clients love: AI contract reading, client portals, built-in e-signature. Cloud hosted or self-host free forever. Start free, no credit card.",
 };
 
 const CTA_PRIMARY = "Start free";
@@ -51,18 +56,15 @@ const CTA_PRIMARY = "Start free";
 const VALUE_STRIP = [
   {
     icon: UsersThree,
-    text: "Your clients follow their closing on a beautiful portal with your name on it, always current.",
-    cls: "border-stone-200/70 bg-white",
+    text: "Client portals with your name on them, always current",
   },
   {
     icon: Sparkle,
-    text: "AI is built in everywhere it helps, included in one monthly price. No add-ons, no meters.",
-    cls: "border-brand-600/20 bg-brand-50/70",
+    text: "AI built in everywhere it helps, in one monthly price",
   },
   {
     icon: Headset,
-    text: "30 days of hands-on onboarding at no charge, including moving you off your old system.",
-    cls: "border-stone-200/70 bg-white",
+    text: "30 days of hands-on onboarding at no charge",
   },
 ];
 
@@ -138,7 +140,7 @@ const BENTO = [
 const FAQ: Array<[string, string]> = [
   [
     "What does it cost?",
-    "Free for 2 users and 5 active closings, no credit card. Cloud Pro is $40 a month when you are running more than that, and the AI is included in the price on every paid plan. There are no contracts and nothing to cancel by phone.",
+    "Every signup starts on Pro free for 14 days, no credit card: the full product, AI included. After that it settles onto Free (1 user, 2 active closings) unless you add a card, and Cloud Pro is $50 a month from there. There are no contracts and nothing to cancel by phone.",
   ],
   [
     "Do I need to be technical?",
@@ -161,6 +163,42 @@ const FAQ: Array<[string, string]> = [
     "A real phone number and live chat, answered by a person. No voicemail. And every new account gets 30 days of onboarding help included.",
   ],
 ];
+
+/* Structured data for search engines, built from the same copy the page
+   renders so it can never drift from what a visitor actually reads. */
+const JSON_LD = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      name: "Freehold",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      url: "https://freeholdtc.dev",
+      description:
+        "Transaction coordination and management software for real estate TCs: AI contract reading, client portals, built-in e-signature, and CRM. Cloud hosted or self-hosted.",
+      offers: [
+        { "@type": "Offer", price: "0", priceCurrency: "USD", name: "Free" },
+        { "@type": "Offer", price: "50", priceCurrency: "USD", name: "Cloud Pro, monthly" },
+        { "@type": "Offer", price: "80", priceCurrency: "USD", name: "Cloud Business, monthly" },
+      ],
+    },
+    {
+      "@type": "Organization",
+      name: "Freehold",
+      url: "https://freeholdtc.dev",
+      email: "hello@freeholdtc.dev",
+    },
+    {
+      "@type": "FAQPage",
+      mainEntity: FAQ.map(([question, answer]) => ({
+        "@type": "Question",
+        name: question,
+        acceptedAnswer: { "@type": "Answer", text: answer },
+      })),
+    },
+  ],
+};
 
 /**
  * A sample of the order email Freehold writes when you order a service from
@@ -212,19 +250,20 @@ export default async function LandingPage() {
 
   return (
     <main className="bg-stone-50 text-stone-900">
+      <script
+        type="application/ld+json"
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: static JSON.stringify of our own constants, no user input
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+      />
       <LaunchBanner />
       <MarketingNav />
 
-      {/* Hero */}
-      <section className="relative overflow-hidden bg-[linear-gradient(165deg,#d7f8e4_0%,#ecfdf3_45%,#fafaf9_100%)]">
-        <div
-          aria-hidden
-          className="absolute inset-0 bg-[radial-gradient(55%_60%_at_20%_10%,#c5f4d8_0%,transparent_70%)]"
-        />
-        <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-14 sm:px-6 lg:grid-cols-[6fr_6fr] lg:gap-14 lg:pb-24 lg:pt-24">
+      {/* Hero: headline left, the real product right. */}
+      <section className="border-b border-stone-200/70 bg-white">
+        <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-14 pt-12 sm:px-6 lg:grid-cols-[5fr_6fr] lg:gap-12 lg:pb-20 lg:pt-16">
           <div>
-            <h1 className="font-display max-w-xl text-5xl font-extrabold leading-[1.08] tracking-tight md:text-6xl">
-              Be the TC your clients <span className="text-brand-600">rave about.</span>
+            <h1 className="font-display max-w-xl text-4xl font-bold leading-[1.1] tracking-tight md:text-5xl">
+              Be the TC your clients rave about.
             </h1>
             <p className="mt-5 max-w-lg text-lg leading-relaxed text-stone-600">
               Every closing on track, every client in the loop, and the typing done for you. Free to
@@ -245,35 +284,33 @@ export default async function LandingPage() {
               </a>
             </div>
           </div>
-          <div className="justify-self-center lg:justify-self-end">
-            <ExtractionReviewCard />
-          </div>
+          <Image
+            src={screenDashboard}
+            priority
+            alt="The Freehold dashboard: today's tasks first, this week's closings grouped by day, and pipeline counts"
+            className="w-full rounded-xl border border-stone-200 shadow-[0_12px_32px_-16px_rgba(28,25,23,0.25)]"
+          />
         </div>
       </section>
 
-      {/* Value strip */}
-      <div className="border-y border-stone-200/70 bg-white">
-        <div className="mx-auto grid max-w-6xl gap-4 px-4 py-8 sm:grid-cols-3 sm:px-6">
-          {VALUE_STRIP.map(({ icon: Icon, text, cls }) => (
-            <div
-              key={text}
-              className={`flex items-start gap-3 rounded-xl border p-4 shadow-xs ${cls}`}
-            >
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-600/10 text-brand-700">
-                <Icon size={18} weight="regular" aria-hidden />
-              </span>
-              <p className="pt-1 text-sm leading-relaxed text-stone-600">{text}</p>
-            </div>
+      {/* Trust strip */}
+      <div className="border-b border-stone-200/70 bg-stone-50">
+        <div className="mx-auto flex max-w-6xl flex-col gap-2.5 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between md:gap-8">
+          {VALUE_STRIP.map(({ icon: Icon, text }) => (
+            <p key={text} className="flex items-center gap-2.5 text-sm text-stone-600">
+              <Icon size={18} weight="regular" aria-hidden className="shrink-0 text-brand-700" />
+              {text}
+            </p>
           ))}
         </div>
       </div>
 
       {/* Voice demo */}
-      <section className="border-b border-stone-200/70 bg-stone-50">
+      <section className="border-b border-stone-200/70 bg-white">
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:gap-16">
           <div>
-            <p className="text-sm font-medium text-brand-600">Try it right now</p>
-            <h2 className="font-display mt-2 text-4xl font-extrabold tracking-tight md:text-5xl">
+            <p className="text-sm font-medium text-brand-700">Try it right now</p>
+            <h2 className="font-display mt-2 text-3xl font-bold tracking-tight md:text-4xl">
               Just ask for what you need.
             </h2>
             <p className="mt-4 max-w-md leading-relaxed text-stone-600">
@@ -286,12 +323,13 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* AI contract extraction */}
-      <section id="extraction" className="border-b border-stone-200/70 bg-white">
+      {/* AI contract extraction: the interactive review card moved here from
+          the hero, where a component demo belongs next to its explanation. */}
+      <section id="extraction" className="border-b border-stone-200/70 bg-stone-50">
         <div className="mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:py-24">
           <div>
-            <p className="text-sm font-medium text-brand-600">AI contract reading</p>
-            <h2 className="font-display mt-2 text-4xl font-extrabold tracking-tight md:text-5xl">
+            <p className="text-sm font-medium text-brand-700">AI contract reading</p>
+            <h2 className="font-display mt-2 text-3xl font-bold tracking-tight md:text-4xl">
               Upload the contract. The file builds itself.
             </h2>
             <p className="mt-4 max-w-xl leading-relaxed text-stone-600">
@@ -300,32 +338,35 @@ export default async function LandingPage() {
               Effective Date.&quot; It is included on every paid plan at no extra charge, along with
               every other place AI helps in Freehold. One monthly price covers all of it.
             </p>
-          </div>
-          <div className="flex flex-col">
-            {EXTRACTION_STEPS.map(({ icon: Icon, title, body }, i) => (
-              <div key={title} className="relative flex gap-5 pb-8 last:pb-0">
-                {i < EXTRACTION_STEPS.length - 1 && (
-                  <span
-                    aria-hidden
-                    className="absolute left-[19px] top-10 h-[calc(100%-1.5rem)] w-px bg-stone-200"
-                  />
-                )}
-                <span className="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-600 text-white">
-                  <Icon size={18} weight="bold" aria-hidden />
-                </span>
-                <div className="pt-1.5">
-                  <h3 className="font-display text-lg font-bold">{title}</h3>
-                  <p className="mt-1.5 leading-relaxed text-stone-600">{body}</p>
+            <div className="mt-9 flex flex-col">
+              {EXTRACTION_STEPS.map(({ icon: Icon, title, body }, i) => (
+                <div key={title} className="relative flex gap-5 pb-8 last:pb-0">
+                  {i < EXTRACTION_STEPS.length - 1 && (
+                    <span
+                      aria-hidden
+                      className="absolute left-[19px] top-10 h-[calc(100%-1.5rem)] w-px bg-stone-200"
+                    />
+                  )}
+                  <span className="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-600 text-white">
+                    <Icon size={18} weight="bold" aria-hidden />
+                  </span>
+                  <div className="pt-1.5">
+                    <h3 className="font-display text-lg font-bold">{title}</h3>
+                    <p className="mt-1.5 leading-relaxed text-stone-600">{body}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+          <div className="justify-self-center lg:justify-self-end">
+            <ExtractionReviewCard />
           </div>
         </div>
       </section>
 
       {/* Feature bento */}
       <section id="features" className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
-        <h2 className="font-display max-w-2xl text-3xl font-extrabold leading-[1.15] tracking-tight md:text-4xl lg:text-5xl">
+        <h2 className="font-display max-w-2xl text-3xl font-bold leading-[1.15] tracking-tight md:text-4xl">
           Everything you run in a day, in one place.
         </h2>
         <p className="mt-4 max-w-xl leading-relaxed text-stone-600">
@@ -413,21 +454,21 @@ export default async function LandingPage() {
               The price, plainly.
             </h2>
             <p className="mx-auto mt-3 max-w-md leading-relaxed text-stone-600">
-              Start free. When you are running more than five closings at a time, Cloud Pro is $40 a
-              month. That is the whole price: the AI, the portals, the templates, and support are
-              all in it.
+              Start on Pro, free for 14 days, no credit card. After that, Cloud Pro is $50 a month.
+              That is the whole price: the AI, the portals, the templates, and support are all in
+              it.
             </p>
             <dl className="mx-auto mt-7 grid max-w-xl grid-cols-3 gap-4">
               <div>
-                <dt className="sr-only">Free active closings</dt>
-                <dd className="font-display text-4xl font-bold tabular-nums text-brand-700">5</dd>
+                <dt className="sr-only">Trial length</dt>
+                <dd className="font-display text-4xl font-bold tabular-nums text-brand-700">14</dd>
                 <p className="mt-1 text-xs leading-snug text-stone-500">
-                  Active closings free, no credit card
+                  Days of full Pro, no credit card
                 </p>
               </div>
               <div>
                 <dt className="sr-only">Cloud Pro price</dt>
-                <dd className="font-display text-4xl font-bold tabular-nums text-brand-700">$40</dd>
+                <dd className="font-display text-4xl font-bold tabular-nums text-brand-700">$50</dd>
                 <p className="mt-1 text-xs leading-snug text-stone-500">
                   Cloud Pro monthly, AI included
                 </p>
@@ -450,8 +491,20 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* Communication (dark section) */}
-      <section className="relative overflow-hidden bg-[linear-gradient(165deg,#1c1917_0%,#292524_60%,#1c1917_100%)]">
+      {/* Communication, over the closing-day photo. Dark here is a photo
+          scrim for legibility, not a theme change. */}
+      <section className="relative overflow-hidden">
+        <Image
+          src={closingKeys}
+          alt="A couple holding the keys to their new home on closing day"
+          fill
+          sizes="100vw"
+          className="object-cover"
+        />
+        <div
+          aria-hidden
+          className="absolute inset-0 bg-gradient-to-r from-stone-950/85 via-stone-950/55 to-stone-950/25"
+        />
         <div className="relative mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
           <h2 className="max-w-md text-3xl font-semibold tracking-tight text-white md:text-4xl">
             The best-informed people in the deal are yours.
@@ -589,6 +642,15 @@ export default async function LandingPage() {
               the account.
             </p>
           </div>
+          <div className="relative mt-8 h-52 overflow-hidden rounded-xl border border-stone-200/70 sm:h-64">
+            <Image
+              src={tcAtWork}
+              alt="A transaction coordinator working at her desk with a coffee, calm and in control"
+              fill
+              sizes="(min-width: 1152px) 1152px, 100vw"
+              className="object-cover"
+            />
+          </div>
           <div className="mt-10 grid gap-x-10 gap-y-8 sm:grid-cols-2">
             <div>
               <h3 className="font-medium">A real person answers</h3>
@@ -644,25 +706,36 @@ export default async function LandingPage() {
               Get partner early access
             </a>
           </div>
-          <div className="flex flex-col gap-4">
-            <div className="rounded-xl border border-stone-200/70 bg-white p-5">
-              <h3 className="text-sm font-medium">Isolated instances</h3>
-              <p className="mt-1 text-sm leading-relaxed text-stone-600">
-                Each client runs its own Freehold with fully separated data.
-              </p>
+          <div>
+            <div className="relative h-48 overflow-hidden rounded-xl border border-stone-200/70 sm:h-56">
+              <Image
+                src={brokerageDusk}
+                alt="A brokerage office at dusk with its lights still on"
+                fill
+                sizes="(min-width: 1024px) 560px, 100vw"
+                className="object-cover"
+              />
             </div>
-            <div className="rounded-xl border border-stone-200/70 bg-white p-5">
-              <h3 className="text-sm font-medium">One command to stand up</h3>
-              <p className="mt-1 text-sm leading-relaxed text-stone-600">
-                Docker Compose brings up the database, storage, and app on any machine you manage.
-              </p>
-            </div>
-            <div className="rounded-xl border border-stone-200/70 bg-white p-5">
-              <h3 className="text-sm font-medium">Fleet tools in development</h3>
-              <p className="mt-1 text-sm leading-relaxed text-stone-600">
-                Provisioning, monitoring, and mixed per-client plans under one partner account are
-                on the roadmap.
-              </p>
+            <div className="mt-4 flex flex-col divide-y divide-stone-200/70">
+              <div className="py-3">
+                <h3 className="text-sm font-medium">Isolated instances</h3>
+                <p className="mt-1 text-sm leading-relaxed text-stone-600">
+                  Each client runs its own Freehold with fully separated data.
+                </p>
+              </div>
+              <div className="py-3">
+                <h3 className="text-sm font-medium">One command to stand up</h3>
+                <p className="mt-1 text-sm leading-relaxed text-stone-600">
+                  Docker Compose brings up the database, storage, and app on any machine you manage.
+                </p>
+              </div>
+              <div className="py-3">
+                <h3 className="text-sm font-medium">Fleet tools in development</h3>
+                <p className="mt-1 text-sm leading-relaxed text-stone-600">
+                  Provisioning, monitoring, and mixed per-client plans under one partner account are
+                  on the roadmap.
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -670,32 +743,43 @@ export default async function LandingPage() {
 
       {/* Trust and security */}
       <section className="border-t border-stone-200/70 bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
-          <h2 className="max-w-xl font-display text-3xl font-bold tracking-tight md:text-4xl">
-            Your files are safe, and they are yours
-          </h2>
-          <div className="mt-10 grid gap-x-10 gap-y-8 sm:grid-cols-3">
-            <div>
-              <h3 className="font-medium">Locked up properly</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
-                Documents and saved logins are protected with cutting-edge database encryption, and
-                your workspace is reachable only through your own sign-in, with two-factor if you
-                want it.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-medium">Private, full stop</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
-                Your data is used to run your account and for nothing else. It is never sold, never
-                shared, and your documents are never used to train AI models.
-              </p>
-            </div>
-            <div>
-              <h3 className="font-medium">Yours to take, any time</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
-                Download everything, records and documents, in one file whenever you like, on any
-                plan. No waiting period, no phone call, no fee.
-              </p>
+        <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[5fr_7fr] lg:gap-14 lg:py-24">
+          <div className="relative order-last h-56 overflow-hidden rounded-xl border border-stone-200/70 lg:order-first lg:h-full lg:min-h-80">
+            <Image
+              src={movingDay}
+              alt="A family carrying boxes into their new home on moving day"
+              fill
+              sizes="(min-width: 1024px) 460px, 100vw"
+              className="object-cover"
+            />
+          </div>
+          <div>
+            <h2 className="max-w-xl font-display text-3xl font-bold tracking-tight md:text-4xl">
+              Your files are safe, and they are yours
+            </h2>
+            <div className="mt-8 flex flex-col gap-7">
+              <div>
+                <h3 className="font-medium">Locked up properly</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
+                  Documents and saved logins are protected with cutting-edge database encryption,
+                  and your workspace is reachable only through your own sign-in, with two-factor if
+                  you want it.
+                </p>
+              </div>
+              <div>
+                <h3 className="font-medium">Private, full stop</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
+                  Your data is used to run your account and for nothing else. It is never sold,
+                  never shared, and your documents are never used to train AI models.
+                </p>
+              </div>
+              <div>
+                <h3 className="font-medium">Yours to take, any time</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-stone-600">
+                  Download everything, records and documents, in one file whenever you like, on any
+                  plan. No waiting period, no phone call, no fee.
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -718,13 +802,13 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* Green CTA banner */}
-      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
-        <div className="rounded-3xl bg-[radial-gradient(80%_120%_at_50%_0%,#0b7a49_0%,#054f30_100%)] px-6 py-16 text-center sm:px-12">
+      {/* CTA band: flat brand surface, full bleed. */}
+      <section className="bg-brand-800">
+        <div className="mx-auto max-w-6xl px-4 py-16 text-center sm:px-6 lg:py-20">
           <h2 className="font-display mx-auto max-w-2xl text-3xl font-bold tracking-tight text-white md:text-4xl">
-            Free for 2 users and 5 active closings. No credit card.
+            Full Pro, free for 14 days. No credit card.
           </h2>
-          <p className="mx-auto mt-4 max-w-xl leading-relaxed text-brand-50/90">
+          <p className="mx-auto mt-4 max-w-xl leading-relaxed text-brand-100">
             Start with one file and see how it feels. Your first 30 days include onboarding help
             from a real person.
           </p>

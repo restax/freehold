@@ -76,7 +76,7 @@ export function MarketingNav() {
           </Link>
           <Link
             href="/signup"
-            className="rounded-full bg-brand-600 px-4 py-2 font-medium text-white shadow-xs transition hover:bg-brand-700 active:scale-[0.98]"
+            className="rounded-lg bg-brand-600 px-4 py-2 font-medium text-white shadow-xs transition hover:bg-brand-700 active:scale-[0.98]"
           >
             Start free
           </Link>
@@ -186,6 +186,11 @@ export function MarketingFooter() {
                 Terms
               </Link>
             </li>
+            <li>
+              <Link href="/subprocessors" className="transition-colors hover:text-stone-900">
+                Subprocessors
+              </Link>
+            </li>
           </ul>
         </nav>
       </div>
@@ -194,7 +199,7 @@ export function MarketingFooter() {
           <StripeTrust />
           <p className="mt-5 text-center text-sm text-stone-400">
             Freehold is source-available (Elastic License 2.0). Self-hosting for your own
-            organization is free forever — Freehold may never be resold or offered as someone else's
+            organization is free forever. Freehold may never be resold or offered as someone else's
             hosted service.
           </p>
         </div>
@@ -217,10 +222,10 @@ export function ExtractionReviewCard() {
     medium: "bg-amber-50 text-amber-700",
   } as const;
   return (
-    <div className="w-full max-w-xl rounded-2xl border border-stone-200/70 bg-white p-6 shadow-[0_1px_2px_rgb(41_37_36/0.05),0_16px_40px_rgb(41_37_36/0.1)]">
+    <div className="w-full max-w-xl rounded-xl border border-stone-200/70 bg-white p-6 shadow-[0_1px_2px_rgb(41_37_36/0.05),0_16px_40px_rgb(41_37_36/0.1)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="font-medium">Review extraction</p>
-        <span className="rounded-full bg-brand-50 px-3 py-1 font-mono text-xs text-brand-700">
+        <span className="rounded-lg bg-brand-50 px-3 py-1 font-mono text-xs text-brand-700">
           purchase-contract.pdf
         </span>
       </div>

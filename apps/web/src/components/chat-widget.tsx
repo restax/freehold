@@ -12,7 +12,7 @@ const GREETING: Msg = {
   id: "greeting",
   role: "assistant",
   content:
-    "Hi! Ask me anything about Freehold — pricing, self-hosting, the AI extraction, whatever. Real questions get real answers.",
+    "Hi! Ask me anything about Freehold: pricing, self-hosting, the AI extraction, whatever. Real questions get real answers.",
 };
 
 function msg(role: Msg["role"], content: string): Msg {
@@ -50,13 +50,13 @@ export function ChatWidget() {
           "assistant",
           data.reply ??
             data.error ??
-            "Something went wrong — email hello@freeholdtc.dev and a human will answer.",
+            "Something went wrong. Email hello@freeholdtc.dev and a human will answer.",
         ),
       ]);
     } catch {
       setMessages((m) => [
         ...m,
-        msg("assistant", "Connection hiccup — try again, or email hello@freeholdtc.dev."),
+        msg("assistant", "Connection hiccup. Try again, or email hello@freeholdtc.dev."),
       ]);
     } finally {
       setBusy(false);
@@ -123,7 +123,7 @@ export function ChatWidget() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? "Close chat" : "Chat with us"}
-        title={open ? "Close chat" : "Chat with us — ask a question about Freehold"}
+        title={open ? "Close chat" : "Chat with us. Ask a question about Freehold"}
         className="grid h-13 w-13 place-items-center rounded-full bg-brand-700 text-white shadow-lg transition hover:bg-brand-600 active:scale-95"
       >
         {open ? (

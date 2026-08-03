@@ -19,29 +19,29 @@ const LIVE: Integration[] = [
   [
     "Email & reply capture",
     "@",
-    "Send transactional email from your workspace's own address — and when anyone replies, it lands right back on the transaction, threaded. No mailbox setup, ever.",
+    "Send transactional email from your workspace's own address, and when anyone replies, it lands right back on the transaction, threaded. No mailbox setup, ever.",
     "email",
   ],
   [
-    "Documenso",
-    "Do",
-    "Open-source e-signature, bundled with Freehold — no vendor contract, no per-envelope tax. Send documents for signature without leaving the file.",
-    "documenso",
+    "OpenSign e-signatures",
+    "OS",
+    "Built into every plan: Freehold runs its own OpenSign instance, so there's no separate e-signature account to create, no vendor contract, and no per-envelope fee. The first document you send provisions your workspace automatically. Prefer your own Documenso or DocuSign account instead? Connect one from Settings any time.",
+    "opensign",
   ],
   [
-    "Claude AI",
+    "Claude AI & the Claude connector",
     "AI",
-    "Reads contracts with page-cited extraction, powers the site assistant, answers your spoken questions in voice search, and ships as a Claude skill so you can ask about your own deals from Claude.",
+    "Reads contracts with page-cited extraction, powers the site assistant, and answers your spoken questions in voice search. Connect Freehold to Claude Desktop or Claude Code as an MCP connector and ask about your pipeline, deadlines, and contacts. With write access turned on, it can also create tasks, log notes, and update transaction status straight from Claude.",
   ],
   [
     "ElevenLabs & LiveKit",
     "Vo",
-    "Voice search speaks its answers with ElevenLabs over a LiveKit realtime session — natural back-and-forth, interruptible, on every dashboard page and every client portal.",
+    "Voice search speaks its answers with ElevenLabs over a LiveKit realtime session: natural back-and-forth, interruptible, on every dashboard page and every client portal.",
   ],
   [
     "Deepgram",
     "Dg",
-    "Speech recognition behind both voice search and the Dictate button — streaming transcription with punctuation, so talking is as precise as typing.",
+    "Speech recognition behind both voice search and the Dictate button: streaming transcription with punctuation, so talking is as precise as typing.",
   ],
   [
     "S3-compatible storage",
@@ -52,49 +52,49 @@ const LIVE: Integration[] = [
   [
     "Calendar feeds (ICS)",
     "Ca",
-    "Every client and agent portal, and every person on your team, has a subscribe-once calendar feed — deadlines land in Google, Outlook, or Apple Calendar and stay current.",
+    "Every client and agent portal, and every person on your team, has a subscribe-once calendar feed: deadlines land in Google, Outlook, or Apple Calendar and stay current.",
     "calendar",
   ],
   [
     "Freehold API",
     "{}",
-    "REST API with signed webhooks: read and write transactions, contacts, tasks, clients, and your account — plus a ready-made Claude skill.",
+    "REST API with signed webhooks: read and write transactions, contacts, tasks, clients, and your account, plus a ready-made Claude skill.",
     "api",
   ],
   [
     "Follow Up Boss",
     "FB",
-    "Working today: connect with your API key — website leads flow straight into your Follow Up Boss automations, and your people import into Freehold contacts.",
+    "Working today: connect with your API key. Website leads flow straight into your Follow Up Boss automations, and your people import into Freehold contacts.",
     "fub",
   ],
   [
     "Twenty CRM",
     "Tw",
-    "Working today: connect your Twenty instance with an API key — website leads land in Twenty as people, and your people import into Freehold contacts.",
+    "Working today: connect your Twenty instance with an API key. Website leads land in Twenty as people, and your people import into Freehold contacts.",
     "twenty",
   ],
   [
     "Zapier",
     "Z",
-    "Working today: instant triggers (new transaction, document uploaded, envelope completed, website leads) and actions into 7,000+ apps — including DocuSign and Dotloop through your own accounts.",
+    "Working today: instant triggers (new transaction, document uploaded, envelope completed, website leads) and actions into 7,000+ apps, including DocuSign and Dotloop through your own accounts.",
     "zapier",
   ],
   [
     "Stripe",
     "St",
-    "Powers Freehold Cloud subscriptions — that's the whole job. Client invoicing never touches a payment processor: it's a document and a follow-up task, not a charge.",
+    "Powers Freehold Cloud subscriptions. That's the whole job. Client invoicing never touches a payment processor: it's a document and a follow-up task, not a charge.",
     "stripe",
   ],
   [
     "ERPNext",
     "Er",
-    "Working today: connect your own ERPNext (Frappe) instance and Freehold creates the Sales Invoice there instead of just in Freehold — your ERP stays the ledger, and paid status mirrors back automatically.",
+    "Working today: connect your own ERPNext (Frappe) instance and Freehold creates the Sales Invoice there instead of just in Freehold. Your ERP stays the ledger, and paid status mirrors back automatically.",
     "erpnext",
   ],
   [
     "FindTCPros directory",
     "Fp",
-    "Working today: the coordinator directory pulls in FindTCPros's public listings alongside Freehold-enabled workspaces, so one search covers both — filtered by state, specialty, and software.",
+    "Working today: the coordinator directory pulls in FindTCPros's public listings alongside Freehold-enabled workspaces, so one search covers both, filtered by state, specialty, and software.",
   ],
 ];
 
@@ -129,7 +129,7 @@ const COMING: Integration[] = [
 function IntegrationCard({ item, logo }: { item: Integration; logo?: string | null }) {
   const [name, mono, description] = item;
   return (
-    <div className="flex gap-4 rounded-2xl border border-stone-200/70 bg-white p-5">
+    <div className="flex gap-4 rounded-xl border border-stone-200/70 bg-white p-5">
       {logo ? (
         // biome-ignore lint/performance/noImgElement: an operator-uploaded data URL, not a bundled asset next/image can size.
         <img
@@ -164,7 +164,7 @@ export default async function IntegrationsPage() {
       <MarketingNav />
 
       <section className="mx-auto max-w-6xl px-4 pb-20 pt-12 sm:px-6 lg:pt-16">
-        <h1 className="font-display max-w-2xl text-4xl font-extrabold leading-[1.1] tracking-tight md:text-5xl">
+        <h1 className="font-display max-w-2xl text-3xl font-bold leading-[1.1] tracking-tight md:text-4xl">
           Connected to the tools you already use.
         </h1>
         <p className="mt-5 max-w-xl leading-relaxed text-stone-600">
@@ -194,7 +194,7 @@ export default async function IntegrationsPage() {
           ))}
         </div>
 
-        <div className="mt-14 rounded-2xl border border-brand-600/15 bg-brand-50/60 px-6 py-5">
+        <div className="mt-14 rounded-xl border border-brand-600/15 bg-brand-50/60 px-6 py-5">
           <p className="font-display font-bold">Need one of these first?</p>
           <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-stone-600">
             Tell us which integration is blocking your switch and we'll prioritize it. Email{" "}
@@ -219,7 +219,7 @@ export default async function IntegrationsPage() {
         <div className="mt-10">
           <Link
             href="/signup"
-            className="rounded-full bg-brand-600 px-5 py-2.5 font-medium text-white shadow-xs transition hover:bg-brand-700 active:scale-[0.98]"
+            className="rounded-lg bg-brand-600 px-5 py-2.5 font-medium text-white shadow-xs transition hover:bg-brand-700 active:scale-[0.98]"
           >
             Start free
           </Link>

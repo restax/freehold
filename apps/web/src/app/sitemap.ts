@@ -29,5 +29,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     page("/recommend", 0.4, "monthly"),
     page("/terms", 0.3, "monthly"),
     page("/privacy", 0.3, "monthly"),
+    page("/subprocessors", 0.3, "monthly"),
   ];
 }

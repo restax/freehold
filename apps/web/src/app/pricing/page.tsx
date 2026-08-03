@@ -10,13 +10,13 @@ import Link from "next/link";
 import { PaidPlanCta } from "@/components/free-plan-dialog";
 import { LaunchBanner } from "@/components/launch-banner";
 import { ExtractionReviewCard, MarketingFooter, MarketingNav } from "@/components/marketing";
-import { fmtPrice, LAUNCH_OFFER, launchOfferActive } from "@/lib/launch-offer";
+import { fmtPrice, LAUNCH_OFFER, launchOfferActive, launchPrice } from "@/lib/launch-offer";
 import { PAYMENTS_PAUSED } from "@/lib/payments-paused";
 
 export const metadata = {
   title: "Pricing | Freehold",
   description:
-    "Simple pricing with one honest free tier. Cloud from $0, Pro $40 and Business $85 a month with a 7-day free trial, Enterprise for standalone installs, self-hosting free forever.",
+    "Simple pricing with one honest free tier. Cloud from $0, Pro $50 and Business $80 a month. Every new signup gets a 14-day full-Pro trial with no card. Enterprise for standalone installs, self-hosting free forever.",
 };
 
 // Rendered per request so the launch offer reflects the current coupon env and
@@ -48,8 +48,7 @@ const TIERS: Array<{
     features: [
       "1 workspace user",
       "2 active transactions at a time",
-      "15 client portal accounts",
-      "2 AI credits to try pro features",
+      "5 client portal accounts",
       "Client portals and e-sign",
       "Data always readable and exportable",
     ],
@@ -60,11 +59,12 @@ const TIERS: Array<{
     name: "Pro",
     icon: Lightning,
     audience: "For working TCs and small teams.",
-    price: "$40",
+    price: "$50",
     period: "/ month",
     features: [
-      "2 users — portal logins never count",
-      "50 active transactions at a time",
+      "2 users (portal logins never count)",
+      "8 active transactions at a time",
+      "Unlimited client portal accounts",
       "AI contract extraction, unmetered",
       "Merge-field document templates",
       "Credential vault with reveal audit",
@@ -72,7 +72,7 @@ const TIERS: Array<{
       "Client invoicing with follow-up",
     ],
     cta: "Start with Pro",
-    note: "7-day free trial · cancel in two clicks",
+    note: "Every signup starts here: 14 days, no credit card",
     featured: true,
     paid: true,
   },
@@ -80,18 +80,19 @@ const TIERS: Array<{
     name: "Business",
     icon: Buildings,
     audience: "For brokerages and title companies.",
-    price: "$85",
+    price: "$80",
     period: "/ month",
     features: [
       "Everything in Pro",
       "10 users included",
-      "100 active transactions at a time",
+      "Unlimited active transactions",
+      "Unlimited client portal accounts",
       "Priority, real-estate-focused support",
       "Onboarding done with you on a call",
       "Early access to new features",
     ],
     cta: "Start with Business",
-    note: "7-day free trial · cancel in two clicks",
+    note: "Cancel in two clicks",
     paid: true,
   },
   {
@@ -103,7 +104,7 @@ const TIERS: Array<{
     features: [
       "Everything in Business",
       "Standalone hosted install, dedicated to you",
-      "Multi-tenancy — many brokerages, one system",
+      "Multi-tenancy: many brokerages, one system",
       "Multiple locations under one roof",
       "Support, upgrades, and SLAs included",
       "Guided migration and onboarding",
@@ -113,27 +114,26 @@ const TIERS: Array<{
   },
 ];
 
-const LAUNCH_BY_NAME: Record<string, number> = {
-  Pro: LAUNCH_OFFER.pro.launch,
-  Business: LAUNCH_OFFER.business.launch,
+const LAUNCH_TIER_BY_NAME: Record<string, "PRO" | "BUSINESS"> = {
+  Pro: "PRO",
+  Business: "BUSINESS",
 };
 
 export default function PricingPage() {
-  const launchActive = launchOfferActive();
   return (
     <main className="bg-stone-50 text-stone-900">
       <LaunchBanner />
       <MarketingNav />
 
       <section className="mx-auto max-w-6xl px-4 pb-16 pt-12 sm:px-6 lg:pb-24 lg:pt-16">
-        <h1 className="font-display max-w-2xl text-4xl font-extrabold leading-[1.1] tracking-tight md:text-5xl">
+        <h1 className="font-display max-w-2xl text-3xl font-bold leading-[1.1] tracking-tight md:text-4xl">
           Simple pricing. One honest free tier.
         </h1>
         <p className="mt-5 max-w-xl leading-relaxed text-stone-600">
           Legacy TC platforms run $99 or more a month. Freehold starts free, and hitting a limit
           never locks your data: existing transactions stay readable and exportable, only creating
           new ones asks you to upgrade. Paid plans include room for{" "}
-          <strong className="font-semibold text-stone-900">hundreds of active clients</strong> —
+          <strong className="font-semibold text-stone-900">hundreds of active clients</strong>,
           enough for a TC serving an entire brokerage's agent roster.
         </p>
         <p className="mt-3 max-w-xl text-sm leading-relaxed text-stone-500">
@@ -146,11 +146,15 @@ export default function PricingPage() {
         <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {TIERS.map((tier) => {
             const TierIcon = tier.icon;
-            const launchUsd = launchActive && tier.paid ? LAUNCH_BY_NAME[tier.name] : undefined;
+            const launchTier = LAUNCH_TIER_BY_NAME[tier.name];
+            const launchUsd =
+              tier.paid && launchTier && launchOfferActive(launchTier)
+                ? launchPrice(launchTier)
+                : undefined;
             return (
               <div
                 key={tier.name}
-                className={`flex flex-col rounded-2xl p-6 ${
+                className={`flex flex-col rounded-xl p-6 ${
                   tier.featured
                     ? "bg-brand-700 text-white shadow-lg shadow-brand-700/20"
                     : "border border-stone-200/70 bg-white"
@@ -169,7 +173,7 @@ export default function PricingPage() {
                 >
                   {tier.audience}
                 </p>
-                <p className="font-display mt-5 text-4xl font-extrabold tabular-nums">
+                <p className="font-display mt-5 text-4xl font-bold tabular-nums">
                   {launchUsd != null && (
                     <span
                       className={`mr-2 align-middle text-2xl font-bold line-through ${
@@ -196,8 +200,11 @@ export default function PricingPage() {
                       tier.featured ? "text-brand-100" : "text-brand-700"
                     }`}
                   >
-                    Launch price — 50% off, locked in through 2027. Ends{" "}
-                    {LAUNCH_OFFER.deadlineLabel}.
+                    Launch price:{" "}
+                    {fmtPrice(
+                      launchTier === "PRO" ? LAUNCH_OFFER.pro.off : LAUNCH_OFFER.business.off,
+                    )}{" "}
+                    off, locked in for good. Sign up by {LAUNCH_OFFER.deadlineLabel}.
                   </p>
                 )}
                 <ul className="mt-5 flex flex-col gap-2.5 text-sm">
@@ -245,12 +252,12 @@ export default function PricingPage() {
         </div>
 
         <p className="mt-5 text-center text-xs text-stone-400">
-          All billing runs through Stripe — we never see or store your card. Cancel any time from
-          the billing page; your data stays exportable.
+          All billing runs through Stripe. We never see or store your card. Cancel any time from the
+          billing page; your data stays exportable.
         </p>
 
         {/* Self-hosted band */}
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-5 rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-5">
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-5 rounded-xl border border-dashed border-stone-300 bg-white px-6 py-5">
           <div>
             <h2 className="font-display font-bold">Self-hosted</h2>
             <p className="mt-1 max-w-xl text-sm leading-relaxed text-stone-600">
@@ -279,7 +286,7 @@ export default function PricingPage() {
             <p className="mt-4 max-w-md leading-relaxed text-stone-600">
               We're building a free partner program for IT providers who manage Freehold for the
               brokerages they serve: fleet provisioning, consolidated billing, volume discounts.
-              It's in development — the first cohort of partners is shaping it with us.{" "}
+              It's in development. The first cohort of partners is shaping it with us.{" "}
               <a
                 href="mailto:partners@freeholdtc.dev"
                 className="font-medium text-brand-700 hover:text-brand-600"
@@ -291,7 +298,7 @@ export default function PricingPage() {
           <div className="flex flex-col gap-4">
             <p className="rounded-xl bg-stone-100/70 px-5 py-4 text-sm leading-relaxed text-stone-600">
               <strong className="font-medium text-stone-900">Works today:</strong> self-host
-              Freehold for any number of clients, free — every feature, no partner account needed.
+              Freehold for any number of clients, free: every feature, no partner account needed.
               The full API and signed webhooks are live for your own tooling.
             </p>
             <p className="rounded-xl bg-stone-100/70 px-5 py-4 text-sm leading-relaxed text-stone-600">
@@ -339,7 +346,7 @@ export default function PricingPage() {
             </p>
             <Link
               href="/signup"
-              className="mt-6 inline-block rounded-full bg-brand-600 px-5 py-2.5 font-medium text-white shadow-xs transition hover:bg-brand-700 active:scale-[0.98]"
+              className="mt-6 inline-block rounded-lg bg-brand-600 px-5 py-2.5 font-medium text-white shadow-xs transition hover:bg-brand-700 active:scale-[0.98]"
             >
               Start free
             </Link>

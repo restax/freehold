@@ -33,7 +33,7 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ],
       [
         "The code is public",
-        "Read every line we ship and self-host free for your own organization, forever. Nobody may resell Freehold or run it as a service for others — which keeps the project funded and your platform alive.",
+        "Read every line we ship and self-host free for your own organization, forever. Nobody may resell Freehold or run it as a service for others, which keeps the project funded and your platform alive.",
         "today",
       ],
       [
@@ -42,8 +42,8 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
         "today",
       ],
       [
-        "Ask Claude about your deals",
-        "A ready-made Claude skill queries your workspace through the API: closings this week, client portal activity, workspace stats.",
+        "Talk to your workspace from Claude",
+        "Connect Freehold to Claude Desktop or Claude Code as an MCP connector: ask about closings this week, upcoming deadlines, or a specific client, and with write access turned on, create tasks, log notes, or update a transaction's status without opening the dashboard.",
         "today",
       ],
       [
@@ -84,12 +84,12 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ],
       [
         "Cascading dates",
-        "Confirm an amendment and every dependent deadline re-dates itself instantly — manually adjusted tasks stay where you put them.",
+        "Confirm an amendment and every dependent deadline re-dates itself instantly. Manually adjusted tasks stay where you put them.",
         "today",
       ],
       [
         "Task priorities that mean it",
-        "Normal, High, Critical — your day sorts priority first, and an unresolved amendment auto-escalates to Critical two days out.",
+        "Normal, High, Critical: your day sorts priority first, and an unresolved amendment auto-escalates to Critical two days out.",
         "today",
       ],
       [
@@ -103,6 +103,11 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
         "A full studio: a 14-template starter library organized by category, merge fields for every party, and per-workspace editing of every word.",
         "today",
       ],
+      [
+        "Built-in e-signature",
+        "Send any document for signature straight from the file. Freehold runs its own OpenSign instance, so it's included on every plan: no separate account to create, no vendor contract, no per-envelope fee. Bring your own Documenso or DocuSign account instead if you'd rather.",
+        "today",
+      ],
     ],
   ],
   [
@@ -110,7 +115,7 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
     [
       [
         "Categories, grades, and auto-prospecting",
-        "Tag contacts, grade relationships A\u2013D, and Freehold queues who to touch and when.",
+        "Tag contacts, grade relationships A-D, and Freehold queues who to touch and when.",
         "today",
       ],
       [
@@ -143,7 +148,7 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ],
       [
         "Voice search",
-        "Ask out loud — “what's closing this week”, “who's the lender on Maple” — and hear the answer, from your own live data. On every page, and on client portals so buyers and agents can ask about their own file instead of calling you.",
+        "Ask out loud (“what's closing this week”, “who's the lender on Maple”) and hear the answer, from your own live data. On every page, and on client portals so buyers and agents can ask about their own file instead of calling you.",
         "today",
       ],
       ["Status filters", "See exactly the slice of your pipeline you need.", "today"],
@@ -161,7 +166,7 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ],
       [
         "Task automation",
-        "Apply a plan and every deadline becomes a dated, assigned task — and when the contract's dates change, open tasks cascade with them.",
+        "Apply a plan and every deadline becomes a dated, assigned task. When the contract's dates change, open tasks cascade with them.",
         "today",
       ],
       [
@@ -171,19 +176,19 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ],
       [
         "Scheduled sends and quiet hours",
-        "Write now, deliver later: schedule any email for a future date, and set workspace quiet hours so automated emails never land at 2am — they wait for morning.",
+        "Write now, deliver later: schedule any email for a future date, and set workspace quiet hours so automated emails never land at 2am. They wait for morning.",
         "today",
       ],
       ["Shared team workflows", "Everyone works the same file with the same live state.", "today"],
       ["Task assignment by role", "New tasks route to the right person automatically.", "request"],
       [
         "Email templates attached to tasks",
-        "One click on any task opens a merge-filled email, with the right templates suggested for that task. A 14-template starter library covers contract-to-close, listing, and post-close — plus a formatting editor with live preview, merge-field picker, and a workspace signature and footer you set once.",
+        "One click on any task opens a merge-filled email, with the right templates suggested for that task. A 14-template starter library covers contract-to-close, listing, and post-close, plus a formatting editor with live preview, merge-field picker, and a workspace signature and footer you set once.",
         "today",
       ],
       [
         "Voice-to-email dictation",
-        "Talk instead of type: dictation powered by Deepgram's Nova model transcribes with excellent accuracy — punctuation and all — straight into your compose box. Paid plans; self-hosters bring their own key.",
+        "Talk instead of type: dictation powered by Deepgram's Nova model transcribes with excellent accuracy, punctuation and all, straight into your compose box. Paid plans; self-hosters bring their own key.",
         "today",
       ],
     ],
@@ -193,12 +198,12 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
     [
       [
         "Your own website on your subdomain",
-        "Every workspace gets its own address — yourname.freeholdtc.dev — with a publishable promotional page: your logo, services, contact info, and a new-client registration form that lands in your contacts as a lead with a same-day follow-up task. Most TC platforms don't give you a website at all. See the live example at freeholdtc.dev/example-site.",
+        "Every workspace gets its own address (yourname.freeholdtc.dev) with a publishable promotional page: your logo, services, contact info, and a new-client registration form that lands in your contacts as a lead with a same-day follow-up task. Most TC platforms don't give you a website at all. See the live example at freeholdtc.dev/example-site.",
         "today",
       ],
       [
         "Intake forms with document upload",
-        "Buyer and seller intake forms live on the client portal: legal names, lender, attorney, HOA — plus uploads like pre-approvals and deeds. Submissions land on the transaction with a review task, and every workspace can rename its sides (sell side, sale side, list side) everywhere.",
+        "Buyer and seller intake forms live on the client portal: legal names, lender, attorney, HOA, plus uploads like pre-approvals and deeds. Submissions land on the transaction with a review task, and every workspace can rename its sides (sell side, sale side, list side) everywhere.",
         "today",
       ],
       [
@@ -208,22 +213,22 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ],
       [
         "Portal colour themes & fonts",
-        "Pick a colour theme and typeface for the client portal in Settings — header, buttons, and links repaint to match, and the same controls colour-code task priorities and highlight urgent rows on your dashboard. Try the live switcher at the top of this page.",
+        "Pick a colour theme and typeface for the client portal in Settings: header, buttons, and links repaint to match, and the same controls colour-code task priorities and highlight urgent rows on your dashboard. Try the live switcher at the top of this page.",
         "today",
       ],
       [
         "Works on any phone",
-        "Dashboard and portals are responsive web — clients tap a link and it just opens. Nothing to install, nothing to update.",
+        "Dashboard and portals are responsive web: clients tap a link and it just opens. Nothing to install, nothing to update.",
         "today",
       ],
       [
         "QR codes for your marketing",
-        "One click generates print-quality QR codes for your site — business cards, yard signs, open-house flyers. A scan becomes a registered lead.",
+        "One click generates print-quality QR codes for your site: business cards, yard signs, open-house flyers. A scan becomes a registered lead.",
         "today",
       ],
       [
         "Buyer & seller portals",
-        "A simple milestone timeline, the deal team, and documents \u2014 on a private, revocable link. No passwords.",
+        "A simple milestone timeline, the deal team, and documents, on a private, revocable link. No passwords.",
         "today",
       ],
       [
@@ -238,7 +243,7 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ],
       [
         "Calendar feeds",
-        "Every portal, and every person on your team, has a subscribe-once calendar feed \u2014 dates sync to Google, Outlook, or Apple Calendar and stay current.",
+        "Every portal, and every person on your team, has a subscribe-once calendar feed: dates sync to Google, Outlook, or Apple Calendar and stay current.",
         "today",
       ],
       [
@@ -262,17 +267,17 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
     [
       [
         "Database-enforced isolation",
-        "Every workspace is walled off with Postgres row-level security — enforced by the database itself, not just application code.",
+        "Every workspace is walled off with Postgres row-level security, enforced by the database itself, not just application code.",
         "today",
       ],
       [
         "Documents encrypted at rest",
-        "Every uploaded document — contracts, intake files, disclosures — is envelope-encrypted at the application layer before it touches storage. Direct database access yields ciphertext.",
+        "Every uploaded document (contracts, intake files, disclosures) is envelope-encrypted at the application layer before it touches storage. Direct database access yields ciphertext.",
         "today",
       ],
       [
         "Encrypted credential vault",
-        "Client logins are envelope-encrypted at rest and revealed only on click — never stored or displayed in plaintext.",
+        "Client logins are envelope-encrypted at rest and revealed only on click, never stored or displayed in plaintext.",
         "today",
       ],
       [
@@ -282,12 +287,12 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ],
       [
         "Full audit log",
-        "Sensitive actions — deletions, portal access changes, credential reveals, sent emails, integration connections — are recorded with who did them, viewable in Settings.",
+        "Sensitive actions (deletions, portal access changes, credential reveals, sent emails, integration connections) are recorded with who did them, viewable in Settings.",
         "today",
       ],
       [
         "Signed, revocable links",
-        "Portals ride single-purpose signed links you can deactivate instantly — the same link resumes if you reactivate. Webhooks are HMAC-signed.",
+        "Portals ride single-purpose signed links you can deactivate instantly. The same link resumes if you reactivate. Webhooks are HMAC-signed.",
         "today",
       ],
       [
@@ -297,22 +302,22 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ],
       [
         "Two-factor authentication",
-        "TOTP codes from any authenticator app, with one-time backup codes — enable it in Settings in under a minute.",
+        "TOTP codes from any authenticator app, with one-time backup codes. Enable it in Settings in under a minute.",
         "today",
       ],
       [
         "Bring your own storage",
-        "Keep every document in an S3-compatible bucket you own — AWS S3, Cloudflare R2, Backblaze B2, Wasabi, or MinIO. Freehold reads and writes it, but the files live in infrastructure you control, not ours.",
+        "Keep every document in an S3-compatible bucket you own: AWS S3, Cloudflare R2, Backblaze B2, Wasabi, or MinIO. Freehold reads and writes it, but the files live in infrastructure you control, not ours.",
         "today",
       ],
       [
         "Your data is never locked in",
-        "Download your entire workspace — records and every document — as one archive any time. Connect your own storage and a full copy is delivered there automatically every night.",
+        "Download your entire workspace, records and every document, as one archive any time. Connect your own storage and a full copy is delivered there automatically every night.",
         "today",
       ],
       [
         "Daily briefing in your inbox",
-        "Opt in and every morning owners and admins get an emailed summary of every active transaction — status, key dates, and contact details for every party — with a PDF attached. Readable offline, so you're covered even without a connection.",
+        "Opt in and every morning owners and admins get an emailed summary of every active transaction (status, key dates, and contact details for every party) with a PDF attached. Readable offline, so you're covered even without a connection.",
         "today",
       ],
     ],
@@ -331,7 +336,7 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ["Record ownership tracking", "See who created and owns every record.", "request"],
       [
         "Support tickets, right where you're working",
-        "Report an issue from any page — one box in the sidebar, tagged automatically with what you were looking at. Track replies on your own tickets page; no separate portal, no email back-and-forth.",
+        "Report an issue from any page: one box in the sidebar, tagged automatically with what you were looking at. Track replies on your own tickets page; no separate portal, no email back-and-forth.",
         "today",
       ],
     ],
@@ -341,7 +346,7 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
     [
       [
         "Per-state license tracking",
-        "Every user's profile holds their TC licenses by state — number, expiration, the document itself — with amber and red alerts as expiry approaches.",
+        "Every user's profile holds their TC licenses by state (number, expiration, the document itself) with amber and red alerts as expiry approaches.",
         "today",
       ],
       [
@@ -351,12 +356,12 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ],
       [
         "License enforcement by operating state",
-        "Mark which of your states require a TC license, then choose warn or block: Freehold flags — or refuses — a file with nobody licensed assigned.",
+        "Mark which of your states require a TC license, then choose warn or block: Freehold flags (or refuses) a file with nobody licensed assigned.",
         "today",
       ],
       [
         "Coordinator directory",
-        "Search Freehold-enabled workspaces and the public FindTCPros directory in one list, filtered by state, specialty, and software — know who to call before you need them.",
+        "Search Freehold-enabled workspaces and the public FindTCPros directory in one list, filtered by state, specialty, and software. Know who to call before you need them.",
         "today",
       ],
       [
@@ -371,7 +376,7 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ],
       [
         "Client invoicing without a payment processor",
-        "Bill a client for TC services as a document, not a charge — email it, track it as an open follow-up, mark it paid however they actually paid. Route it through your own ERPNext instead and status mirrors back automatically.",
+        "Bill a client for TC services as a document, not a charge: email it, track it as an open follow-up, mark it paid however they actually paid. Route it through your own ERPNext instead and status mirrors back automatically.",
         "today",
       ],
     ],
@@ -409,12 +414,12 @@ const SCREENS: Array<[string, string, string]> = [
   [
     "/marketing/screens/transaction-workspace.png",
     "Transaction workspace with listing details, tabbed tasks, and key dates in three columns",
-    "The transaction workspace: checklist, files, participants, payout \u2014 with per-portal visibility toggles on every row.",
+    "The transaction workspace: checklist, files, participants, payout, with per-portal visibility toggles on every row.",
   ],
   [
     "/marketing/screens/portal-agent.png",
     "Managed agent portal with pipeline stats, on-track projection, and upcoming dates",
-    "What your agents see: their whole book with you, live \u2014 pipeline, next 30 days, closed history.",
+    "What your agents see: their whole book with you, live: pipeline, next 30 days, closed history.",
   ],
   [
     "/marketing/screens/portal-client.png",
@@ -429,7 +434,7 @@ export default function FeaturesPage() {
       <MarketingNav />
 
       <section className="mx-auto max-w-6xl px-4 pb-20 pt-12 sm:px-6 lg:pt-16">
-        <h1 className="font-display max-w-2xl text-4xl font-extrabold leading-[1.1] tracking-tight md:text-5xl">
+        <h1 className="font-display max-w-2xl text-3xl font-bold leading-[1.1] tracking-tight md:text-4xl">
           Every feature, honestly labeled.
         </h1>
         <p className="mt-5 max-w-xl leading-relaxed text-stone-600">
@@ -453,7 +458,7 @@ export default function FeaturesPage() {
         {/* The Handbook. Sold as the problem it solves — the knowledge that
             currently lives in one person's head — with no mention of how it
             works. Nobody buys "persistent context". */}
-        <div className="mt-14 overflow-hidden rounded-2xl border border-brand-600/20 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_10px_rgb(41_37_36/0.05)]">
+        <div className="mt-14 overflow-hidden rounded-xl border border-brand-600/20 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_10px_rgb(41_37_36/0.05)]">
           <div className="grid gap-0 md:grid-cols-[1.1fr_1fr]">
             <div className="p-6 sm:p-8">
               <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">
@@ -463,20 +468,20 @@ export default function FeaturesPage() {
                 Everything your team knows, where they need it
               </h2>
               <p className="mt-3 max-w-md text-sm leading-relaxed text-stone-600">
-                The things you'd tell someone new on their first day — which client wants a phone
+                The things you'd tell someone new on their first day: which client wants a phone
                 call when a date moves, which vendor only covers one county, whose broker reviews
                 documents before payment. Write it down once, on the client or the contact it
                 belongs to, and Freehold puts it in front of whoever opens the file.
               </p>
               <p className="mt-3 max-w-md text-sm leading-relaxed text-stone-600">
-                Grade the people you work with A–F and say why. A note like{" "}
-                <em>"blamed us for a deal falling through — don't take their work"</em> is still
+                Grade the people you work with A-F and say why. A note like{" "}
+                <em>"blamed us for a deal falling through. Don't take their work"</em> is still
                 there two years later, when the person who wrote it has forgotten and someone new is
                 about to say yes.
               </p>
               <p className="mt-4 text-xs leading-relaxed text-stone-500">
                 Internal only. None of it appears in a client portal or an email. Switch it off
-                entirely if it isn't for you — and switch off just the daily summary if you want the
+                entirely if it isn't for you, and switch off just the daily summary if you want the
                 notes without the AI.
               </p>
             </div>
@@ -495,7 +500,7 @@ export default function FeaturesPage() {
                       Sunrise Realty · their client
                     </p>
                     <p className="text-sm leading-snug text-stone-700">
-                      Wants a phone call if any contract date moves — never just an email
+                      Wants a phone call if any contract date moves, never just an email
                     </p>
                   </div>
                   <div>
@@ -534,7 +539,7 @@ export default function FeaturesPage() {
             Real screenshots, not mockups
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-stone-600">
-            Straight from the live demo workspace — what you see is what ships.{" "}
+            Straight from the live demo workspace: what you see is what ships.{" "}
             <a href="/demo" className="font-medium text-brand-700 hover:text-brand-600">
               Click around it yourself →
             </a>
@@ -543,7 +548,7 @@ export default function FeaturesPage() {
             {SCREENS.map(([src, alt, caption]) => (
               <figure
                 key={src}
-                className="overflow-hidden rounded-2xl border border-stone-200/70 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_8px_rgb(41_37_36/0.04)]"
+                className="overflow-hidden rounded-xl border border-stone-200/70 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_8px_rgb(41_37_36/0.04)]"
               >
                 <Image src={src} alt={alt} width={1360} height={860} className="w-full" />
                 <figcaption className="border-t border-stone-100 px-4 py-2.5 text-xs text-stone-500">
@@ -584,7 +589,7 @@ export default function FeaturesPage() {
           ))}
         </div>
 
-        <div className="mt-14 rounded-2xl border border-brand-600/15 bg-brand-50/60 px-6 py-6">
+        <div className="mt-14 rounded-xl border border-brand-600/15 bg-brand-50/60 px-6 py-6">
           <h2 className="font-display text-xl font-bold tracking-tight">
             &quot;On request&quot; means days, not weeks.
           </h2>
@@ -626,7 +631,7 @@ export default function FeaturesPage() {
         <div className="mt-10">
           <Link
             href="/signup"
-            className="rounded-full bg-brand-600 px-5 py-2.5 font-medium text-white shadow-xs transition hover:bg-brand-700 active:scale-[0.98]"
+            className="rounded-lg bg-brand-600 px-5 py-2.5 font-medium text-white shadow-xs transition hover:bg-brand-700 active:scale-[0.98]"
           >
             Start free
           </Link>
