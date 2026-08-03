@@ -15,7 +15,7 @@ const DEMO_INTAKE = FORM_TEMPLATES.find((t) => t.id === "basic_client");
 export const metadata = {
   title: "Example tenant website | Freehold",
   description:
-    "A live example of the promotional website every Freehold workspace gets on its own subdomain — with new-client registration that lands as a lead.",
+    "A live example of the promotional website every Freehold workspace gets on its own subdomain, with new-client registration that lands as a lead.",
 };
 
 /**
@@ -28,7 +28,7 @@ const EXAMPLE: TenantSiteConfig = {
   showRegistration: true,
   tagline: "Contract to close, handled.",
   about:
-    "Harborline coordinates real-estate transactions end to end — contracts, deadlines, documents, and closings — so agents stay in the field and clients always know what's next.",
+    "Harborline coordinates real-estate transactions end to end (contracts, deadlines, documents, and closings) so agents stay in the field and clients always know what's next.",
   phone: "(555) 014-2288",
   email: "hello@harborline.example",
   services:
@@ -68,7 +68,7 @@ export default async function ExampleSitePage({
         heroImageSrc="/site/site-team.jpg"
         about={{
           heading: "About us",
-          body: "Harborline is Dana Whitfield and Priya Rao. They met ten years ago running the closing desk at a harbor-town brokerage, and they have kept files moving ever since: more than forty transactions a year, every one handled by the same two people who answer the phone. Small on purpose — you always know who has your file.",
+          body: "Harborline is Dana Whitfield and Priya Rao. They met ten years ago running the closing desk at a harbor-town brokerage, and they have kept files moving ever since: more than forty transactions a year, every one handled by the same two people who answer the phone. Small on purpose: you always know who has your file.",
         }}
       />
     </>

@@ -17,7 +17,7 @@ export default function DemoEntryPage() {
 
   return (
     <main className="flex min-h-[100dvh] items-center justify-center bg-stone-50 p-4">
-      <div className="w-full max-w-sm rounded-2xl border border-stone-200/70 bg-white p-8 text-center shadow-sm">
+      <div className="w-full max-w-sm rounded-xl border border-stone-200/70 bg-white p-8 text-center shadow-sm">
         <p className="font-display text-lg font-bold text-brand-800">Freehold</p>
         <div className="mx-auto mt-6 h-8 w-8 animate-spin rounded-full border-[3px] border-stone-200 border-t-brand-600" />
         <p className="mt-5 text-sm font-medium text-stone-700">Logging you in to the live demo…</p>

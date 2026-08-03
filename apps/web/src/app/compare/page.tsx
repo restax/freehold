@@ -57,7 +57,7 @@ const ROWS: Array<[string, string, string, string]> = [
   ],
   [
     "Price",
-    "$0, $40, or $85 a month — flat, users included",
+    "$0, $50, or $80 a month: flat, users included",
     "$0 forever; an unused PC you already own works",
     "Standard plan rates on one consolidated invoice",
   ],
@@ -69,7 +69,7 @@ export default function ComparePage() {
       <MarketingNav />
 
       <section className="mx-auto max-w-6xl px-4 pb-20 pt-12 sm:px-6 lg:pt-16">
-        <h1 className="font-display max-w-3xl text-4xl font-extrabold leading-[1.1] tracking-tight md:text-5xl">
+        <h1 className="font-display max-w-3xl text-3xl font-bold leading-[1.1] tracking-tight md:text-4xl">
           Three honest ways to run Freehold.
         </h1>
         <p className="mt-5 max-w-xl leading-relaxed text-stone-600">
@@ -81,7 +81,7 @@ export default function ComparePage() {
 
         {/* Choose-if cards with imagery */}
         <div className="mt-10 grid gap-4 md:grid-cols-3">
-          <div className="flex flex-col overflow-hidden rounded-2xl border border-stone-200/70 bg-white">
+          <div className="flex flex-col overflow-hidden rounded-xl border border-stone-200/70 bg-white">
             <div className="relative aspect-[16/9]">
               <Image
                 src={movingDay}
@@ -104,7 +104,7 @@ export default function ComparePage() {
               </Link>
             </div>
           </div>
-          <div className="flex flex-col overflow-hidden rounded-2xl border border-stone-200/70 bg-white">
+          <div className="flex flex-col overflow-hidden rounded-xl border border-stone-200/70 bg-white">
             <div className="relative aspect-[16/9]">
               <Image
                 src={closingKeys}
@@ -132,7 +132,7 @@ export default function ComparePage() {
               </a>
             </div>
           </div>
-          <div className="flex flex-col overflow-hidden rounded-2xl border border-stone-200/70 bg-white">
+          <div className="flex flex-col overflow-hidden rounded-xl border border-stone-200/70 bg-white">
             <div className="relative aspect-[16/9]">
               <Image
                 src={brokerageDusk}
@@ -158,7 +158,7 @@ export default function ComparePage() {
         </div>
 
         {/* The honest table */}
-        <div className="mt-12 overflow-x-auto rounded-2xl border border-stone-200/70 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_8px_rgb(41_37_36/0.04)]">
+        <div className="mt-12 overflow-x-auto rounded-xl border border-stone-200/70 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_8px_rgb(41_37_36/0.04)]">
           <table className="w-full min-w-[760px] text-sm">
             <thead>
               <tr className="border-b border-stone-200 text-left">
@@ -181,7 +181,7 @@ export default function ComparePage() {
           </table>
         </div>
 
-        <div className="mt-10 rounded-2xl border border-brand-600/15 bg-brand-50/60 px-6 py-5">
+        <div className="mt-10 rounded-xl border border-brand-600/15 bg-brand-50/60 px-6 py-5">
           <p className="font-display font-bold">None of these doors lock behind you.</p>
           <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-stone-600">
             Start on Cloud and move to your own server later, or run your own server until you're

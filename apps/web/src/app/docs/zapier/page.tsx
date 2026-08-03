@@ -26,11 +26,11 @@ export default function ZapierDocsPage() {
     <main className="bg-stone-50 text-stone-900">
       <MarketingNav />
       <section className="mx-auto max-w-3xl px-4 pb-20 pt-12 sm:px-6">
-        <h1 className="font-display text-4xl font-extrabold leading-[1.1] tracking-tight">
+        <h1 className="font-display text-4xl font-bold leading-[1.1] tracking-tight">
           Freehold + Zapier
         </h1>
         <p className="mt-4 leading-relaxed text-stone-600">
-          Zapier connects your workspace to DocuSign, Dotloop, and 7,000+ other apps — using{" "}
+          Zapier connects your workspace to DocuSign, Dotloop, and 7,000+ other apps, using{" "}
           <em>your</em> accounts in those tools, with nothing to install and no approval processes.
           Freehold's side is powered by instant, signed webhooks and the{" "}
           <Link href="/docs/api" className="text-brand-700 underline hover:text-brand-600">
@@ -39,7 +39,7 @@ export default function ZapierDocsPage() {
           .
         </p>
 
-        <div className="mt-8 rounded-2xl border border-stone-200/70 bg-white p-6">
+        <div className="mt-8 rounded-xl border border-stone-200/70 bg-white p-6">
           <h2 className="font-display text-xl font-bold tracking-tight">What Freehold offers</h2>
           <p className="mt-2 text-sm leading-relaxed text-stone-600">
             <strong>Instant triggers:</strong> new transaction, new contact (including website
@@ -64,50 +64,50 @@ export default function ZapierDocsPage() {
         </div>
 
         <h2 className="font-display mt-12 text-2xl font-bold tracking-tight">
-          Recipe 1 — DocuSign signing loop
+          Recipe 1: DocuSign signing loop
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-stone-600">
           Upload a document in Freehold, DocuSign sends it for signature from your own DocuSign
           account, and the completion lands back on the transaction.
         </p>
         <ol className="mt-2">
-          <Step n={1} title="Trigger: Freehold — Document Uploaded">
+          <Step n={1} title="Trigger: Freehold - Document Uploaded">
             With the Freehold app, pick the "Document Uploaded" trigger. (Webhooks by Zapier works
             too: catch hook, then add a webhook endpoint in Freehold Settings for{" "}
             <code className="font-mono text-xs">document.uploaded</code>.)
           </Step>
-          <Step n={2} title="Action: DocuSign — Send Envelope">
+          <Step n={2} title="Action: DocuSign - Send Envelope">
             Connect your DocuSign account in Zapier and use "Send Envelope Using Document" (or a
             template). Map the signer names and emails from the transaction.
           </Step>
-          <Step n={3} title="Trigger: DocuSign — Envelope Completed">
+          <Step n={3} title="Trigger: DocuSign - Envelope Completed">
             A second Zap: when DocuSign reports the envelope complete…
           </Step>
-          <Step n={4} title="Action: Freehold — Add Transaction Note">
+          <Step n={4} title="Action: Freehold - Add Transaction Note">
             …write it back: "Signed via DocuSign" lands on the transaction's Notes, timestamped. Or
             create a task for the next step of your checklist.
           </Step>
         </ol>
 
         <h2 className="font-display mt-12 text-2xl font-bold tracking-tight">
-          Recipe 2 — Dotloop sync
+          Recipe 2: Dotloop sync
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-stone-600">
           Working alongside a team that lives in Dotloop? Keep both systems current without double
           entry.
         </p>
         <ol className="mt-2">
-          <Step n={1} title="Trigger: Freehold — New Transaction">
+          <Step n={1} title="Trigger: Freehold - New Transaction">
             Every new Freehold transaction…
           </Step>
-          <Step n={2} title="Action: Dotloop — Create Loop">
+          <Step n={2} title="Action: Dotloop - Create Loop">
             …creates a matching loop in your Dotloop account, with the address and details mapped.
           </Step>
-          <Step n={3} title="Trigger: Dotloop — Loop Status Change">
+          <Step n={3} title="Trigger: Dotloop - Loop Status Change">
             And in the other direction: when a loop's status changes…
           </Step>
-          <Step n={4} title="Action: Freehold — Create Task or Add Note">
-            …Freehold gets a task ("Loop moved to Under Contract — update dates") or a note on the
+          <Step n={4} title="Action: Freehold - Create Task or Add Note">
+            …Freehold gets a task ("Loop moved to Under Contract - update dates") or a note on the
             transaction.
           </Step>
         </ol>
@@ -131,8 +131,8 @@ export default function ZapierDocsPage() {
         </p>
         <p className="mt-4 text-xs text-stone-400">
           Multi-step Zaps require a paid Zapier plan (Zapier's pricing, not ours). Freehold's
-          bundled e-signing via Documenso needs none of this — Zapier is for teams that specifically
-          want DocuSign, Dotloop, or the rest of the Zapier catalog.
+          built-in e-signing needs none of this. Zapier is for teams that specifically want
+          DocuSign, Dotloop, or the rest of the Zapier catalog.
         </p>
       </section>
       <MarketingFooter />

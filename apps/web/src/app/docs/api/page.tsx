@@ -47,7 +47,7 @@ export default function ApiDocsPage() {
       <MarketingNav />
 
       <section className="mx-auto max-w-3xl px-4 pb-20 pt-12 sm:px-6 lg:pt-16">
-        <h1 className="font-display text-4xl font-extrabold leading-[1.1] tracking-tight md:text-5xl">
+        <h1 className="font-display text-3xl font-bold leading-[1.1] tracking-tight md:text-4xl">
           API reference
         </h1>
         <p className="mt-4 leading-relaxed text-stone-600">
@@ -153,7 +153,7 @@ function verify(secret, header, body) {
           <code className="font-mono text-xs">~/.claude/skills/</code>, set{" "}
           <code className="font-mono text-xs">FREEHOLD_API_KEY</code> and{" "}
           <code className="font-mono text-xs">FREEHOLD_API_URL</code>, and ask Claude things like
-          "what closes this week?" or "has my client opened their portal?" — answered live from your
+          "what closes this week?" or "has my client opened their portal?", answered live from your
           workspace.
         </p>
 
@@ -189,7 +189,7 @@ function verify(secret, header, body) {
         <div className="mt-10">
           <Link
             href="/signup"
-            className="rounded-full bg-brand-600 px-5 py-2.5 font-medium text-white shadow-xs transition hover:bg-brand-700 active:scale-[0.98]"
+            className="rounded-lg bg-brand-600 px-5 py-2.5 font-medium text-white shadow-xs transition hover:bg-brand-700 active:scale-[0.98]"
           >
             Start free
           </Link>

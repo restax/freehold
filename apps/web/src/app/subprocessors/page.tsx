@@ -14,7 +14,7 @@ const GROUPS: Array<[string, Row[]]> = [
     [
       [
         "Vercel Inc.",
-        "Runs the application — every page load and API request.",
+        "Runs the application: every page load and API request.",
         "All traffic passing through Freehold, including session cookies.",
         "United States",
       ],
@@ -27,7 +27,7 @@ const GROUPS: Array<[string, Row[]]> = [
       [
         "Cloudflare, Inc. (R2)",
         "Object storage for uploaded documents.",
-        "Every uploaded file — envelope-encrypted before it leaves our servers, so Cloudflare holds ciphertext, not readable documents.",
+        "Every uploaded file, envelope-encrypted before it leaves our servers, so Cloudflare holds ciphertext, not readable documents.",
         "United States / global edge",
       ],
       [
@@ -78,7 +78,7 @@ const GROUPS: Array<[string, Row[]]> = [
       ],
       [
         "Slack Technologies, LLC",
-        "Internal alerts to the Freehold team — new signups, support tickets, payment issues.",
+        "Internal alerts to the Freehold team: new signups, support tickets, payment issues.",
         "Operational alerts, which sometimes include a customer's name or email. Never document contents or contract data.",
         "United States",
       ],
@@ -90,7 +90,7 @@ const GROUPS: Array<[string, Row[]]> = [
       [
         "Stripe, Inc.",
         "Processes Freehold Cloud subscription payments.",
-        "Billing details and payment method — we never see or store your card number.",
+        "Billing details and payment method. We never see or store your card number.",
         "United States",
       ],
       [
@@ -115,17 +115,17 @@ export default function SubprocessorsPage() {
           This is the complete list of third parties Freehold Cloud sends data to in order to run
           the service, what each one does, and what they can see. We add a vendor here the same day
           we start sending it data, not months later. If you self-host Freehold, none of this
-          applies — your data goes nowhere but your own server, and you choose your own
+          applies: your data goes nowhere but your own server, and you choose your own
           infrastructure.
         </p>
         <p>
           <strong>E-signature is built in, not outsourced.</strong> Freehold runs its own instance
-          of OpenSign — the open-source e-signature project — on our own infrastructure
-          (DigitalOcean, listed below). That means signing documents is included with every plan: no
-          separate e-signature subscription, no per-envelope fee, no account to create with another
-          company. If you'd rather use your own Documenso account or DocuSign, you can connect one
-          from Settings — at that point you have a direct vendor relationship with them, not us, and
-          this page doesn't cover what they do with your data.
+          of OpenSign (the open-source e-signature project) on our own infrastructure (DigitalOcean,
+          listed below). That means signing documents is included with every plan: no separate
+          e-signature subscription, no per-envelope fee, no account to create with another company.
+          If you'd rather use your own Documenso account or DocuSign, you can connect one from
+          Settings. At that point you have a direct vendor relationship with them, not us, and this
+          page doesn't cover what they do with your data.
         </p>
       </div>
 
@@ -161,11 +161,11 @@ export default function SubprocessorsPage() {
 
       <div className="mt-10 flex max-w-prose flex-col gap-4 text-sm leading-relaxed text-stone-700">
         <p>
-          Two things not on this list on purpose. First, optional sign-in with Google or Microsoft —
+          Two things not on this list on purpose. First, optional sign-in with Google or Microsoft:
           if you choose one of those at login, that provider only ever sees what any OAuth sign-in
           shares (your name and email), and only if you pick it. Second, any integration you connect
-          yourself — Follow Up Boss, Twenty CRM, Zapier, ERPNext, your own Documenso or DocuSign
-          account — is a relationship between you and that vendor. We send data there because you
+          yourself (Follow Up Boss, Twenty CRM, Zapier, ERPNext, your own Documenso or DocuSign
+          account) is a relationship between you and that vendor. We send data there because you
           told us to; we don't add a step of our own in between.
         </p>
         <p>

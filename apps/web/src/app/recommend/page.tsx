@@ -4,7 +4,7 @@ import { MarketingFooter, MarketingNav } from "@/components/marketing";
 export const metadata = {
   title: "Recommend Freehold | Freehold",
   description:
-    "Freehold pays no affiliate commissions — recommendations are earned or they don't happen. If we've earned yours, here's where it helps most.",
+    "Freehold pays no affiliate commissions: recommendations are earned or they don't happen. If we've earned yours, here's where it helps most.",
 };
 
 const WAYS = [
@@ -25,7 +25,7 @@ const WAYS = [
   {
     icon: GithubLogo,
     title: "Write about your experience",
-    body: "A review, a comparison, a forum reply — anywhere TCs read. Good or critical, honest words help people decide. Review platforms are coming; for now, GitHub and your own channels are home.",
+    body: "A review, a comparison, a forum reply, anywhere TCs read. Good or critical, honest words help people decide. Review platforms are coming; for now, GitHub and your own channels are home.",
     cta: "Open a discussion",
     href: "https://github.com/restax/freehold",
   },
@@ -37,13 +37,13 @@ export default function RecommendPage() {
       <MarketingNav />
 
       <section className="mx-auto max-w-3xl px-4 pb-20 pt-12 sm:px-6 lg:pt-16">
-        <h1 className="font-display max-w-xl text-4xl font-extrabold leading-[1.1] tracking-tight md:text-5xl">
-          Recommend Freehold — because you want to.
+        <h1 className="font-display max-w-xl text-3xl font-bold leading-[1.1] tracking-tight md:text-4xl">
+          Recommend Freehold, because you want to.
         </h1>
         <p className="mt-5 max-w-xl leading-relaxed text-stone-600">
           Here's our deal: we pay no affiliate commissions, ever. Other platforms hand recommenders
           20% of your subscription forever, which is why so many "reviews" in this industry read
-          like ads. A Freehold recommendation can't be bought — so if we've earned yours, it means
+          like ads. A Freehold recommendation can't be bought, so if we've earned yours, it means
           something, and here's where it helps most.
         </p>
 
@@ -53,7 +53,7 @@ export default function RecommendPage() {
             return (
               <div
                 key={way.title}
-                className="flex flex-col gap-3 rounded-2xl border border-stone-200/70 bg-white p-6 sm:flex-row sm:items-center sm:gap-6"
+                className="flex flex-col gap-3 rounded-xl border border-stone-200/70 bg-white p-6 sm:flex-row sm:items-center sm:gap-6"
               >
                 <IconComponent
                   size={28}

@@ -11,7 +11,7 @@ const OFFERINGS: Array<[title: string, mono: string, body: string]> = [
   [
     "Self-hosted install",
     "SH",
-    "Your own Freehold on your own server or cloud account — we provision it, secure it (TLS, backups, updates), and hand you the keys. You own the data and the box.",
+    "Your own Freehold on your own server or cloud account. We provision it, secure it (TLS, backups, updates), and hand you the keys. You own the data and the box.",
   ],
   [
     "DocuSign connection",
@@ -21,7 +21,7 @@ const OFFERINGS: Array<[title: string, mono: string, body: string]> = [
   [
     "Data migration",
     "→",
-    "Transactions, contacts, and documents out of your legacy TC platform or spreadsheets and into Freehold — mapped, dry-run previewed, and verified together before cutover.",
+    "Transactions, contacts, and documents out of your legacy TC platform or spreadsheets and into Freehold: mapped, dry-run previewed, and verified together before cutover.",
   ],
   [
     "Email & domain setup",
@@ -31,7 +31,7 @@ const OFFERINGS: Array<[title: string, mono: string, body: string]> = [
   [
     "Training & onboarding",
     "Tr",
-    "A working session with your team on your real deals: checklists, cascading dates, portals, and the daily routine — not a canned demo.",
+    "A working session with your team on your real deals: checklists, cascading dates, portals, and the daily routine, not a canned demo.",
   ],
 ];
 
@@ -41,11 +41,11 @@ export default function ServicesPage() {
       <MarketingNav />
 
       <section className="mx-auto max-w-6xl px-4 pb-20 pt-12 sm:px-6 lg:pt-16">
-        <h1 className="font-display max-w-2xl text-4xl font-extrabold leading-[1.1] tracking-tight md:text-5xl">
+        <h1 className="font-display max-w-2xl text-3xl font-bold leading-[1.1] tracking-tight md:text-4xl">
           Don't want to touch servers? We'll set it up.
         </h1>
         <p className="mt-5 max-w-xl leading-relaxed text-stone-600">
-          Freehold is source-available — anyone can self-host it free for their own organization,
+          Freehold is source-available: anyone can self-host it free for their own organization,
           forever. If you'd rather spend that time on closings, our team does the technical work for
           a flat fee, quoted up front. No subscriptions, no surprises.
         </p>
@@ -54,7 +54,7 @@ export default function ServicesPage() {
           {OFFERINGS.map(([title, mono, body]) => (
             <div
               key={title}
-              className="flex gap-4 rounded-2xl border border-stone-200/70 bg-white p-5"
+              className="flex gap-4 rounded-xl border border-stone-200/70 bg-white p-5"
             >
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-stone-100 font-display text-base font-bold text-stone-700">
                 {mono}
@@ -67,7 +67,7 @@ export default function ServicesPage() {
           ))}
         </div>
 
-        <div className="mt-12 rounded-2xl border border-stone-200/70 bg-white p-6 sm:p-8">
+        <div className="mt-12 rounded-xl border border-stone-200/70 bg-white p-6 sm:p-8">
           <h2 className="font-display text-2xl font-bold tracking-tight">
             Tell us what you're moving from
           </h2>
