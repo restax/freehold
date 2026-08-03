@@ -139,12 +139,14 @@ export default async function CalendarPage({
             <div className="flex overflow-hidden rounded-lg border border-stone-300 text-sm">
               <Link
                 href={`/dashboard/calendar?month=${monthKey(monthStart)}&scope=mine`}
+                title="Show only tasks and closings assigned to you"
                 className={`px-3 py-1.5 ${scope === "mine" ? "bg-brand-700 text-white" : "bg-white text-stone-600 hover:bg-stone-50"}`}
               >
                 Mine
               </Link>
               <Link
                 href={`/dashboard/calendar?month=${monthKey(monthStart)}&scope=all`}
+                title="Show every task and closing across the workspace"
                 className={`px-3 py-1.5 ${scope === "all" ? "bg-brand-700 text-white" : "bg-white text-stone-600 hover:bg-stone-50"}`}
               >
                 Everyone
@@ -155,12 +157,14 @@ export default async function CalendarPage({
             href={`/dashboard/calendar?month=${monthKey(addMonths(monthStart, -1))}&scope=${scope}`}
             className={btnGhost}
             aria-label="Previous month"
+            title="Previous month"
           >
             ←
           </Link>
           <Link
             href={`/dashboard/calendar?month=${monthKey(new Date())}&scope=${scope}`}
             className={btnGhost}
+            title="Jump to the current month"
           >
             Today
           </Link>
@@ -168,6 +172,7 @@ export default async function CalendarPage({
             href={`/dashboard/calendar?month=${monthKey(addMonths(monthStart, 1))}&scope=${scope}`}
             className={btnGhost}
             aria-label="Next month"
+            title="Next month"
           >
             →
           </Link>

@@ -128,6 +128,7 @@ export function MultiSelect({
             <button
               type="button"
               aria-label={`Remove ${labelOf.get(v) ?? v}`}
+              title={`Remove ${labelOf.get(v) ?? v}`}
               onClick={(e) => {
                 e.stopPropagation();
                 toggle(v);

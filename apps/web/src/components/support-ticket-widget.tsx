@@ -31,6 +31,7 @@ export function SupportTicketWidget() {
       <button
         type="button"
         onClick={() => setOpen(true)}
+        title="File a quick ticket — attaches the page you're on"
         className="rounded-lg px-2.5 py-1.5 text-left text-xs text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-800"
       >
         Report an issue

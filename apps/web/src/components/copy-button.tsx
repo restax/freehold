@@ -23,6 +23,7 @@ export function CopyButton({
   return (
     <button
       type="button"
+      title="Copy to clipboard"
       onClick={async () => {
         await navigator.clipboard.writeText(text);
         setCopied(true);

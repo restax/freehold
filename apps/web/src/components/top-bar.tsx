@@ -72,6 +72,7 @@ export function TopBar({
         <div className="relative shrink-0">
           <button
             type="button"
+            title="Start a new transaction, contact, client, or contact note"
             onClick={() => setMenu(menu === "create" ? "none" : "create")}
             aria-expanded={menu === "create"}
             className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-500"
@@ -81,16 +82,28 @@ export function TopBar({
           </button>
           {menu === "create" && (
             <div className="absolute left-0 z-40 mt-1 flex min-w-44 flex-col rounded-lg border border-stone-200 bg-white py-1 shadow-lg">
-              <Link href="/dashboard/transactions/new" className={itemCls}>
+              <Link href="/dashboard/transactions/new" title="Start a new file" className={itemCls}>
                 Transaction
               </Link>
-              <Link href="/dashboard/contacts/new" className={itemCls}>
+              <Link
+                href="/dashboard/contacts/new"
+                title="Add someone new to your address book"
+                className={itemCls}
+              >
                 Contact
               </Link>
-              <Link href="/dashboard/clients?new=agent" className={itemCls}>
+              <Link
+                href="/dashboard/clients?new=agent"
+                title="Add a brokerage or agent you invoice"
+                className={itemCls}
+              >
                 Client
               </Link>
-              <Link href="/dashboard/contacts?view=touch" className={itemCls}>
+              <Link
+                href="/dashboard/contacts?view=touch"
+                title="Log a call or conversation against a contact"
+                className={itemCls}
+              >
                 Contact note
               </Link>
             </div>
@@ -110,13 +123,14 @@ export function TopBar({
           type="search"
           placeholder="Search transactions, contacts, clients…"
           aria-label="Search"
+          title="Search across transactions, contacts, and clients"
           className="w-full rounded-lg border border-white/10 bg-white/10 py-1.5 pl-8 pr-3 text-sm text-white placeholder:text-stone-400 focus:border-brand-400 focus:bg-white/15 focus:outline-none"
         />
       </form>
 
       <button
         type="button"
-        title="Voice search"
+        title="Voice search — ask a question out loud, answered from your workspace's data"
         onClick={() => window.dispatchEvent(new CustomEvent(VOICE_OPEN_EVENT))}
         className="shrink-0 rounded-lg p-1.5 text-stone-300 transition-colors hover:bg-white/10 hover:text-white"
       >
@@ -130,7 +144,11 @@ export function TopBar({
       <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
         <Link
           href="/dashboard?alerts=1"
-          title={`${alerts} needing attention`}
+          title={
+            alerts > 0
+              ? `${alerts} needing attention — quiet files and close deadlines`
+              : "Nothing needs attention right now"
+          }
           className="relative shrink-0 rounded-lg p-1.5 text-stone-300 transition-colors hover:bg-white/10 hover:text-white"
         >
           <span aria-hidden className="text-base leading-none">
@@ -147,7 +165,11 @@ export function TopBar({
         {!isGuest && (
           <Link
             href={inAdmin ? "/dashboard" : ADMIN_HOME}
-            title={inAdmin ? "Back to your workspace" : "Workspace admin"}
+            title={
+              inAdmin
+                ? "Back to your workspace"
+                : "Workspace admin — team, billing, integrations, and settings"
+            }
             className={`hidden shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors sm:flex ${
               inAdmin
                 ? "bg-white/15 text-white"
@@ -162,7 +184,7 @@ export function TopBar({
         {/* The help sign: one place that always leads to "something's wrong". */}
         <Link
           href="/dashboard/support"
-          title="Help &amp; report an issue"
+          title="Help & report an issue — file a support ticket"
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-600 text-white transition-colors hover:bg-sky-500"
         >
           <Question size={15} weight="bold" aria-hidden />
@@ -172,6 +194,7 @@ export function TopBar({
         <div className="relative shrink-0">
           <button
             type="button"
+            title={`Signed in as ${userEmail}`}
             onClick={() => setMenu(menu === "user" ? "none" : "user")}
             aria-expanded={menu === "user"}
             className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-stone-200 transition-colors hover:bg-white/10 hover:text-white"
@@ -185,16 +208,25 @@ export function TopBar({
               <p className="truncate border-b border-stone-100 px-3 pb-2 pt-1 text-xs text-stone-400">
                 {userEmail}
               </p>
-              <Link href="/dashboard/profile" className={itemCls}>
+              <Link
+                href="/dashboard/profile"
+                title="Your name, phone, password, and two-factor settings"
+                className={itemCls}
+              >
                 Profile
               </Link>
               {!isGuest && (
-                <Link href="/dashboard/billing" className={itemCls}>
+                <Link
+                  href="/dashboard/billing"
+                  title="Plan, seats, and payment for this workspace"
+                  className={itemCls}
+                >
                   Billing
                 </Link>
               )}
               <button
                 type="button"
+                title="End this session"
                 onClick={async () => {
                   setMenu("none");
                   await authClient.signOut();

@@ -45,6 +45,10 @@ interface NavItem {
   href: string;
   label: string;
   icon: Icon;
+  /** One factual line on what's behind this link — shown as the hover
+   *  tooltip, and doing double duty as the only clue to what an icon means
+   *  once the sidebar collapses to its 56px rail below lg. */
+  desc?: string;
 }
 
 interface NavGroup {
@@ -62,12 +66,27 @@ const TRANSACTIONS_HREF = "/dashboard/transactions";
  *
  * Keep in step with TXN_TABS' first row in the transaction page.
  */
-const TXN_TAB_ITEMS: Array<{ tab: string; label: string; icon: Icon }> = [
-  { tab: "tasks", label: "Tasks", icon: CheckSquare },
-  { tab: "documents", label: "Attachments", icon: Files },
-  { tab: "emails", label: "Emails", icon: EnvelopeSimple },
-  { tab: "notes", label: "Notes", icon: Note },
-  { tab: "dates", label: "Details", icon: ListChecks },
+const TXN_TAB_ITEMS: Array<{ tab: string; label: string; icon: Icon; desc: string }> = [
+  { tab: "tasks", label: "Tasks", icon: CheckSquare, desc: "This file's checklist" },
+  {
+    tab: "documents",
+    label: "Attachments",
+    icon: Files,
+    desc: "Every document on this file and its signature status",
+  },
+  {
+    tab: "emails",
+    label: "Emails",
+    icon: EnvelopeSimple,
+    desc: "Every message sent or received about this file",
+  },
+  { tab: "notes", label: "Notes", icon: Note, desc: "Free-text notes kept on this file" },
+  {
+    tab: "dates",
+    label: "Details",
+    icon: ListChecks,
+    desc: "Property info, key dates, and side wording",
+  },
 ];
 
 /** The tab a transaction opens on when the URL doesn't name one. */
@@ -76,25 +95,77 @@ const DEFAULT_TXN_TAB = "tasks";
 const GROUPS: NavGroup[] = [
   {
     label: null,
-    items: [{ href: "/dashboard", label: "Today", icon: Sun }],
+    items: [
+      {
+        href: "/dashboard",
+        label: "Today",
+        icon: Sun,
+        desc: "Overdue items, today's tasks, and what's coming up",
+      },
+    ],
   },
   {
     label: "Work",
     items: [
-      { href: TRANSACTIONS_HREF, label: "Transactions", icon: House },
-      { href: "/dashboard/calendar", label: "Calendar", icon: CalendarBlank },
-      { href: "/dashboard/contacts", label: "Contacts", icon: AddressBook },
-      { href: "/dashboard/clients", label: "Clients", icon: Buildings },
+      {
+        href: TRANSACTIONS_HREF,
+        label: "Transactions",
+        icon: House,
+        desc: "Every active and closed file, with status and key dates",
+      },
+      {
+        href: "/dashboard/calendar",
+        label: "Calendar",
+        icon: CalendarBlank,
+        desc: "Key dates and tasks across every file, in one calendar",
+      },
+      {
+        href: "/dashboard/contacts",
+        label: "Contacts",
+        icon: AddressBook,
+        desc: "Agents, lenders, title, vendors, and everyone else you work with",
+      },
+      {
+        href: "/dashboard/clients",
+        label: "Clients",
+        icon: Buildings,
+        desc: "The brokerages and agents you invoice, and their billing",
+      },
     ],
   },
   {
     label: "Library",
     items: [
-      { href: "/dashboard/templates", label: "Templates", icon: FileText },
-      { href: "/dashboard/compliance", label: "Compliance", icon: ShieldCheck },
-      { href: "/dashboard/emails", label: "Email settings", icon: EnvelopeSimple },
-      { href: "/dashboard/forms", label: "Forms", icon: ListDashes },
-      { href: "/dashboard/vault", label: "Vault", icon: LockKey },
+      {
+        href: "/dashboard/templates",
+        label: "Templates",
+        icon: FileText,
+        desc: "Reusable document checklists and task plans you apply to a file",
+      },
+      {
+        href: "/dashboard/compliance",
+        label: "Compliance",
+        icon: ShieldCheck,
+        desc: "Documents awaiting review, and your approval history",
+      },
+      {
+        href: "/dashboard/emails",
+        label: "Email settings",
+        icon: EnvelopeSimple,
+        desc: "Signature blocks, automated emails, and the template library",
+      },
+      {
+        href: "/dashboard/forms",
+        label: "Forms",
+        icon: ListDashes,
+        desc: "Intake forms clients fill out, and submissions awaiting review",
+      },
+      {
+        href: "/dashboard/vault",
+        label: "Vault",
+        icon: LockKey,
+        desc: "Encrypted logins your team needs — MLS, lockboxes, portals",
+      },
     ],
   },
 ];
@@ -107,26 +178,83 @@ const GROUPS: NavGroup[] = [
 const ADMIN_GROUPS: NavGroup[] = [
   {
     label: "Money",
-    items: [{ href: "/dashboard/invoices", label: "Invoices", icon: Receipt }],
+    items: [
+      {
+        href: "/dashboard/invoices",
+        label: "Invoices",
+        icon: Receipt,
+        desc: "Every invoice issued to clients — draft, sent, and paid",
+      },
+    ],
   },
   {
     label: "Network",
     items: [
-      { href: "/dashboard/reviews", label: "Reviews", icon: Star },
-      { href: "/dashboard/directory", label: "Directory", icon: Compass },
-      { href: "/dashboard/vendors", label: "Vendors", icon: Toolbox },
-      { href: "/dashboard/engagements", label: "Engagements", icon: Handshake },
+      {
+        href: "/dashboard/reviews",
+        label: "Reviews",
+        icon: Star,
+        desc: "Client reviews of your coordination",
+      },
+      {
+        href: "/dashboard/directory",
+        label: "Directory",
+        icon: Compass,
+        desc: "The public coordinator directory listing, for overflow and coverage",
+      },
+      {
+        href: "/dashboard/vendors",
+        label: "Vendors",
+        icon: Toolbox,
+        desc: "Inspectors, photographers, and other vendors you order from",
+      },
+      {
+        href: "/dashboard/engagements",
+        label: "Engagements",
+        icon: Handshake,
+        desc: "Agreements with the agents and brokerages you coordinate for",
+      },
     ],
   },
   {
     label: "Workspace",
     items: [
-      { href: "/dashboard/settings", label: "Settings", icon: GearSix },
-      { href: "/dashboard/team", label: "Team", icon: UsersThree },
-      { href: "/dashboard/website", label: "Website", icon: Globe },
-      { href: "/dashboard/integrations", label: "Integrations", icon: PlugsConnected },
-      { href: "/dashboard/import", label: "Data", icon: DownloadSimple },
-      { href: "/dashboard/support", label: "Support", icon: Lifebuoy },
+      {
+        href: "/dashboard/settings",
+        label: "Settings",
+        icon: GearSix,
+        desc: "Workspace-wide configuration — billing defaults, holidays, API keys",
+      },
+      {
+        href: "/dashboard/team",
+        label: "Team",
+        icon: UsersThree,
+        desc: "Members, roles, licenses, and permissions",
+      },
+      {
+        href: "/dashboard/website",
+        label: "Website",
+        icon: Globe,
+        desc: "Your public marketing site — pages, blocks, and domain",
+      },
+      {
+        href: "/dashboard/integrations",
+        label: "Integrations",
+        icon: PlugsConnected,
+        desc: "Connect email, e-signature, CRMs, storage, and other tools",
+      },
+      {
+        href: "/dashboard/import",
+        label: "Data",
+        icon: DownloadSimple,
+        desc: "Import a CSV, export everything, and manage reports and sample data",
+      },
+      {
+        href: "/dashboard/support",
+        label: "Support",
+        icon: Lifebuoy,
+        desc: "File a ticket or see replies from Freehold support",
+      },
     ],
   },
 ];
@@ -162,7 +290,7 @@ function NavLink({
   return (
     <Link
       href={href ?? item.href}
-      title={item.label}
+      title={item.desc ? `${item.label} — ${item.desc}` : item.label}
       aria-current={active ? "page" : undefined}
       className={`${navRowCls} ${indent ? "lg:pl-8" : ""} ${
         active
@@ -222,11 +350,12 @@ export function DashboardNav({
   const currentTab = searchParams.get("tab") ?? DEFAULT_TXN_TAB;
 
   const txnChildren = currentTxnId
-    ? TXN_TAB_ITEMS.map(({ tab, label, icon }) => ({
+    ? TXN_TAB_ITEMS.map(({ tab, label, icon, desc }) => ({
         key: tab,
         href: `/dashboard/transactions/${currentTxnId}?tab=${tab}`,
         label,
         icon,
+        desc,
         active: currentTab === tab,
       }))
     : [
@@ -235,6 +364,7 @@ export function DashboardNav({
           href: "/dashboard/documents",
           label: "Documents",
           icon: Files,
+          desc: "Every document across every transaction, in one place",
           active: pathname.startsWith("/dashboard/documents"),
         },
       ];
@@ -339,7 +469,7 @@ export function DashboardNav({
           {group.label === "Work" && (
             <button
               type="button"
-              title="Voice search"
+              title="Voice search — ask a question out loud, answered from your workspace's data"
               onClick={() => window.dispatchEvent(new CustomEvent(VOICE_OPEN_EVENT))}
               className={`${navRowCls} text-left text-stone-600 hover:bg-stone-100 hover:text-stone-900`}
             >
@@ -354,7 +484,7 @@ export function DashboardNav({
       {inAdmin && (
         <Link
           href="/dashboard"
-          title="Back to your workspace"
+          title="Back to workspace — leave Admin and return to your everyday dashboard"
           className={`${navRowCls} mt-5 border-t border-stone-200 pt-4 text-stone-600 hover:bg-stone-100 hover:text-stone-900`}
         >
           <ArrowLeft size={16} className="shrink-0 text-stone-400" aria-hidden />

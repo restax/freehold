@@ -74,6 +74,7 @@ export function ChatWidget() {
               type="button"
               onClick={() => setOpen(false)}
               aria-label="Close chat"
+              title="Close chat"
               className="text-white/70 transition hover:text-white"
             >
               ✕
@@ -122,6 +123,7 @@ export function ChatWidget() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? "Close chat" : "Chat with us"}
+        title={open ? "Close chat" : "Chat with us — ask a question about Freehold"}
         className="grid h-13 w-13 place-items-center rounded-full bg-brand-700 text-white shadow-lg transition hover:bg-brand-600 active:scale-95"
       >
         {open ? (

@@ -102,6 +102,7 @@ export function ColumnPicker({
     return (
       <button
         type="button"
+        title="Choose which columns show and their order"
         onClick={() => {
           setOrder(selected);
           setOpen(true);
@@ -148,6 +149,7 @@ export function ColumnPicker({
               type="button"
               onClick={() => setOpen(false)}
               aria-label="Close"
+              title="Close without saving"
               className="rounded p-1 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700"
             >
               <X size={16} aria-hidden />
@@ -266,6 +268,7 @@ function SortableRow({ col }: { col: ColumnDef }) {
         {...attributes}
         {...listeners}
         aria-label={`Reorder ${col.label}`}
+        title="Drag to reorder"
         className="cursor-grab rounded p-1 text-stone-300 transition-colors hover:bg-stone-100 hover:text-stone-500"
       >
         <DotsSixVertical size={16} aria-hidden />

@@ -38,6 +38,7 @@ export function SaveMenu({
       <details className="group relative">
         <summary
           aria-label="More save options"
+          title="More options, including delete"
           className="flex h-full cursor-pointer list-none items-center rounded-r-md border-l border-black/10 bg-brand-700 px-1.5 text-[var(--color-brand-fg)] transition hover:bg-brand-600"
         >
           <CaretDown

@@ -248,6 +248,7 @@ export function VoiceWidget({ portalToken }: { portalToken?: string }) {
                 setOpen(false);
               }}
               aria-label="Close voice search"
+              title="Close voice search"
               className="text-white/70 transition hover:text-white"
             >
               <X size={16} weight="bold" />
@@ -345,6 +346,7 @@ export function VoiceWidget({ portalToken }: { portalToken?: string }) {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? "Close voice search" : "Voice search"}
+        title={open ? "Close voice search" : "Voice search — ask a question out loud or by typing"}
         className={`grid h-12 w-12 place-items-center rounded-full text-white shadow-lg transition active:scale-95 ${
           state === "live" ? "animate-pulse bg-red-600" : "bg-brand-700 hover:bg-brand-600"
         }`}

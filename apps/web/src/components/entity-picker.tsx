@@ -202,6 +202,7 @@ export function EntityPicker({
           <button
             type="button"
             aria-label={`Clear ${label}`}
+            title={`Clear ${label}`}
             onClick={() => {
               setSelected(null);
               setQuery("");
