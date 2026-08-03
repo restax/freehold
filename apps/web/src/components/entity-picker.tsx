@@ -231,7 +231,7 @@ export function EntityPicker({
             <p className="px-3 py-2 text-sm text-stone-400">No matches</p>
           )}
           {matches.map((o, i) => (
-            // biome-ignore lint/a11y/useKeyWithClickEvents: the combobox input owns keyboard handling; options are reached with arrows via aria-activedescendant, the standard pattern
+            // the combobox input owns keyboard handling; options are reached with arrows via aria-activedescendant, the standard pattern
             <div
               key={o.id}
               id={optionId(i)}
@@ -255,7 +255,7 @@ export function EntityPicker({
             </div>
           ))}
           {canCreate && (
-            // biome-ignore lint/a11y/useKeyWithClickEvents: reached with arrows through the combobox, same as the options above
+            // reached with arrows through the combobox, same as the options above
             <div
               id={optionId(matches.length)}
               role="option"

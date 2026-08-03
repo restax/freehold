@@ -372,106 +372,104 @@ function ParticipantDialog({
     // No wrapper element: this renders inside the row's last <td>, and a <td>
     // (or a <div>) of its own would be invalid table markup. The overlay is
     // position:fixed, so its place in the tree doesn't affect where it lands.
-    <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-4">
-        <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white text-left shadow-xl">
-          <header className="flex items-center gap-2 border-b border-stone-200 px-4 py-3">
-            <h2 className="text-sm font-semibold text-stone-800">Edit {contact.name}</h2>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close"
-              className="ml-auto text-stone-400 transition-colors hover:text-stone-700"
-            >
-              <X size={16} weight="bold" aria-hidden />
-            </button>
-          </header>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-4">
+      <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white text-left shadow-xl">
+        <header className="flex items-center gap-2 border-b border-stone-200 px-4 py-3">
+          <h2 className="text-sm font-semibold text-stone-800">Edit {contact.name}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="ml-auto text-stone-400 transition-colors hover:text-stone-700"
+          >
+            <X size={16} weight="bold" aria-hidden />
+          </button>
+        </header>
 
-          <form action={action} className="flex min-h-0 flex-1 flex-col">
-            <input type="hidden" name="contactId" value={contact.id} />
-            <input type="hidden" name="back" value={back} />
+        <form action={action} className="flex min-h-0 flex-1 flex-col">
+          <input type="hidden" name="contactId" value={contact.id} />
+          <input type="hidden" name="back" value={back} />
 
-            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+            <label className={labelCls}>
+              Name
+              <input name="name" defaultValue={contact.name} required className={input} />
+            </label>
+
+            <label className={labelCls}>
+              Company
+              <input name="company" defaultValue={contact.company ?? ""} className={input} />
+            </label>
+
+            <div className="flex flex-col gap-2">
               <label className={labelCls}>
-                Name
-                <input name="name" defaultValue={contact.name} required className={input} />
-              </label>
-
-              <label className={labelCls}>
-                Company
-                <input name="company" defaultValue={contact.company ?? ""} className={input} />
-              </label>
-
-              <div className="flex flex-col gap-2">
-                <label className={labelCls}>
-                  Email
-                  <input
-                    type="email"
-                    name="email"
-                    defaultValue={contact.email ?? ""}
-                    className={input}
-                  />
-                </label>
-                <PointRows
-                  rows={mails}
-                  setRows={setMails}
-                  name="extraEmail"
-                  kind="email"
-                  addLabel="Add another email"
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className={labelCls}>
-                  Phone
-                  <PhoneInput name="phone" defaultValue={contact.phone ?? ""} className={input} />
-                </label>
-                <PointRows
-                  rows={phones}
-                  setRows={setPhones}
-                  name="extraPhone"
-                  kind="phone"
-                  addLabel="Add another phone"
-                />
-              </div>
-
-              <label className={labelCls}>
-                Notes
-                <textarea
-                  name="notes"
-                  rows={3}
-                  defaultValue={contact.notes ?? ""}
-                  placeholder="Prefers texts after 6; wife handles the paperwork"
-                  className={`${input} resize-y`}
+                Email
+                <input
+                  type="email"
+                  name="email"
+                  defaultValue={contact.email ?? ""}
+                  className={input}
                 />
               </label>
-
-              {emails.length > 0 && (
-                <div className="border-t border-stone-100 pt-3">
-                  <p className="text-xs font-medium text-stone-500">On these messages</p>
-                  <ul className="mt-1 flex flex-col gap-0.5">
-                    {emails.map((e) => (
-                      <li key={e.id} className="truncate text-xs text-stone-500">
-                        <span className="text-stone-400">
-                          {e.direction === "INBOUND" ? "↓" : "↑"} {e.createdAt}
-                        </span>{" "}
-                        {e.subject}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <PointRows
+                rows={mails}
+                setRows={setMails}
+                name="extraEmail"
+                kind="email"
+                addLabel="Add another email"
+              />
             </div>
 
-            <footer className="flex items-center justify-end gap-2 border-t border-stone-200 px-4 py-3">
-              <button type="button" onClick={onClose} className={btnGhost}>
-                Cancel
-              </button>
-              <SaveButton onDone={onClose}>Save</SaveButton>
-            </footer>
-          </form>
-        </div>
+            <div className="flex flex-col gap-2">
+              <label className={labelCls}>
+                Phone
+                <PhoneInput name="phone" defaultValue={contact.phone ?? ""} className={input} />
+              </label>
+              <PointRows
+                rows={phones}
+                setRows={setPhones}
+                name="extraPhone"
+                kind="phone"
+                addLabel="Add another phone"
+              />
+            </div>
+
+            <label className={labelCls}>
+              Notes
+              <textarea
+                name="notes"
+                rows={3}
+                defaultValue={contact.notes ?? ""}
+                placeholder="Prefers texts after 6; wife handles the paperwork"
+                className={`${input} resize-y`}
+              />
+            </label>
+
+            {emails.length > 0 && (
+              <div className="border-t border-stone-100 pt-3">
+                <p className="text-xs font-medium text-stone-500">On these messages</p>
+                <ul className="mt-1 flex flex-col gap-0.5">
+                  {emails.map((e) => (
+                    <li key={e.id} className="truncate text-xs text-stone-500">
+                      <span className="text-stone-400">
+                        {e.direction === "INBOUND" ? "↓" : "↑"} {e.createdAt}
+                      </span>{" "}
+                      {e.subject}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          <footer className="flex items-center justify-end gap-2 border-t border-stone-200 px-4 py-3">
+            <button type="button" onClick={onClose} className={btnGhost}>
+              Cancel
+            </button>
+            <SaveButton onDone={onClose}>Save</SaveButton>
+          </footer>
+        </form>
       </div>
-    </>
+    </div>
   );
 }

@@ -173,7 +173,7 @@ export function AddressAutocomplete({
           className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-stone-200 bg-white py-1 shadow-lg"
         >
           {suggestions.map((s, i) => (
-            // biome-ignore lint/a11y/useKeyWithClickEvents: the combobox input owns keyboard handling; options are reached with arrows via aria-activedescendant, the standard pattern
+            // the combobox input owns keyboard handling; options are reached with arrows via aria-activedescendant, the standard pattern
             <div
               key={s.id}
               id={optionId(i)}
