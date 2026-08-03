@@ -11,6 +11,7 @@ import { SupportTicketWidget } from "@/components/support-ticket-widget";
 import { TopBar } from "@/components/top-bar";
 import { VoiceWidget } from "@/components/voice-widget";
 import { openBillingPortal } from "@/lib/actions/billing";
+import { removeSampleData } from "@/lib/actions/sample-data";
 import { priorityVars, tenantAppearance, themeTokens } from "@/lib/appearance";
 import { cloudPromptDue, cloudPromptText, readCloudPromptConfig } from "@/lib/cloud-prompt";
 import { DEMO_SLUG } from "@/lib/demo";
@@ -43,7 +44,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // The workspace's own mark, shown at the top of the rail when they've set one.
   const org = await prisma.organization.findUnique({
     where: { id: active.id },
-    select: { logo: true, directoryConfig: true, cloudPromptConfig: true },
+    select: { logo: true, directoryConfig: true, cloudPromptConfig: true, hasSampleData: true },
   });
   // Both bell nudges are admin decisions about the workspace, so neither is
   // offered to a member who couldn't act on it anyway.
@@ -195,6 +196,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
             formsPending={formsPending}
           />
           <div className="mt-auto flex shrink-0 flex-col gap-2 border-t border-stone-200 pt-3">
+            {/* Stays visible in the nav — not just the dashboard-home banner —
+                until the sample data is actually gone, since it's the one
+                action that resolves every other sample-data nudge at once. */}
+            {org?.hasSampleData && (
+              <form action={removeSampleData} className="hidden lg:block">
+                <button
+                  type="submit"
+                  className="w-full rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-left text-xs font-medium text-amber-900 transition-colors hover:bg-amber-100"
+                >
+                  Remove sample data
+                </button>
+              </form>
+            )}
             {/* Text-only composer with no icon to collapse to — hidden on the
               rail, where Support is still one click away. */}
             <div className="hidden lg:block">

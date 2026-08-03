@@ -1,4 +1,4 @@
-import { ClientType, EsignProvider, withTenant } from "@freehold/db";
+import { ClientType, EsignProvider, prisma, withTenant } from "@freehold/db";
 import { Buildings, Storefront, User, UserPlus, UsersThree } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { Fragment } from "react";
@@ -115,6 +115,14 @@ export default async function ClientsPage({
       include: { _count: { select: { transactions: true, agents: true } } },
     }),
   );
+  const hasSampleData = path
+    ? (
+        await prisma.organization.findUnique({
+          where: { id: tenantId },
+          select: { hasSampleData: true },
+        })
+      )?.hasSampleData
+    : false;
 
   return (
     <div className="flex flex-col gap-4">
@@ -143,6 +151,12 @@ export default async function ClientsPage({
             </Link>
           }
         >
+          {hasSampleData && (
+            <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              This workspace still has sample data. What you add here is real and separate from it,
+              so consider removing the sample data first, before your team has to tell them apart.
+            </p>
+          )}
           <p className="mb-3 text-sm text-stone-500">Who is this client?</p>
 
           <div className="grid gap-2 sm:grid-cols-3">

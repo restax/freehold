@@ -1,4 +1,4 @@
-import { TransactionSide, withTenant } from "@freehold/db";
+import { prisma, TransactionSide, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { AddressAutocomplete } from "@/components/address-autocomplete";
 import { AgentsCommissions } from "@/components/agents-commissions";
@@ -39,11 +39,12 @@ export default async function NewTransactionPage({
 }) {
   const { tenantId } = await requireTenant();
   const { licenseError } = await searchParams;
-  const [limit, plan, credits, labels] = await Promise.all([
+  const [limit, plan, credits, labels, org] = await Promise.all([
     transactionLimit(tenantId),
     getTenantPlan(tenantId),
     creditBalance(tenantId),
     tenantSideLabels(tenantId),
+    prisma.organization.findUnique({ where: { id: tenantId }, select: { hasSampleData: true } }),
   ]);
   const { clients, members, contacts } = await withTenant(tenantId, async (tx) => ({
     clients: await tx.client.findMany({ orderBy: { name: "asc" } }),
@@ -75,6 +76,13 @@ export default async function NewTransactionPage({
           ← Back to transactions
         </Link>
       </div>
+
+      {org?.hasSampleData && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          This workspace still has sample data. What you create here is real and separate from it —
+          consider removing the sample data first, before your team has to tell them apart.
+        </p>
+      )}
 
       {licenseError && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">

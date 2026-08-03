@@ -21,22 +21,33 @@ export interface SummaryResult {
 }
 
 /**
+ * "Nothing to say" and "the call failed" have to stay distinguishable:
+ * refreshSummary clears the cached paragraph for the former (a quiet
+ * workspace is a real answer, and yesterday's paragraph is now simply
+ * wrong) but leaves it alone for the latter (a broken call shouldn't erase
+ * a paragraph that was still accurate).
+ */
+export type WriteSummaryResult =
+  | ({ ok: true } & SummaryResult & { usage: ReturnType<typeof usageFrom> })
+  | { ok: false; reason: "empty" | "error" };
+
+/**
  * Ask the model for the briefing.
  *
- * Returns null rather than throwing on any failure: this runs in the
- * background after a page has already rendered, so there is nobody to show an
- * error to, and a workspace with a missing API key should simply not have a
- * briefing rather than log an exception every hour.
+ * Never throws: this runs in the background after a page has already
+ * rendered, so there is nobody to show an error to, and a workspace with a
+ * missing API key should simply not have a briefing rather than log an
+ * exception every hour.
  */
 export async function writeSummary(
   input: SummaryInput,
   opts: { model: string; thinking: boolean; style: string | null },
   now: Date,
-): Promise<(SummaryResult & { usage: ReturnType<typeof usageFrom> }) | null> {
+): Promise<WriteSummaryResult> {
   const context = buildSummaryContext(input, now);
   // Nothing to say. Not an error, and not worth a model call — a quiet day is
   // a real answer, and the screen already shows the empty lists.
-  if (!context) return null;
+  if (!context) return { ok: false, reason: "empty" };
 
   try {
     const client = new Anthropic();
@@ -66,11 +77,11 @@ export async function writeSummary(
       .map((b) => b.text)
       .join("")
       .trim();
-    if (!text) return null;
+    if (!text) return { ok: false, reason: "empty" };
 
-    return { text, model: opts.model, usage: usageFrom(opts.model, response) };
+    return { ok: true, text, model: opts.model, usage: usageFrom(opts.model, response) };
   } catch {
-    return null;
+    return { ok: false, reason: "error" };
   }
 }
 
@@ -117,9 +128,21 @@ export async function refreshSummary(
     now,
   );
 
-  if (!written) {
-    // Leave the claim in place: a failure shouldn't mean retrying the same
-    // broken call on every page load for the next hour.
+  if (!written.ok) {
+    if (written.reason === "empty") {
+      // A quiet workspace is a real answer, and the cached paragraph from
+      // before is not — leave it displayed and it reads as a stale AI
+      // hallucination (this is what "Today at a glance" kept describing
+      // sample-data content that had already been removed). The claim
+      // stays in place either way, so this doesn't retry the call.
+      await prisma.member.update({
+        where: { id: memberId },
+        data: { handbookSummary: null },
+      });
+    }
+    // On "error", leave the claim and the old text both in place — a
+    // broken call shouldn't erase a paragraph that was still accurate, and
+    // shouldn't retry the same broken call on every page load for an hour.
     return;
   }
 

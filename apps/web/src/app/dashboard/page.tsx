@@ -10,6 +10,7 @@ import { HandbookGlance } from "@/components/handbook-glance";
 import { HubNews } from "@/components/hub-news";
 import { SectionCard } from "@/components/section-card";
 import { SideBadge } from "@/components/side-badge";
+import { removeSampleData } from "@/lib/actions/sample-data";
 import { toggleTask } from "@/lib/actions/tasks";
 import { activityTitle } from "@/lib/activity";
 import { rankAlerts, transactionAlerts } from "@/lib/alerts";
@@ -355,6 +356,10 @@ export default async function DashboardPage({
   // The two bell nudges, mirrored here so clicking the bell lands on
   // something that explains the count. Both are admin-only, matching how
   // the dashboard layout counts them.
+  const { hasSampleData } = await prisma.organization.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: { hasSampleData: true },
+  });
   const nudgeAdmin = ["owner", "admin"].includes(await getMemberRole(tenantId, userId));
   const nudgeOrg = nudgeAdmin
     ? await prisma.organization.findUnique({
@@ -475,6 +480,25 @@ export default async function DashboardPage({
 
   return (
     <div className="flex flex-col gap-4">
+      {hasSampleData && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+          <Warning size={18} weight="fill" className="shrink-0 text-amber-600" aria-hidden />
+          <p className="text-sm text-amber-900">
+            <strong className="font-semibold">This workspace still has sample data.</strong> It's
+            here to help you get a feel for Freehold — remove it whenever you're ready to add your
+            own clients and transactions.
+          </p>
+          <form action={removeSampleData} className="ml-auto shrink-0">
+            <button
+              type="submit"
+              className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-amber-700"
+            >
+              Remove sample data
+            </button>
+          </form>
+        </div>
+      )}
+
       {licenseAlerts.length > 0 && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
           <Warning size={14} weight="fill" className="mr-1 inline text-amber-600" aria-hidden />
