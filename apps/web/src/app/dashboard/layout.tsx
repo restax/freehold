@@ -1,10 +1,12 @@
 import { prisma, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { CriticalMessagesWidget } from "@/components/critical-messages-widget";
 import { DashboardNav } from "@/components/dashboard-nav";
 import { DemoTour } from "@/components/demo-tour";
 import { DemoWatermark } from "@/components/demo-watermark";
 import { Wordmark } from "@/components/marketing";
+import { OnboardingAdWidget } from "@/components/onboarding-ad-widget";
 import { SessionGuard } from "@/components/session-guard";
 import { SignOutButton } from "@/components/sign-out-button";
 import { SupportTicketWidget } from "@/components/support-ticket-widget";
@@ -14,6 +16,8 @@ import { openBillingPortal } from "@/lib/actions/billing";
 import { removeSampleData } from "@/lib/actions/sample-data";
 import { priorityVars, tenantAppearance, themeTokens } from "@/lib/appearance";
 import { cloudPromptDue, cloudPromptText, readCloudPromptConfig } from "@/lib/cloud-prompt";
+import { onboardingAdDue } from "@/lib/critical-messages";
+import { dueCriticalMessagesFor } from "@/lib/critical-messages-data";
 import { DEMO_SLUG } from "@/lib/demo";
 import { directoryNudgeDue, readDirectoryConfig } from "@/lib/directory";
 import { getTenantPlan, isCloud } from "@/lib/plans";
@@ -119,11 +123,32 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // limit entirely, so it never sees this.
   const userRow = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { sessionKickCount: true },
+    select: { sessionKickCount: true, phone: true, onboardingAdDismissedAt: true },
   });
   const sessionAtRisk =
     (userRow?.sessionKickCount ?? 0) >= SESSION_KICK_RISK_THRESHOLD &&
     !(await hasBusinessMembership(session.user.id));
+
+  // "5th real transaction" drives both the onboarding ad's auto-hide and one
+  // of the seeded critical messages — real (non-sample) rows only, so a
+  // workspace that never removes its sample data can't trip it by accident.
+  const realTransactionCount = isGuest
+    ? 0
+    : await withTenant(active.id, (tx) => tx.transaction.count({ where: { isSample: false } }));
+  const showOnboardingAd =
+    !isGuest &&
+    Boolean(userRow?.phone) &&
+    onboardingAdDue(userRow?.onboardingAdDismissedAt ?? null, realTransactionCount);
+
+  // The operator's broadcast messages currently due for this person in this
+  // workspace. See lib/critical-messages(-data).ts for the trigger logic.
+  const member = isGuest
+    ? null
+    : await prisma.member.findFirst({
+        where: { organizationId: active.id, userId: session.user.id },
+        select: { id: true },
+      });
+  const dueMessages = member ? await dueCriticalMessagesFor(active.id, member.id) : [];
 
   // The colour theme paints the whole dashboard the same way it paints the
   // portal: the tokens cover the brand ramp *and* the shaded section strips,
@@ -160,7 +185,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         userName={session.user.name ?? session.user.email}
         userEmail={session.user.email}
         isGuest={isGuest}
-        alerts={supportUnread + formsPending + directoryNudge + cloudNudge}
+        alerts={supportUnread + formsPending + directoryNudge + cloudNudge + dueMessages.length}
       />
       <div className="flex min-h-0 flex-1">
         <aside className="sticky top-14 flex h-[calc(100vh-3.5rem)] w-14 shrink-0 flex-col overflow-y-auto overflow-x-hidden border-r border-stone-200 bg-white px-2 py-6 lg:w-56 lg:px-4">
@@ -208,6 +233,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
                   Remove sample data
                 </button>
               </form>
+            )}
+            {showOnboardingAd && userRow?.phone && (
+              <div className="hidden lg:block">
+                <OnboardingAdWidget phone={userRow.phone} />
+              </div>
+            )}
+            {dueMessages.length > 0 && (
+              <div className="hidden lg:block">
+                <CriticalMessagesWidget messages={dueMessages} />
+              </div>
             )}
             {/* Text-only composer with no icon to collapse to — hidden on the
               rail, where Support is still one click away. */}
