@@ -19,6 +19,7 @@ export async function seedSampleData(tenantId: string) {
   if (!membership) return;
 
   await seedTenantData(tenantId, userId);
+  await prisma.organization.update({ where: { id: tenantId }, data: { hasSampleData: true } });
 }
 
 export async function removeSampleData() {
@@ -32,6 +33,18 @@ export async function removeSampleData() {
     await tx.emailTemplate.deleteMany({ where: { isSample: true } });
     await tx.contact.deleteMany({ where: { isSample: true } });
     await tx.client.deleteMany({ where: { isSample: true } });
+  });
+  // Organization and Member aren't RLS-scoped the way the deletes above are,
+  // so these sit outside withTenant, same as the revalidatePath calls below.
+  await prisma.organization.update({ where: { id: tenantId }, data: { hasSampleData: false } });
+  // The "Today at a glance" summary is cached per member on a pure 1-hour
+  // clock (lib/handbook/summary-context.ts's isStale), with no dependency on
+  // the underlying data — clearing this tenant-wide forces every member's
+  // next dashboard load to regenerate it against the post-removal reality,
+  // rather than repeating sample-data content for up to an hour.
+  await prisma.member.updateMany({
+    where: { organizationId: tenantId },
+    data: { handbookSummaryAt: null },
   });
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/transactions");
