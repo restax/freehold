@@ -20,53 +20,58 @@ datasource db {
 // --- Better Auth core ---
 
 model User {
-  id                     String                @id
-  name                   String
-  email                  String                @unique
-  emailVerified          Boolean               @default(false)
+  id                      String                @id
+  name                    String
+  email                   String                @unique
+  emailVerified           Boolean               @default(false)
   /// Unique login handle that doubles as the user's subdomain, so it lives in
   /// the same *.freeholdtc.dev namespace as workspace slugs and reserved
   /// subdomains. Lowercase, URL-safe. displayUsername keeps the as-typed form.
-  username               String?               @unique
-  displayUsername        String?
+  username                String?               @unique
+  displayUsername         String?
   /// The coordinator's own contact number, shown on the signature card of
   /// every email they send and available to templates as {{tc_phone}}. On the
   /// user rather than the membership: it's the person's number, and a
   /// coordinator working two workspaces answers the same phone in both.
-  phone                  String?
-  image                  String?
+  phone                   String?
+  image                   String?
   /// Profile photo bytes, stored inline (photos are small and user-global, so
   /// they never route to a tenant's bucket). Served by /api/users/[id]/avatar;
   /// `image` holds that path so anything reading the auth user renders it.
-  avatarData             Bytes?                @map("avatar_data")
-  avatarType             String?               @map("avatar_type")
-  createdAt              DateTime              @default(now())
-  updatedAt              DateTime              @updatedAt
-  twoFactorEnabled       Boolean?              @map("two_factor_enabled")
+  avatarData              Bytes?                @map("avatar_data")
+  avatarType              String?               @map("avatar_type")
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  twoFactorEnabled        Boolean?              @map("two_factor_enabled")
   /// Lifetime count of "signed in from a different location" kicks (Free/Pro
   /// concurrent-desktop-session limit only — never incremented on Business).
   /// No reset window by design; purely a display metric until it earns
   /// enforcement — at 10, the dashboard shows an at-risk banner.
-  sessionKickCount       Int                   @default(0) @map("session_kick_count")
-  twoFactors             TwoFactor[]
-  sessions               Session[]
-  accounts               Account[]
-  members                Member[]
-  invitations            Invitation[]
-  ownedContacts          ContactOwner[]        @relation("ContactOwner")
-  assignedTasks          Task[]                @relation("TaskAssignee")
-  licenses               UserLicense[]
-  transactionAssignments TransactionAssignee[]
-  paymentRequests        PaymentRequest[]
-  guestEngagements       Engagement[]
-  supportTickets         SupportTicket[]
-  vendorUsers            VendorUser[]
-  clientReviews          ClientReview[]
-  nylasGrant             NylasGrant?
-  oauthApplications      OauthApplication[]
-  oauthAccessTokens      OauthAccessToken[]
-  oauthConsents          OauthConsent[]
-  mcpConnections         McpConnection[]
+  sessionKickCount        Int                   @default(0) @map("session_kick_count")
+  /// Dismiss for the "30 day onboarding" ad widget in the left nav. On the
+  /// person, not the membership: the ad shows their own phone number
+  /// (User.phone), not anything workspace-specific, so closing it once holds
+  /// across every workspace they belong to.
+  onboardingAdDismissedAt DateTime?             @map("onboarding_ad_dismissed_at")
+  twoFactors              TwoFactor[]
+  sessions                Session[]
+  accounts                Account[]
+  members                 Member[]
+  invitations             Invitation[]
+  ownedContacts           ContactOwner[]        @relation("ContactOwner")
+  assignedTasks           Task[]                @relation("TaskAssignee")
+  licenses                UserLicense[]
+  transactionAssignments  TransactionAssignee[]
+  paymentRequests         PaymentRequest[]
+  guestEngagements        Engagement[]
+  supportTickets          SupportTicket[]
+  vendorUsers             VendorUser[]
+  clientReviews           ClientReview[]
+  nylasGrant              NylasGrant?
+  oauthApplications       OauthApplication[]
+  oauthAccessTokens       OauthAccessToken[]
+  oauthConsents           OauthConsent[]
+  mcpConnections          McpConnection[]
 
   @@map("user")
 }
@@ -757,229 +762,241 @@ enum PlanTier {
 }
 
 model Organization {
-  id                       String                   @id
-  name                     String
-  slug                     String                   @unique
-  logo                     String?
-  metadata                 String?
-  planTier                 PlanTier                 @default(FREE) @map("plan_tier")
-  seatLimit                Int                      @default(2) @map("seat_limit")
-  aiExtractionsUsed        Int                      @default(0) @map("ai_extractions_used")
+  id                        String                     @id
+  name                      String
+  slug                      String                     @unique
+  logo                      String?
+  metadata                  String?
+  planTier                  PlanTier                   @default(FREE) @map("plan_tier")
+  seatLimit                 Int                        @default(2) @map("seat_limit")
+  aiExtractionsUsed         Int                        @default(0) @map("ai_extractions_used")
   /// Voice-search sessions started this billing month. Unlike the lifetime
   /// extraction credits, voice recurs, so the window rolls: once
   /// voiceQuotaResetAt is in the past the counter starts over.
-  voiceSessionsUsed        Int                      @default(0) @map("voice_sessions_used")
-  voiceQuotaResetAt        DateTime?                @map("voice_quota_reset_at")
+  voiceSessionsUsed         Int                        @default(0) @map("voice_sessions_used")
+  voiceQuotaResetAt         DateTime?                  @map("voice_quota_reset_at")
   /// Prepaid AI credits (Cloud Free only). Spending one credit permanently
   /// unlocks pro AI features on a single transaction. Paid tiers ignore this —
   /// their AI is unmetered. New workspaces start with 0 — Free carries no
   /// included AI; topped up only by purchase or coupon. The balance of
   /// record; every change is mirrored to CreditLedger.
-  aiCredits                Int                      @default(0) @map("ai_credits")
+  aiCredits                 Int                        @default(0) @map("ai_credits")
   /// Operator override for this tenant's contract-extraction model. When set,
   /// heavy or costly workspaces run extraction on a cheaper model instead of
   /// the default. Null = platform default (FREEHOLD_AI_MODEL / Opus).
-  aiModelOverride          String?                  @map("ai_model_override")
+  aiModelOverride           String?                    @map("ai_model_override")
   /// Admin setting: when true, members only see contacts they own.
-  restrictContactsToOwner  Boolean                  @default(false) @map("restrict_contacts_to_owner")
+  restrictContactsToOwner   Boolean                    @default(false) @map("restrict_contacts_to_owner")
   /// Admin setting: when true, any member can create/edit/delete signature
   /// blocks. Off (the default) keeps that to owners/admins only — a
   /// coordinator's title and phone number on outgoing mail isn't something
   /// every new hire should be able to rewrite on day one.
-  membersCanEditSignatures Boolean                  @default(false) @map("members_can_edit_signatures")
-  emailSignatures          EmailSignature[]
+  membersCanEditSignatures  Boolean                    @default(false) @map("members_can_edit_signatures")
+  /// Whether this workspace currently has any seeded sample rows, across the
+  /// 10 isSample-flagged models (Client, Contact, Transaction, Task,
+  /// ActionPlan, AttachmentTemplate, DateTemplate, ComplianceChecklist,
+  /// EmailTemplate, DocTemplate). Maintained by seedSampleData (sets true)
+  /// and removeSampleData (sets false) in lib/actions/sample-data.ts — the
+  /// ONLY two places any isSample row is created or deleted. A denormalized
+  /// flag rather than a live COUNT across 10 tables on every dashboard
+  /// render; if a third write site to any isSample row is ever added, it
+  /// must maintain this flag too or it will drift.
+  hasSampleData             Boolean                    @default(false) @map("has_sample_data")
+  emailSignatures           EmailSignature[]
   /// The Handbook: the notes a team keeps about clients, contacts, people and
   /// files. Two switches, not one, because the halves are separable — someone
   /// who wants nothing to do with AI can still keep notes, which is the more
   /// valuable half. Off hides the feature entirely.
-  handbookEnabled          Boolean                  @default(true) @map("handbook_enabled")
+  handbookEnabled           Boolean                    @default(true) @map("handbook_enabled")
   /// The AI-written "Today at a glance" paragraph. Off leaves notes, pooling
   /// and grades working exactly as before, with no model call anywhere.
-  handbookSummaryEnabled   Boolean                  @default(true) @map("handbook_summary_enabled")
-  handbookNotes            HandbookNote[]
+  handbookSummaryEnabled    Boolean                    @default(true) @map("handbook_summary_enabled")
+  handbookNotes             HandbookNote[]
   /// Per-tenant Follow Up Boss connection: {enc:{...}, importedAt?, importedCount?}.
   /// API key encrypted with VAULT_MASTER_KEY.
-  fubConfig                Json?                    @map("fub_config")
+  fubConfig                 Json?                      @map("fub_config")
   /// Per-tenant Twenty CRM connection: {url, enc:{...}, importedAt?, importedCount?}.
-  twentyConfig             Json?                    @map("twenty_config")
+  twentyConfig              Json?                      @map("twenty_config")
   /// Tenant wording for transaction sides: {buy, sell} — e.g. sell side vs list side.
-  sideLabels               Json?                    @map("side_labels")
+  sideLabels                Json?                      @map("side_labels")
   /// Tenant overrides for automated email templates: {intro:{subject,body}, postClose:{subject,body}}.
-  emailTemplates           Json?                    @map("email_templates")
+  emailTemplates            Json?                      @map("email_templates")
   /// Workspace email signature + global footer: {signature, footer} —
   /// appended to every outgoing branded email.
-  emailSettings            Json?                    @map("email_settings")
+  emailSettings             Json?                      @map("email_settings")
   /// Tenant mini-site at <slug>.<root>: {published, tagline, about, phone, email,
   /// services, showRegistration, blocks}. `blocks` is the ordered page layout from
   /// the designer (lib/site-blocks.ts); the flat fields above are what sites made
   /// before the designer existed still render from.
-  siteConfig               Json?                    @map("site_config")
+  siteConfig                Json?                      @map("site_config")
   /// Look-and-feel choices, all optional with sensible defaults:
   /// {theme, portalFont, priorityColors:{HIGH,CRITICAL}, rowHighlight:{scope,color}}.
   /// theme + portalFont style the client portal; priorityColors + rowHighlight
   /// tint the internal task lists. Null = Freehold defaults (forest/green).
-  appearanceConfig         Json?                    @map("appearance_config")
+  appearanceConfig          Json?                      @map("appearance_config")
   /// A domain the workspace owns, serving the same public surface as
   /// <slug>.<root>: the mini-site, public forms, and portal links. Unique
   /// because a hostname resolves to exactly one workspace — that uniqueness is
   /// what stops one workspace from claiming a domain another is already using.
   /// Stored lowercase and without a port; lib/host-routing.ts normalises before
   /// matching.
-  customDomain             String?                  @unique @map("custom_domain")
+  customDomain              String?                    @unique @map("custom_domain")
   /// "pending" (added, DNS not confirmed yet) | "active" (serving) | "error".
   /// Only "active" routes: an unconfirmed domain must not serve a workspace's
   /// page, or claiming someone else's hostname would be enough to sit on it.
-  customDomainStatus       String?                  @map("custom_domain_status")
+  customDomainStatus        String?                    @map("custom_domain_status")
   /// Last thing the domain provider told us — the DNS record still missing, or
   /// why verification failed. Shown verbatim to the admin, never parsed.
-  customDomainNote         String?                  @map("custom_domain_note")
+  customDomainNote          String?                    @map("custom_domain_note")
   /// Per-tenant Documenso connection: {url, enc:{ciphertext,iv,tag,wrappedKey,wrapIv,wrapTag,keyVersion}}.
   /// Token encrypted with VAULT_MASTER_KEY; null = use server-wide env default.
-  documensoConfig          Json?                    @map("documenso_config")
+  documensoConfig           Json?                      @map("documenso_config")
   /// Per-tenant OpenSign org, auto-provisioned on first send (not user-entered
   /// like documensoConfig): {orgId, sessionTokenEnc:{...}}. Freehold operates
   /// one shared OpenSign instance (FREEHOLD_OPENSIGN_URL); this is how each
   /// workspace gets its own isolated space inside it. Session token encrypted
   /// with VAULT_MASTER_KEY, same as documensoConfig's token.
-  openSignConfig           Json?                    @map("opensign_config")
+  openSignConfig            Json?                      @map("opensign_config")
   /// Per-tenant document storage: {provider:"S3", endpoint, region, bucket,
   /// accessKeyEnc:{...}, secretKeyEnc:{...}}. Keys encrypted with VAULT_MASTER_KEY.
   /// New documents route here; null = platform default (env S3) or Postgres bytes.
-  storageConfig            Json?                    @map("storage_config")
-  stripeCustomerId         String?                  @map("stripe_customer_id")
-  stripeSubscriptionId     String?                  @map("stripe_subscription_id")
+  storageConfig             Json?                      @map("storage_config")
+  stripeCustomerId          String?                    @map("stripe_customer_id")
+  stripeSubscriptionId      String?                    @map("stripe_subscription_id")
   /// Last-known Stripe subscription status (active, trialing, past_due, unpaid, canceled).
   /// Mirrored from webhooks for operator visibility; null = never had a paid sub.
-  subscriptionStatus       String?                  @map("subscription_status")
+  subscriptionStatus        String?                    @map("subscription_status")
   /// Set when the workspace is locked for a failed renewal. Data is preserved;
   /// the dashboard is gated until payment is updated. Cleared when Stripe reports paid again.
-  billingSuspendedAt       DateTime?                @map("billing_suspended_at")
+  billingSuspendedAt        DateTime?                  @map("billing_suspended_at")
   /// Complimentary (comped) plan grant, independent of Stripe. When set (and not
   /// past compExpiresAt), it overrides planTier — a full plan with no checkout/charge.
-  compTier                 PlanTier?                @map("comp_tier")
+  compTier                  PlanTier?                  @map("comp_tier")
   /// When the comp ends; null = no expiry (until an operator revokes it).
-  compExpiresAt            DateTime?                @map("comp_expires_at")
-  createdAt                DateTime                 @default(now())
-  members                  Member[]
-  invitations              Invitation[]
-  clients                  Client[]
-  contacts                 Contact[]
-  contactOwners            ContactOwner[]
-  transactions             Transaction[]
-  parties                  TransactionParty[]
-  tasks                    Task[]
-  actionPlans              ActionPlan[]
-  actionPlanTasks          ActionPlanTask[]
-  actionPlanDocuments      ActionPlanDocument[]
-  templateGroups           TemplateGroup[]
-  attachmentTemplates      AttachmentTemplate[]
-  attachmentTemplateItems  AttachmentTemplateItem[]
-  dateTemplates            DateTemplate[]
-  dateTemplateItems        DateTemplateItem[]
-  attachments              TransactionAttachment[]
-  attachmentFolders        AttachmentFolder[]
-  attachmentNotes          AttachmentNote[]
-  complianceChecklists     ComplianceChecklist[]
-  complianceItems          ComplianceItem[]
-  transactionCompliances   TransactionCompliance[]
-  complianceSlots          ComplianceSlot[]
-  userLicenses             UserLicense[]
-  transactionAssignees     TransactionAssignee[]
-  states                   TenantState[]
-  paymentRequests          PaymentRequest[]
-  paymentRequestItems      PaymentRequestItem[]
-  engagementsHired         Engagement[]             @relation("EngagementHirer")
-  engagementsProvided      Engagement[]             @relation("EngagementVendor")
-  supportTickets           SupportTicket[]
-  supportTicketReplies     SupportTicketReply[]
-  vendorConnections        VendorConnection[]
-  vendorOrders             VendorOrder[]
+  compExpiresAt             DateTime?                  @map("comp_expires_at")
+  createdAt                 DateTime                   @default(now())
+  members                   Member[]
+  invitations               Invitation[]
+  clients                   Client[]
+  contacts                  Contact[]
+  contactOwners             ContactOwner[]
+  transactions              Transaction[]
+  parties                   TransactionParty[]
+  tasks                     Task[]
+  actionPlans               ActionPlan[]
+  actionPlanTasks           ActionPlanTask[]
+  actionPlanDocuments       ActionPlanDocument[]
+  templateGroups            TemplateGroup[]
+  attachmentTemplates       AttachmentTemplate[]
+  attachmentTemplateItems   AttachmentTemplateItem[]
+  dateTemplates             DateTemplate[]
+  dateTemplateItems         DateTemplateItem[]
+  attachments               TransactionAttachment[]
+  attachmentFolders         AttachmentFolder[]
+  attachmentNotes           AttachmentNote[]
+  complianceChecklists      ComplianceChecklist[]
+  complianceItems           ComplianceItem[]
+  transactionCompliances    TransactionCompliance[]
+  complianceSlots           ComplianceSlot[]
+  userLicenses              UserLicense[]
+  transactionAssignees      TransactionAssignee[]
+  states                    TenantState[]
+  paymentRequests           PaymentRequest[]
+  paymentRequestItems       PaymentRequestItem[]
+  engagementsHired          Engagement[]               @relation("EngagementHirer")
+  engagementsProvided       Engagement[]               @relation("EngagementVendor")
+  supportTickets            SupportTicket[]
+  supportTicketReplies      SupportTicketReply[]
+  vendorConnections         VendorConnection[]
+  vendorOrders              VendorOrder[]
   /// What happens when a file sits in a license-required state with nobody
   /// licensed assigned: "warn" (save it, flag it everywhere) or "block"
   /// (refuse the write). Deliberately a tenant choice — TCs routinely open a
   /// file before deciding who runs it.
-  licenseEnforcement       String                   @default("warn") @map("license_enforcement")
+  licenseEnforcement        String                     @default("warn") @map("license_enforcement")
   /// Opt-in vendor-directory listing, published to other workspaces and to the
   /// public syndication feed: {listed, blurb, contactEmail, specializations[],
   /// software[], availability, pricingModel, yearsExperience, remote}. States
   /// covered come from TenantState. Null or listed:false = not listed anywhere.
-  directoryConfig          Json?                    @map("directory_config")
+  directoryConfig           Json?                      @map("directory_config")
   /// Per-tenant ERPNext connection: {url, itemCode, keyEnc:{...},
   /// secretEnc:{...}}. API key + secret encrypted with VAULT_MASTER_KEY.
   /// Null = client invoices are kept in Freehold only.
-  erpnextConfig            Json?                    @map("erpnext_config")
+  erpnextConfig             Json?                      @map("erpnext_config")
   /// Workspace billing policy: {mode, depositPercent, lateFee:{...},
   /// defaultFeeCents}. Every key overridable per client (Client.billingConfig).
   /// Parsed/validated by lib/billing-policy.ts; unset keys fall back there.
-  billingDefaults          Json?                    @map("billing_defaults")
+  billingDefaults           Json?                      @map("billing_defaults")
   /// Which US federal holidays count as non-business days for date-template
   /// calculators — array of the holiday keys in lib/date-calculators.ts.
   /// Null = the full default US federal set.
-  holidaySchedule          Json?                    @map("holiday_schedule")
+  holidaySchedule           Json?                      @map("holiday_schedule")
   /// This workspace's answer to the self-host Freehold Cloud prompt:
   /// `{off?: boolean, snoozedAt?: ISO string}`. Two different noes — "not
   /// now" (snoozed, back in a month) and "never" (off). Null = never
   /// answered, which is what makes a fresh install see it at all.
-  cloudPromptConfig        Json?                    @map("cloud_prompt_config")
-  documents                Document[]
-  extractions              ContractExtraction[]
-  extractionFields         ExtractionField[]
-  templates                DocTemplate[]
-  envelopes                SignatureEnvelope[]
-  portalLinks              PortalLink[]
-  vaultCredentials         VaultCredential[]
-  vaultAccessLogs          VaultAccessLog[]
-  auditLogs                AuditLog[]
-  transactionActivity      TransactionActivity[]
-  contactNotes             ContactNote[]
-  clientNotes              ClientNote[]
-  clientAgents             ClientAgent[]
-  emailTemplatesLib        EmailTemplate[]
-  intakeSubmissions        IntakeSubmission[]
-  forms                    Form[]
-  formSubmissions          FormSubmission[]
-  formSubmissionFiles      FormSubmissionFile[]
-  formAccessLinks          FormAccessLink[]
-  formLookupAttempts       FormLookupAttempt[]
-  clientReviews            ClientReview[]
-  emails                   Email[]
-  apiKeys                  ApiKey[]
-  mcpConnections           McpConnection[]
+  cloudPromptConfig         Json?                      @map("cloud_prompt_config")
+  documents                 Document[]
+  extractions               ContractExtraction[]
+  extractionFields          ExtractionField[]
+  templates                 DocTemplate[]
+  envelopes                 SignatureEnvelope[]
+  portalLinks               PortalLink[]
+  vaultCredentials          VaultCredential[]
+  vaultAccessLogs           VaultAccessLog[]
+  auditLogs                 AuditLog[]
+  transactionActivity       TransactionActivity[]
+  contactNotes              ContactNote[]
+  clientNotes               ClientNote[]
+  clientAgents              ClientAgent[]
+  emailTemplatesLib         EmailTemplate[]
+  intakeSubmissions         IntakeSubmission[]
+  forms                     Form[]
+  formSubmissions           FormSubmission[]
+  formSubmissionFiles       FormSubmissionFile[]
+  formAccessLinks           FormAccessLink[]
+  formLookupAttempts        FormLookupAttempt[]
+  clientReviews             ClientReview[]
+  emails                    Email[]
+  apiKeys                   ApiKey[]
+  mcpConnections            McpConnection[]
   /// Master switch for the Claude connector, owned by the subscriber.
   ///
   /// Off by default: connecting an AI assistant to a workspace full of client
   /// addresses and deal terms is a decision somebody should make on purpose,
   /// not discover they already made. Turning it off revokes every live
   /// connection in this workspace rather than merely hiding the setting.
-  mcpEnabled               Boolean                  @default(false) @map("mcp_enabled")
-  invoices                 Invoice[]
-  invoiceLines             InvoiceLine[]
-  invoicePayments          InvoicePayment[]
-  invoiceEmailLogs         InvoiceEmailLog[]
-  clientCreditEntries      ClientCreditEntry[]
-  webhookEndpoints         WebhookEndpoint[]
-  siteImages               SiteImage[]
+  mcpEnabled                Boolean                    @default(false) @map("mcp_enabled")
+  invoices                  Invoice[]
+  invoiceLines              InvoiceLine[]
+  invoicePayments           InvoicePayment[]
+  invoiceEmailLogs          InvoiceEmailLog[]
+  clientCreditEntries       ClientCreditEntry[]
+  webhookEndpoints          WebhookEndpoint[]
+  siteImages                SiteImage[]
+  criticalMessageDismissals CriticalMessageDismissal[]
+  messageShownAt            MessageShownAt[]
 
   @@map("organization")
 }
 
 model Member {
-  id                String       @id
-  organizationId    String
-  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId            String
-  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role              String       @default("member")
+  id                        String                     @id
+  organizationId            String
+  organization              Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId                    String
+  user                      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role                      String                     @default("member")
   /// Compliance review authority, assigned from the Team page. null = default
   /// by role (owner/admin hold top authority, member submits only); 0 =
   /// submitter only even for an admin; 1..N = approves at levels up to N.
-  complianceTier    Int?         @map("compliance_tier")
+  complianceTier            Int?                       @map("compliance_tier")
   /// Billing authority, assigned from the Team page. null = default by role
   /// (owner/admin see and manage everything incl. team comp; member sees
   /// nothing). "view" reads invoices and revenue; "manage" also records
   /// money; "full" additionally sees team payout/comp data. Resolved by
   /// lib/billing-access.ts.
-  billingRole       String?      @map("billing_role")
+  billingRole               String?                    @map("billing_role")
   /// What this person's Claude connector may do, assigned from the Team page.
   /// null = default by role (owner/admin read and write, member reads only,
   /// guest nothing). "none" cuts a specific person off without disturbing
@@ -987,31 +1004,32 @@ model Member {
   /// lib/mcp-access.ts, and re-resolved on every tool call — so changing this
   /// takes effect on the person's next message to Claude, not whenever their
   /// token happens to expire.
-  mcpRole           String?      @map("mcp_role")
+  mcpRole                   String?                    @map("mcp_role")
   /// Capability token for this person's subscribe-once personal calendar feed
   /// in this workspace (a user in two tenants gets a separate feed per one,
   /// same as everything else here — roles and assignments don't cross tenants).
   /// Generated lazily on first request for the link; null until then.
-  calendarToken     String?      @unique @map("calendar_token")
+  calendarToken             String?                    @unique @map("calendar_token")
   /// When this person last looked at the Support page in this workspace. Any
   /// operator/Slack reply newer than this counts as unread, driving the
   /// sidebar's "new message" badge. Null = never opened it.
-  supportSeenAt     DateTime?    @map("support_seen_at")
+  supportSeenAt             DateTime?                  @map("support_seen_at")
   /// Per-person table preferences in this workspace, e.g.
   /// {transactionColumns: ["address","status",...]} — the chosen columns in
   /// display order. Per member rather than per user because someone who
   /// coordinates for two workspaces wants different columns in each, the
   /// same way roles and assignments don't cross tenants. Unset = the
   /// defaults in lib/transaction-columns.ts.
-  tablePrefs        Json?        @map("table_prefs")
+  tablePrefs                Json?                      @map("table_prefs")
   /// Cached "Today at a glance" text, and when it was written. Per member
   /// rather than per user: it describes this workspace's work, and someone
   /// coordinating for two tenants needs a separate one in each. Rewritten
   /// lazily when the Today screen is opened and this is over an hour old,
   /// which is what makes "once an hour while signed in" true without a cron.
-  handbookSummary   String?      @map("handbook_summary")
-  handbookSummaryAt DateTime?    @map("handbook_summary_at")
-  createdAt         DateTime     @default(now())
+  handbookSummary           String?                    @map("handbook_summary")
+  handbookSummaryAt         DateTime?                  @map("handbook_summary_at")
+  createdAt                 DateTime                   @default(now())
+  criticalMessageDismissals CriticalMessageDismissal[]
 
   @@index([organizationId])
   @@index([userId])
@@ -1929,6 +1947,90 @@ model ApiKey {
 
   @@index([tenantId])
   @@map("api_key")
+}
+
+/// What triggers a CriticalMessage to become due for a workspace.
+/// IMMEDIATE is the default an operator gets for anything typed into
+/// /admin/messages going forward, once the three launch messages below have
+/// each run their course.
+enum CriticalMessageTrigger {
+  /// Due for every workspace right away.
+  IMMEDIATE
+  /// Due while Organization.hasSampleData is true.
+  HAS_SAMPLE_DATA
+  /// Due once a workspace's count of real (isSample: false) Transaction rows
+  /// reaches 5.
+  FIFTH_REAL_TRANSACTION
+  /// Due triggerDelayDays after triggerAfterMessage was first shown to this
+  /// same workspace (see MessageShownAt).
+  DAYS_AFTER_MESSAGE
+}
+
+/// An operator-authored broadcast, composed on /admin/messages and shown in
+/// the tenant-facing left nav once due. No tenant column and no RLS: the
+/// content itself is platform-wide, the same root-table shape as VendorAd —
+/// what varies per workspace is only whether it is currently due
+/// (messageIsDue, lib/critical-messages.ts) and whether this member has
+/// dismissed it (CriticalMessageDismissal).
+model CriticalMessage {
+  id                    String                     @id @default(uuid())
+  title                 String
+  body                  String
+  linkUrl               String?                    @map("link_url")
+  /// Sorts first among a member's currently-due messages and gets more
+  /// prominent styling in the widget. Never a modal — inline emphasis only.
+  urgent                Boolean                    @default(false)
+  trigger               CriticalMessageTrigger     @default(IMMEDIATE)
+  /// Only meaningful for DAYS_AFTER_MESSAGE.
+  triggerDelayDays      Int?                       @map("trigger_delay_days")
+  /// Only meaningful for DAYS_AFTER_MESSAGE: the message whose first-shown
+  /// timestamp, per workspace, this one counts from.
+  triggerAfterMessageId String?                    @map("trigger_after_message_id")
+  triggerAfterMessage   CriticalMessage?           @relation("MessageChain", fields: [triggerAfterMessageId], references: [id], onDelete: SetNull)
+  chainedFrom           CriticalMessage[]          @relation("MessageChain")
+  createdAt             DateTime                   @default(now()) @map("created_at")
+  updatedAt             DateTime                   @updatedAt @map("updated_at")
+  dismissals            CriticalMessageDismissal[]
+  shownAt               MessageShownAt[]
+
+  @@map("critical_message")
+}
+
+/// One row per (message, membership), created only when a member closes a
+/// message — closing is the read action, there is no separate "seen"
+/// state. "Currently due and unread" for a member = the message is due for
+/// their org (messageIsDue) and no row exists here for their memberId.
+model CriticalMessageDismissal {
+  id          String          @id @default(uuid())
+  tenantId    String          @map("tenant_id")
+  tenant      Organization    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messageId   String          @map("message_id")
+  message     CriticalMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  memberId    String          @map("member_id")
+  member      Member          @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  dismissedAt DateTime        @default(now()) @map("dismissed_at")
+
+  @@unique([messageId, memberId])
+  @@index([tenantId])
+  @@map("critical_message_dismissal")
+}
+
+/// The first time a given workspace was shown a given message — its own
+/// small table rather than folded into the dismissal, because the grain
+/// differs: this is per-workspace (needed for DAYS_AFTER_MESSAGE's "N days
+/// after this workspace saw it" math), dismissal is per-member. Written
+/// lazily, once, the first time messageIsDue is true for a (message, org)
+/// pair with no row yet — never backfilled or recomputed.
+model MessageShownAt {
+  id           String          @id @default(uuid())
+  tenantId     String          @map("tenant_id")
+  tenant       Organization    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messageId    String          @map("message_id")
+  message      CriticalMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  firstShownAt DateTime        @default(now()) @map("first_shown_at")
+
+  @@unique([messageId, tenantId])
+  @@map("message_shown_at")
 }
 
 /// Global platform configuration, editable from /admin — a single row (there's
