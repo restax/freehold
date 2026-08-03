@@ -24,6 +24,7 @@ export default function SignupPage() {
   const [avail, setAvail] = useState<AvailState>({ status: "idle" });
   const [password, setPassword] = useState("");
   const [score, setScore] = useState(0);
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -59,7 +60,12 @@ export default function SignupPage() {
 
   const passwordOk = password.length >= 8 && score >= MIN_PASSWORD_SCORE;
   const canSubmit =
-    !busy && name.trim() !== "" && email.trim() !== "" && avail.status === "ok" && passwordOk;
+    !busy &&
+    name.trim() !== "" &&
+    email.trim() !== "" &&
+    avail.status === "ok" &&
+    passwordOk &&
+    agreed;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -164,6 +170,27 @@ export default function SignupPage() {
         />
       </label>
       <PasswordStrength password={password} onScore={setScore} />
+      <label className="flex items-start gap-2 text-xs text-stone-500">
+        <input
+          type="checkbox"
+          required
+          checked={agreed}
+          onChange={(e) => setAgreed(e.target.checked)}
+          className="mt-0.5"
+        />
+        <span>
+          I agree to the{" "}
+          <Link href="/terms" target="_blank" className="underline hover:text-stone-600">
+            terms of service
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" target="_blank" className="underline hover:text-stone-600">
+            privacy policy
+          </Link>
+          , including the security disclaimer, the limitation of liability, and that I'm solely
+          responsible for my business's compliance with my state's real estate and licensing laws.
+        </span>
+      </label>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button
         type="submit"
@@ -172,17 +199,6 @@ export default function SignupPage() {
       >
         {busy ? "Creating…" : "Create account"}
       </button>
-      <p className="text-center text-xs text-stone-400">
-        By creating an account you agree to the{" "}
-        <Link href="/terms" className="underline hover:text-stone-600">
-          terms
-        </Link>{" "}
-        and{" "}
-        <Link href="/privacy" className="underline hover:text-stone-600">
-          privacy policy
-        </Link>
-        , including the security disclaimer.
-      </p>
       <p className="text-center text-xs text-stone-400">
         Freehold is source-available. If Freehold Cloud ever shuts down, you can self-host the same
         app from{" "}
@@ -194,7 +210,7 @@ export default function SignupPage() {
         >
           GitHub
         </a>{" "}
-        and keep your data — your business is never locked in.
+        and keep your data, your business is never locked in.
       </p>
       <p className="text-center text-sm text-stone-500">
         Already have an account?{" "}

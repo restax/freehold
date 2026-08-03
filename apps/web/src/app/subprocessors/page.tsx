@@ -14,8 +14,8 @@ const GROUPS: Array<[string, Row[]]> = [
     [
       [
         "Vercel Inc.",
-        "Runs the application: every page load and API request.",
-        "All traffic passing through Freehold, including session cookies.",
+        "Runs the application (every page load and API request) and provides Vercel Web Analytics, a cookieless, aggregate page-view analytics product active across the whole app.",
+        "All traffic passing through Freehold, including session cookies, plus aggregate page-view counts.",
         "United States",
       ],
       [
@@ -169,8 +169,11 @@ export default function SubprocessorsPage() {
           told us to; we don't add a step of our own in between.
         </p>
         <p>
-          We use no third-party advertising or analytics trackers, and we do not sell data to
-          anyone, subprocessor or otherwise. See the full{" "}
+          We use no third-party advertising trackers or pixels. We do use Vercel Web Analytics
+          (cookieless, aggregate page views, listed above) and ship PostHog, a product-analytics
+          tool, in our code, though it only activates if we configure an API key for it; it is not
+          currently active. Neither is advertising, and we do not sell data to anyone, subprocessor
+          or otherwise. See the full{" "}
           <a href="/privacy" className="text-brand-700 hover:text-brand-600">
             privacy policy
           </a>{" "}

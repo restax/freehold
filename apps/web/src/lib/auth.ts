@@ -7,6 +7,7 @@ import { MCP_SCOPES, mcpResourceUrl } from "@/lib/mcp";
 import { adminAlert } from "@/lib/notify";
 import { platformEmailEnabled, sendPlatformEmail } from "@/lib/platform-email";
 import { enforceSessionLimit } from "@/lib/session-limit";
+import { TERMS_VERSION } from "@/lib/terms";
 import {
   checkUsernameAvailability,
   normalizeUsername,
@@ -52,6 +53,18 @@ export const auth = betterAuth({
         "Reset your Freehold password",
         `We received a request to reset your Freehold password. Click the link below to choose a new one:\n\n${url}\n\nThis link expires in an hour. If you didn't request it, ignore this email — your password is unchanged.`,
       );
+    },
+  },
+  // Terms-of-service acceptance record. input: false on both means neither
+  // is ever accepted from the client (so it can't be spoofed) — the
+  // user.create.before hook below is the only writer, stamping every new
+  // account with the version live at signup. The signup page's required
+  // checkbox is the actual consent gesture; this only records that it
+  // happened.
+  user: {
+    additionalFields: {
+      termsAcceptedAt: { type: "date", required: false, input: false },
+      termsVersion: { type: "string", required: false, input: false },
     },
   },
   // Extra Session columns for the concurrent-desktop-session limit (see
@@ -136,6 +149,7 @@ export const auth = betterAuth({
               });
             }
           }
+          return { data: { termsAcceptedAt: new Date(), termsVersion: TERMS_VERSION } };
         },
         after: async (user) => {
           adminAlert(`🆕 New Freehold signup: ${user.name} <${user.email}>`);

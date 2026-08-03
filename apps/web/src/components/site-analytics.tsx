@@ -5,10 +5,12 @@ import posthog from "posthog-js";
 import { useEffect } from "react";
 
 /**
- * Site analytics, both env-gated so self-hosted installs track nothing:
+ * Analytics, mounted app-wide from the root layout (marketing pages and the
+ * dashboard alike), both env-gated so self-hosted installs track nothing:
  * - Vercel Web Analytics: active only on Vercel deployments (no-op elsewhere).
- * - PostHog: activates when NEXT_PUBLIC_POSTHOG_KEY is set — events, funnels,
- *   session context for the marketing site.
+ * - PostHog: activates when NEXT_PUBLIC_POSTHOG_KEY is set, otherwise dormant.
+ * Disclosed on /privacy and /subprocessors — keep those in sync with any
+ * change here.
  */
 export function SiteAnalytics() {
   useEffect(() => {

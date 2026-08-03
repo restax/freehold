@@ -53,6 +53,12 @@ model User {
   /// (User.phone), not anything workspace-specific, so closing it once holds
   /// across every workspace they belong to.
   onboardingAdDismissedAt DateTime?             @map("onboarding_ad_dismissed_at")
+  /// Stamped server-side by the user.create hook in auth.ts, never accepted
+  /// as client input, so it can't be spoofed. Non-null means this account
+  /// accepted the terms of service that were live at signup; termsVersion
+  /// (lib/terms.ts's TERMS_VERSION) records exactly which version that was.
+  termsAcceptedAt         DateTime?             @map("terms_accepted_at")
+  termsVersion            String?               @map("terms_version")
   twoFactors              TwoFactor[]
   sessions                Session[]
   accounts                Account[]
