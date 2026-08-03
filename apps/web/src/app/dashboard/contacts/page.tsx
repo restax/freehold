@@ -400,7 +400,7 @@ export default async function ContactsPage({
               </Link>
             </EmptyState>
           ) : (
-            <div className={tableWrap}>
+            <div data-tour="contacts-table" className={tableWrap}>
               <table className={tableFixed} style={{ minWidth: contactTableMinWidth(columns) }}>
                 <colgroup>
                   {columns.map((c) => (

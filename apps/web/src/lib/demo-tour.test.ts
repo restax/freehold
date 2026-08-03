@@ -42,9 +42,20 @@ describe("the demo tour script", () => {
   });
 
   it("routes somewhere real: a dashboard path or the transaction token", () => {
+    // Stops may carry a ?tab= so a tab-gated card is actually mounted when the
+    // spotlight looks for it; the engine strips the query before comparing
+    // against the pathname, so the path half is what has to be real.
     for (const s of TOUR_STOPS) {
-      const ok = s.route === FIRST_TRANSACTION || s.route.startsWith("/dashboard");
+      const [path] = s.route.split("?");
+      const ok = path === FIRST_TRANSACTION || path.startsWith("/dashboard");
       expect(ok, `${s.id} routes to ${s.route}`).toBe(true);
+    }
+  });
+
+  it("only ever uses ?tab= in a route, since that is all the engine navigates", () => {
+    for (const s of TOUR_STOPS) {
+      const [, query] = s.route.split("?");
+      if (query !== undefined) expect(query, s.id).toMatch(/^tab=[a-z]+$/);
     }
   });
 
@@ -84,16 +95,22 @@ describe("the demo tour script", () => {
     // "claude", after the tour had already been written against the guess.
     const keys = new Set(INTEGRATION_CATALOG.map((e) => e.key));
     for (const s of TOUR_STOPS) {
-      const m = s.selector?.match(/^\[data-tour="integration-(.+)"\]$/);
-      if (!m) continue;
-      expect(keys, `${s.id} points at integration-${m[1]}`).toContain(m[1]);
+      for (const a of s.anchors) {
+        if (!a.startsWith("integration-")) continue;
+        expect(keys, `${s.id} points at ${a}`).toContain(a.slice("integration-".length));
+      }
     }
   });
 
-  it("anchors to data-tour attributes rather than fragile markup", () => {
+  it("gives every single stop something to highlight", () => {
+    // The whole screen dimming with nothing lit reads as a broken tour, so an
+    // empty anchor list is a defect rather than a soft default.
+    for (const s of TOUR_STOPS) expect(s.anchors.length, s.id).toBeGreaterThan(0);
+  });
+
+  it("uses plain anchor names, not raw CSS selectors", () => {
     for (const s of TOUR_STOPS) {
-      if (!s.selector) continue;
-      expect(s.selector, s.id).toMatch(/^\[data-tour="[a-z0-9-]+"\]$/);
+      for (const a of s.anchors) expect(a, s.id).toMatch(/^[a-z0-9-]+$/);
     }
   });
 });

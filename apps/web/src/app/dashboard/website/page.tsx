@@ -205,7 +205,7 @@ export default async function WebsitePage() {
           )}
         </div>
 
-        <SectionCard title="Preview" className="xl:sticky xl:top-6">
+        <SectionCard tour="website-preview" title="Preview" className="xl:sticky xl:top-6">
           <SitePreviewPane src="/site-preview" published={Boolean(site.published)} />
         </SectionCard>
       </div>

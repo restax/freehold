@@ -76,6 +76,7 @@ export default async function SupportPage() {
           </span>
         </summary>
         <form
+          data-tour="support-form"
           action={createTicket}
           className="flex flex-col gap-2 border-t border-stone-100 px-3 py-3 sm:flex-row sm:items-end"
         >

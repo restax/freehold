@@ -93,14 +93,29 @@ function visibleTarget(selector: string): HTMLElement | null {
   return null;
 }
 
-/** Poll for an element that arrives after navigation or a server round trip. */
-function awaitTarget(selector: string, signal: AbortSignal): Promise<HTMLElement | null> {
+/**
+ * Poll until one of these anchors shows up, taking the earliest in the list
+ * that is on screen. Priority matters: a stop names its ideal target first and
+ * a guaranteed-present fallback last, so a conditionally rendered panel that
+ * happens to be absent degrades to lighting something rather than nothing.
+ */
+function awaitTarget(anchors: string[], signal: AbortSignal): Promise<HTMLElement | null> {
+  return awaitAny(
+    anchors.map((a) => `[data-tour="${a}"]`),
+    signal,
+  );
+}
+
+/** The same wait, for a plain CSS selector rather than a tour anchor. */
+function awaitAny(selectors: string[], signal: AbortSignal): Promise<HTMLElement | null> {
   return new Promise((resolve) => {
     const started = Date.now();
     const tick = () => {
       if (signal.aborted) return resolve(null);
-      const el = visibleTarget(selector);
-      if (el) return resolve(el);
+      for (const sel of selectors) {
+        const el = visibleTarget(sel);
+        if (el) return resolve(el);
+      }
       if (Date.now() - started > TARGET_TIMEOUT_MS) return resolve(null);
       requestAnimationFrame(tick);
     };
@@ -202,27 +217,27 @@ export function DemoTour() {
       // sample data, so the tour reads one off the list rather than
       // hardcoding something that will rot.
       let want = stop.route;
-      if (want === FIRST_TRANSACTION) {
+      if (want.startsWith(FIRST_TRANSACTION)) {
+        const suffix = want.slice(FIRST_TRANSACTION.length);
         if (!txnHref.current) {
           if (pathname !== "/dashboard/transactions") {
             router.push("/dashboard/transactions");
             return;
           }
-          await awaitTarget('a[href^="/dashboard/transactions/"]', ac.signal);
+          await awaitAny(['a[href^="/dashboard/transactions/"]'], ac.signal);
           if (ac.signal.aborted) return;
           txnHref.current = findTransactionHref();
           if (!txnHref.current) return advanceRef.current(); // no sample data
         }
-        want = txnHref.current;
+        want = txnHref.current + suffix;
       }
-      if (pathname !== want) {
+      // Compare paths only: the tab lives in the query, which usePathname drops.
+      if (pathname !== want.split("?")[0]) {
         router.push(want);
         return;
       }
 
-      // A stop with no selector is about the page as a whole.
-      if (!stop.selector) return;
-      const el = await awaitTarget(stop.selector, ac.signal);
+      const el = await awaitTarget(stop.anchors, ac.signal);
       if (ac.signal.aborted || !el) return;
       el.scrollIntoView({ block: "center", behavior: "smooth" });
       // Let the smooth scroll settle before measuring, or the spotlight lands
@@ -273,10 +288,12 @@ export function DemoTour() {
 
   // Keep the spotlight on the target through scrolling and resizing.
   useEffect(() => {
-    if (phase !== "running" || !stop?.selector) return;
+    if (phase !== "running" || !stop) return;
     const update = () => {
-      const el = visibleTarget(stop.selector as string);
-      if (el) setRect(el.getBoundingClientRect());
+      for (const a of stop.anchors) {
+        const el = visibleTarget(`[data-tour="${a}"]`);
+        if (el) return setRect(el.getBoundingClientRect());
+      }
     };
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);

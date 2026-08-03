@@ -60,7 +60,9 @@ export default async function TemplatesHubPage({
         </p>
       </div>
 
-      <TemplateHubTabs active={tab} />
+      <div data-tour="templates-tabs">
+        <TemplateHubTabs active={tab} />
+      </div>
 
       {tab === "tasks" && (
         <TemplatesTabTasks

@@ -505,7 +505,7 @@ export default async function TransactionsPage({
               />
             )
           ) : (
-            <div className={tableWrap}>
+            <div data-tour="txn-table" className={tableWrap}>
               <table className={tableFixed} style={{ minWidth: tableMinWidth(columns) }}>
                 {/* Explicit widths are what make the columns strict: every row
                   lands on the same grid instead of each one negotiating its

@@ -118,7 +118,7 @@ export default async function BillingPage({
         </p>
       )}
 
-      <section className={card}>
+      <section data-tour="billing-plan" className={card}>
         <h2 className="mb-2 font-medium">
           Current plan: {info.label}
           {info.priceMonthly ? (

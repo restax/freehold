@@ -134,6 +134,7 @@ export default async function ClientsPage({
 
       {path && (
         <SectionCard
+          tour="clients-new"
           title="New client"
           icon={<UserPlus size={15} weight="fill" aria-hidden />}
           action={
@@ -328,7 +329,7 @@ export default async function ClientsPage({
             hint='Clients are who you coordinate for — an agent, a brokerage, a title company. Each transaction belongs to one, and their preferences (like e-sign provider) follow automatically. Hit "+ New client" above to add your first.'
           />
         ) : (
-          <div className={tableWrap}>
+          <div data-tour="clients-table" className={tableWrap}>
             <table className="w-full">
               <thead>
                 <tr>

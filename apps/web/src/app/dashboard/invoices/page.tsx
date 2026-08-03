@@ -83,7 +83,7 @@ export default async function InvoicesPage({
   // teammate the Team page granted view/manage/full.
   if (!access.view) {
     return (
-      <div className="flex flex-col gap-4">
+      <div data-tour="invoices-page" className="flex flex-col gap-4">
         <div>
           <h1 className="text-xl font-semibold">Invoices</h1>
           <p className="text-sm text-stone-500">
@@ -259,12 +259,12 @@ export default async function InvoicesPage({
     : null;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div data-tour="invoices-page" className="flex flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">Invoices</h1>
         <p className="text-sm text-stone-500">
-          Bill your clients for coordination work — however they actually pay: check, Zelle, wire,
-          or out of closing proceeds. Every dollar in is a ledger entry; corrections are reversing
+          Bill your clients for coordination work, however they actually pay: check, Zelle, wire, or
+          out of closing proceeds. Every dollar in is a ledger entry; corrections are reversing
           entries, so the books always show what happened.
         </p>
       </div>
@@ -284,13 +284,13 @@ export default async function InvoicesPage({
       )}
 
       {allowed && outstanding.length > 0 && (
-        <SectionCard title="Outstanding">
+        <SectionCard tour="invoices-outstanding" title="Outstanding">
           <p className="text-sm text-stone-600">
             <strong className="tabular-nums">{fmtCents(outstandingBalance)}</strong> open across{" "}
             {outstanding.length} invoice{outstanding.length === 1 ? "" : "s"}
             {overdue.length > 0 && (
               <>
-                {" — "}
+                {", "}
                 <strong className="tabular-nums text-red-700">{fmtCents(overdueBalance)}</strong>{" "}
                 <span className="text-red-700">
                   overdue ({overdue.length} invoice{overdue.length === 1 ? "" : "s"})

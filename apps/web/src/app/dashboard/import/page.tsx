@@ -16,8 +16,10 @@ export const dynamic = "force-dynamic";
 export default async function ImportPage() {
   const { tenantId, isAdmin } = await requireAdminTenant();
   if (!isAdmin) {
+    // data-tour is on this branch too: the demo tour visits this page, and a
+    // non-admin viewer would otherwise dim the screen with nothing lit.
     return (
-      <div className="max-w-3xl">
+      <div data-tour="import-page" className="max-w-3xl">
         <p className="text-sm text-stone-500">
           Only a workspace admin or owner can bulk-import data. Ask one of them to run this.
         </p>
@@ -48,7 +50,7 @@ export default async function ImportPage() {
   });
 
   return (
-    <div className="flex max-w-3xl flex-col gap-6">
+    <div data-tour="import-page" className="flex max-w-3xl flex-col gap-6">
       <div>
         <h1 className="text-xl font-semibold">Import / Export</h1>
         <p className="text-sm text-stone-500">
@@ -61,7 +63,7 @@ export default async function ImportPage() {
         </p>
       </div>
 
-      <section className={card}>
+      <section data-tour="import-csv" className={card}>
         <form action={importCsv} className="flex flex-col gap-4">
           <div className="flex flex-wrap gap-5 text-sm text-stone-700">
             <label className="flex items-center gap-1.5">
@@ -241,7 +243,7 @@ export default async function ImportPage() {
         </SectionCard>
       )}
 
-      <SectionCard title="Sample data">
+      <SectionCard tour="import-sample" title="Sample data">
         {sampleCount > 0 ? (
           <form action={removeSampleData} className="flex items-center gap-3">
             <p className="text-sm text-stone-500">

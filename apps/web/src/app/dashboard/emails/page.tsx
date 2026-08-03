@@ -65,7 +65,7 @@ export default async function EmailTemplatesPage() {
         </p>
       </div>
 
-      <SectionCard title="Signature &amp; footer">
+      <SectionCard tour="email-signature" title="Signature &amp; footer">
         <p className="mb-4 text-sm text-stone-500">
           Appended to every outgoing email — change it once here and it changes everywhere,
           including the automated emails.

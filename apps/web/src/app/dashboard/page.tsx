@@ -523,6 +523,7 @@ export default async function DashboardPage({
           two is showing. */}
       {(hb.summary || needsAttention.length > 0) && (
         <div
+          data-tour="day-glance"
           className={
             hb.summary && needsAttention.length > 0
               ? "grid grid-cols-1 items-start gap-4 lg:grid-cols-2"
@@ -619,6 +620,7 @@ export default async function DashboardPage({
         <div className="flex flex-col gap-6">
           {/* Today */}
           <SectionCard
+            tour="day-today"
             title="Today"
             icon={<Sun size={15} weight="fill" className="text-brand-600" aria-hidden />}
           >

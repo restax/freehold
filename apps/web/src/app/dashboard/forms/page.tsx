@@ -82,6 +82,7 @@ export default async function FormsPage({
       )}
 
       <SectionCard
+        tour="forms-templates"
         title="Start from a template"
         icon={<FilePlus size={15} weight="fill" aria-hidden />}
       >

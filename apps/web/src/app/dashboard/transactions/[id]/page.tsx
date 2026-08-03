@@ -913,7 +913,7 @@ export default async function TransactionDetailPage({
               { label: txn.propertyAddress },
             ]}
           />
-          <h1 className="flex items-center gap-2 text-xl font-semibold">
+          <h1 data-tour="txn-header" className="flex items-center gap-2 text-xl font-semibold">
             <SideBadge side={txn.side} labels={labels} size="md" />
             {txn.propertyAddress}
           </h1>
@@ -1352,7 +1352,7 @@ export default async function TransactionDetailPage({
             </SectionCard>
           )}
           {tab === "documents" && (
-            <div className="flex flex-col gap-4">
+            <div data-tour="txn-documents" className="flex flex-col gap-4">
               {splitError && (
                 <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                   {splitError}

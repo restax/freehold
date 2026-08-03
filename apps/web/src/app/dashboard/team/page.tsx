@@ -135,7 +135,7 @@ export default async function TeamPage() {
         </p>
       )}
 
-      <SectionCard title="Members">
+      <SectionCard tour="team-members" title="Members">
         <div className={tableWrap}>
           <table className="w-full">
             <thead>

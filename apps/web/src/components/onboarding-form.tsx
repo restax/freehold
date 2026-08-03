@@ -1,7 +1,6 @@
 "use client";
 
 import { tenantSlug } from "@freehold/db/slug";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { beginSignupTrial } from "@/lib/actions/billing";
 import { seedSampleData } from "@/lib/actions/sample-data";
@@ -10,7 +9,6 @@ import { authClient } from "@/lib/auth-client";
 import { isReservedSlug } from "@/lib/reserved-slugs";
 
 export function OnboardingForm() {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [withSample, setWithSample] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,8 +43,14 @@ export function OnboardingForm() {
     } catch {
       // Sample data is sugar; the dashboard works without it.
     }
-    router.push("/dashboard");
-    router.refresh();
+    // Hard navigation, not router.push: setActive has just changed the active
+    // organization in a cookie, and the whole dashboard tree has to render
+    // against the new tenant. A soft push would also serve cached RSC output
+    // from before the switch — and pairing it with an immediate refresh()
+    // cancelled the in-flight transition outright, stranding the user on this
+    // screen with the button stuck reading "Creating…". Same approach /demo
+    // already takes after it prepares a workspace.
+    window.location.assign("/dashboard");
   }
 
   return (
@@ -73,7 +77,7 @@ export function OnboardingForm() {
           onChange={(e) => setWithSample(e.target.checked)}
           className="h-4 w-4 accent-brand-600"
         />
-        Start with sample data (a demo transaction, checklist, and contacts — removable in Settings)
+        Start with sample data (a demo transaction, checklist, and contacts, removable in Settings)
       </label>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button
