@@ -18,15 +18,15 @@ export function recommendClickUrl(token: string): string {
 
 const FEATURES = [
   [
-    "AI reads the contract",
-    "Built in, not a bolt-on. Every extracted value is shown for approval before it's used, nothing runs unattended.",
+    "AI: Freehold runs on Claude, Anthropic's AI.",
+    "Built in, not a bolt-on. Ask AI about your transactions, clients and contracts.",
   ],
   [
-    "Signing is included",
+    "Document Signing is included",
     "OpenSign e-signatures ship with every plan. No separate account, no per-envelope fee.",
   ],
   [
-    "A website comes with it",
+    "Web Hosting Plans Included",
     "Every workspace gets its own public site and portal links, included, not an upsell.",
   ],
 ] as const;
@@ -56,9 +56,15 @@ export function recommendationEmailSubject(): string {
 
 export function recommendationEmailText(token: string): string {
   const url = recommendClickUrl(token);
-  return `Someone who uses Freehold thought it might help your business too.
+  return `Recommended by a friend.
 
-Freehold is a real estate transaction coordination platform. AI reads the contract (built in, every value shown for your approval), document signing is included at no extra cost, and every workspace comes with its own website.
+Someone who uses Freehold thought it might help your business too. It's a real estate transaction coordination platform built around three things:
+
+AI: Freehold runs on Claude, Anthropic's AI. Built in, not a bolt-on. Ask AI about your transactions, clients and contracts.
+
+Document Signing is included: OpenSign e-signatures ship with every plan. No separate account, no per-envelope fee.
+
+Web Hosting Plans Included: every workspace gets its own public site and portal links, included, not an upsell.
 
 Free: $0/mo, 2 active files
 Pro: $50/mo, 8 active files
@@ -85,7 +91,7 @@ export function recommendationEmailHtml(token: string): string {
 
   const bodyHtml = `
     <p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#292524;">
-      Someone who uses Freehold thought it might help your business too, a real estate
+      Someone who uses Freehold thought it might help your business too. It's a real estate
       transaction coordination platform built around three things:
     </p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
@@ -106,8 +112,8 @@ export function recommendationEmailHtml(token: string): string {
     </p>`;
 
   return renderBrandedEnvelope({
-    tenantName: "Freehold",
-    subtitle: "Someone thought you'd want to see this",
+    tenantName: "Freehold, Software for TC's",
+    subtitle: "Recommended by a friend.",
     accent: ACCENT,
     bodyHtml,
     footerHtml:
