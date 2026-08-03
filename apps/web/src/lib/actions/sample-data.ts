@@ -39,12 +39,17 @@ export async function removeSampleData() {
   await prisma.organization.update({ where: { id: tenantId }, data: { hasSampleData: false } });
   // The "Today at a glance" summary is cached per member on a pure 1-hour
   // clock (lib/handbook/summary-context.ts's isStale), with no dependency on
-  // the underlying data — clearing this tenant-wide forces every member's
-  // next dashboard load to regenerate it against the post-removal reality,
-  // rather than repeating sample-data content for up to an hour.
+  // the underlying data. Clearing handbookSummaryAt alone forces the next
+  // dashboard load to regenerate it in the background (dashboard/page.tsx's
+  // after()) — correct for the normal staleness case, but here it means the
+  // very next render still shows the old text, since HandbookGlance renders
+  // whatever's currently in handbookSummary while the regen runs. Clearing
+  // handbookSummary too means that render shows the "writing it now"
+  // placeholder instead of a paragraph about the sample data you just
+  // removed.
   await prisma.member.updateMany({
     where: { organizationId: tenantId },
-    data: { handbookSummaryAt: null },
+    data: { handbookSummaryAt: null, handbookSummary: null },
   });
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/transactions");
