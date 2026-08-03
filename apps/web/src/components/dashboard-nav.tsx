@@ -3,6 +3,7 @@
 import {
   AddressBook,
   ArrowLeft,
+  BookOpen,
   Buildings,
   CalendarBlank,
   CheckSquare,
@@ -165,6 +166,17 @@ const GROUPS: NavGroup[] = [
         label: "Vault",
         icon: LockKey,
         desc: "Encrypted logins your team needs — MLS, lockboxes, portals",
+      },
+    ],
+  },
+  {
+    label: "Help",
+    items: [
+      {
+        href: "/dashboard/manual",
+        label: "User manual",
+        icon: BookOpen,
+        desc: "Every setting, feature, and integration, in one place",
       },
     ],
   },
