@@ -284,7 +284,7 @@ export async function setDailyBriefing(formData: FormData) {
   const { tenantId, isAdmin } = await requireAdminTenant();
   if (!isAdmin) return;
   await mergeEmailSettings(tenantId, { dailyBriefing: str(formData, "enabled") === "1" });
-  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/import");
 }
 
 /**
@@ -296,5 +296,5 @@ export async function setInvoiceReport(formData: FormData) {
   const { tenantId, isAdmin } = await requireAdminTenant();
   if (!isAdmin) return;
   await mergeEmailSettings(tenantId, { invoiceReportUserId: str(formData, "userId") });
-  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/import");
 }

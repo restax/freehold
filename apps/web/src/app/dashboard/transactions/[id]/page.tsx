@@ -2,7 +2,6 @@ import { PartyRole, prisma, TransactionSide, withTenant } from "@freehold/db";
 import {
   Archive,
   ArrowSquareOut,
-  Buildings,
   CalendarBlank,
   CalendarCheck,
   ChartPieSlice,
@@ -18,9 +17,7 @@ import {
   ListBullets,
   NotePencil,
   PaperPlaneTilt,
-  PencilSimple,
   PenNib,
-  Phone,
   Plus,
   PlusCircle,
   Receipt,
@@ -64,6 +61,7 @@ import { KeyDateRow } from "@/components/key-date-row";
 import { LinkPartyForm } from "@/components/link-party-form";
 import { ListingDetailRow } from "@/components/listing-detail-row";
 import { PanelJump } from "@/components/panel-jump";
+import { ParticipantEditor } from "@/components/participant-editor";
 import { PendingButton } from "@/components/pending-button";
 import { ScrollToHash } from "@/components/scroll-to-hash";
 import { SectionCard } from "@/components/section-card";
@@ -110,7 +108,7 @@ import {
   startRound,
   submitForReview,
 } from "@/lib/actions/compliance";
-import { createContactByName } from "@/lib/actions/contacts";
+import { createContactByName, updateParticipantContact } from "@/lib/actions/contacts";
 import { enableProFeatures } from "@/lib/actions/credits";
 import { applyDateTemplateValues, previewDateTemplate } from "@/lib/actions/date-templates";
 import { deleteDocument, replaceDocument, uploadDocument } from "@/lib/actions/documents";
@@ -194,6 +192,7 @@ import {
   STATUS_TONE as COMPLIANCE_STATUS_TONE,
   effectiveTier,
 } from "@/lib/compliance";
+import { readContactPoints } from "@/lib/contact-points";
 import { emailEnabled } from "@/lib/email";
 import { type EmailContact, parseEmailSettings, renderMerge } from "@/lib/email-template";
 import { suggestForTask } from "@/lib/email-template-library";
@@ -868,6 +867,30 @@ export default async function TransactionDetailPage({
   );
   // Ours first, then the third parties, then the other side's people.
   const groupedParties = groupPartiesBySide(txn.parties, txn.side);
+  /**
+   * The messages on this file a participant appears on, for the small edit
+   * dialog. Matched off `txn.emails`, which is already loaded for the Emails
+   * tab, so this costs nothing extra. Address match as well as contactId
+   * because mail that arrived before the contact existed carries only the
+   * address.
+   */
+  const emailsFor = (contactId: string, address: string | null) => {
+    const addr = address?.toLowerCase();
+    return txn.emails
+      .filter(
+        (e) =>
+          e.contactId === contactId ||
+          (addr &&
+            (e.toAddr.toLowerCase().includes(addr) || e.fromAddr.toLowerCase().includes(addr))),
+      )
+      .slice(0, 5)
+      .map((e) => ({
+        id: e.id,
+        subject: e.subject,
+        direction: e.direction,
+        createdAt: fmtDate(e.createdAt),
+      }));
+  };
   // "Did you send that to the lender?" — answered from what actually went
   // out, on the row for the thing that was sent.
   const [sentDocs, sentLinks] = await Promise.all([
@@ -3556,7 +3579,9 @@ export default async function TransactionDetailPage({
             >
               <p className="mb-3 text-sm text-stone-500">
                 Everyone on this file who isn't your team — buyer, seller, agents, lender, title,
-                and more. Real contacts, not free text; click a name to open their record.
+                and more. Buyers and sellers open a short form for the details that matter on this
+                file; everyone else opens their full contact record. Use "edit" on any row to fix a
+                company, phone or email in place.
               </p>
               <details className="mb-4">
                 <summary className={`${btnAdd} w-fit list-none`}>+ Add participant</summary>
@@ -3645,60 +3670,26 @@ export default async function TransactionDetailPage({
                               >
                                 {ROLE_LABEL[p.role]}
                               </td>
-                              <td className={td}>
-                                <span className="inline-flex items-center gap-1.5">
-                                  <Link
-                                    href={`/dashboard/contacts/${p.contact.id}`}
-                                    className="font-medium text-brand-700 hover:underline"
-                                  >
-                                    {p.contact.name}
-                                  </Link>
-                                  <Link
-                                    href={`/dashboard/contacts/${p.contact.id}/edit`}
-                                    title="Edit contact details"
-                                    aria-label={`Edit ${p.contact.name}`}
-                                    className="text-stone-300 transition-colors hover:text-brand-700"
-                                  >
-                                    <PencilSimple size={12} aria-hidden />
-                                  </Link>
-                                </span>
-                              </td>
-                              <td className={td}>
-                                {p.contact.company ? (
-                                  <span className="inline-flex items-center gap-1">
-                                    <Buildings size={13} className="text-stone-400" aria-hidden />
-                                    {p.contact.company}
-                                  </span>
-                                ) : (
-                                  <span className="text-stone-300">—</span>
-                                )}
-                              </td>
-                              <td className={td}>
-                                {p.contact.phone ? (
-                                  <a
-                                    href={`tel:${p.contact.phone}`}
-                                    className="inline-flex items-center gap-1 hover:underline"
-                                  >
-                                    <Phone size={13} className="text-stone-400" aria-hidden />
-                                    {p.contact.phone}
-                                  </a>
-                                ) : (
-                                  <span className="text-stone-300">—</span>
-                                )}
-                              </td>
-                              <td className={td}>
-                                {p.contact.email ? (
-                                  <Link
-                                    href={`/dashboard/transactions/${txn.id}?tab=emails&emailTo=${encodeURIComponent(p.contact.email)}`}
-                                    className="inline-flex items-center gap-1 text-brand-700 hover:underline"
-                                  >
-                                    <Envelope size={13} aria-hidden />
-                                    {p.contact.email}
-                                  </Link>
-                                ) : (
-                                  <span className="text-stone-300">—</span>
-                                )}
-                              </td>
+                              <ParticipantEditor
+                                contact={{
+                                  id: p.contact.id,
+                                  name: p.contact.name,
+                                  company: p.contact.company,
+                                  phone: p.contact.phone,
+                                  email: p.contact.email,
+                                  notes: p.contact.notes,
+                                  extraPhones: readContactPoints(p.contact.extraContacts, "phones"),
+                                  extraEmails: readContactPoints(p.contact.extraContacts, "emails"),
+                                }}
+                                action={updateParticipantContact}
+                                back={`/dashboard/transactions/${txn.id}`}
+                                transactionId={txn.id}
+                                // A buyer or seller is usually a one-off; an
+                                // agent, lender or title rep is repeat business
+                                // with a record worth opening.
+                                simple={p.role === "BUYER" || p.role === "SELLER"}
+                                emails={emailsFor(p.contact.id, p.contact.email)}
+                              />
                               <td className={td}>
                                 <DangerDelete
                                   compact

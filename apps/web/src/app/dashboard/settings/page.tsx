@@ -18,21 +18,17 @@ import { setCloudPromptOff, snoozeCloudPrompt } from "@/lib/actions/cloud-prompt
 import { setContactVisibilityRestriction } from "@/lib/actions/contacts";
 import { setHandbookEnabled, setHandbookSummaryEnabled } from "@/lib/actions/handbook";
 import { saveHolidaySchedule } from "@/lib/actions/holidays";
-import { removeSampleData } from "@/lib/actions/sample-data";
 import { addState, removeState, setLicenseEnforcement } from "@/lib/actions/states";
-import { setDailyBriefing, setInvoiceReport } from "@/lib/actions/templates";
 import { saveSideLabels } from "@/lib/actions/website";
 import { BILLING_MODES, tenantBillingPolicy } from "@/lib/billing-policy";
 import { cloudPromptText, readCloudPromptConfig } from "@/lib/cloud-prompt";
 import { enabledHolidayKeys, FEDERAL_HOLIDAYS } from "@/lib/date-calculators";
 import { readDirectoryConfig } from "@/lib/directory";
-import { emailEnabled } from "@/lib/email";
 import { fmtDate } from "@/lib/format";
 import { handbookState, isCloud } from "@/lib/plans";
 import { getPlatformSettings } from "@/lib/platform-settings";
 import { listTenants } from "@/lib/session";
 import { tenantSideLabels } from "@/lib/side-labels";
-import { storageStatus } from "@/lib/storage-config";
 import { getMemberRole, requireTenant } from "@/lib/tenant";
 import { btn, btnGhost, input, label, td, th, trHover } from "@/lib/ui";
 import { WEBHOOK_EVENTS } from "@/lib/webhook-emit";
@@ -587,34 +583,15 @@ export default async function SettingsPage() {
   const { tenantId, session } = await requireTenant();
   const tenants = await listTenants();
   const tenant = tenants.find((t) => t.id === tenantId);
-  const sampleCount = await withTenant(tenantId, async (tx) => {
-    const [transactions, contacts] = await Promise.all([
-      tx.transaction.count({ where: { isSample: true } }),
-      tx.contact.count({ where: { isSample: true } }),
-    ]);
-    return transactions + contacts;
-  });
 
   const sideLabels = await tenantSideLabels(tenantId);
-  const storage = await storageStatus(tenantId);
   const role = await getMemberRole(tenantId, session.user.id);
   const isAdmin = role === "owner" || role === "admin";
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: tenantId },
-    select: { emailSettings: true, billingDefaults: true },
+    select: { billingDefaults: true },
   });
   const billing = tenantBillingPolicy(org.billingDefaults);
-  const briefingOn =
-    (org.emailSettings as { dailyBriefing?: boolean } | null)?.dailyBriefing === true;
-  const invoiceReportUserId =
-    (org.emailSettings as { invoiceReportUserId?: string } | null)?.invoiceReportUserId ?? "";
-  const reportMembers = isAdmin
-    ? await prisma.member.findMany({
-        where: { organizationId: tenantId, role: { not: "guest" } },
-        include: { user: { select: { id: true, name: true } } },
-        orderBy: { createdAt: "asc" },
-      })
-    : [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -648,39 +625,6 @@ export default async function SettingsPage() {
             </Link>
           </SectionCard>
         )}
-
-        <SectionCard title="Your data">
-          <p className="mb-3 text-sm text-stone-500">
-            Everything in this workspace — transactions, contacts, clients, tasks, and every
-            document — as one ZIP you can take anywhere. Freehold is source-available, so this
-            export plus the{" "}
-            <a
-              href="https://github.com/restax/freehold"
-              className="text-brand-700 hover:text-brand-600"
-            >
-              public repo
-            </a>{" "}
-            is a working copy of your business that never depends on us.
-          </p>
-          <a href="/api/exports/latest" className={btn} download>
-            Download everything
-          </a>
-          {storage.source === "tenant" ? (
-            <p className="mt-3 text-xs text-stone-500">
-              Nightly export is <strong>on</strong> — a fresh copy is pushed to your own storage (
-              {storage.bucket}) every morning, and the owner gets an email with a link. A backup in
-              infrastructure you control.
-            </p>
-          ) : (
-            <p className="mt-3 text-xs text-stone-400">
-              Want it automatic?{" "}
-              <Link href="/dashboard/integrations" className="text-brand-700 hover:underline">
-                Connect your own storage bucket
-              </Link>{" "}
-              and we'll deliver a nightly export there — a backup in infrastructure you control.
-            </p>
-          )}
-        </SectionCard>
 
         {isAdmin && (
           <SectionCard title="Client billing defaults">
@@ -789,47 +733,6 @@ export default async function SettingsPage() {
           </SectionCard>
         )}
 
-        {emailEnabled() && isAdmin && (
-          <SectionCard title="Daily briefing">
-            <p className="mb-3 text-sm text-stone-500">
-              Every morning, owners and admins get an emailed summary of every active transaction —
-              status, key dates, and the contact details for every party — with a PDF attached. Once
-              it's in your inbox it's yours: readable offline, whatever happens to your connection,
-              your storage, or us. {briefingOn ? "It's on." : "It's off."}
-            </p>
-            <form action={setDailyBriefing}>
-              <input type="hidden" name="enabled" value={briefingOn ? "0" : "1"} />
-              <button type="submit" className={btnGhost}>
-                {briefingOn ? "Turn off daily briefing" : "Turn on daily briefing"}
-              </button>
-            </form>
-          </SectionCard>
-        )}
-
-        {emailEnabled() && isAdmin && (
-          <SectionCard title="Invoice report">
-            <p className="mb-3 text-sm text-stone-500">
-              Each morning, one chosen person gets the outstanding-invoices list — what's unpaid,
-              what's overdue, who to chase. Mornings with nothing outstanding send nothing.{" "}
-              {invoiceReportUserId ? "It's on." : "It's off."}
-            </p>
-            <form action={setInvoiceReport} className="flex flex-wrap items-end gap-3">
-              <label className={label}>
-                Send to
-                <select name="userId" defaultValue={invoiceReportUserId} className={input}>
-                  <option value="">— off —</option>
-                  {reportMembers.map((m) => (
-                    <option key={m.user.id} value={m.user.id}>
-                      {m.user.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <SaveButton className={btnGhost} />
-            </form>
-          </SectionCard>
-        )}
-
         <SectionCard title="Two-factor authentication">
           <TwoFactorSettings enabled={Boolean(session.user.twoFactorEnabled)} />
         </SectionCard>
@@ -856,21 +759,6 @@ export default async function SettingsPage() {
             </label>
             <SaveButton className={btnGhost} label="Save wording" />
           </form>
-        </SectionCard>
-
-        <SectionCard title="Sample data">
-          {sampleCount > 0 ? (
-            <form action={removeSampleData} className="flex items-center gap-3">
-              <p className="text-sm text-stone-500">
-                This workspace contains sample records (marked “(Sample)”).
-              </p>
-              <button type="submit" className={btnGhost}>
-                Remove all sample data
-              </button>
-            </form>
-          ) : (
-            <p className="text-sm text-stone-500">No sample data in this workspace.</p>
-          )}
         </SectionCard>
 
         <ApiSection tenantId={tenantId} userId={session.user.id} />

@@ -188,6 +188,11 @@ export function TopBar({
               <Link href="/dashboard/profile" className={itemCls}>
                 Profile
               </Link>
+              {!isGuest && (
+                <Link href="/dashboard/billing" className={itemCls}>
+                  Billing
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={async () => {

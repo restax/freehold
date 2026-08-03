@@ -4,6 +4,7 @@ import { type TenantTx, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logAudit } from "@/lib/audit";
+import { buildExtraContacts, type ContactPoint } from "@/lib/contact-points";
 import {
   type Address,
   displayName,
@@ -284,6 +285,67 @@ export async function updateContact(formData: FormData) {
   revalidatePath(`/dashboard/contacts/${id}`);
   revalidatePath("/dashboard/contacts");
   redirect(`/dashboard/contacts/${id}`);
+}
+
+/**
+ * The narrow edit behind a transaction participant — a buyer or seller, who is
+ * usually a one-off this workspace will never type again.
+ *
+ * Deliberately NOT `updateContact`: that one runs the whole contact form
+ * through parseContactForm, so a five-field submission would blank the
+ * addresses, the second person, the categories and everything else the full
+ * record holds. This writes only what the small form actually shows, which is
+ * also what makes it safe to reuse for the three inline cells in the
+ * participants table — a row that only carries `company` leaves the name,
+ * emails and notes exactly as they were.
+ *
+ * Extra phones/emails arrive as parallel value/label arrays and are stored in
+ * the same `"value (Label)"` form the CSV importer writes; see
+ * lib/contact-points.ts for why the label lives inside the string.
+ */
+export async function updateParticipantContact(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "contactId");
+  if (!id) return;
+
+  const points = (valueKey: string, labelKey: string): ContactPoint[] =>
+    formData.getAll(valueKey).map((v, i) => ({
+      value: String(v),
+      label: String(formData.getAll(labelKey)[i] ?? ""),
+    }));
+
+  // Only fields the submitted form actually carried are written. The inline
+  // row editor sends three; the dialog sends the lot.
+  const data: Record<string, unknown> = {};
+  if (formData.has("name")) {
+    const name = str(formData, "name");
+    // A nameless contact is unfindable everywhere else in the app, so a blank
+    // is ignored rather than saved.
+    if (name) data.name = name;
+  }
+  if (formData.has("company")) data.company = optStr(formData, "company");
+  if (formData.has("phone")) data.phone = optStr(formData, "phone");
+  if (formData.has("email")) data.email = optStr(formData, "email")?.toLowerCase() ?? null;
+  if (formData.has("notes")) data.notes = optStr(formData, "notes");
+  if (formData.has("extraPhone") || formData.has("extraEmail")) {
+    data.extraContacts =
+      buildExtraContacts(
+        points("extraPhone", "extraPhoneLabel"),
+        points("extraEmail", "extraEmailLabel"),
+      ) ?? undefined;
+    // Prisma treats `undefined` as "leave alone", which is wrong when the user
+    // has just removed the last extra — say null explicitly.
+    if (data.extraContacts === undefined) data.extraContacts = null;
+  }
+  if (Object.keys(data).length === 0) return;
+
+  await withTenant(tenantId, (tx) => tx.contact.update({ where: { id }, data }));
+
+  revalidatePath(`/dashboard/contacts/${id}`);
+  revalidatePath("/dashboard/contacts");
+  // The participants table this was almost certainly edited from.
+  const back = optStr(formData, "back");
+  if (back?.startsWith("/dashboard/")) revalidatePath(back);
 }
 
 /** Quick note from the contact detail screen. */

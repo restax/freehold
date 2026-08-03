@@ -48,4 +48,8 @@ export async function saveIntegrationBranding(formData: FormData) {
 
   revalidatePath("/admin/integrations");
   revalidatePath("/dashboard/integrations");
+  // The public marketing page (app/integrations/page.tsx) shows the same
+  // logos for the entries it shares a catalog key with — on-demand revalidate
+  // so an upload doesn't wait for the next deploy to show there.
+  revalidatePath("/integrations");
 }

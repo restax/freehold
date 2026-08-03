@@ -1,14 +1,18 @@
 import { prisma, withTenant } from "@freehold/db";
 import Link from "next/link";
+import { Fragment } from "react";
 import { Avatar } from "@/components/avatar";
 import { MemberHandbookNotes } from "@/components/handbook-notes";
 import { SectionCard } from "@/components/section-card";
+import { TeamNewMenu } from "@/components/team-new-menu";
 import { addLicense, deleteLicense } from "@/lib/actions/licenses";
 import { updateMemberMcpRole } from "@/lib/actions/mcp-settings";
 import {
+  addTeamMember,
   cancelInvitation,
   inviteMember,
   removeMember,
+  sendMemberWelcomeEmail,
   updateMemberBillingRole,
   updateMemberComplianceTier,
   updateMemberRole,
@@ -102,13 +106,23 @@ export default async function TeamPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-semibold">Team</h1>
-        <p className="text-sm text-stone-500">
-          Owners and admins manage the workspace; members handle day-to-day coordination but can't
-          delete transactions, clients, templates, or plans. Compliance review sets who can approve
-          submitted documents, and at which level when a checklist needs more than one sign-off.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">Team</h1>
+          <p className="text-sm text-stone-500">
+            Owners and admins manage the workspace; members handle day-to-day coordination but can't
+            delete transactions, clients, templates, or plans. Compliance review sets who can
+            approve submitted documents, and at which level when a checklist needs more than one
+            sign-off.
+          </p>
+        </div>
+        {isAdmin && (
+          <TeamNewMenu
+            addAction={addTeamMember}
+            inviteAction={inviteMember}
+            seatsLimited={seats.limited}
+          />
+        )}
       </div>
 
       {seats.limited && (
@@ -137,336 +151,356 @@ export default async function TeamPage() {
               </tr>
             </thead>
             <tbody>
-              {members.map((m) => (
-                <tr key={m.id} className={trHover}>
-                  <td className={`${td} font-medium`}>
-                    <span className="flex items-center gap-2">
-                      <Avatar user={m.user} size={28} />
-                      <span>
-                        {m.user.name}
-                        {m.userId === userId && (
-                          <span className="ml-1 text-xs text-stone-400">(you)</span>
+              {members.map((m) => {
+                const memberLicenses = licensesByUser.get(m.userId) ?? [];
+                const memberNotesList = notesByMember.get(m.id) ?? [];
+                return (
+                  <Fragment key={m.id}>
+                    <tr className={trHover}>
+                      <td className={`${td} font-medium`}>
+                        <span className="flex items-center gap-2">
+                          <Avatar user={m.user} size={28} />
+                          <span>
+                            {m.user.name}
+                            {m.userId === userId && (
+                              <span className="ml-1 text-xs text-stone-400">(you)</span>
+                            )}
+                          </span>
+                        </span>
+                      </td>
+                      <td className={td}>{m.user.email}</td>
+                      <td className={td}>
+                        {memberLicenses.length === 0 ? (
+                          <span className="text-stone-300">—</span>
+                        ) : (
+                          <span className="flex flex-wrap gap-1.5">
+                            {memberLicenses.map((lic) => {
+                              const health = licenseHealth(lic.expiresAt);
+                              return (
+                                <span
+                                  key={lic.id}
+                                  title={
+                                    lic.expiresAt
+                                      ? `${health === "expired" ? "Expired" : "Expires"} ${fmtDate(lic.expiresAt)}`
+                                      : "No expiry on record"
+                                  }
+                                  className="inline-flex items-center gap-1 rounded-md bg-stone-100 px-1.5 py-0.5 text-xs font-medium text-stone-700"
+                                >
+                                  <span
+                                    aria-hidden
+                                    className={`h-1.5 w-1.5 rounded-full ${HEALTH_DOT[health]}`}
+                                  />
+                                  {lic.state}
+                                </span>
+                              );
+                            })}
+                          </span>
                         )}
-                      </span>
-                    </span>
-                  </td>
-                  <td className={td}>{m.user.email}</td>
-                  <td className={td}>
-                    {(licensesByUser.get(m.userId) ?? []).length === 0 ? (
-                      <span className="text-stone-300">—</span>
-                    ) : (
-                      <span className="flex flex-wrap gap-1.5">
-                        {(licensesByUser.get(m.userId) ?? []).map((lic) => {
-                          const health = licenseHealth(lic.expiresAt);
-                          return (
-                            <span
-                              key={lic.id}
-                              title={
-                                lic.expiresAt
-                                  ? `${health === "expired" ? "Expired" : "Expires"} ${fmtDate(lic.expiresAt)}`
-                                  : "No expiry on record"
-                              }
-                              className="inline-flex items-center gap-1 rounded-md bg-stone-100 px-1.5 py-0.5 text-xs font-medium text-stone-700"
+                      </td>
+                      <td className={td}>
+                        {m.role === "owner" || !isAdmin ? (
+                          <span className="capitalize">{m.role}</span>
+                        ) : (
+                          <form action={updateMemberRole} className="flex items-center gap-1">
+                            <input type="hidden" name="memberId" value={m.id} />
+                            <select
+                              name="role"
+                              defaultValue={m.role}
+                              className={`${input} px-2 py-1 text-xs`}
                             >
-                              <span
-                                aria-hidden
-                                className={`h-1.5 w-1.5 rounded-full ${HEALTH_DOT[health]}`}
-                              />
-                              {lic.state}
-                            </span>
-                          );
-                        })}
-                      </span>
+                              {ROLES.map((r) => (
+                                <option key={r} value={r}>
+                                  {r}
+                                </option>
+                              ))}
+                            </select>
+                            <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                              Save
+                            </button>
+                          </form>
+                        )}
+                      </td>
+                      <td className={td}>
+                        {m.role === "owner" ? (
+                          <span className="text-stone-500">Full authority</span>
+                        ) : !isAdmin ? (
+                          <span className="text-stone-500">
+                            {tierLabel(m.complianceTier, m.role)}
+                          </span>
+                        ) : (
+                          <form
+                            action={updateMemberComplianceTier}
+                            className="flex items-center gap-1"
+                          >
+                            <input type="hidden" name="memberId" value={m.id} />
+                            <select
+                              name="complianceTier"
+                              defaultValue={
+                                m.complianceTier === null ? "default" : String(m.complianceTier)
+                              }
+                              className={`${input} px-2 py-1 text-xs`}
+                            >
+                              {TIER_OPTIONS.map(([value, text]) => (
+                                <option key={value} value={value}>
+                                  {text}
+                                </option>
+                              ))}
+                            </select>
+                            <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                              Save
+                            </button>
+                          </form>
+                        )}
+                      </td>
+                      <td className={td}>
+                        {m.role === "owner" ? (
+                          <span className="text-stone-500">Full authority</span>
+                        ) : !isAdmin ? (
+                          <span className="text-stone-500">
+                            {billingRoleLabel(m.role, m.billingRole)}
+                          </span>
+                        ) : (
+                          <form
+                            action={updateMemberBillingRole}
+                            className="flex items-center gap-1"
+                          >
+                            <input type="hidden" name="memberId" value={m.id} />
+                            <select
+                              name="billingRole"
+                              defaultValue={m.billingRole ?? "default"}
+                              className={`${input} px-2 py-1 text-xs`}
+                            >
+                              {BILLING_ROLE_OPTIONS.map(([value, text]) => (
+                                <option key={value} value={value}>
+                                  {text}
+                                </option>
+                              ))}
+                            </select>
+                            <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                              Save
+                            </button>
+                          </form>
+                        )}
+                      </td>
+                      <td className={td}>
+                        {!mcpEnabled ? (
+                          // No point offering a per-person grant while the whole
+                          // connector is off — it would read as broken.
+                          <span className="text-stone-400">Connector off</span>
+                        ) : m.role === "owner" ? (
+                          <span className="text-stone-500">Full authority</span>
+                        ) : !isAdmin ? (
+                          <span className="text-stone-500">
+                            {mcpRoleLabel(m.role, m.mcpRole, mcpEnabled)}
+                          </span>
+                        ) : (
+                          <form action={updateMemberMcpRole} className="flex items-center gap-1">
+                            <input type="hidden" name="memberId" value={m.id} />
+                            <select
+                              name="mcpRole"
+                              defaultValue={m.mcpRole ?? "default"}
+                              className={`${input} px-2 py-1 text-xs`}
+                            >
+                              {MCP_ROLE_OPTIONS.map(([value, text]) => (
+                                <option key={value} value={value}>
+                                  {text}
+                                </option>
+                              ))}
+                            </select>
+                            <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
+                              Save
+                            </button>
+                          </form>
+                        )}
+                      </td>
+                      <td className={td}>
+                        <span className="flex items-center justify-end gap-2">
+                          {isAdmin && m.role !== "owner" && (
+                            <form action={sendMemberWelcomeEmail}>
+                              <input type="hidden" name="memberId" value={m.id} />
+                              <button
+                                type="submit"
+                                className="text-xs text-stone-400 hover:text-brand-700"
+                              >
+                                send email
+                              </button>
+                            </form>
+                          )}
+                          {isAdmin && m.role !== "owner" && m.userId !== userId && (
+                            <form action={removeMember}>
+                              <input type="hidden" name="memberId" value={m.id} />
+                              <button
+                                type="submit"
+                                className="text-xs text-stone-300 hover:text-red-600"
+                              >
+                                remove
+                              </button>
+                            </form>
+                          )}
+                        </span>
+                      </td>
+                    </tr>
+                    {isAdmin && (
+                      <tr className="border-b border-stone-100 bg-stone-50/60">
+                        <td colSpan={8} className="px-0 py-0">
+                          <details className="group">
+                            <summary className="flex cursor-pointer list-none items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-stone-500 marker:content-none hover:text-stone-700">
+                              <span className="text-brand-600 group-open:hidden">+</span>
+                              <span className="hidden text-stone-400 group-open:inline">−</span>
+                              Notes &amp; licenses
+                              {memberLicenses.length + memberNotesList.length > 0 && (
+                                <span className="rounded-full bg-stone-200/70 px-1.5 py-0.5 text-[11px] font-medium text-stone-600">
+                                  {memberLicenses.length + memberNotesList.length}
+                                </span>
+                              )}
+                            </summary>
+                            <div className="flex flex-col gap-4 px-4 pb-4">
+                              <SectionCard title={`${m.user.name}'s licenses`}>
+                                <p className="mb-3 text-sm text-stone-500">
+                                  Some states require a licensed coordinator on every file. This
+                                  person can also manage their own from their profile.
+                                </p>
+                                <form
+                                  action={addLicense}
+                                  className="mb-2 flex flex-wrap items-end gap-3"
+                                >
+                                  <input type="hidden" name="userId" value={m.userId} />
+                                  <label className={label}>
+                                    State *
+                                    <input
+                                      name="state"
+                                      required
+                                      maxLength={2}
+                                      className={`${input} w-20`}
+                                      placeholder="TX"
+                                    />
+                                  </label>
+                                  <label className={label}>
+                                    Type
+                                    <input
+                                      name="label"
+                                      className={input}
+                                      placeholder="Salesperson"
+                                    />
+                                  </label>
+                                  <label className={label}>
+                                    License #
+                                    <input name="licenseNumber" className={input} />
+                                  </label>
+                                  <label className={label}>
+                                    Expires
+                                    <input name="expiresAt" type="date" className={input} />
+                                  </label>
+                                  <label className={`${label} min-w-52`}>
+                                    Copy (optional)
+                                    <input
+                                      name="file"
+                                      type="file"
+                                      accept="application/pdf,.pdf,image/*"
+                                      className={input}
+                                    />
+                                  </label>
+                                  <button type="submit" className={btn}>
+                                    Add license
+                                  </button>
+                                </form>
+                                {memberLicenses.length > 0 && (
+                                  <ul className="flex flex-col">
+                                    {memberLicenses.map((lic) => {
+                                      const health = licenseHealth(lic.expiresAt);
+                                      return (
+                                        <li
+                                          key={lic.id}
+                                          className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
+                                        >
+                                          <span
+                                            aria-hidden
+                                            className={`h-1.5 w-1.5 rounded-full ${HEALTH_DOT[health]}`}
+                                          />
+                                          <span className="font-medium">{lic.state}</span>
+                                          <span className="text-xs text-stone-400">
+                                            {lic.label ?? "License"}
+                                            {lic.licenseNumber ? ` #${lic.licenseNumber}` : ""}
+                                            {lic.expiresAt
+                                              ? ` · ${health === "expired" ? "expired" : "expires"} ${fmtDate(lic.expiresAt)}`
+                                              : ""}
+                                          </span>
+                                          {lic.filename && (
+                                            <a
+                                              href={`/api/licenses/${lic.id}/file`}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="text-xs text-brand-600 hover:underline"
+                                            >
+                                              open copy
+                                            </a>
+                                          )}
+                                          <form action={deleteLicense} className="ml-auto">
+                                            <input type="hidden" name="id" value={lic.id} />
+                                            <button
+                                              type="submit"
+                                              className="text-xs text-stone-300 hover:text-red-600"
+                                            >
+                                              remove
+                                            </button>
+                                          </form>
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                )}
+                              </SectionCard>
+
+                              {showMemberNotes && (
+                                <MemberHandbookNotes
+                                  subjectId={m.id}
+                                  personName={m.user.name ?? m.user.email}
+                                  notes={memberNotesList}
+                                  canWrite
+                                  back="/dashboard/team"
+                                />
+                              )}
+                            </div>
+                          </details>
+                        </td>
+                      </tr>
                     )}
-                  </td>
-                  <td className={td}>
-                    {m.role === "owner" || !isAdmin ? (
-                      <span className="capitalize">{m.role}</span>
-                    ) : (
-                      <form action={updateMemberRole} className="flex items-center gap-1">
-                        <input type="hidden" name="memberId" value={m.id} />
-                        <select
-                          name="role"
-                          defaultValue={m.role}
-                          className={`${input} px-2 py-1 text-xs`}
-                        >
-                          {ROLES.map((r) => (
-                            <option key={r} value={r}>
-                              {r}
-                            </option>
-                          ))}
-                        </select>
-                        <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
-                          Save
-                        </button>
-                      </form>
-                    )}
-                  </td>
-                  <td className={td}>
-                    {m.role === "owner" ? (
-                      <span className="text-stone-500">Full authority</span>
-                    ) : !isAdmin ? (
-                      <span className="text-stone-500">{tierLabel(m.complianceTier, m.role)}</span>
-                    ) : (
-                      <form action={updateMemberComplianceTier} className="flex items-center gap-1">
-                        <input type="hidden" name="memberId" value={m.id} />
-                        <select
-                          name="complianceTier"
-                          defaultValue={
-                            m.complianceTier === null ? "default" : String(m.complianceTier)
-                          }
-                          className={`${input} px-2 py-1 text-xs`}
-                        >
-                          {TIER_OPTIONS.map(([value, text]) => (
-                            <option key={value} value={value}>
-                              {text}
-                            </option>
-                          ))}
-                        </select>
-                        <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
-                          Save
-                        </button>
-                      </form>
-                    )}
-                  </td>
-                  <td className={td}>
-                    {m.role === "owner" ? (
-                      <span className="text-stone-500">Full authority</span>
-                    ) : !isAdmin ? (
-                      <span className="text-stone-500">
-                        {billingRoleLabel(m.role, m.billingRole)}
-                      </span>
-                    ) : (
-                      <form action={updateMemberBillingRole} className="flex items-center gap-1">
-                        <input type="hidden" name="memberId" value={m.id} />
-                        <select
-                          name="billingRole"
-                          defaultValue={m.billingRole ?? "default"}
-                          className={`${input} px-2 py-1 text-xs`}
-                        >
-                          {BILLING_ROLE_OPTIONS.map(([value, text]) => (
-                            <option key={value} value={value}>
-                              {text}
-                            </option>
-                          ))}
-                        </select>
-                        <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
-                          Save
-                        </button>
-                      </form>
-                    )}
-                  </td>
-                  <td className={td}>
-                    {!mcpEnabled ? (
-                      // No point offering a per-person grant while the whole
-                      // connector is off — it would read as broken.
-                      <span className="text-stone-400">Connector off</span>
-                    ) : m.role === "owner" ? (
-                      <span className="text-stone-500">Full authority</span>
-                    ) : !isAdmin ? (
-                      <span className="text-stone-500">
-                        {mcpRoleLabel(m.role, m.mcpRole, mcpEnabled)}
-                      </span>
-                    ) : (
-                      <form action={updateMemberMcpRole} className="flex items-center gap-1">
-                        <input type="hidden" name="memberId" value={m.id} />
-                        <select
-                          name="mcpRole"
-                          defaultValue={m.mcpRole ?? "default"}
-                          className={`${input} px-2 py-1 text-xs`}
-                        >
-                          {MCP_ROLE_OPTIONS.map(([value, text]) => (
-                            <option key={value} value={value}>
-                              {text}
-                            </option>
-                          ))}
-                        </select>
-                        <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
-                          Save
-                        </button>
-                      </form>
-                    )}
-                  </td>
-                  <td className={td}>
-                    {isAdmin && m.role !== "owner" && m.userId !== userId && (
-                      <form action={removeMember}>
-                        <input type="hidden" name="memberId" value={m.id} />
-                        <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
-                          remove
-                        </button>
-                      </form>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </SectionCard>
 
-      {showMemberNotes &&
-        members.map((m) => (
-          <MemberHandbookNotes
-            key={`hb-${m.id}`}
-            subjectId={m.id}
-            personName={m.user.name ?? m.user.email}
-            notes={notesByMember.get(m.id) ?? []}
-            canWrite
-            back="/dashboard/team"
-          />
-        ))}
-
-      {isAdmin && (
-        <SectionCard title="License & Expiration Tracker">
-          <p className="mb-3 text-sm text-stone-500">
-            The workspace's record of who is licensed where — some states require a licensed
-            coordinator on every file. Each person can also manage their own from their profile.
-          </p>
-          <form action={addLicense} className="mb-2 flex flex-wrap items-end gap-3">
-            <label className={label}>
-              Member *
-              <select name="userId" required className={input} defaultValue="">
-                <option value="" disabled>
-                  — pick —
-                </option>
-                {members.map((m) => (
-                  <option key={m.userId} value={m.userId}>
-                    {m.user.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={label}>
-              State *
-              <input
-                name="state"
-                required
-                maxLength={2}
-                className={`${input} w-20`}
-                placeholder="TX"
-              />
-            </label>
-            <label className={label}>
-              Type
-              <input name="label" className={input} placeholder="Salesperson" />
-            </label>
-            <label className={label}>
-              License #
-              <input name="licenseNumber" className={input} />
-            </label>
-            <label className={label}>
-              Expires
-              <input name="expiresAt" type="date" className={input} />
-            </label>
-            <label className={`${label} min-w-52`}>
-              Copy (optional)
-              <input
-                name="file"
-                type="file"
-                accept="application/pdf,.pdf,image/*"
-                className={input}
-              />
-            </label>
-            <button type="submit" className={btn}>
-              Add license
-            </button>
-          </form>
-          {licenses.length > 0 && (
-            <ul className="flex flex-col">
-              {licenses.map((lic) => {
-                const owner = members.find((m) => m.userId === lic.userId);
-                const health = licenseHealth(lic.expiresAt);
-                return (
-                  <li
-                    key={lic.id}
-                    className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
-                  >
-                    <span
-                      aria-hidden
-                      className={`h-1.5 w-1.5 rounded-full ${HEALTH_DOT[health]}`}
-                    />
-                    <span className="font-medium">{lic.state}</span>
-                    <span className="text-stone-600">{owner?.user.name ?? "(former member)"}</span>
-                    <span className="text-xs text-stone-400">
-                      {lic.label ?? "License"}
-                      {lic.licenseNumber ? ` #${lic.licenseNumber}` : ""}
-                      {lic.expiresAt
-                        ? ` · ${health === "expired" ? "expired" : "expires"} ${fmtDate(lic.expiresAt)}`
-                        : ""}
-                    </span>
-                    {lic.filename && (
-                      <a
-                        href={`/api/licenses/${lic.id}/file`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs text-brand-600 hover:underline"
-                      >
-                        open copy
-                      </a>
-                    )}
-                    <form action={deleteLicense} className="ml-auto">
-                      <input type="hidden" name="id" value={lic.id} />
-                      <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
-                        remove
-                      </button>
-                    </form>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </SectionCard>
-      )}
-
-      {isAdmin && (
-        <SectionCard title="Invite a teammate">
-          <form action={inviteMember} className="flex flex-wrap items-end gap-3">
-            <label className={label}>
-              Email *
-              <input name="email" type="email" required className={input} />
-            </label>
-            <label className={label}>
-              Role
-              <select name="role" className={input} defaultValue="member">
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button type="submit" className={btn}>
-              Create invitation
-            </button>
-          </form>
-          {invitations.length > 0 && (
-            <ul className="mt-4 flex flex-col">
-              {invitations.map((inv) => (
-                <li key={inv.id} className="border-b border-stone-100 py-2 last:border-0">
-                  <div className="flex flex-wrap items-center gap-3 text-sm">
-                    <span className="font-medium">{inv.email}</span>
-                    <span className="text-xs text-stone-400">
-                      {inv.role} · expires {fmtDate(inv.expiresAt)}
-                    </span>
-                    <form action={cancelInvitation} className="ml-auto">
-                      <input type="hidden" name="id" value={inv.id} />
-                      <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
-                        cancel
-                      </button>
-                    </form>
-                  </div>
-                  <input
-                    readOnly
-                    value={`${baseUrl}/accept-invitation/${inv.id}`}
-                    className="mt-1 w-full rounded border border-stone-200 bg-stone-50 px-2 py-1 font-mono text-xs text-stone-600"
-                  />
-                  <p className="mt-0.5 text-xs text-stone-400">
-                    Send this link to {inv.email} — they sign up with that email, then accept.
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
+      {isAdmin && invitations.length > 0 && (
+        <SectionCard title="Pending invitations" count={invitations.length}>
+          <ul className="flex flex-col">
+            {invitations.map((inv) => (
+              <li key={inv.id} className="border-b border-stone-100 py-2 last:border-0">
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <span className="font-medium">{inv.email}</span>
+                  <span className="text-xs text-stone-400">
+                    {inv.role} · expires {fmtDate(inv.expiresAt)}
+                  </span>
+                  <form action={cancelInvitation} className="ml-auto">
+                    <input type="hidden" name="id" value={inv.id} />
+                    <button type="submit" className="text-xs text-stone-300 hover:text-red-600">
+                      cancel
+                    </button>
+                  </form>
+                </div>
+                <input
+                  readOnly
+                  value={`${baseUrl}/accept-invitation/${inv.id}`}
+                  className="mt-1 w-full rounded border border-stone-200 bg-stone-50 px-2 py-1 font-mono text-xs text-stone-600"
+                />
+                <p className="mt-0.5 text-xs text-stone-400">
+                  Send this link to {inv.email} — they sign up with that email, then accept.
+                </p>
+              </li>
+            ))}
+          </ul>
         </SectionCard>
       )}
     </div>

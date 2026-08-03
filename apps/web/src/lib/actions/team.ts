@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
+import { auth } from "@/lib/auth";
 import { oneOf, str } from "@/lib/forms";
 import { seatState } from "@/lib/plans";
 import { requireAdminTenant } from "@/lib/tenant";
@@ -37,6 +38,60 @@ export async function inviteMember(formData: FormData) {
     },
   });
   revalidatePath("/dashboard/team");
+}
+
+/**
+ * The other way onto the team: an admin provisions the account directly
+ * rather than the invitee accepting a link. Only for a brand-new email —
+ * an email already tied to a Freehold account is refused (use Invite
+ * instead), so this can never silently attach someone else's existing
+ * account to a workspace they never agreed to join.
+ */
+export async function addTeamMember(formData: FormData) {
+  const { tenantId, isAdmin } = await requireAdminTenant();
+  if (!isAdmin) return;
+  const email = str(formData, "email").toLowerCase();
+  if (!email) return;
+  const name = str(formData, "name") || email.split("@")[0];
+  const seats = await seatState(tenantId);
+  if (seats.limited) return;
+
+  if (await prisma.user.findUnique({ where: { email }, select: { id: true } })) return;
+
+  // A random, discarded password — this person sets their own via the "Send
+  // email" reset link rather than an invite-link accept flow.
+  const password = `${randomUUID()}${randomUUID()}`;
+  await auth.api.signUpEmail({ body: { email, password, name } });
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) return;
+  // Added by an admin, not self-registered — skip the OTP dance, same as
+  // demo/vendor accounts created the same way.
+  await prisma.user.update({ where: { id: user.id }, data: { emailVerified: true } });
+
+  await prisma.member.create({
+    data: {
+      id: randomUUID(),
+      organizationId: tenantId,
+      userId: user.id,
+      role: oneOf(formData, "role", ROLES, "member"),
+    },
+  });
+  revalidatePath("/dashboard/team");
+}
+
+/** Nudges a member (freshly added or not) to set their own password. Reuses
+ *  the same reset-password email the "forgot password" link sends. */
+export async function sendMemberWelcomeEmail(formData: FormData) {
+  const { tenantId, isAdmin } = await requireAdminTenant();
+  if (!isAdmin) return;
+  const memberId = str(formData, "memberId");
+  if (!memberId) return;
+  const member = await prisma.member.findFirst({
+    where: { id: memberId, organizationId: tenantId },
+    include: { user: { select: { email: true } } },
+  });
+  if (!member) return;
+  await auth.api.requestPasswordReset({ body: { email: member.user.email } });
 }
 
 export async function cancelInvitation(formData: FormData) {

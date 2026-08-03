@@ -7,7 +7,6 @@ import {
   CalendarBlank,
   CheckSquare,
   Compass,
-  CreditCard,
   DownloadSimple,
   EnvelopeSimple,
   Files,
@@ -108,10 +107,7 @@ const GROUPS: NavGroup[] = [
 const ADMIN_GROUPS: NavGroup[] = [
   {
     label: "Money",
-    items: [
-      { href: "/dashboard/invoices", label: "Invoices", icon: Receipt },
-      { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
-    ],
+    items: [{ href: "/dashboard/invoices", label: "Invoices", icon: Receipt }],
   },
   {
     label: "Network",
@@ -129,7 +125,7 @@ const ADMIN_GROUPS: NavGroup[] = [
       { href: "/dashboard/team", label: "Team", icon: UsersThree },
       { href: "/dashboard/website", label: "Website", icon: Globe },
       { href: "/dashboard/integrations", label: "Integrations", icon: PlugsConnected },
-      { href: "/dashboard/import", label: "Import", icon: DownloadSimple },
+      { href: "/dashboard/import", label: "Data", icon: DownloadSimple },
       { href: "/dashboard/support", label: "Support", icon: Lifebuoy },
     ],
   },

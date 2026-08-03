@@ -1,3 +1,4 @@
+import { prisma } from "@freehold/db";
 import Link from "next/link";
 import { MarketingFooter, MarketingNav } from "@/components/marketing";
 
@@ -7,18 +8,25 @@ export const metadata = {
     "Everything Freehold connects to: e-signature, email, CRMs, legacy TC platforms, payments, and automation. Live integrations and the ones on the way.",
 };
 
-type Integration = [name: string, mono: string, description: string];
+// The optional 4th element is the key from lib/integration-catalog.ts, for
+// the entries that also have a card on /dashboard/integrations — an
+// operator-uploaded logo there shows here too. Entries with no catalog
+// counterpart (Claude AI, Deepgram, the vendors this page lists but the
+// dashboard doesn't) simply have nothing to look up, and keep their letters.
+type Integration = [name: string, mono: string, description: string, key?: string];
 
 const LIVE: Integration[] = [
   [
     "Email & reply capture",
     "@",
     "Send transactional email from your workspace's own address — and when anyone replies, it lands right back on the transaction, threaded. No mailbox setup, ever.",
+    "email",
   ],
   [
     "Documenso",
     "Do",
     "Open-source e-signature, bundled with Freehold — no vendor contract, no per-envelope tax. Send documents for signature without leaving the file.",
+    "documenso",
   ],
   [
     "Claude AI",
@@ -39,41 +47,49 @@ const LIVE: Integration[] = [
     "S3-compatible storage",
     "S3",
     "Keep documents on any S3-compatible service you choose, or the bundled default when self-hosting.",
+    "storage",
   ],
   [
     "Calendar feeds (ICS)",
     "Ca",
     "Every client and agent portal, and every person on your team, has a subscribe-once calendar feed — deadlines land in Google, Outlook, or Apple Calendar and stay current.",
+    "calendar",
   ],
   [
     "Freehold API",
     "{}",
     "REST API with signed webhooks: read and write transactions, contacts, tasks, clients, and your account — plus a ready-made Claude skill.",
+    "api",
   ],
   [
     "Follow Up Boss",
     "FB",
     "Working today: connect with your API key — website leads flow straight into your Follow Up Boss automations, and your people import into Freehold contacts.",
+    "fub",
   ],
   [
     "Twenty CRM",
     "Tw",
     "Working today: connect your Twenty instance with an API key — website leads land in Twenty as people, and your people import into Freehold contacts.",
+    "twenty",
   ],
   [
     "Zapier",
     "Z",
     "Working today: instant triggers (new transaction, document uploaded, envelope completed, website leads) and actions into 7,000+ apps — including DocuSign and Dotloop through your own accounts.",
+    "zapier",
   ],
   [
     "Stripe",
     "St",
     "Powers Freehold Cloud subscriptions — that's the whole job. Client invoicing never touches a payment processor: it's a document and a follow-up task, not a charge.",
+    "stripe",
   ],
   [
     "ERPNext",
     "Er",
     "Working today: connect your own ERPNext (Frappe) instance and Freehold creates the Sales Invoice there instead of just in Freehold — your ERP stays the ledger, and paid status mirrors back automatically.",
+    "erpnext",
   ],
   [
     "FindTCPros directory",
@@ -110,13 +126,22 @@ const COMING: Integration[] = [
   ],
 ];
 
-function IntegrationCard({ item }: { item: Integration }) {
+function IntegrationCard({ item, logo }: { item: Integration; logo?: string | null }) {
   const [name, mono, description] = item;
   return (
     <div className="flex gap-4 rounded-2xl border border-stone-200/70 bg-white p-5">
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-stone-100 font-display text-base font-bold text-stone-700">
-        {mono}
-      </span>
+      {logo ? (
+        // biome-ignore lint/performance/noImgElement: an operator-uploaded data URL, not a bundled asset next/image can size.
+        <img
+          src={logo}
+          alt=""
+          className="h-11 w-11 shrink-0 rounded-xl border border-stone-200 object-contain p-1"
+        />
+      ) : (
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-stone-100 font-display text-base font-bold text-stone-700">
+          {mono}
+        </span>
+      )}
       <div>
         <h3 className="font-display font-bold">{name}</h3>
         <p className="mt-1 text-sm leading-relaxed text-stone-600">{description}</p>
@@ -125,7 +150,15 @@ function IntegrationCard({ item }: { item: Integration }) {
   );
 }
 
-export default function IntegrationsPage() {
+export default async function IntegrationsPage() {
+  // Same operator-uploaded logos as /dashboard/integrations — see
+  // lib/integration-catalog.ts for how the two pages share keys. Entries here
+  // with no dashboard counterpart (Claude AI, Deepgram, the vendors this page
+  // lists that the dashboard doesn't) have no key and just keep their letters.
+  const branding = new Map(
+    (await prisma.integrationBranding.findMany()).map((b) => [b.key, b.logo]),
+  );
+
   return (
     <main className="bg-stone-50 text-stone-900">
       <MarketingNav />
@@ -142,7 +175,11 @@ export default function IntegrationsPage() {
         <h2 className="font-display mt-12 text-2xl font-bold tracking-tight">Working today</h2>
         <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {LIVE.map((item) => (
-            <IntegrationCard key={item[0]} item={item} />
+            <IntegrationCard
+              key={item[0]}
+              item={item}
+              logo={item[3] ? branding.get(item[3]) : null}
+            />
           ))}
         </div>
 

@@ -39,4 +39,5 @@ export async function removeSampleData() {
   revalidatePath("/dashboard/clients");
   revalidatePath("/dashboard/action-plans");
   revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/import");
 }
