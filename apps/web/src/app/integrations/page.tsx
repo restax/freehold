@@ -8,6 +8,11 @@ export const metadata = {
     "Everything Freehold connects to: e-signature, email, CRMs, legacy TC platforms, payments, and automation. Live integrations and the ones on the way.",
 };
 
+// Reads operator-uploaded logos from the DB on each request. Without this,
+// a Vercel build can try to prerender the page and die on Prisma init (seen
+// 2026-08-03) whenever build-time DB access hiccups.
+export const dynamic = "force-dynamic";
+
 // The optional 4th element is the key from lib/integration-catalog.ts, for
 // the entries that also have a card on /dashboard/integrations — an
 // operator-uploaded logo there shows here too. Entries with no catalog

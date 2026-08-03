@@ -6,6 +6,11 @@
       "outputs": [".next/**", "dist/**", "!.next/cache/**"],
       "env": ["DATABASE_URL", "BETTER_AUTH_SECRET", "BETTER_AUTH_URL", "REDIS_URL"]
     },
+    "@freehold/db#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"],
+      "cache": false
+    },
     "dev": {
       "dependsOn": ["^build"],
       "cache": false,
