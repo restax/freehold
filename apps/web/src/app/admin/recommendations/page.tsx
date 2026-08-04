@@ -60,8 +60,8 @@ export default async function AdminRecommendationsPage({
           Sends the same email the public form does.{" "}
           {crm.connected ? (
             <>
-              If a name is given, the lead is also saved to Twenty CRM (<code>{crm.url}</code>)
-              as a new person, with the note attached if you write one.
+              If a name is given, the lead is also saved to Twenty CRM (<code>{crm.url}</code>) as a
+              new person, with the note attached if you write one.
             </>
           ) : (
             <>
