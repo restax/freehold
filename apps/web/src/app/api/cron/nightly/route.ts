@@ -7,6 +7,7 @@ import { pruneMcpClients } from "@/lib/mcp-prune";
 import { flushOutbox } from "@/lib/outbox";
 import { runReviewRequests } from "@/lib/review-requests";
 import { sweepExpiredExports } from "@/lib/storage";
+import { runTransactionStatusReports } from "@/lib/transaction-status-report";
 import { runTrialDowngrades } from "@/lib/trial-downgrade";
 import { runVendorAdRenewals } from "@/lib/vendor-ad-renewals";
 
@@ -42,6 +43,7 @@ export async function GET(req: Request) {
   // this is the only thing that ever collects them.
   const mcpPrune = await pruneMcpClients();
   const trialDowngrades = await runTrialDowngrades();
+  const transactionReports = await runTransactionStatusReports();
   return NextResponse.json({
     outbox,
     exports,
@@ -53,5 +55,6 @@ export async function GET(req: Request) {
     reviewRequests,
     mcpPrune,
     trialDowngrades,
+    transactionReports,
   });
 }
