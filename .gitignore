@@ -49,11 +49,15 @@ CLAUDE.md
 skills/
 skills-lock.json
 
-# ee/ is deliberately excluded from this public repo — see ee/README.md.
-# It is a real pnpm workspace member ("ee" in pnpm-workspace.yaml) and stays
-# on disk for local Freehold Cloud billing development; it is just never
-# versioned in git here. Purged from history alongside the paths above.
-ee/
+# ee/ was briefly gitignored here on 2026-08-04, then restored the same day:
+# apps/web statically imports @freehold/ee-billing, so pnpm can't resolve the
+# workspace without it — every Vercel deploy and every self-hosted build
+# failed with "Module not found: Can't resolve '@freehold/ee-billing'" while
+# it was excluded. It's back in git for that reason. ee/LICENSE (source-
+# available, commercial-use-requires-agreement) still governs it; only its
+# own build artifacts are ignored below.
+ee/dist/
+ee/node_modules/
 
 # typescript incremental
 *.tsbuildinfo

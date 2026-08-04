@@ -1,0 +1,13 @@
+Freehold Commercial License (placeholder)
+
+Copyright (c) 2026 Freehold
+
+The contents of the ee/ directory are NOT covered by the Elastic License 2.0
+at the repository root. They are source-available for inspection and contribution,
+but production use requires a commercial agreement with Freehold.
+
+Nothing in ee/ is required to build, run, or self-host Freehold — the
+source-available core is complete without it.
+
+Final license text (modeled on the Cal.com / GitLab EE license pattern) must be
+in place before the repository goes public.
