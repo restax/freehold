@@ -4,13 +4,16 @@
  *
  * Deliberately styled as a personal note from Paul, not a marketing
  * template: Calibri on white, no branded envelope, no header bar, no
- * pricing cards, the demo link shown as a plain blue URL, and a typed
- * signature block with a real phone number. The one-time-email disclosure
- * stays as small grey text at the bottom; it does real anti-spam work.
+ * pricing cards, and a typed signature block with a real phone number.
+ * The one-time-email disclosure stays as small grey text at the bottom;
+ * it does real anti-spam work.
  *
- * The visible link text is the bare domain while the href carries the
- * /rec/<token> tracking path (same domain, so a benign mismatch — the
- * standard tracked-marketing-link shape).
+ * The demo link's visible text must NOT look like a URL: an early version
+ * showed "https://freeholdtc.dev" while the href carried the /rec/<token>
+ * tracking path, and both Gmail and Hostinger accepted-then-vanished those
+ * sends (URL-shaped text pointing at a different URL is a classic phishing
+ * signature). Plain "click here" wording with the same tracked href
+ * delivers fine.
  */
 
 /** Where the tracked link in the email actually goes once opened. */
@@ -83,8 +86,7 @@ ${p(
 ${p(
   "3. <b>Doc Sign included!</b> E-signatures ship with every plan. No separate account, no per-envelope fees.",
 )}
-${p("The easiest way to see if it's for you is the live demo. No signup, just click and look around:")}
-${p(link(url, "https://freeholdtc.dev"))}
+${p(`The easiest way to see if it's for you is the live demo. No signup, ${link(url, "just click here to see it")} and look around.`)}
 ${p(
   "A couple things I want you to know up front: we have real tech support (you can even call me directly), and we never ask for a credit card to try it out. The free plan is actually free.",
 )}
