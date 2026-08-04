@@ -318,7 +318,12 @@ export async function seedDemoWorkspace(orgId: string, ownerUserId: string): Pro
 
     // PDFs first, outside any transaction — this is CPU work and must not
     // burn the 15s transaction budget.
-    const pdfs: Array<{ filename: string; bytes: Uint8Array }> = [];
+    const pdfs: Array<{
+      filename: string;
+      bytes: Uint8Array;
+      label: string;
+      folder: string;
+    }> = [];
     const mls = await mlsSheetPdf({
       mlsNumber: spec.mlsNumber,
       status: spec.status
@@ -339,7 +344,12 @@ export async function seedDemoWorkspace(orgId: string, ownerUserId: string): Pro
       listingAgentName: nameOf(spec.sellerAgentKey),
       listingOfficeName: companyOf(spec.sellerAgentKey),
     });
-    pdfs.push({ filename: `MLS listing sheet - ${spec.address}.pdf`, bytes: mls });
+    pdfs.push({
+      filename: `MLS listing sheet - ${spec.address}.pdf`,
+      bytes: mls,
+      label: "MLS listing sheet",
+      folder: "Listing",
+    });
 
     if (spec.hasContract && contractDate && closeDate) {
       const contract = await purchaseAgreementPdf({
@@ -362,7 +372,12 @@ export async function seedDemoWorkspace(orgId: string, ownerUserId: string): Pro
         closeDate,
         variant: contractVariant++,
       });
-      pdfs.push({ filename: `Purchase agreement - ${spec.address}.pdf`, bytes: contract });
+      pdfs.push({
+        filename: `Purchase agreement - ${spec.address}.pdf`,
+        bytes: contract,
+        label: "Executed purchase agreement",
+        folder: "Contract",
+      });
     }
 
     const txnId = await withTenant(orgId, async (tx) => {
@@ -375,11 +390,16 @@ export async function seedDemoWorkspace(orgId: string, ownerUserId: string): Pro
           state: spec.state,
           zip: spec.zip,
           purchasePrice: spec.price,
+          // The listing panel on the transaction page reads these; leaving
+          // them null showed an empty "Listing details" card on every file.
+          mlsId: spec.mlsNumber,
+          listPrice: spec.listPrice ?? spec.price,
           status: spec.status,
           side: spec.side,
           contractDate,
           closeDate,
           listDate: contractDate ? addDaysUtc(contractDate, -21) : addDaysUtc(anchor, -12),
+          onMarketDate: contractDate ? addDaysUtc(contractDate, -21) : addDaysUtc(anchor, -12),
           isSample: true,
         },
         select: { id: true },
@@ -421,9 +441,17 @@ export async function seedDemoWorkspace(orgId: string, ownerUserId: string): Pro
 
     // Documents in their own transaction: PDF bytes make these the heaviest
     // inserts in the seed.
+    //
+    // Each Document also needs a TransactionAttachment row pointing at it.
+    // The Attachments tab renders rows, not documents — a Document with no row
+    // is invisible in the UI even though it is in the database and counted by
+    // the admin panel. Writing only Documents is exactly the bug that shipped
+    // the first time.
     await withTenant(orgId, async (tx) => {
+      const folderIds = new Map<string, string>();
+      let sortOrder = 0;
       for (const pdf of pdfs) {
-        await tx.document.create({
+        const doc = await tx.document.create({
           data: {
             tenantId: orgId,
             transactionId: txnId,
@@ -439,6 +467,38 @@ export async function seedDemoWorkspace(orgId: string, ownerUserId: string): Pro
             uploadedById: ownerUserId,
             uploadedByName: ownerName,
             createdAt: contractDate ?? addDaysUtc(anchor, -10),
+          },
+          select: { id: true },
+        });
+
+        let folderId = folderIds.get(pdf.folder);
+        if (!folderId) {
+          const folder = await tx.attachmentFolder.create({
+            data: {
+              tenantId: orgId,
+              transactionId: txnId,
+              name: pdf.folder,
+              sortOrder: folderIds.size,
+            },
+            select: { id: true },
+          });
+          folderId = folder.id;
+          folderIds.set(pdf.folder, folderId);
+        }
+
+        await tx.transactionAttachment.create({
+          data: {
+            tenantId: orgId,
+            transactionId: txnId,
+            documentId: doc.id,
+            folderId,
+            label: pdf.label,
+            // The file is here, so the row is satisfied.
+            completedAt: contractDate ?? addDaysUtc(anchor, -10),
+            required: true,
+            createdById: ownerUserId,
+            createdByName: ownerName,
+            sortOrder: sortOrder++,
           },
         });
       }

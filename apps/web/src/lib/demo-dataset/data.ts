@@ -359,6 +359,8 @@ export interface DemoTransactionSpec {
   state: string;
   zip: string;
   price: number;
+  /** Original asking price. Omit when it went at list. */
+  listPrice?: number;
   status: TransactionStatus;
   side: "BUY_SIDE" | "SELL_SIDE";
   /** Null on a listing that has no contract yet. */
@@ -432,6 +434,7 @@ export const DEMO_TRANSACTIONS: DemoTransactionSpec[] = [
     state: "TN",
     zip: "37064",
     price: 615000,
+    listPrice: 629900,
     status: "CLOSED",
     side: "BUY_SIDE",
     contractOffset: -58,
@@ -490,6 +493,7 @@ export const DEMO_TRANSACTIONS: DemoTransactionSpec[] = [
     state: "TN",
     zip: "37027",
     price: 892000,
+    listPrice: 915000,
     status: "CLOSED",
     side: "SELL_SIDE",
     contractOffset: -66,
@@ -586,6 +590,7 @@ export const DEMO_TRANSACTIONS: DemoTransactionSpec[] = [
     state: "TN",
     zip: "37206",
     price: 528000,
+    listPrice: 539000,
     status: "UNDER_CONTRACT",
     side: "BUY_SIDE",
     contractOffset: -21,
@@ -715,6 +720,7 @@ export const DEMO_TRANSACTIONS: DemoTransactionSpec[] = [
     state: "TN",
     zip: "37069",
     price: 735000,
+    listPrice: 749000,
     status: "PENDING",
     side: "SELL_SIDE",
     contractOffset: -34,
@@ -913,6 +919,7 @@ export const DEMO_TRANSACTIONS: DemoTransactionSpec[] = [
     state: "TN",
     zip: "37066",
     price: 341000,
+    listPrice: 355000,
     status: "UNDER_CONTRACT",
     side: "BUY_SIDE",
     contractOffset: -1,
