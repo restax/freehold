@@ -1,13 +1,72 @@
-Freehold Commercial License (placeholder)
+Freehold Commercial License
 
-Copyright (c) 2026 Freehold
+Copyright (c) 2026 Freehold (freeholdtc.dev). All rights reserved.
 
-The contents of the ee/ directory are NOT covered by the Elastic License 2.0
-at the repository root. They are source-available for inspection and contribution,
-but production use requires a commercial agreement with Freehold.
+This license governs everything under the `ee/` directory of the Freehold
+repository ("the Software"). It does not apply to any other part of the
+repository, which remains licensed under the Elastic License 2.0 as stated
+in the LICENSE file at the repository root.
 
-Nothing in ee/ is required to build, run, or self-host Freehold — the
-source-available core is complete without it.
+## Why this directory is licensed separately
 
-Final license text (modeled on the Cal.com / GitLab EE license pattern) must be
-in place before the repository goes public.
+Freehold's core — transaction management, CRM, portals, workflows,
+integrations, the credential vault, backups, reporting — is complete and
+free to self-host under the Elastic License 2.0. Nothing in `ee/` is
+required to build, run, or self-host Freehold.
+
+`ee/` contains Freehold Cloud's billing and plan-gating logic: Stripe
+checkout, subscription and credit-pack handling, coupon issuance, and
+related plan enforcement. This code is published for transparency — so
+anyone can see exactly how Freehold Cloud bills and gates plans — not for
+reuse in a competing product or service.
+
+## Permitted without a commercial agreement
+
+- Reading, cloning, and inspecting the Software for any purpose.
+- Building and running the Software locally for development, testing, and
+  evaluation — including running Freehold's own test suite against it.
+- Modifying the Software and submitting patches back to Freehold under the
+  repository's Contributor License Agreement (see CONTRIBUTING.md).
+- Forking the repository, provided any production deployment of a fork
+  either omits `ee/` entirely or holds its own commercial agreement as
+  described below.
+
+## Requires a commercial agreement
+
+Using the Software, or any modified version of it, in production —
+meaning any deployment that serves real users, processes real payments,
+or is otherwise relied upon outside of development and testing — requires
+a separate, signed commercial agreement with Freehold. Becoming a Freehold
+Cloud customer, or otherwise reaching a written agreement with Freehold,
+satisfies this requirement for that deployment only.
+
+Absent such an agreement, you may not copy, merge, publish, distribute,
+sublicense, sell, host, or offer the Software, or any modified or
+derivative version of it, to any third party, whether directly, as part
+of a hosted or managed service, or bundled with another product.
+
+## Contributions
+
+Any contribution you submit to `ee/` is licensed to Freehold under the
+same Contributor License Agreement that governs contributions to the rest
+of the repository, and Freehold may incorporate it into Freehold Cloud
+and relicense it as part of the Software.
+
+## No trademark rights
+
+This license does not grant any right to use Freehold's name, logo, or
+trademarks, except as needed to reproduce the notices required above.
+
+## Warranty disclaimer
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL
+FREEHOLD BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN
+AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## Questions
+
+For a commercial agreement, or any question about what this license
+permits, contact hello@freeholdtc.dev.
