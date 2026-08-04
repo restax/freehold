@@ -15,8 +15,7 @@ export const metadata: Metadata = {
     "AI transaction management and CRM for real estate brokerages and transaction coordinators. Free to self-host, easy on Freehold Cloud.",
   openGraph: {
     title: "Freehold",
-    description:
-      "AI reads the purchase contract, you approve every value, and every deadline lands in one system. Free to self-host.",
+    description: "A complete system to run a transaction coordination business. Free to self-host.",
     url: "https://freeholdtc.dev",
     siteName: "Freehold",
     type: "website",
