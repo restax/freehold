@@ -1,12 +1,18 @@
 import { prisma } from "@freehold/db";
-import { ArrowUUpLeft, Buildings } from "@phosphor-icons/react/dist/ssr";
+import { ArrowUUpLeft, Buildings, Warning } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ScreenshotPaste } from "@/components/screenshot-paste";
 import { SectionCard } from "@/components/section-card";
 import { extractLead, saveLeadToCrm } from "@/lib/actions/crm-capture";
 import { isOperator } from "@/lib/operator";
-import { twentyStatus } from "@/lib/twenty";
+import {
+  findTwentyDuplicates,
+  loadTwentyConnection,
+  type TwentyPerson,
+  twentyPersonUrl,
+  twentyStatus,
+} from "@/lib/twenty";
 import { btn, btnGhost, input, label } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +46,7 @@ export default async function CrmCapturePage({
     found?: string;
     saved?: string;
     error?: string;
+    dup?: string;
     firstName?: string;
     lastName?: string;
     phone?: string;
@@ -55,6 +62,24 @@ export default async function CrmCapturePage({
     select: { id: true },
   });
   const crm = org ? await twentyStatus(org.id) : { connected: false as const };
+
+  // Check for existing records as soon as there are values to check, so a
+  // duplicate is visible while reviewing rather than only after pressing Save.
+  let conn = null;
+  let dupes: { ok: boolean; matches: TwentyPerson[] } | null = null;
+  if (sp.found === "1" && org) {
+    conn = await loadTwentyConnection(org.id);
+    if (conn && (sp.email || sp.lastName || sp.phone)) {
+      dupes = await findTwentyDuplicates(conn, {
+        email: sp.email ?? null,
+        phone: sp.phone ?? null,
+        firstName: sp.firstName ?? null,
+        lastName: sp.lastName ?? null,
+      });
+    }
+  }
+  const hasDupes = (dupes?.matches.length ?? 0) > 0;
+  const dupeCheckFailed = dupes !== null && !dupes.ok;
 
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-10 sm:px-6">
@@ -101,6 +126,62 @@ export default async function CrmCapturePage({
           <p className="mb-3 text-sm text-stone-500">
             Read from the screenshot. Fix anything that came out wrong, then save.
           </p>
+
+          {hasDupes && dupes && (
+            <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-900">
+                <Warning size={15} weight="fill" aria-hidden />
+                Already in Twenty
+                {dupes.matches.length > 1 ? ` — ${dupes.matches.length} matches` : ""}
+              </p>
+              <ul className="mt-2 flex flex-col gap-1">
+                {dupes.matches.map((m) => {
+                  const who =
+                    [m.name?.firstName, m.name?.lastName].filter(Boolean).join(" ") ||
+                    m.emails?.primaryEmail ||
+                    "Unnamed record";
+                  const detail = [m.emails?.primaryEmail, m.phones?.primaryPhoneNumber]
+                    .filter(Boolean)
+                    .join(" · ");
+                  return (
+                    <li key={m.id} className="text-sm text-amber-900">
+                      {conn ? (
+                        <a
+                          href={twentyPersonUrl(conn, m.id)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium underline"
+                        >
+                          {who}
+                        </a>
+                      ) : (
+                        <span className="font-medium">{who}</span>
+                      )}
+                      {detail && <span className="text-amber-800"> — {detail}</span>}
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="mt-2 text-xs text-amber-800">
+                Saving creates a second record. Open the existing one to update it by hand instead,
+                or save anyway if this really is a different person.
+              </p>
+            </div>
+          )}
+
+          {dupeCheckFailed && (
+            <p className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Couldn't check Twenty for an existing record, so this may be a duplicate. Saving will
+              go ahead without that check.
+            </p>
+          )}
+
+          {sp.dup === "unknown" && !dupeCheckFailed && (
+            <p className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              The duplicate check failed, so nothing was saved. Try again, or use Save anyway to
+              skip the check.
+            </p>
+          )}
           <form action={saveLeadToCrm} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className={label}>
               First name
@@ -122,10 +203,25 @@ export default async function CrmCapturePage({
               Company
               <input name="company" defaultValue={sp.company ?? ""} className={input} />
             </label>
-            <div className="flex items-center gap-3 sm:col-span-2">
-              <button type="submit" className={btn} disabled={!crm.connected}>
-                Save to Twenty
-              </button>
+            <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
+              {/* When a match is already on screen, the plain Save is replaced
+                  by an explicit confirm so the duplicate can't be created by
+                  reflex. The server re-checks either way. */}
+              {hasDupes || dupeCheckFailed || sp.dup ? (
+                <button
+                  type="submit"
+                  name="confirm"
+                  value="1"
+                  className={btn}
+                  disabled={!crm.connected}
+                >
+                  Save anyway
+                </button>
+              ) : (
+                <button type="submit" className={btn} disabled={!crm.connected}>
+                  Save to Twenty
+                </button>
+              )}
               <Link href="/admin/crm-capture" className={btnGhost}>
                 <ArrowUUpLeft size={14} className="mr-1 inline" aria-hidden />
                 Start over

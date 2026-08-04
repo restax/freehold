@@ -91,6 +91,31 @@ export function fullName(lead: Pick<LeadFields, "firstName" | "lastName">): stri
   return cleanField([lead.firstName, lead.lastName].filter(Boolean).join(" "));
 }
 
+/** Case- and whitespace-insensitive comparison, for duplicate matching. */
+export function looseEquals(a: string | null | undefined, b: string | null | undefined): boolean {
+  const x = cleanField(a);
+  const y = cleanField(b);
+  return x !== null && y !== null && x.toLowerCase() === y.toLowerCase();
+}
+
+/**
+ * Just the digits of a phone number, so "(916) 555-0142", "916-555-0142", and
+ * "9165550142" compare equal. Leading country code is dropped when it makes an
+ * 11-digit US number, since one CRM row may carry it and another may not.
+ */
+export function phoneDigits(v: string | null | undefined): string | null {
+  const digits = (v ?? "").replace(/\D/g, "");
+  if (digits.length === 0) return null;
+  return digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+}
+
+/** Whether two phone numbers are the same once formatting is stripped. */
+export function samePhone(a: string | null | undefined, b: string | null | undefined): boolean {
+  const x = phoneDigits(a);
+  const y = phoneDigits(b);
+  return x !== null && y !== null && x === y;
+}
+
 export interface LeadCaptureRun {
   lead: LeadFields;
   usage: AiUsage;

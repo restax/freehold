@@ -4,7 +4,10 @@ import {
   fullName,
   hasAnyField,
   isSupportedImageType,
+  looseEquals,
   normalizeLead,
+  phoneDigits,
+  samePhone,
 } from "./lead-capture";
 
 describe("cleanField", () => {
@@ -96,6 +99,58 @@ describe("fullName", () => {
 
   it("is null when neither part is present, so a company-only lead is detectable", () => {
     expect(fullName({ firstName: null, lastName: null })).toBeNull();
+  });
+});
+
+describe("looseEquals", () => {
+  it("ignores case and surrounding whitespace", () => {
+    expect(looseEquals("Brooke", "brooke")).toBe(true);
+    expect(looseEquals("  Brooke ", "BROOKE")).toBe(true);
+  });
+
+  it("is false for different names and for anything missing", () => {
+    expect(looseEquals("Brooke", "Brook")).toBe(false);
+    expect(looseEquals(null, "Brooke")).toBe(false);
+    expect(looseEquals("Brooke", null)).toBe(false);
+    expect(looseEquals(null, null)).toBe(false);
+    // Two blanks are not a match, or every nameless record would collide.
+    expect(looseEquals("", "")).toBe(false);
+  });
+});
+
+describe("phoneDigits", () => {
+  it("strips formatting down to comparable digits", () => {
+    expect(phoneDigits("(916) 555-0142")).toBe("9165550142");
+    expect(phoneDigits("916-555-0142")).toBe("9165550142");
+    expect(phoneDigits("916.555.0142")).toBe("9165550142");
+  });
+
+  it("drops a US country code so +1 and bare numbers compare equal", () => {
+    expect(phoneDigits("+1 (916) 555-0142")).toBe("9165550142");
+    expect(phoneDigits("19165550142")).toBe("9165550142");
+  });
+
+  it("leaves non-US-length numbers alone", () => {
+    expect(phoneDigits("+44 20 7946 0958")).toBe("442079460958");
+  });
+
+  it("is null when there are no digits at all", () => {
+    expect(phoneDigits("")).toBeNull();
+    expect(phoneDigits(null)).toBeNull();
+    expect(phoneDigits("no digits here")).toBeNull();
+  });
+});
+
+describe("samePhone", () => {
+  it("matches the same number written differently", () => {
+    expect(samePhone("(916) 555-0142", "9165550142")).toBe(true);
+    expect(samePhone("+1 916 555 0142", "916-555-0142")).toBe(true);
+  });
+
+  it("does not match different numbers or missing ones", () => {
+    expect(samePhone("9165550142", "9165550143")).toBe(false);
+    expect(samePhone(null, "9165550142")).toBe(false);
+    expect(samePhone("9165550142", "")).toBe(false);
   });
 });
 

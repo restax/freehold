@@ -1,5 +1,6 @@
 import { prisma } from "@freehold/db";
 import { decryptSecret, type EncryptedSecret, loadMasterKey } from "@freehold/vault";
+import { looseEquals, samePhone } from "@/lib/ai/lead-capture";
 
 /**
  * Twenty CRM connection, per tenant. Twenty is the open-source CRM — cloud
@@ -152,34 +153,142 @@ export async function sendTwentyLead(
 }
 
 /**
- * Find a company by exact name, or create it. Twenty has no free-text
- * company field on Person — company is its own object joined by companyId —
- * so a screenshot that names a brokerage needs the company to exist first.
+ * Twenty's REST `filter` grammar is `field[comparator]:value`, with dotted
+ * paths for composite fields and or()/and()/not() conjunctions. Its parser
+ * counts parentheses and splits on commas *inside conjunctions*, so a value
+ * containing either — "(916) 555-0142", "Smith, Jones & Co" — corrupts the
+ * parse. A single bare predicate skips that code path entirely and takes
+ * everything after the first colon as the value, so every query built here
+ * stays single-predicate on purpose. Combine results in memory instead of
+ * reaching for or().
  *
- * The lookup is a filter on name.name (Twenty's composite name field).
- * Returns null rather than throwing when Twenty is unreachable or the
- * workspace has a non-standard Company schema: the person still saves, and
- * the caller reports the company as unlinked.
+ * Comparators available: eq, neq, in, containsAny, is, gt, gte, lt, lte,
+ * startsWith, endsWith, like, ilike.
+ */
+async function queryTwenty<T>(
+  conn: TwentyConnection,
+  object: "people" | "companies",
+  filter: string,
+  limit = 20,
+): Promise<{ ok: boolean; rows: T[] }> {
+  try {
+    const res = await fetch(
+      `${rest(conn.url)}/${object}?filter=${encodeURIComponent(filter)}&limit=${limit}`,
+      { headers: headers(conn.apiKey), signal: AbortSignal.timeout(10_000) },
+    );
+    if (!res.ok) {
+      console.error(`queryTwenty(${object}): non-ok`, res.status, await res.text().catch(() => ""));
+      return { ok: false, rows: [] };
+    }
+    const body = (await res.json()) as {
+      data?: Record<string, T[]> | T[];
+    };
+    const rows = Array.isArray(body.data) ? body.data : (body.data?.[object] ?? []);
+    return { ok: true, rows };
+  } catch (err) {
+    console.error(`queryTwenty(${object}): threw`, err);
+    return { ok: false, rows: [] };
+  }
+}
+
+/**
+ * Existing people who look like the lead being saved.
+ *
+ * `ok` is false when any lookup failed, which the caller must surface
+ * distinctly: reporting "no duplicates" because the request errored is the
+ * one failure mode that actually creates the duplicate this is meant to
+ * prevent.
+ *
+ * Email is matched case-insensitively; phone and first name are compared in
+ * memory (see samePhone/looseEquals) because CRM rows store phone formatting
+ * inconsistently and a server-side eq would miss "(916) 555-0142" against
+ * "9165550142".
+ */
+export async function findTwentyDuplicates(
+  conn: TwentyConnection,
+  lead: {
+    email?: string | null;
+    phone?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+  },
+): Promise<{ ok: boolean; matches: TwentyPerson[] }> {
+  const found = new Map<string, TwentyPerson>();
+  let ok = true;
+
+  if (lead.email) {
+    const r = await queryTwenty<TwentyPerson>(
+      conn,
+      "people",
+      `emails.primaryEmail[ilike]:${lead.email}`,
+    );
+    ok &&= r.ok;
+    for (const p of r.rows) if (p.id) found.set(p.id, p);
+  }
+
+  // Last name narrows server-side; first name and phone are then checked
+  // against the candidates in memory, where formatting can be normalized.
+  if (lead.lastName) {
+    const r = await queryTwenty<TwentyPerson>(
+      conn,
+      "people",
+      `name.lastName[ilike]:${lead.lastName}`,
+      60,
+    );
+    ok &&= r.ok;
+    for (const p of r.rows) {
+      if (!p.id) continue;
+      const nameMatches = lead.firstName ? looseEquals(p.name?.firstName, lead.firstName) : true;
+      if (nameMatches) found.set(p.id, p);
+    }
+  }
+
+  if (lead.phone) {
+    // No server-side phone filter: stored formatting varies too much for eq
+    // to be trustworthy, so candidates already gathered are checked, plus an
+    // exact-string attempt for the case where formatting does happen to match.
+    for (const p of found.values()) {
+      if (samePhone(p.phones?.primaryPhoneNumber, lead.phone)) found.set(p.id, p);
+    }
+    const r = await queryTwenty<TwentyPerson>(
+      conn,
+      "people",
+      `phones.primaryPhoneNumber[eq]:${lead.phone}`,
+    );
+    ok &&= r.ok;
+    for (const p of r.rows) if (p.id) found.set(p.id, p);
+  }
+
+  return { ok, matches: [...found.values()] };
+}
+
+/** Deep link to a record in Twenty's own UI, for the duplicate warning. */
+export function twentyPersonUrl(conn: TwentyConnection, personId: string): string {
+  return `${conn.url.replace(/\/$/, "")}/object/person/${personId}`;
+}
+
+/**
+ * Find a company by name, or create it. Twenty has no free-text company field
+ * on Person — company is its own object joined by companyId — so a screenshot
+ * that names a brokerage needs the company to exist first.
+ *
+ * Matching is case-insensitive (ilike) so "Bayside Realty" doesn't become a
+ * second row alongside "bayside realty". Returns null rather than throwing
+ * when Twenty is unreachable or the workspace has a non-standard Company
+ * schema: the person still saves, and the caller reports the company as
+ * unlinked.
  */
 export async function findOrCreateTwentyCompany(
   conn: TwentyConnection,
   name: string,
 ): Promise<{ id: string; created: boolean } | null> {
-  try {
-    const res = await fetch(
-      `${rest(conn.url)}/companies?filter=${encodeURIComponent(`name.name[eq]:${name}`)}&limit=1`,
-      { headers: headers(conn.apiKey), signal: AbortSignal.timeout(10_000) },
-    );
-    if (res.ok) {
-      const body = (await res.json()) as {
-        data?: { companies?: { id: string }[] } | { id: string }[];
-      };
-      const found = Array.isArray(body.data) ? body.data : (body.data?.companies ?? []);
-      if (found[0]?.id) return { id: found[0].id, created: false };
-    }
-  } catch (err) {
-    console.error("findOrCreateTwentyCompany: lookup threw", err);
-  }
+  const existing = await queryTwenty<{ id: string }>(
+    conn,
+    "companies",
+    `name.name[ilike]:${name}`,
+    1,
+  );
+  if (existing.rows[0]?.id) return { id: existing.rows[0].id, created: false };
 
   try {
     const res = await fetch(`${rest(conn.url)}/companies`, {

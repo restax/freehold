@@ -13,6 +13,7 @@ import { optStr } from "@/lib/forms";
 import { isOperator } from "@/lib/operator";
 import {
   findOrCreateTwentyCompany,
+  findTwentyDuplicates,
   linkTwentyPersonToCompany,
   loadTwentyConnection,
   sendTwentyLead,
@@ -69,6 +70,11 @@ export async function extractLead(formData: FormData) {
  * Save the reviewed fields to Twenty. The company (when given) is found or
  * created first, then linked to the new person — Twenty models company as its
  * own object, so there is no single call that does both.
+ *
+ * Duplicates are re-checked here against the values actually submitted, not
+ * just the ones the page checked at render time, because the form is
+ * editable. Finding a match sends the form back with a warning instead of
+ * saving; a second submit carrying confirm=1 is what actually writes.
  */
 export async function saveLeadToCrm(formData: FormData) {
   if (!(await isOperator())) return;
@@ -78,13 +84,24 @@ export async function saveLeadToCrm(formData: FormData) {
   const phone = optStr(formData, "phone");
   const email = optStr(formData, "email");
   const company = optStr(formData, "company");
+  const confirmed = optStr(formData, "confirm") === "1";
 
   const name = fullName({ firstName: firstName || null, lastName: lastName || null });
   // A company-only capture is still worth saving, but Twenty's Person needs
   // some name, so fall back to the company for the person record.
   const personName = name ?? company;
+
+  /** Bounce back to the review form with the current values preserved. */
+  function backToForm(extra: Record<string, string>): never {
+    const qs = new URLSearchParams({ found: "1", ...extra });
+    for (const [k, v] of Object.entries({ firstName, lastName, phone, email, company })) {
+      if (v) qs.set(k, v);
+    }
+    redirect(`/admin/crm-capture?${qs.toString()}`);
+  }
+
   if (!personName) {
-    redirect("/admin/crm-capture?error=noname");
+    backToForm({ error: "noname" });
   }
 
   const org = await prisma.organization.findFirst({
@@ -94,12 +111,26 @@ export async function saveLeadToCrm(formData: FormData) {
   const conn = org ? await loadTwentyConnection(org.id) : null;
   if (!conn) {
     console.error("saveLeadToCrm: no Twenty connection for", CRM_SOURCE_ORG_SLUG);
-    redirect("/admin/crm-capture?error=noconn");
+    backToForm({ error: "noconn" });
+  }
+
+  if (!confirmed) {
+    const dup = await findTwentyDuplicates(conn, {
+      email,
+      phone,
+      firstName: firstName || null,
+      lastName: lastName || null,
+    });
+    // A failed lookup is reported as its own state, never as "no duplicates":
+    // silently saving over a check that errored is exactly the duplicate this
+    // is meant to catch.
+    if (!dup.ok) backToForm({ dup: "unknown" });
+    if (dup.matches.length > 0) backToForm({ dup: String(dup.matches.length) });
   }
 
   const person = await sendTwentyLead(conn, { name: personName, email, phone });
   if (!person.ok) {
-    redirect("/admin/crm-capture?error=save");
+    backToForm({ error: "save" });
   }
 
   // Company linking is best-effort: the person is already in the CRM, so a
