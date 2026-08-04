@@ -619,6 +619,26 @@ export async function seedDemoWorkspace(orgId: string, ownerUserId: string): Pro
           sortOrder: 1,
         },
       });
+      // The money surfaces read the payment ledger, not Invoice.paidAt:
+      // "collected this month" aggregates InvoicePayment.receivedAt, and
+      // invoiceMoney derives the balance from payments too. An invoice marked
+      // PAID with no ledger row therefore showed as settled on the invoice
+      // itself while contributing nothing to revenue — the dashboard read
+      // "collected this month: $0.00" with three paid invoices on screen.
+      if (paidAt) {
+        await tx.invoicePayment.create({
+          data: {
+            tenantId: orgId,
+            invoiceId: invoice.id,
+            amountCents: inv.amount * 100,
+            method: "Closing proceeds",
+            source: "direct",
+            recordedByName: ownerName,
+            receivedAt: paidAt,
+            createdAt: paidAt,
+          },
+        });
+      }
     }
   });
 
@@ -708,15 +728,35 @@ export async function redateDemoWorkspace(orgId: string): Promise<number> {
          WHERE tenant_id = $2 AND "transactionId" = ANY($3::text[])`,
         scope.transactionIds,
       );
+      // The payment ledger is what "collected this month" actually aggregates,
+      // so it has to move with the invoice it belongs to.
+      await shift(
+        tx,
+        `UPDATE "invoice_payment" SET received_at = received_at + ($1 || ' days')::interval,
+           "createdAt" = "createdAt" + ($1 || ' days')::interval
+         WHERE tenant_id = $2 AND invoice_id IN (
+           SELECT id FROM "invoice" WHERE tenant_id = $2 AND "transactionId" = ANY($3::text[])
+         )`,
+        scope.transactionIds,
+      );
       // A uniform shift can still land a payment in last month (seed late in
       // one month, re-date early in the next), which puts the dashboard's
       // "collected this month" back at $0. Pull any stragglers forward, for
-      // the same reason paidThisMonth exists at seed time.
+      // the same reason paidThisMonth exists at seed time. Invoice and ledger
+      // are clamped to the same instant so they cannot disagree.
+      const monthStart = `date_trunc('month', timezone('UTC', now()))`;
       await tx.$executeRawUnsafe(
-        `UPDATE "invoice" SET paid_at = date_trunc('month', timezone('UTC', now())) + interval '1 day'
+        `UPDATE "invoice" SET paid_at = ${monthStart} + interval '1 day'
            WHERE tenant_id = $1 AND "transactionId" = ANY($2::text[])
-             AND paid_at IS NOT NULL
-             AND paid_at < date_trunc('month', timezone('UTC', now()))`,
+             AND paid_at IS NOT NULL AND paid_at < ${monthStart}`,
+        orgId,
+        scope.transactionIds,
+      );
+      await tx.$executeRawUnsafe(
+        `UPDATE "invoice_payment" SET received_at = ${monthStart} + interval '1 day'
+           WHERE tenant_id = $1 AND received_at < ${monthStart} AND invoice_id IN (
+             SELECT id FROM "invoice" WHERE tenant_id = $1 AND "transactionId" = ANY($2::text[])
+           )`,
         orgId,
         scope.transactionIds,
       );
