@@ -152,6 +152,87 @@ export async function sendTwentyLead(
 }
 
 /**
+ * Find a company by exact name, or create it. Twenty has no free-text
+ * company field on Person — company is its own object joined by companyId —
+ * so a screenshot that names a brokerage needs the company to exist first.
+ *
+ * The lookup is a filter on name.name (Twenty's composite name field).
+ * Returns null rather than throwing when Twenty is unreachable or the
+ * workspace has a non-standard Company schema: the person still saves, and
+ * the caller reports the company as unlinked.
+ */
+export async function findOrCreateTwentyCompany(
+  conn: TwentyConnection,
+  name: string,
+): Promise<{ id: string; created: boolean } | null> {
+  try {
+    const res = await fetch(
+      `${rest(conn.url)}/companies?filter=${encodeURIComponent(`name.name[eq]:${name}`)}&limit=1`,
+      { headers: headers(conn.apiKey), signal: AbortSignal.timeout(10_000) },
+    );
+    if (res.ok) {
+      const body = (await res.json()) as {
+        data?: { companies?: { id: string }[] } | { id: string }[];
+      };
+      const found = Array.isArray(body.data) ? body.data : (body.data?.companies ?? []);
+      if (found[0]?.id) return { id: found[0].id, created: false };
+    }
+  } catch (err) {
+    console.error("findOrCreateTwentyCompany: lookup threw", err);
+  }
+
+  try {
+    const res = await fetch(`${rest(conn.url)}/companies`, {
+      method: "POST",
+      headers: headers(conn.apiKey),
+      body: JSON.stringify({ name }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      console.error(
+        "findOrCreateTwentyCompany: create non-ok",
+        res.status,
+        await res.text().catch(() => ""),
+      );
+      return null;
+    }
+    const body = (await res.json()) as { data?: { createCompany?: { id?: string } } };
+    const id = body.data?.createCompany?.id;
+    return id ? { id, created: true } : null;
+  } catch (err) {
+    console.error("findOrCreateTwentyCompany: create threw", err);
+    return null;
+  }
+}
+
+/** Link an existing person to a company (Twenty's Person.companyId). */
+export async function linkTwentyPersonToCompany(
+  conn: TwentyConnection,
+  personId: string,
+  companyId: string,
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${rest(conn.url)}/people/${personId}`, {
+      method: "PATCH",
+      headers: headers(conn.apiKey),
+      body: JSON.stringify({ companyId }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      console.error(
+        "linkTwentyPersonToCompany: non-ok",
+        res.status,
+        await res.text().catch(() => ""),
+      );
+    }
+    return res.ok;
+  } catch (err) {
+    console.error("linkTwentyPersonToCompany: threw", err);
+    return false;
+  }
+}
+
+/**
  * Attach a note to an existing person — Twenty's standard object model has
  * no free-text field on Person itself, so a note is its own object plus a
  * NoteTarget join row linking it to the person.

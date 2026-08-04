@@ -150,6 +150,9 @@ export default async function AdminPage() {
           <Link href="/admin/recommendations" className={btnGhost}>
             Recommendations
           </Link>
+          <Link href="/admin/crm-capture" className={btnGhost}>
+            Screenshot to CRM
+          </Link>
           <Link href="/admin/demo-data" className={btnGhost}>
             Demo data
           </Link>
