@@ -16,12 +16,12 @@ import type { EnvelopeStatusResult, EsignAdapter } from "./types.js";
  *
  * getStatus is grounded but not fully live-verified: the `getDocument`
  * cloud function either isn't registered under that name or wants
- * parameters this session didn't find, so it reads `contracts_Document`
+ * parameters that weren't identified, so it reads `contracts_Document`
  * straight off Parse's own class REST API instead (confirmed working).
  * What's still inferred rather than confirmed: SignedUrl as the signal for
  * "fully signed" — a real field per createDocumentFromApp's accepted
- * inputs, but this session never drove a document through an actual
- * signature (needs OpenSign's web client, not just the server API) to see
+ * inputs, but no document has been driven through an actual signature
+ * (needs OpenSign's web client, not just the server API) to confirm
  * what changes on completion. See the comment on mapStatus() below.
  *
  * Auth model, deliberately asymmetric:

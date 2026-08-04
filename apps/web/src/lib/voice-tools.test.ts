@@ -18,9 +18,9 @@ const PORTAL: VoiceScope = { kind: "portal", portalToken: "tok" };
 // toolsForScope/briefForScope now read platform_setting for the marketing
 // scope (the founder-call kill switch), so only the DB-free scopes are
 // covered here — the marketing behavior (0 tools off, 1 tool on) is verified
-// against a real database the same way the rest of the vendor-order RLS work
-// this session was: a standalone script, not vitest. marketingInstructions
-// itself is pure and DB-free, so its content logic is fully covered below.
+// against a real database via a standalone script, not vitest, the same way
+// the rest of the vendor-order RLS work is. marketingInstructions itself is
+// pure and DB-free, so its content logic is fully covered below.
 const names = async (s: VoiceScope) => (await toolsForScope(s)).map((t) => t.name).sort();
 
 describe("toolsForScope", () => {

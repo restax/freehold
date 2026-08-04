@@ -15,8 +15,8 @@ Because a commercial tier (Freehold Cloud, `ee/`) is sold alongside the source-a
 
 1. Fork and branch off `main`.
 2. `pnpm install`, then `pnpm lint && pnpm typecheck && pnpm test` before opening a PR.
-3. Open a PR against `main`. CI runs lint/typecheck/test automatically (Stage 00).
-4. Keep PRs scoped to one stage/module where possible — the plan doc's stage boundaries are also good PR boundaries.
+3. Open a PR against `main`. CI runs lint/typecheck/test automatically.
+4. Keep PRs scoped to one feature/module where possible.
 
 ## Scope boundary
 
