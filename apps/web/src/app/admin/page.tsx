@@ -105,15 +105,6 @@ export default async function AdminPage() {
     ),
   );
 
-  const openTicketCounts = await Promise.all(
-    orgs.map((o) =>
-      withTenant(o.id, (tx) =>
-        tx.supportTicket.count({ where: { status: { not: "CLOSED" } } }),
-      ).catch(() => 0),
-    ),
-  );
-  const openTickets = openTicketCounts.reduce((sum, n) => sum + n, 0);
-
   const paying = orgs.filter((o) => o.planTier !== "FREE" && o.stripeSubscriptionId);
   const mrr = paying.reduce((sum, o) => sum + (PLAN_INFO[o.planTier].priceMonthly ?? 0), 0);
 
@@ -127,51 +118,11 @@ export default async function AdminPage() {
 
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 sm:px-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Operator panel</h1>
-          <p className="text-sm text-stone-500">
-            Every workspace on this deployment, read-only. Visible only to platform admins.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/admin/settings" className={btnGhost}>
-            Platform settings
-          </Link>
-          <Link href="/admin/ads" className={btnGhost}>
-            Vendor ads
-          </Link>
-          <Link href="/admin/states" className={btnGhost}>
-            State reference
-          </Link>
-          <Link href="/admin/messages" className={btnGhost}>
-            Critical messages
-          </Link>
-          <Link href="/admin/recommendations" className={btnGhost}>
-            Recommendations
-          </Link>
-          <Link href="/admin/crm-capture" className={btnGhost}>
-            Screenshot to CRM
-          </Link>
-          <Link href="/admin/demo-data" className={btnGhost}>
-            Demo data
-          </Link>
-          <Link href="/admin/integrations" className={btnGhost}>
-            Integration branding
-          </Link>
-          <Link href="/admin/socialmedia" className={btnGhost}>
-            Social media kit
-          </Link>
-          <Link href="/admin/inbound" className={btnGhost}>
-            Unmatched inbound
-          </Link>
-          <Link
-            href="/admin/tickets"
-            className={`${btnGhost} ${openTickets > 0 ? "border-brand-300 text-brand-700" : ""}`}
-          >
-            Support tickets{openTickets > 0 ? ` — ${openTickets} open` : ""}
-          </Link>
-        </div>
+      <div>
+        <h1 className="text-xl font-semibold">Operator panel</h1>
+        <p className="text-sm text-stone-500">
+          Every workspace on this deployment, read-only. Visible only to platform admins.
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">

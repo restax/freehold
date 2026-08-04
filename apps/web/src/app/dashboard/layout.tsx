@@ -1,4 +1,5 @@
 import { prisma, withTenant } from "@freehold/db";
+import { ShieldCheck } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CriticalMessagesWidget } from "@/components/critical-messages-widget";
@@ -20,6 +21,7 @@ import { onboardingAdDue } from "@/lib/critical-messages";
 import { dueCriticalMessagesFor } from "@/lib/critical-messages-data";
 import { DEMO_SLUG } from "@/lib/demo";
 import { directoryNudgeDue, readDirectoryConfig } from "@/lib/directory";
+import { isOperator } from "@/lib/operator";
 import { getTenantPlan, isCloud } from "@/lib/plans";
 import { getPlatformSettings } from "@/lib/platform-settings";
 import { getSession, listTenants } from "@/lib/session";
@@ -31,6 +33,10 @@ import { btn } from "@/lib/ui";
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session) redirect("/login");
+  // Platform operators (PLATFORM_ADMIN_EMAILS) get a link to /admin in the
+  // sidebar footer — invisible to everyone else, since isOperator() is false
+  // by default on every self-hosted install.
+  const showAdminLink = await isOperator();
   const tenants = await listTenants();
   if (tenants.length === 0) redirect("/onboarding");
   const active = tenants.find((t) => t.id === session.session.activeOrganizationId) ?? tenants[0];
@@ -249,6 +255,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <div className="hidden lg:block">
               <SupportTicketWidget />
             </div>
+            {showAdminLink && (
+              <Link
+                href="/admin"
+                title="Platform admin — every workspace on this deployment"
+                className="flex items-center justify-center gap-2 rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 lg:justify-start"
+              >
+                <ShieldCheck size={16} className="shrink-0 text-stone-400" aria-hidden />
+                <span className="hidden lg:block">Platform admin</span>
+              </Link>
+            )}
             <div className="flex justify-center pt-1 lg:justify-start lg:px-1">
               <Wordmark href="/dashboard" collapsible />
             </div>
