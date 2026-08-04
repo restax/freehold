@@ -388,6 +388,9 @@ export default async function DashboardPage({
       })
     : null;
   const glanceStale = me ? isStale(me.handbookSummaryAt, now) : false;
+  /** Whether the glance card will actually put anything on screen. Mirrors
+   *  HandbookGlance's own early return, which the layout below depends on. */
+  const glanceVisible = Boolean(hb.summary) && Boolean(me?.handbookSummary || glanceStale);
   const myName = me?.user.name ?? null;
 
   if (me && glanceStale) {
@@ -469,7 +472,7 @@ export default async function DashboardPage({
         {t.transaction && (
           <AddressPill
             href={`/dashboard/transactions/${t.transaction.id}`}
-            className="ml-auto max-w-[12rem] sm:max-w-[16rem]"
+            className="ml-auto w-[11rem] shrink-0 justify-start sm:w-[13rem]"
           >
             {t.transaction.propertyAddress}
           </AddressPill>
@@ -544,17 +547,24 @@ export default async function DashboardPage({
           card on its own, so pairing it with the next panel instead of
           stacking them is what actually uses the width, not a wider cap on
           the paragraph. Falls back to a single column when only one of the
-          two is showing. */}
-      {(hb.summary || needsAttention.length > 0) && (
+          two is showing.
+
+          The pairing keys off `glanceVisible`, not the `hb.summary` setting.
+          HandbookGlance renders nothing at all until there is a summary or one
+          is being written, so gating on the setting alone put a workspace with
+          the feature on but no summary yet into a two-column grid whose second
+          column was empty — a half-width Needs attention card with a large
+          dead space beside it. */}
+      {(glanceVisible || needsAttention.length > 0) && (
         <div
           data-tour="day-glance"
           className={
-            hb.summary && needsAttention.length > 0
+            glanceVisible && needsAttention.length > 0
               ? "grid grid-cols-1 items-start gap-4 lg:grid-cols-2"
               : ""
           }
         >
-          {hb.summary && (
+          {glanceVisible && (
             <HandbookGlance text={me?.handbookSummary ?? null} pending={glanceStale} />
           )}
 
@@ -573,50 +583,63 @@ export default async function DashboardPage({
               </p>
               <ul className="flex flex-col divide-y divide-stone-100">
                 {needsAttention.slice(0, 8).map((a) => (
-                  <li key={a.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2">
-                    <AddressPill href={`/dashboard/transactions/${a.id}`}>
+                  // Fixed column widths rather than a wrapping flex row: with
+                  // flex, every row's status pills started wherever that row's
+                  // address happened to end, so the pills stepped raggedly in
+                  // and out down the list and were hard to scan. The address
+                  // column is a fixed width, so the pills all line up.
+                  <li
+                    key={a.id}
+                    className="grid grid-cols-1 items-baseline gap-x-3 gap-y-1 py-2 sm:grid-cols-[13rem_minmax(0,1fr)]"
+                  >
+                    <AddressPill
+                      href={`/dashboard/transactions/${a.id}`}
+                      className="w-full justify-start"
+                    >
                       {a.propertyAddress}
                     </AddressPill>
-                    {a.urgentTasks[0] &&
-                      (() => {
-                        const t = a.urgentTasks[0];
-                        // The highlight gets more pronounced as the weekend
-                        // closes in: still amber with two business days to go,
-                        // solid red once it's down to the wire.
-                        const critical = t.businessDaysAway <= 1;
-                        return (
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
-                              critical
-                                ? "bg-red-600 text-white animate-pulse"
-                                : "bg-amber-200 text-amber-900"
-                            }`}
-                          >
-                            {activityTitle(t.title, 24)} ·{" "}
-                            {t.calendarDaysAway === 0
-                              ? "due today"
-                              : `due in ${t.calendarDaysAway}d`}
-                          </span>
-                        );
-                      })()}
-                    {a.staleness.stale && (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
-                        {a.staleness.quietDays}d quiet
+                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      {a.urgentTasks[0] &&
+                        (() => {
+                          const t = a.urgentTasks[0];
+                          // The highlight gets more pronounced as the weekend
+                          // closes in: still amber with two business days to go,
+                          // solid red once it's down to the wire.
+                          const critical = t.businessDaysAway <= 1;
+                          return (
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                                critical
+                                  ? "bg-red-600 text-white animate-pulse"
+                                  : "bg-amber-200 text-amber-900"
+                              }`}
+                            >
+                              {activityTitle(t.title, 24)} ·{" "}
+                              {t.calendarDaysAway === 0
+                                ? "due today"
+                                : `due in ${t.calendarDaysAway}d`}
+                            </span>
+                          );
+                        })()}
+                      {a.staleness.stale && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
+                          {a.staleness.quietDays}d quiet
+                        </span>
+                      )}
+                      {a.staleness.escalatedBy && (
+                        <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-600">
+                          {a.staleness.escalatedBy.label}{" "}
+                          {a.staleness.escalatedBy.daysAway === 0
+                            ? "today"
+                            : `in ${a.staleness.escalatedBy.daysAway}d`}
+                        </span>
+                      )}
+                      <span className="ml-auto truncate text-xs text-stone-400">
+                        {a.lastActivity
+                          ? `${a.lastActivity.actorName} · ${a.lastActivity.summary}`
+                          : "never touched"}
                       </span>
-                    )}
-                    {a.staleness.escalatedBy && (
-                      <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-600">
-                        {a.staleness.escalatedBy.label}{" "}
-                        {a.staleness.escalatedBy.daysAway === 0
-                          ? "today"
-                          : `in ${a.staleness.escalatedBy.daysAway}d`}
-                      </span>
-                    )}
-                    <span className="ml-auto text-xs text-stone-400">
-                      {a.lastActivity
-                        ? `${a.lastActivity.actorName} · ${a.lastActivity.summary}`
-                        : "never touched"}
-                    </span>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -718,7 +741,7 @@ export default async function DashboardPage({
                       {t.transaction && (
                         <AddressPill
                           href={`/dashboard/transactions/${t.transaction.id}`}
-                          className="ml-auto max-w-[12rem] sm:max-w-[16rem]"
+                          className="ml-auto w-[11rem] shrink-0 justify-start sm:w-[13rem]"
                         >
                           {t.transaction.propertyAddress}
                         </AddressPill>
@@ -761,7 +784,7 @@ export default async function DashboardPage({
                       {t.transaction && (
                         <AddressPill
                           href={`/dashboard/transactions/${t.transaction.id}`}
-                          className="ml-auto max-w-[12rem] sm:max-w-[16rem]"
+                          className="ml-auto w-[11rem] shrink-0 justify-start sm:w-[13rem]"
                         >
                           {t.transaction.propertyAddress}
                         </AddressPill>
@@ -913,7 +936,7 @@ export default async function DashboardPage({
                       {t.transaction && (
                         <AddressPill
                           href={`/dashboard/transactions/${t.transaction.id}`}
-                          className="ml-auto max-w-[12rem] sm:max-w-[16rem]"
+                          className="ml-auto w-[11rem] shrink-0 justify-start sm:w-[13rem]"
                         >
                           {t.transaction.propertyAddress}
                         </AddressPill>
