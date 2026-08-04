@@ -1,122 +1,102 @@
 /**
  * The "someone recommended Freehold to you" email, sent from /recommend's
- * send-it-for-you form. Platform-level, not tied to any workspace, so it
- * uses the same forest-green accent every other unbranded system email uses
- * (daily briefing, invoice report) and the same envelope chrome, rather than
- * resolving a tenant's theme.
+ * send-it-for-you form and the /admin/recommendations composer.
+ *
+ * Deliberately styled as a personal note from Paul, not a marketing
+ * template: Calibri on white, no branded envelope, no header bar, no
+ * pricing cards, the demo link shown as a plain blue URL, and a typed
+ * signature block with a real phone number. The one-time-email disclosure
+ * stays as small grey text at the bottom; it does real anti-spam work.
+ *
+ * The visible link text is the bare domain while the href carries the
+ * /rec/<token> tracking path (same domain, so a benign mismatch — the
+ * standard tracked-marketing-link shape).
  */
-import { esc, renderBrandedEnvelope } from "./email-template";
-import { PLAN_INFO } from "./plans";
-import { type EmailAccent, resolveEmailAccent } from "./theme";
-
-const ACCENT: EmailAccent = resolveEmailAccent({ theme: "forest", customAccent: "" });
 
 /** Where the tracked link in the email actually goes once opened. */
 export function recommendClickUrl(token: string): string {
   return `https://freeholdtc.dev/rec/${token}`;
 }
 
-const FEATURES = [
-  [
-    "AI: Freehold runs on Claude, Anthropic's AI.",
-    "Built in, not a bolt-on. Ask AI about your transactions, clients and contracts.",
-  ],
-  [
-    "Document Signing is included",
-    "OpenSign e-signatures ship with every plan. No separate account, no per-envelope fee.",
-  ],
-  [
-    "Web Hosting Plans Included",
-    "Every workspace gets its own public site and portal links, included, not an upsell.",
-  ],
-] as const;
-
-function priceCell(tier: "FREE" | "PRO" | "BUSINESS"): string {
-  const info = PLAN_INFO[tier];
-  const price = info.priceMonthly === 0 ? "Free" : `$${info.priceMonthly}/mo`;
-  const txns =
-    info.activeTransactionLimit == null
-      ? "Unlimited files"
-      : `${info.activeTransactionLimit} active files`;
-  return `
-    <td valign="top" width="33%" style="padding:10px 8px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e7e5e4;border-radius:10px;">
-        <tr><td style="padding:14px 12px;text-align:center;">
-          <p style="margin:0 0 2px;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#a8a29e;">${esc(info.label)}</p>
-          <p style="margin:0 0 6px;font-size:18px;font-weight:700;color:#1c1917;">${price}</p>
-          <p style="margin:0;font-size:11px;line-height:1.5;color:#78716c;">${esc(txns)}</p>
-        </td></tr>
-      </table>
-    </td>`;
-}
-
 export function recommendationEmailSubject(): string {
-  return "Someone thought you'd want to see Freehold";
+  return "A quick intro to Freehold from Paul at the team";
 }
 
 export function recommendationEmailText(token: string): string {
   const url = recommendClickUrl(token);
-  return `Recommended by a friend.
+  return `Hi,
 
-Someone who uses Freehold thought it might help your business too. It's a real estate transaction coordination platform built around three things:
+My name is Paul Slazas. I'm on the team running Freehold, transaction management software for TCs and real estate teams. Someone who knows your business thought it might be a fit for you, so I wanted to reach out personally and ask you to please take a look.
 
-AI: Freehold runs on Claude, Anthropic's AI. Built in, not a bolt-on. Ask AI about your transactions, clients and contracts.
+Honestly, there are too many features to list in one email, so here are just the top 3:
 
-Document Signing is included: OpenSign e-signatures ship with every plan. No separate account, no per-envelope fee.
+1. Latest AI Models. Freehold runs on Claude, Anthropic's latest AI. Ask it about your transactions, clients, and contracts.
 
-Web Hosting Plans Included: every workspace gets its own public site and portal links, included, not an upsell.
+2. Real Website for your business, included. Every workspace gets its own public website and client portals. Not an upsell.
 
-Free: $0/mo, 2 active files
-Pro: $50/mo, 8 active files
-Business: $80/mo, unlimited files
+3. Doc Sign included! E-signatures ship with every plan. No separate account, no per-envelope fees.
 
-See the live demo: ${url}
+The easiest way to see if it's for you is the live demo. No signup, just click and look around:
 
-Freehold is also free to self-host, forever, if you'd rather run it yourself: https://github.com/restax/freehold
+${url}
 
-You're receiving this because someone recommended Freehold to you. This is a one-time email; nothing else will follow unless you sign up yourself.`;
+A couple things I want you to know up front: we have real tech support (you can even call me directly), and we never ask for a credit card to try it out. The free plan is actually free.
+
+If you have any questions at all, just reply to this email or give me a call.
+
+Thanks for your time,
+
+Paul Slazas
+Freehold
+paul@freeholdtc.dev
+774-240-4715
+freeholdtc.dev
+
+--
+You're receiving this because someone recommended Freehold to you. This is a one-time email; nothing else follows unless you sign up yourself.`;
 }
 
 export function recommendationEmailHtml(token: string): string {
   const url = recommendClickUrl(token);
-  const featureRows = FEATURES.map(
-    ([title, body]) => `
-    <tr>
-      <td style="padding:0 0 14px;">
-        <p style="margin:0 0 2px;font-size:14px;font-weight:600;color:#1c1917;">${esc(title)}</p>
-        <p style="margin:0;font-size:13px;line-height:1.55;color:#57534e;">${esc(body)}</p>
-      </td>
-    </tr>`,
-  ).join("");
+  const link = (href: string, text: string) =>
+    `<a href="${href}" style="color:#0563c1;text-decoration:underline;">${text}</a>`;
+  const p = (body: string, margin = "0 0 16px") => `<p style="margin:${margin};">${body}</p>`;
 
-  const bodyHtml = `
-    <p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#292524;">
-      Someone who uses Freehold thought it might help your business too. It's a real estate
-      transaction coordination platform built around three things:
-    </p>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
-      ${featureRows}
-    </table>
-    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
-      <tr><td style="background:${ACCENT.header};border-radius:8px;">
-        <a href="${url}" style="display:inline-block;padding:12px 24px;font-size:14px;font-weight:600;color:${ACCENT.headerFg};text-decoration:none;">See the live demo</a>
-      </td></tr>
-    </table>
-    <p style="margin:0 0 8px;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#a8a29e;">Plans</p>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
-      <tr>${priceCell("FREE")}${priceCell("PRO")}${priceCell("BUSINESS")}</tr>
-    </table>
-    <p style="margin:0;font-size:12px;line-height:1.6;color:#78716c;">
-      Freehold is also free to self-host, forever, if you'd rather run it yourself:
-      <a href="https://github.com/restax/freehold" style="color:${ACCENT.link};text-decoration:none;">github.com/restax/freehold</a>.
-    </p>`;
-
-  return renderBrandedEnvelope({
-    tenantName: "Freehold, Software for TC's",
-    subtitle: "Recommended by a friend.",
-    accent: ACCENT,
-    bodyHtml,
-    footerHtml:
-      "You're receiving this because someone recommended Freehold to you. This is a one-time email; nothing else follows unless you sign up yourself.",
-  });
+  return `<!doctype html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:24px;background:#ffffff;">
+<div style="max-width:640px;font-family:Calibri,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:#000000;">
+${p("Hi,")}
+${p(
+  "My name is Paul Slazas. I'm on the team running Freehold, transaction management software for TCs and real estate teams. Someone who knows your business thought it might be a fit for you, so I wanted to reach out personally and ask you to please take a look.",
+)}
+${p("Honestly, there are too many features to list in one email, so here are just the top 3:")}
+${p(
+  "1. <b>Latest AI Models.</b> Freehold runs on Claude, Anthropic's latest AI. Ask it about your transactions, clients, and contracts.",
+  "0 0 8px",
+)}
+${p(
+  "2. <b>Real Website for your business, included.</b> Every workspace gets its own public website and client portals. Not an upsell.",
+  "0 0 8px",
+)}
+${p(
+  "3. <b>Doc Sign included!</b> E-signatures ship with every plan. No separate account, no per-envelope fees.",
+)}
+${p("The easiest way to see if it's for you is the live demo. No signup, just click and look around:")}
+${p(link(url, "https://freeholdtc.dev"))}
+${p(
+  "A couple things I want you to know up front: we have real tech support (you can even call me directly), and we never ask for a credit card to try it out. The free plan is actually free.",
+)}
+${p("If you have any questions at all, just reply to this email or give me a call.")}
+${p("Thanks for your time,")}
+${p("Paul Slazas", "0 0 2px")}
+${p("Freehold", "0 0 2px")}
+${p(link("mailto:paul@freeholdtc.dev", "paul@freeholdtc.dev"), "0 0 2px")}
+${p("774-240-4715", "0 0 2px")}
+${p(link("https://freeholdtc.dev", "freeholdtc.dev"), "0 0 24px")}
+<p style="margin:0;font-size:12px;color:#737373;">You're receiving this because someone recommended Freehold to you. This is a one-time email; nothing else follows unless you sign up yourself.</p>
+</div>
+</body>
+</html>`;
 }
