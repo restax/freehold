@@ -196,6 +196,25 @@ async function ensureTeammates(orgId: string): Promise<Record<string, string>> {
   return ids;
 }
 
+/**
+ * When an invoice was paid, pulled forward if needed so it lands inside the
+ * current calendar month.
+ *
+ * The dataset's natural "paid 8 / 12 / 21 days ago" puts every payment in the
+ * previous month whenever the demo is loaded near the start of one, and the
+ * dashboard's Money panel then reads "collected this month: $0.00" through a
+ * whole recording. Clamping to days-elapsed-this-month keeps the payments in
+ * the past (never dated into the future) while guaranteeing they count.
+ *
+ * `index` staggers them by a day each so three payments don't stack on one
+ * date when there is room to spread them.
+ */
+function paidThisMonth(anchor: Date, preferredDaysAgo: number, index: number): Date {
+  const daysElapsedThisMonth = anchor.getUTCDate() - 1;
+  const daysAgo = Math.min(preferredDaysAgo, Math.max(0, daysElapsedThisMonth - index));
+  return addDaysUtc(anchor, -daysAgo);
+}
+
 /** Resolve an author key to a real user id. */
 const authorId = (
   key: "owner" | "alex" | "priya",
@@ -564,10 +583,13 @@ export async function seedDemoWorkspace(orgId: string, ownerUserId: string): Pro
   // ---- Invoices on the closed files ------------------------------------
   await withTenant(orgId, async (tx) => {
     let number = 1041;
+    let paidIndex = 0;
     for (const { spec, txnId } of closedForInvoicing) {
       const inv = spec.invoice;
       if (!inv) continue;
       const issued = addDaysUtc(anchor, -inv.issuedDaysAgo);
+      const paidAt =
+        inv.paidDaysAgo === null ? null : paidThisMonth(anchor, inv.paidDaysAgo, paidIndex++);
       const invoice = await tx.invoice.create({
         data: {
           tenantId: orgId,
@@ -580,8 +602,8 @@ export async function seedDemoWorkspace(orgId: string, ownerUserId: string): Pro
           dueDate: addDaysUtc(issued, 15),
           status: inv.paidDaysAgo === null ? "SENT" : "PAID",
           sentAt: issued,
-          paidAt: inv.paidDaysAgo === null ? null : addDaysUtc(anchor, -inv.paidDaysAgo),
-          paidNote: inv.paidDaysAgo === null ? null : "Paid from closing proceeds",
+          paidAt,
+          paidNote: paidAt === null ? null : "Paid from closing proceeds",
           createdAt: issued,
         },
         select: { id: true },
@@ -631,14 +653,25 @@ export async function redateDemoWorkspace(orgId: string): Promise<number> {
   const shiftDays = Math.round((anchor.getTime() - seeded) / 86_400_000);
   if (shiftDays === 0) return 0;
 
-  const shift = (tx: TenantTx, sql: string) => tx.$executeRawUnsafe(sql, shiftDays, orgId);
+  // Same scoping discipline as the wipe: these tables hold real rows too
+  // (a genuine invoice, a month of automated briefing sends), and silently
+  // rewriting their dates would be its own kind of data loss.
+  //
+  // The foreign-key column name is NOT consistent across these tables —
+  // email/document/invoice use "transactionId", transaction_activity uses
+  // "transaction_id" — so each one is spelled out rather than looped over a
+  // shared string.
+  const scope = await withTenant(orgId, demoRowScope);
+  const shift = (tx: TenantTx, sql: string, ...extra: unknown[]) =>
+    tx.$executeRawUnsafe(sql, shiftDays, orgId, ...extra);
 
   await withTenant(orgId, async (tx) => {
     await shift(
       tx,
       `UPDATE "transaction" SET contract_date = contract_date + ($1 || ' days')::interval,
          close_date = close_date + ($1 || ' days')::interval,
-         list_date = list_date + ($1 || ' days')::interval
+         list_date = list_date + ($1 || ' days')::interval,
+         on_market_date = on_market_date + ($1 || ' days')::interval
        WHERE tenant_id = $2 AND "isSample" = true`,
     );
     await shift(
@@ -649,28 +682,62 @@ export async function redateDemoWorkspace(orgId: string): Promise<number> {
     );
   });
 
-  await withTenant(orgId, async (tx) => {
-    for (const table of ["email", "document", "transaction_activity"]) {
+  if (scope.transactionIds.length > 0) {
+    await withTenant(orgId, async (tx) => {
+      for (const [table, fk] of [
+        ["email", '"transactionId"'],
+        ["document", '"transactionId"'],
+        ["transaction_activity", "transaction_id"],
+      ] as const) {
+        await shift(
+          tx,
+          `UPDATE "${table}" SET "createdAt" = "createdAt" + ($1 || ' days')::interval
+             WHERE tenant_id = $2 AND ${fk} = ANY($3::text[])`,
+          scope.transactionIds,
+        );
+      }
+    });
+
+    await withTenant(orgId, async (tx) => {
       await shift(
         tx,
-        `UPDATE "${table}" SET "createdAt" = "createdAt" + ($1 || ' days')::interval WHERE tenant_id = $2`,
+        `UPDATE "invoice" SET "createdAt" = "createdAt" + ($1 || ' days')::interval,
+           due_date = due_date + ($1 || ' days')::interval,
+           sent_at = sent_at + ($1 || ' days')::interval,
+           paid_at = paid_at + ($1 || ' days')::interval
+         WHERE tenant_id = $2 AND "transactionId" = ANY($3::text[])`,
+        scope.transactionIds,
       );
-    }
-  });
+      // A uniform shift can still land a payment in last month (seed late in
+      // one month, re-date early in the next), which puts the dashboard's
+      // "collected this month" back at $0. Pull any stragglers forward, for
+      // the same reason paidThisMonth exists at seed time.
+      await tx.$executeRawUnsafe(
+        `UPDATE "invoice" SET paid_at = date_trunc('month', timezone('UTC', now())) + interval '1 day'
+           WHERE tenant_id = $1 AND "transactionId" = ANY($2::text[])
+             AND paid_at IS NOT NULL
+             AND paid_at < date_trunc('month', timezone('UTC', now()))`,
+        orgId,
+        scope.transactionIds,
+      );
+    });
+  }
 
   await withTenant(orgId, async (tx) => {
-    await shift(
-      tx,
-      `UPDATE "invoice" SET "createdAt" = "createdAt" + ($1 || ' days')::interval,
-         due_date = due_date + ($1 || ' days')::interval,
-         sent_at = sent_at + ($1 || ' days')::interval,
-         paid_at = paid_at + ($1 || ' days')::interval
-       WHERE tenant_id = $2`,
-    );
-    for (const table of ["client_note", "contact_note"]) {
+    if (scope.clientIds.length > 0) {
       await shift(
         tx,
-        `UPDATE "${table}" SET "createdAt" = "createdAt" + ($1 || ' days')::interval WHERE tenant_id = $2`,
+        `UPDATE "client_note" SET "createdAt" = "createdAt" + ($1 || ' days')::interval
+           WHERE tenant_id = $2 AND client_id = ANY($3::text[])`,
+        scope.clientIds,
+      );
+    }
+    if (scope.contactIds.length > 0) {
+      await shift(
+        tx,
+        `UPDATE "contact_note" SET "createdAt" = "createdAt" + ($1 || ' days')::interval
+           WHERE tenant_id = $2 AND contact_id = ANY($3::text[])`,
+        scope.contactIds,
       );
     }
   });
