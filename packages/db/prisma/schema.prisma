@@ -802,12 +802,23 @@ model Organization {
   /// 10 isSample-flagged models (Client, Contact, Transaction, Task,
   /// ActionPlan, AttachmentTemplate, DateTemplate, ComplianceChecklist,
   /// EmailTemplate, DocTemplate). Maintained by seedSampleData (sets true)
-  /// and removeSampleData (sets false) in lib/actions/sample-data.ts — the
-  /// ONLY two places any isSample row is created or deleted. A denormalized
-  /// flag rather than a live COUNT across 10 tables on every dashboard
-  /// render; if a third write site to any isSample row is ever added, it
-  /// must maintain this flag too or it will drift.
+  /// and removeSampleData (sets false) in lib/actions/sample-data.ts. A
+  /// denormalized flag rather than a live COUNT across 10 tables on every
+  /// dashboard render.
+  ///
+  /// lib/demo-workspace.ts also writes isSample rows and deliberately leaves
+  /// this flag FALSE: its dataset exists to be filmed in training videos, so
+  /// the "remove your sample data" nag banner and the sample-data warnings on
+  /// the create flows must stay hidden. Those rows are still isSample so the
+  /// demo wipe can find them, and because nothing there is real. Any OTHER
+  /// new write site must maintain this flag or it will drift.
   hasSampleData             Boolean                    @default(false) @map("has_sample_data")
+  /// When the demo dataset (lib/demo-workspace.ts) was last seeded into this
+  /// workspace, or null if it never was. Every demo date is stored as an
+  /// offset from this anchor, so "re-date to today" is a single delta shift
+  /// rather than a re-derivation — that is the whole reason it is persisted
+  /// rather than inferred from the data.
+  demoSeededAt              DateTime?                  @map("demo_seeded_at")
   emailSignatures           EmailSignature[]
   /// The Handbook: the notes a team keeps about clients, contacts, people and
   /// files. Two switches, not one, because the halves are separable — someone
