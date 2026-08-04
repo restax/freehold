@@ -70,50 +70,96 @@ export async function demoWorkspaceStatus(): Promise<DemoWorkspaceStatus | null>
   });
   if (!org) return null;
 
-  const counts = await withTenant(org.id, async (tx) => ({
-    clients: await tx.client.count({ where: { isSample: true } }),
-    contacts: await tx.contact.count({ where: { isSample: true } }),
-    transactions: await tx.transaction.count({ where: { isSample: true } }),
-    tasks: await tx.task.count({ where: { isSample: true } }),
-    documents: await tx.document.count({}),
-    emails: await tx.email.count({}),
-    invoices: await tx.invoice.count({}),
-  }));
+  const counts = await withTenant(org.id, async (tx) => {
+    const scope = await demoRowScope(tx);
+    return {
+      clients: scope.clientIds.length,
+      contacts: scope.contactIds.length,
+      transactions: scope.transactionIds.length,
+      tasks: await tx.task.count({ where: { isSample: true } }),
+      // Scoped to the demo's own rows, not the whole workspace — this panel
+      // exists to say what the demo put here, and counting a real invoice
+      // among them would be actively misleading about what Wipe removes.
+      documents: await tx.document.count({
+        where: { transactionId: { in: scope.transactionIds } },
+      }),
+      emails: await tx.email.count({ where: { transactionId: { in: scope.transactionIds } } }),
+      invoices: await tx.invoice.count({ where: { transactionId: { in: scope.transactionIds } } }),
+    };
+  });
 
   return { orgId: org.id, orgName: org.name, seededAt: org.demoSeededAt, counts };
 }
 
 /**
- * Remove every sample row from the workspace. Documents, emails and invoices
- * have no isSample flag of their own — they only ever exist here because the
- * demo put them there, and they hang off sample transactions — so they go
- * wholesale. That is safe precisely because this targets one known workspace
- * that has never held real files.
+ * The ids the demo owns: sample-flagged transactions, clients and contacts.
+ *
+ * Everything else the seeder writes (documents, email, invoices, activity,
+ * notes) hangs off one of these three, and none of those tables has an
+ * isSample flag of its own — so this is how the wipe stays surgical.
+ */
+async function demoRowScope(tx: TenantTx) {
+  const [transactions, clients, contacts] = await Promise.all([
+    tx.transaction.findMany({ where: { isSample: true }, select: { id: true } }),
+    tx.client.findMany({ where: { isSample: true }, select: { id: true } }),
+    tx.contact.findMany({ where: { isSample: true }, select: { id: true } }),
+  ]);
+  return {
+    transactionIds: transactions.map((r) => r.id),
+    clientIds: clients.map((r) => r.id),
+    contactIds: contacts.map((r) => r.id),
+  };
+}
+
+/**
+ * Remove the demo's rows, and only those.
+ *
+ * This deliberately does NOT clear the workspace's document/email/invoice
+ * tables wholesale. An earlier version did, on the assumption that this
+ * workspace had never held anything real — which turned out to be false:
+ * Acme Brokers Inc already had a genuine invoice ("Caputo sale California
+ * Ave") plus a month of automated daily-briefing send records, none of which
+ * the demo put there. Everything the seeder writes hangs off a sample
+ * transaction, client, or contact, so scoping by those ids removes exactly
+ * what was seeded and nothing else.
  */
 export async function wipeDemoWorkspace(orgId: string): Promise<void> {
+  const scope = await withTenant(orgId, demoRowScope);
+  const onDemoTxn = { transactionId: { in: scope.transactionIds } };
+
   // Child-first, in its own short transaction each, for the same timeout
   // reason the seed is split up.
-  await withTenant(orgId, async (tx) => {
-    await tx.invoiceLine.deleteMany({});
-    await tx.invoicePayment.deleteMany({});
-    await tx.invoice.deleteMany({});
-  });
-  await withTenant(orgId, async (tx) => {
-    await tx.transactionActivity.deleteMany({});
-    await tx.email.deleteMany({});
-    await tx.document.deleteMany({});
-  });
+  if (scope.transactionIds.length > 0) {
+    await withTenant(orgId, async (tx) => {
+      const invoices = await tx.invoice.findMany({ where: onDemoTxn, select: { id: true } });
+      const invoiceIds = invoices.map((r) => r.id);
+      if (invoiceIds.length > 0) {
+        await tx.invoiceLine.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
+        await tx.invoicePayment.deleteMany({ where: { invoiceId: { in: invoiceIds } } });
+        await tx.invoice.deleteMany({ where: { id: { in: invoiceIds } } });
+      }
+    });
+    await withTenant(orgId, async (tx) => {
+      await tx.transactionActivity.deleteMany({ where: onDemoTxn });
+      await tx.email.deleteMany({ where: onDemoTxn });
+      await tx.document.deleteMany({ where: onDemoTxn });
+    });
+  }
+
   await withTenant(orgId, async (tx) => {
     await tx.task.deleteMany({ where: { isSample: true } });
     await tx.transaction.deleteMany({ where: { isSample: true } });
   });
   await withTenant(orgId, async (tx) => {
-    await tx.clientNote.deleteMany({});
-    await tx.contactNote.deleteMany({});
+    if (scope.clientIds.length > 0) {
+      await tx.clientNote.deleteMany({ where: { clientId: { in: scope.clientIds } } });
+    }
+    if (scope.contactIds.length > 0) {
+      await tx.contactNote.deleteMany({ where: { contactId: { in: scope.contactIds } } });
+    }
     await tx.contact.deleteMany({ where: { isSample: true } });
     await tx.client.deleteMany({ where: { isSample: true } });
   });
-  await prisma.emailThread.deleteMany({ where: { tenantId: orgId } });
   await prisma.organization.update({ where: { id: orgId }, data: { demoSeededAt: null } });
 }
 
