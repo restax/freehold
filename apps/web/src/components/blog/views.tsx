@@ -110,6 +110,19 @@ export function BlogPost({ post }: { post: FullPost }) {
         <span>{formatDate(post.firstPublishedAt)}</span>
       </div>
 
+      {post.titleFile?.fileKey ? (
+        <div className="relative mt-8 aspect-[16/9] overflow-hidden rounded-2xl bg-stone-100">
+          <Image
+            src={imageUrl(post.titleFile.fileKey, opinlyConfig)}
+            alt={post.titleFile.altText ?? post.title}
+            fill
+            className="object-cover"
+            sizes="(min-width: 768px) 672px, 100vw"
+            priority
+          />
+        </div>
+      ) : null}
+
       <div className="mt-10">
         <PostContent content={post.content} />
       </div>
