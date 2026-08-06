@@ -1,5 +1,5 @@
-import type { NextConfig } from "next";
 import { withOpinlyConfig } from "@opinly/next";
+import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
