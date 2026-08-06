@@ -1,3 +1,4 @@
+import { withOpinlyConfig } from "@opinly/next";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -11,4 +12,10 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withOpinlyConfig({
+  blogPath: "/blog",
+  imagesPath: "/images",
+  companyName: "Freehold",
+  cdnNamespace: "ivPVMe4XPTqZivN_AnEoh",
+  siteUrl: "https://freeholdtc.dev",
+})(nextConfig);

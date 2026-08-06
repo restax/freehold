@@ -101,6 +101,17 @@ const GROUPS: Array<[string, Row[]]> = [
       ],
     ],
   ],
+  [
+    "Marketing",
+    [
+      [
+        "Opinly",
+        "Blog content hosting and analytics pixel on the marketing blog, measuring page views and which posts lead to sign-ups.",
+        "Blog page views and, once you identify yourself (for example, by signing up), your email address associated with that activity.",
+        "United States",
+      ],
+    ],
+  ],
 ];
 
 export default function SubprocessorsPage() {
@@ -169,11 +180,11 @@ export default function SubprocessorsPage() {
           told us to; we don't add a step of our own in between.
         </p>
         <p>
-          We use no third-party advertising trackers or pixels. We do use Vercel Web Analytics
-          (cookieless, aggregate page views, listed above) and ship PostHog, a product-analytics
-          tool, in our code, though it only activates if we configure an API key for it; it is not
-          currently active. Neither is advertising, and we do not sell data to anyone, subprocessor
-          or otherwise. See the full{" "}
+          We use Vercel Web Analytics (cookieless, aggregate page views, listed above), ship
+          PostHog, a product-analytics tool, in our code (though it only activates if we configure
+          an API key for it; it is not currently active), and run the Opinly analytics pixel on the
+          marketing blog (listed above). None of these are advertising, and we do not sell data to
+          anyone, subprocessor or otherwise. See the full{" "}
           <a href="/privacy" className="text-brand-700 hover:text-brand-600">
             privacy policy
           </a>{" "}

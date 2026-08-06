@@ -1,4 +1,7 @@
+import { opinlyConfig } from "@opinly/next";
+import { buildSitemapEntries } from "@opinly/shared";
 import type { MetadataRoute } from "next";
+import { getOpinlyClient, opinlyEnabled } from "@/lib/opinly";
 
 const BASE = "https://freeholdtc.dev";
 
@@ -6,13 +9,22 @@ const BASE = "https://freeholdtc.dev";
  * Marketing + docs pages only. The app (dashboard, portals, tenant sites,
  * auth) is deliberately excluded — robots.ts disallows it too.
  */
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
   const page = (
     path: string,
     priority: number,
     changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"] = "weekly",
   ) => ({ url: `${BASE}${path}`, lastModified: now, changeFrequency, priority });
+
+  const blogEntries = opinlyEnabled()
+    ? buildSitemapEntries(await getOpinlyClient().routes(), opinlyConfig).map((e) => ({
+        url: e.url,
+        lastModified: new Date(e.lastModified),
+        changeFrequency: "weekly" as const,
+        priority: 0.6,
+      }))
+    : [];
 
   return [
     page("/", 1),
@@ -30,5 +42,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     page("/terms", 0.3, "monthly"),
     page("/privacy", 0.3, "monthly"),
     page("/subprocessors", 0.3, "monthly"),
+    ...blogEntries,
   ];
 }

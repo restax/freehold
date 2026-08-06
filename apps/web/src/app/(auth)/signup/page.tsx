@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { MIN_PASSWORD_SCORE, PasswordStrength } from "@/components/password-strength";
 import { authClient } from "@/lib/auth-client";
+import { opinlyIdentify, opinlyTrack } from "@/lib/opinly-pixel";
 
 type AvailState =
   | { status: "idle" }
@@ -78,6 +79,9 @@ export default function SignupPage() {
       setBusy(false);
       return;
     }
+    opinlyIdentify({ email });
+    opinlyTrack("sign_up");
+
     // With email verification on (Cloud), sign-up doesn't create a session;
     // the 6-digit code page finishes the job. Self-host goes straight in.
     const { data: session } = await authClient.getSession();

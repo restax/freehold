@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Geist, Geist_Mono, Outfit } from "next/font/google";
+import Script from "next/script";
 import { SiteAnalytics } from "@/components/site-analytics";
 import "./globals.css";
 
@@ -31,6 +32,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {children}
         <SiteAnalytics />
+        <Script
+          id="opinly-pixel"
+          strategy="afterInteractive"
+          src="https://static.opinly.ai/p.js"
+          data-key="pk-lGtesMaJSHkg1r9ZikgGsgcsrDGWBbCoQVpkIlz"
+        />
       </body>
     </html>
   );

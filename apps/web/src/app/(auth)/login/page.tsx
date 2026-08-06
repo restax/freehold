@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { opinlyIdentify, opinlyTrack } from "@/lib/opinly-pixel";
 
 /**
  * Where to land after a successful sign-in.
@@ -57,6 +58,11 @@ function LoginForm() {
       setError(error.message ?? "Sign-in failed.");
       setBusy(false);
       return;
+    }
+    const { data: session } = await authClient.getSession();
+    if (session?.user?.email) {
+      opinlyIdentify({ email: session.user.email, userId: session.user.id });
+      opinlyTrack("login");
     }
     router.push(next);
     router.refresh();

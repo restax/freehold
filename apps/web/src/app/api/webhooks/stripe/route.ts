@@ -7,6 +7,7 @@ import {
   verifyWebhook,
 } from "@freehold/ee-billing";
 import { adminAlert } from "@/lib/notify";
+import { getOpinlyClient, opinlyEnabled } from "@/lib/opinly";
 import { grantCredits } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +54,28 @@ export async function POST(req: Request) {
     const cs = event.data.object as {
       id?: string;
       after_expiration?: { recovery?: { url?: string | null } | null } | null;
+      amount_total?: number | null;
+      currency?: string | null;
+      customer_details?: { email?: string | null } | null;
     };
+
+    // Server-side revenue signal for Opinly attribution (which blog posts led to
+    // paying customers). Best-effort: never block checkout bookkeeping on it.
+    // orderId here matches the externalEventId the confirmation page's client-side
+    // track sends (OpinlyPurchaseTracker) — same checkout session id both places —
+    // so Opinly dedupes the two into a single purchase event.
+    if (purchase && cs.id && typeof cs.amount_total === "number" && opinlyEnabled()) {
+      getOpinlyClient()
+        .trackPurchase({
+          orderId: purchase.sessionId,
+          value: cs.amount_total / 100,
+          currency: cs.currency?.toUpperCase(),
+          email: cs.customer_details?.email ?? undefined,
+          anonId: purchase.opinlyAnonId ?? undefined,
+        })
+        .catch(() => {});
+    }
+
     if (cs.id) {
       await prisma.checkoutAttempt
         .update({
@@ -104,6 +126,15 @@ export async function POST(req: Request) {
 
   const update = planUpdateFromEvent(event);
   if (update) {
+    if (update.tier !== "FREE" && !update.suspended && opinlyEnabled()) {
+      getOpinlyClient()
+        .track(
+          "subscribe",
+          { tier: update.tier, seats: update.seats },
+          { externalEventId: update.subscriptionId ?? undefined },
+        )
+        .catch(() => {});
+    }
     adminAlert(
       update.suspended
         ? `⚠️ Payment problem: tenant ${update.tenantId} → ${update.status} (workspace locked)`
