@@ -1,7 +1,7 @@
 import { opinlyConfig } from "@opinly/next";
 import { buildSitemapEntries } from "@opinly/shared";
 import type { MetadataRoute } from "next";
-import { opinly } from "@/lib/opinly";
+import { getOpinlyClient, opinlyEnabled } from "@/lib/opinly";
 
 const BASE = "https://freeholdtc.dev";
 
@@ -17,13 +17,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"] = "weekly",
   ) => ({ url: `${BASE}${path}`, lastModified: now, changeFrequency, priority });
 
-  const routes = await opinly.routes();
-  const blogEntries = buildSitemapEntries(routes, opinlyConfig).map((e) => ({
-    url: e.url,
-    lastModified: new Date(e.lastModified),
-    changeFrequency: "weekly" as const,
-    priority: 0.6,
-  }));
+  const blogEntries = opinlyEnabled()
+    ? buildSitemapEntries(await getOpinlyClient().routes(), opinlyConfig).map((e) => ({
+        url: e.url,
+        lastModified: new Date(e.lastModified),
+        changeFrequency: "weekly" as const,
+        priority: 0.6,
+      }))
+    : [];
 
   return [
     page("/", 1),

@@ -10,7 +10,7 @@ import {
   CategoryView,
 } from "@/components/blog/views";
 import { MarketingFooter, MarketingNav } from "@/components/marketing";
-import { opinly } from "@/lib/opinly";
+import { getOpinlyClient, opinlyEnabled } from "@/lib/opinly";
 
 export const revalidate = 3600;
 
@@ -20,6 +20,8 @@ const authorPrefix = opinlyConfig.authorPrefix ?? "authors";
 type BlogPageProps = { params: Promise<{ slug?: string[] }> };
 
 const loadRoute = async (slug: string[]) => {
+  if (!opinlyEnabled()) return { type: "not-found" as const };
+  const opinly = getOpinlyClient();
   if (slug.length === 0) {
     const [posts, categories] = await Promise.all([
       opinly.posts({ limit: 12 }),

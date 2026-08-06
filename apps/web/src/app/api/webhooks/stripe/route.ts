@@ -7,7 +7,7 @@ import {
   verifyWebhook,
 } from "@freehold/ee-billing";
 import { adminAlert } from "@/lib/notify";
-import { opinly } from "@/lib/opinly";
+import { getOpinlyClient, opinlyEnabled } from "@/lib/opinly";
 import { grantCredits } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
@@ -64,8 +64,8 @@ export async function POST(req: Request) {
     // orderId here matches the externalEventId the confirmation page's client-side
     // track sends (OpinlyPurchaseTracker) — same checkout session id both places —
     // so Opinly dedupes the two into a single purchase event.
-    if (purchase && cs.id && typeof cs.amount_total === "number") {
-      opinly
+    if (purchase && cs.id && typeof cs.amount_total === "number" && opinlyEnabled()) {
+      getOpinlyClient()
         .trackPurchase({
           orderId: purchase.sessionId,
           value: cs.amount_total / 100,
@@ -126,8 +126,8 @@ export async function POST(req: Request) {
 
   const update = planUpdateFromEvent(event);
   if (update) {
-    if (update.tier !== "FREE" && !update.suspended) {
-      opinly
+    if (update.tier !== "FREE" && !update.suspended && opinlyEnabled()) {
+      getOpinlyClient()
         .track(
           "subscribe",
           { tier: update.tier, seats: update.seats },
