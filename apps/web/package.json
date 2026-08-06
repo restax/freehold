@@ -24,6 +24,10 @@
     "@freehold/vault": "workspace:^",
     "@freehold/workflows": "workspace:*",
     "@modelcontextprotocol/server": "2.0.0",
+    "@opinly/backend": "^1.4.0",
+    "@opinly/next": "^1.4.0",
+    "@opinly/react": "^1.4.0",
+    "@opinly/shared": "^1.4.0",
     "@phosphor-icons/react": "^2.1.10",
     "@types/qrcode": "^1.5.6",
     "@vercel/analytics": "^2.0.1",
@@ -43,10 +47,12 @@
     "react-dom": "19.2.7",
     "react-pdf": "^10.4.1",
     "stripe": "^22.3.2",
+    "svix": "^1.99.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",
+    "@tailwindcss/typography": "^0.5.20",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",

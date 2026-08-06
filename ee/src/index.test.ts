@@ -102,7 +102,28 @@ describe("creditPurchaseFromEvent", () => {
   it("maps a paid one-time session to a credit grant with the session id as key", () => {
     expect(
       creditPurchaseFromEvent(checkoutEvent("checkout.session.completed", PAID_CREDIT_SESSION)),
-    ).toEqual({ tenantId: "tenant-1", credits: 5, sessionId: "cs_test_1" });
+    ).toEqual({
+      tenantId: "tenant-1",
+      credits: 5,
+      sessionId: "cs_test_1",
+      opinlyAnonId: null,
+    });
+  });
+
+  it("carries opinlyAnonId through from metadata when present", () => {
+    expect(
+      creditPurchaseFromEvent(
+        checkoutEvent("checkout.session.completed", {
+          ...PAID_CREDIT_SESSION,
+          metadata: { ...PAID_CREDIT_SESSION.metadata, opinlyAnonId: "anon-123" },
+        }),
+      ),
+    ).toEqual({
+      tenantId: "tenant-1",
+      credits: 5,
+      sessionId: "cs_test_1",
+      opinlyAnonId: "anon-123",
+    });
   });
 
   it("ignores a subscription checkout (mode !== payment) — plan path handles those", () => {

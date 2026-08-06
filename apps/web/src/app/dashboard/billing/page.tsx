@@ -1,4 +1,6 @@
 import { billingEnabled, creditsEnabled } from "@freehold/ee-billing";
+import { OpinlyAnonIdField } from "@/components/opinly-anon-id-field";
+import { OpinlyPurchaseTracker } from "@/components/opinly-purchase-tracker";
 import { SectionCard } from "@/components/section-card";
 import {
   openBillingPortal,
@@ -30,12 +32,13 @@ export default async function BillingPage({
     redeemed?: string;
     codeError?: string;
     purchased?: string;
+    session_id?: string;
     creditRedeemed?: string;
     creditError?: string;
   }>;
 }) {
   const { tenantId, isAdmin } = await requireAdminTenant();
-  const { upgraded, redeemed, codeError, purchased, creditRedeemed, creditError } =
+  const { upgraded, redeemed, codeError, purchased, session_id, creditRedeemed, creditError } =
     await searchParams;
   const [plan, seats, activeTxns, credits] = await Promise.all([
     getTenantPlan(tenantId),
@@ -77,6 +80,12 @@ export default async function BillingPage({
           Payment received — {purchased} credit{purchased === "1" ? "" : "s"} will appear within a
           few seconds of Stripe's confirmation.
         </p>
+      )}
+      {purchased && session_id && (
+        <OpinlyPurchaseTracker
+          sessionId={session_id}
+          value={CREDIT_PACKS.find((p) => p.credits === Number(purchased))?.amountUsd ?? 0}
+        />
       )}
 
       {codeError && (
@@ -172,6 +181,7 @@ export default async function BillingPage({
                 className={`${card} flex flex-col items-start gap-1`}
               >
                 <input type="hidden" name="credits" value={pack.credits} />
+                <OpinlyAnonIdField />
                 <p className="font-serif text-2xl font-semibold tabular-nums">${pack.amountUsd}</p>
                 <p className="text-sm text-stone-600">
                   {pack.credits} credit{pack.credits === 1 ? "" : "s"}

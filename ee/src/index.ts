@@ -116,6 +116,8 @@ export interface CreditCheckoutInput {
   customerEmail: string;
   existingCustomerId: string | null;
   baseUrl: string;
+  /** Opinly pixel's anonymous visitor id, carried through to the webhook so its server-side purchase track attributes to the same visitor as the client-side one. */
+  opinlyAnonId?: string | null;
 }
 
 /**
@@ -127,7 +129,11 @@ export interface CreditCheckoutInput {
 export async function createCreditCheckout(
   input: CreditCheckoutInput,
 ): Promise<{ url: string; sessionId: string }> {
-  const metadata = { tenantId: input.tenantId, credits: String(input.credits) };
+  const metadata = {
+    tenantId: input.tenantId,
+    credits: String(input.credits),
+    ...(input.opinlyAnonId ? { opinlyAnonId: input.opinlyAnonId } : {}),
+  };
   const session = await stripe().checkout.sessions.create({
     mode: "payment",
     line_items: [{ price: creditPriceFor(input.credits), quantity: 1 }],
@@ -137,7 +143,11 @@ export async function createCreditCheckout(
       : { customer_email: input.customerEmail }),
     payment_intent_data: { metadata },
     metadata,
-    success_url: `${input.baseUrl}/dashboard/billing?purchased=${input.credits}`,
+    // {CHECKOUT_SESSION_ID} is a Stripe template token, filled in on redirect —
+    // it's the same id used as the purchase's externalEventId on both the
+    // client-side track (confirmation page) and the server-side one (webhook),
+    // so Opinly dedupes them into a single event.
+    success_url: `${input.baseUrl}/dashboard/billing?purchased=${input.credits}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${input.baseUrl}/dashboard/billing`,
   });
   if (!session.url) throw new Error("Stripe did not return a checkout URL.");
@@ -149,6 +159,8 @@ export interface CreditPurchase {
   credits: number;
   /** Checkout session id — used as the idempotency key when granting. */
   sessionId: string;
+  /** Opinly pixel anonId, if the checkout carried one. */
+  opinlyAnonId: string | null;
 }
 
 /**
@@ -163,7 +175,7 @@ export function creditPurchaseFromEvent(event: Stripe.Event): CreditPurchase | n
   const tenantId = cs.metadata?.tenantId;
   const credits = Number(cs.metadata?.credits ?? 0);
   if (!tenantId || !Number.isFinite(credits) || credits <= 0) return null;
-  return { tenantId, credits, sessionId: cs.id };
+  return { tenantId, credits, sessionId: cs.id, opinlyAnonId: cs.metadata?.opinlyAnonId ?? null };
 }
 
 /** Whether the vendor-ad monthly price is configured (gates the "Advertise here" panel). */

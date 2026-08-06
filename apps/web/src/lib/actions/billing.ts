@@ -13,7 +13,7 @@ import { redirect } from "next/navigation";
 import { logAudit } from "@/lib/audit";
 import { redeemCompCode, startSignupTrial } from "@/lib/comp";
 import { redeemCreditCoupon } from "@/lib/credit-coupons";
-import { oneOf, str } from "@/lib/forms";
+import { oneOf, optStr, str } from "@/lib/forms";
 import { launchCouponId } from "@/lib/launch-offer";
 import { PAYMENTS_PAUSED } from "@/lib/payments-paused";
 import { CREDIT_PACK_SIZES } from "@/lib/plans";
@@ -85,6 +85,7 @@ export async function startCreditCheckout(formData: FormData) {
     customerEmail: session.user.email,
     existingCustomerId: org.stripeCustomerId,
     baseUrl: baseUrl(),
+    opinlyAnonId: optStr(formData, "anonId"),
   });
   redirect(checkout.url);
 }

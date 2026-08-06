@@ -101,9 +101,14 @@ export default function PrivacyPage() {
           <strong>Cookies and analytics.</strong> Freehold Cloud uses Vercel Web Analytics, a
           cookieless, aggregate page-view analytics product, across the whole application, including
           the dashboard. We also ship PostHog, a product-analytics tool, in our code, but it only
-          activates if we configure an API key for it; it is not currently active. Neither is an
-          advertising tracker, and we place no advertising pixels of any kind. Sign-in itself
+          activates if we configure an API key for it; it is not currently active. Sign-in itself
           requires a session cookie to work.
+        </p>
+        <p>
+          On our marketing blog, we use Opinly, a content and attribution analytics pixel, to
+          measure blog performance and which posts lead to sign-ups. It may associate page views
+          and, once you identify yourself (for example, by signing up), your email address with your
+          activity on the site.
         </p>
 
         <h2 className="mt-2 font-semibold text-stone-900">How we use it</h2>

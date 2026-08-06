@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { opinlyTrack } from "@/lib/opinly-pixel";
 
 /**
  * Demo entry: a brief signing-you-in moment while /api/demo prepares the
@@ -9,6 +10,7 @@ import { useEffect } from "react";
  */
 export default function DemoEntryPage() {
   useEffect(() => {
+    opinlyTrack("generate_lead", { source: "live_demo" });
     const t = setTimeout(() => {
       window.location.assign("/api/demo");
     }, 400);
