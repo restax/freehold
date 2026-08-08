@@ -1094,9 +1094,9 @@ export default async function TransactionDetailPage({
                 .map((t) => (
                   <li key={t.id}>
                     <Link
-                      href={`/dashboard/transactions/${txn.id}?tab=${t.title.startsWith("Follow up:") ? "billing" : "tasks"}`}
+                      href={`/dashboard/transactions/${txn.id}/tasks/${t.id}`}
                       className="flex justify-between gap-2 hover:text-brand-700"
-                      title="This file's own task — opens the tab it lives on"
+                      title="Open this task"
                     >
                       <span className="truncate">{t.title}</span>
                       <span className="shrink-0 tabular-nums text-stone-400">

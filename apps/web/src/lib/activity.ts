@@ -22,6 +22,9 @@ export function logActivity(entry: {
   documentId?: string | null;
   /** The portal link this was about, for the same reason. */
   portalLinkId?: string | null;
+  /** Set from a task's own screen, so the task can show its own work log
+   *  while the row still appears in the file's activity feed. */
+  taskId?: string | null;
 }): void {
   if (!entry.transactionId) return;
   const transactionId = entry.transactionId;
@@ -36,6 +39,7 @@ export function logActivity(entry: {
         summary: entry.summary.slice(0, 300),
         documentId: entry.documentId ?? null,
         portalLinkId: entry.portalLinkId ?? null,
+        taskId: entry.taskId ?? null,
       },
     }),
   ).catch(() => {});

@@ -11,8 +11,13 @@ import { confirmed, dateOnly, oneOf, str } from "@/lib/forms";
 import { guestMaySeeTransaction, requireTenant } from "@/lib/tenant";
 import { emitWebhook } from "@/lib/webhook-emit";
 
-function revalidateTaskViews(transactionId: string | null) {
-  if (transactionId) revalidatePath(`/dashboard/transactions/${transactionId}`);
+function revalidateTaskViews(transactionId: string | null, taskId?: string | null) {
+  if (transactionId) {
+    revalidatePath(`/dashboard/transactions/${transactionId}`);
+    // The task's own screen reads the same row; without this an edit made
+    // there shows the old value until something else revalidates.
+    if (taskId) revalidatePath(`/dashboard/transactions/${transactionId}/tasks/${taskId}`);
+  }
   revalidatePath("/dashboard");
 }
 
@@ -127,7 +132,7 @@ async function applyTaskStatus(
       summary: `${nowDone ? "Completed" : "Reopened"} task “${activityTitle(title)}”${knockOn}`,
     });
   }
-  revalidateTaskViews(transactionId);
+  revalidateTaskViews(transactionId, id);
 }
 
 export async function toggleTask(formData: FormData) {
@@ -173,7 +178,7 @@ export async function setTaskNotes(formData: FormData) {
   await withTenant(tenantId, (tx) =>
     tx.task.update({ where: { id }, data: { notes: notes || null } }),
   );
-  revalidateTaskViews(transactionId);
+  revalidateTaskViews(transactionId, id);
 }
 
 export async function deleteTask(formData: FormData) {
@@ -347,7 +352,7 @@ export async function setTaskPriority(formData: FormData) {
   const priority = oneOf(formData, "priority", PRIORITIES, TaskPriority.NORMAL);
   const transactionId = str(formData, "transactionId") || null;
   await withTenant(tenantId, (tx) => tx.task.update({ where: { id }, data: { priority } }));
-  revalidateTaskViews(transactionId);
+  revalidateTaskViews(transactionId, id);
 }
 
 /** Due-date inline edit on the task row — a plain field edit, not an
@@ -359,5 +364,5 @@ export async function setTaskDueDate(formData: FormData) {
   const transactionId = str(formData, "transactionId") || null;
   const dueDate = dateOnly(formData, "value");
   await withTenant(tenantId, (tx) => tx.task.update({ where: { id }, data: { dueDate } }));
-  revalidateTaskViews(transactionId);
+  revalidateTaskViews(transactionId, id);
 }

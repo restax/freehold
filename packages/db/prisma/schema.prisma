@@ -2434,9 +2434,15 @@ model TransactionActivity {
   /// last-sent-to instead of only appearing in the general activity feed.
   portalLinkId  String?      @map("portal_link_id")
   portalLink    PortalLink?  @relation(fields: [portalLinkId], references: [id], onDelete: SetNull)
+  /// Set on rows written from a task's own screen (a call logged, a note, a
+  /// file attached), so the task can show its own work log while the row still
+  /// appears in the file's activity feed.
+  taskId        String?      @map("task_id")
+  task          Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
   createdAt     DateTime     @default(now())
 
   @@index([tenantId, transactionId, createdAt])
+  @@index([taskId, createdAt])
   @@index([documentId])
   @@index([portalLinkId])
   @@map("transaction_activity")
@@ -2570,6 +2576,11 @@ model Task {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   invoiceFollowUps Invoice[]
+  /// Files produced or collected while doing this task, and the task's own
+  /// work log. Both SetNull on delete: the document and the record that the
+  /// work happened outlive the checklist item that prompted them.
+  documents        Document[]
+  activity         TransactionActivity[]
 
   @@index([tenantId, status, dueDate])
   @@map("task")
@@ -3253,6 +3264,11 @@ model Document {
   /// Set when the file came from a vendor — an inbound email attachment on an
   /// order (Stage 4) or a vendor upload (Stage 5). Kept internal by default
   /// (visibleToClient false); only the TC can promote it to the client.
+  /// The checklist item this file was uploaded or generated for, when it came
+  /// from a task's own screen. Advisory: the document belongs to the file, not
+  /// the task, so deleting the task keeps it.
+  taskId           String?                 @map("task_id")
+  task             Task?                   @relation(fields: [taskId], references: [id], onDelete: SetNull)
   sourceOrderId    String?                 @map("source_order_id")
   sourceOrder      VendorOrder?            @relation("OrderDocuments", fields: [sourceOrderId], references: [id], onDelete: SetNull)
   /// Set when the file is the signed copy that came back from an e-sign

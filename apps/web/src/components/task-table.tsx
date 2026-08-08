@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { DangerDelete } from "@/components/danger-delete";
 import { TaskDueDateField } from "@/components/task-due-date-field";
@@ -212,7 +213,19 @@ function cell(
 ): ReactNode {
   switch (key) {
     case "title":
-      return <span className={state.done ? "text-stone-400 line-through" : ""}>{t.title}</span>;
+      // The title is the way in to the task's own screen — where the letter
+      // gets written, the call gets logged, and the file gets attached.
+      return (
+        <Link
+          href={`/dashboard/transactions/${ctx.transactionId}/tasks/${t.id}`}
+          className={`hover:underline ${
+            state.done ? "text-stone-400 line-through" : "text-stone-800 hover:text-brand-700"
+          }`}
+          title="Open this task"
+        >
+          {t.title}
+        </Link>
+      );
     case "notes":
       return (
         <TaskNotesField

@@ -506,7 +506,19 @@ export default async function DashboardPage({
         >
           {fmtDayMonth(t.dueDate)}
         </span>
-        <span className="text-sm">{t.title}</span>
+        {/* Same way in as the checklist on the file: the title opens the
+            task's own screen, where the work actually gets done. */}
+        {t.transactionId ? (
+          <Link
+            href={`/dashboard/transactions/${t.transactionId}/tasks/${t.id}`}
+            className="text-sm hover:text-brand-700 hover:underline"
+            title="Open this task"
+          >
+            {t.title}
+          </Link>
+        ) : (
+          <span className="text-sm">{t.title}</span>
+        )}
         {PRIORITY_LABEL[eff] && (
           <span
             className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
@@ -783,7 +795,17 @@ export default async function DashboardPage({
                           className="h-5 w-5 rounded border border-stone-300 transition-colors hover:border-brand-600"
                         />
                       </form>
-                      <span className="text-sm">{t.title}</span>
+                      {t.transactionId ? (
+                        <Link
+                          href={`/dashboard/transactions/${t.transactionId}/tasks/${t.id}`}
+                          className="text-sm hover:text-brand-700 hover:underline"
+                          title="Open this task"
+                        >
+                          {t.title}
+                        </Link>
+                      ) : (
+                        <span className="text-sm">{t.title}</span>
+                      )}
                       {t.transaction && (
                         <AddressPill
                           href={`/dashboard/transactions/${t.transaction.id}`}
