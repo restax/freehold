@@ -73,6 +73,7 @@ model User {
   supportTickets          SupportTicket[]
   vendorUsers             VendorUser[]
   clientReviews           ClientReview[]
+  transactionTimeEntries  TransactionTimeEntry[]
   nylasGrant              NylasGrant?
   oauthApplications       OauthApplication[]
   oauthAccessTokens       OauthAccessToken[]
@@ -824,6 +825,10 @@ model Organization {
   /// files. Two switches, not one, because the halves are separable — someone
   /// who wants nothing to do with AI can still keep notes, which is the more
   /// valuable half. Off hides the feature entirely.
+  /// "Time on files": passive per-file time analytics, built from presence
+  /// pings while a transaction page is open. Off = no pings recorded, no
+  /// charts shown. Data already recorded is kept, same policy as the Handbook.
+  timeTrackingEnabled       Boolean                    @default(true) @map("time_tracking_enabled")
   handbookEnabled           Boolean                    @default(true) @map("handbook_enabled")
   /// The AI-written "Today at a glance" paragraph. Off leaves notes, pooling
   /// and grades working exactly as before, with no model call anywhere.
@@ -963,6 +968,7 @@ model Organization {
   vaultAccessLogs           VaultAccessLog[]
   auditLogs                 AuditLog[]
   transactionActivity       TransactionActivity[]
+  transactionTimeEntries    TransactionTimeEntry[]
   contactNotes              ContactNote[]
   clientNotes               ClientNote[]
   clientAgents              ClientAgent[]
@@ -1922,6 +1928,7 @@ model Transaction {
   compliance             TransactionCompliance[]
   vendorOrders           VendorOrder[]
   activity               TransactionActivity[]
+  timeEntries            TransactionTimeEntry[]
 
   @@index([tenantId, status])
   @@map("transaction")
@@ -2433,6 +2440,34 @@ model TransactionActivity {
   @@index([documentId])
   @@index([portalLinkId])
   @@map("transaction_activity")
+}
+
+/// One row per (file, person, day): the passive time ledger behind "time on
+/// files". Minutes accrue from a once-a-minute presence ping while a
+/// transaction page is open and visible — nobody starts a timer, the numbers
+/// just exist. `touches` counts pings accepted, a cheap proxy for how often
+/// the file was opened that day. Deliberately an aggregate, not raw events:
+/// this powers cost-per-file analytics, not per-person surveillance, and a
+/// daily rollup is the least data that answers "what does this file cost".
+model TransactionTimeEntry {
+  id            String       @id @default(uuid())
+  tenantId      String       @map("tenant_id")
+  tenant        Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactionId String       @map("transaction_id")
+  transaction   Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  userId        String       @map("user_id")
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day           DateTime     @db.Date
+  minutes       Int          @default(0)
+  touches       Int          @default(0)
+  /// Dedupe clock: a ping only adds a minute when the last accepted ping is
+  /// at least ~50s old, so two open tabs don't double-count the same minute.
+  lastPingAt    DateTime     @map("last_ping_at")
+
+  @@unique([transactionId, userId, day])
+  @@index([tenantId, day])
+  @@index([tenantId, transactionId])
+  @@map("transaction_time_entry")
 }
 
 model AuditLog {

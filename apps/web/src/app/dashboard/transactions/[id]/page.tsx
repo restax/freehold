@@ -71,6 +71,7 @@ import { SplitPdfDialog } from "@/components/split-pdf-dialog";
 import { StatusSelect } from "@/components/status-select";
 import { TaskTable } from "@/components/task-table";
 import { TemplateEditor } from "@/components/template-editor";
+import { TimeTrackingPing } from "@/components/time-tracking-ping";
 import { UploadOnChange } from "@/components/upload-on-change";
 import { VendorOrderTab } from "@/components/vendor-order-tab";
 import { VisibilityToggles } from "@/components/visibility-toggles";
@@ -810,7 +811,7 @@ export default async function TransactionDetailPage({
   // Workspace CC address (copy-to-clipboard pill in the header).
   const orgEmail = await prisma.organization.findUnique({
     where: { id: tenantId },
-    select: { emailSettings: true },
+    select: { emailSettings: true, timeTrackingEnabled: true },
   });
   const ccEmail = parseEmailSettings(orgEmail?.emailSettings).cc ?? "";
 
@@ -905,6 +906,7 @@ export default async function TransactionDetailPage({
 
   return (
     <div className="flex flex-col gap-4">
+      {orgEmail?.timeTrackingEnabled && <TimeTrackingPing transactionId={txn.id} />}
       <div className="flex items-center justify-between">
         <div>
           <Breadcrumbs

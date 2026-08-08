@@ -19,6 +19,7 @@ import { setContactVisibilityRestriction } from "@/lib/actions/contacts";
 import { setHandbookEnabled, setHandbookSummaryEnabled } from "@/lib/actions/handbook";
 import { saveHolidaySchedule } from "@/lib/actions/holidays";
 import { addState, removeState, setLicenseEnforcement } from "@/lib/actions/states";
+import { setTimeTrackingEnabled } from "@/lib/actions/time-tracking";
 import { saveSideLabels } from "@/lib/actions/website";
 import { BILLING_MODES, tenantBillingPolicy } from "@/lib/billing-policy";
 import { cloudPromptText, readCloudPromptConfig } from "@/lib/cloud-prompt";
@@ -176,6 +177,37 @@ async function ApiSection({ tenantId, userId }: { tenantId: string; userId: stri
  * is built from — a coordinator recognises "the things you'd tell someone new",
  * not a retrieval system. See lib/handbook.ts.
  */
+/**
+ * The "time on files" switch. Worded as file-cost analytics, which is what it
+ * is: minutes accrue passively while a transaction page is open, summed per
+ * file and per client — never shown per person on the dashboard.
+ */
+async function TimeTrackingSection({ tenantId, userId }: { tenantId: string; userId: string }) {
+  const role = await getMemberRole(tenantId, userId);
+  if (role !== "owner" && role !== "admin") return null;
+  const { prisma } = await import("@freehold/db");
+  const org = await prisma.organization.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: { timeTrackingEnabled: true },
+  });
+
+  return (
+    <SectionCard title="Time on files">
+      <p className="mb-3 text-sm text-stone-500">
+        {org.timeTrackingEnabled
+          ? "While a transaction page is open, minutes are recorded against that file automatically — no timers. Today shows the results: what each file costs against its fee, and which clients take the most and least time per deal."
+          : "Time on files is off. Nothing is being recorded, and the Today panels are hidden. What was already recorded is kept, and comes back if you turn it on again."}
+      </p>
+      <form action={setTimeTrackingEnabled}>
+        <input type="hidden" name="on" value={org.timeTrackingEnabled ? "0" : "1"} />
+        <button type="submit" className={btnGhost}>
+          {org.timeTrackingEnabled ? "Turn time on files off" : "Turn time on files on"}
+        </button>
+      </form>
+    </SectionCard>
+  );
+}
+
 async function HandbookSection({ tenantId, userId }: { tenantId: string; userId: string }) {
   const role = await getMemberRole(tenantId, userId);
   if (role !== "owner" && role !== "admin") return null;
@@ -764,6 +796,7 @@ export default async function SettingsPage() {
         <ApiSection tenantId={tenantId} userId={session.user.id} />
 
         <HandbookSection tenantId={tenantId} userId={session.user.id} />
+        <TimeTrackingSection tenantId={tenantId} userId={session.user.id} />
         <ContactVisibilitySection tenantId={tenantId} userId={session.user.id} />
 
         <AuditSection tenantId={tenantId} userId={session.user.id} />

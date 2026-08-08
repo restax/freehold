@@ -56,6 +56,11 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
         "One CRM entry holds a couple or a client and their assistant, so mailings and merges address both.",
         "today",
       ],
+      [
+        "Time on files",
+        "Minutes accrue automatically while a file is open — no timers — so you can see what each file costs against its fee, and which clients take the most and least time per deal.",
+        "today",
+      ],
     ],
   ],
   [
@@ -523,6 +528,72 @@ export default function FeaturesPage() {
               </div>
               <p className="mt-3 text-xs leading-relaxed text-stone-500">
                 Written on three different records. Gathered onto one file.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Time on files. Sold as the business question it answers — what does a
+            file actually cost — not as tracking. */}
+        <div className="mt-10 overflow-hidden rounded-xl border border-brand-600/20 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_10px_rgb(41_37_36/0.05)]">
+          <div className="grid gap-0 md:grid-cols-[1.1fr_1fr]">
+            <div className="p-6 sm:p-8">
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">
+                Time on files
+              </p>
+              <h2 className="mt-2 font-display text-2xl font-bold tracking-tight">
+                Know what every file actually costs you
+              </h2>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-stone-600">
+                Nobody starts a timer. While a transaction page is open, Freehold quietly records
+                the minutes against that file, then shows you the numbers flat pricing usually
+                hides: time against fee on every file, which clients absorb the most hours across
+                your whole team, and which send the work that takes the least time per deal.
+              </p>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-stone-600">
+                That's the difference between a flat fee that feels right and one you can prove is
+                profitable — and it's the number to know before your first hire, when someone else's
+                salary depends on your margins being real.
+              </p>
+              <p className="mt-4 text-xs leading-relaxed text-stone-500">
+                A workspace switch, not an obligation. Turn it off in Settings and nothing is
+                recorded; numbers are shown per file and per client, not as a per-person scoreboard.
+              </p>
+            </div>
+
+            <div className="border-t border-stone-200/70 bg-stone-50 p-6 sm:p-8 md:border-l md:border-t-0">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
+                On Today
+              </p>
+              <div className="mt-2 overflow-hidden rounded-xl border border-stone-200 bg-white">
+                <div className="border-b border-stone-200/80 bg-[var(--section-header)] px-3 py-2">
+                  <p className="text-sm font-semibold text-stone-800">Time on files</p>
+                </div>
+                <div className="flex flex-col gap-3 p-3">
+                  {[
+                    ["412 Maple Avenue", "3h 20m · $450 fee", "$135/hr", 100],
+                    ["88 Harbor Lane", "1h 45m · $400 fee", "$228/hr", 52],
+                    ["17 Cedar Court", "55m · $450 fee", "$490/hr", 27],
+                  ].map(([addr, meta, rate, width]) => (
+                    <div key={addr as string}>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-sm text-stone-700">{addr}</span>
+                        <span className="shrink-0 text-xs tabular-nums text-stone-500">
+                          {meta} · <span className="font-medium text-stone-700">{rate}</span>
+                        </span>
+                      </div>
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-stone-100">
+                        <div
+                          className="h-full rounded-full bg-brand-600/80"
+                          style={{ width: `${width}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-stone-500">
+                Recorded automatically. Summed per file, per client, per day.
               </p>
             </div>
           </div>

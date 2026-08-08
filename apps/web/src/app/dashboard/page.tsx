@@ -10,6 +10,7 @@ import { HandbookGlance } from "@/components/handbook-glance";
 import { HubNews } from "@/components/hub-news";
 import { SectionCard } from "@/components/section-card";
 import { SideBadge } from "@/components/side-badge";
+import { EfficientClientsChart, TimeByClientChart, TimeVsFeeChart } from "@/components/time-charts";
 import { removeSampleData } from "@/lib/actions/sample-data";
 import { toggleTask } from "@/lib/actions/tasks";
 import { activityTitle } from "@/lib/activity";
@@ -34,6 +35,7 @@ import {
 } from "@/lib/priority";
 import { tenantSideLabels } from "@/lib/side-labels";
 import { getBillingAccess, getMemberRole, requireTenant } from "@/lib/tenant";
+import { efficientClients, timeByClient, timeVsFee } from "@/lib/time-tracking";
 import { tableWrap, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -252,6 +254,50 @@ export default async function DashboardPage({
   const busiestClients = topClients(
     chartFiles.map((t) => ({ clientId: t.clientId, clientName: t.client?.name ?? null })),
   );
+
+  // Time on files, same window as the other two panels. Gated on the
+  // workspace switch: off means no panels, not empty panels.
+  const timeTrackingOn = (
+    await prisma.organization.findUnique({
+      where: { id: tenantId },
+      select: { timeTrackingEnabled: true },
+    })
+  )?.timeTrackingEnabled;
+  const fileTimes = timeTrackingOn
+    ? await withTenant(tenantId, async (tx) => {
+        const sums = await tx.transactionTimeEntry.groupBy({
+          by: ["transactionId"],
+          where: { day: { gte: new Date(now.getTime() - chartRange * 24 * 3600 * 1000) } },
+          _sum: { minutes: true },
+        });
+        if (sums.length === 0) return [];
+        const txns = await tx.transaction.findMany({
+          where: { id: { in: sums.map((s) => s.transactionId) } },
+          select: {
+            id: true,
+            propertyAddress: true,
+            expectedFeeCents: true,
+            clientId: true,
+            client: { select: { name: true } },
+          },
+        });
+        const byId = new Map(txns.map((t) => [t.id, t]));
+        return sums.flatMap((s) => {
+          const t = byId.get(s.transactionId);
+          if (!t) return [];
+          return [
+            {
+              transactionId: t.id,
+              propertyAddress: t.propertyAddress,
+              minutes: s._sum.minutes ?? 0,
+              expectedFeeCents: t.expectedFeeCents,
+              clientId: t.clientId,
+              clientName: t.client?.name ?? null,
+            },
+          ];
+        });
+      })
+    : [];
 
   const { counts, openTasks, closings, doneThisWeek, prospecting, recent, licenseAlerts, myFiles } =
     await withTenant(tenantId, async (tx) => ({
@@ -1086,6 +1132,33 @@ export default async function DashboardPage({
           <SectionCard title="Busiest clients" tooltip="Who sent the most work in the window.">
             <TopClientsChart clients={busiestClients} range={chartRange} />
           </SectionCard>
+
+          {timeTrackingOn && (
+            <>
+              <SectionCard
+                title="Time on files"
+                tooltip="Minutes recorded while a file was open, against its expected fee. The $/hr is fee ÷ time — the number that says whether a file is paying for itself."
+              >
+                <TimeVsFeeChart files={timeVsFee(fileTimes)} />
+              </SectionCard>
+              {fileTimes.length > 0 && (
+                <>
+                  <SectionCard
+                    title="Time by client"
+                    tooltip="Total time across every user in the window — the clients absorbing the most hours."
+                  >
+                    <TimeByClientChart clients={timeByClient(fileTimes)} />
+                  </SectionCard>
+                  <SectionCard
+                    title="Most efficient clients"
+                    tooltip="Least average time per file — the work that costs the fewest hours per fee earned."
+                  >
+                    <EfficientClientsChart clients={efficientClients(fileTimes)} />
+                  </SectionCard>
+                </>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>
