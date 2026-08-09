@@ -37,6 +37,44 @@ import { WEBHOOK_EVENTS } from "@/lib/webhook-emit";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * A band of related setting cards under a quiet heading.
+ *
+ * Two problems this solves at once. Fifteen cards in one undifferentiated
+ * wall meant hunting for the one you wanted; and the wall was a CSS
+ * multi-column masonry, which balances its columns by *height*, so any card
+ * that grew or shrank re-flowed its neighbours into the other column. Turning
+ * the daily recap off shortened the Handbook card and sent unrelated sections
+ * jumping from top-right to bottom-left. A button must never move something
+ * else on the page.
+ *
+ * A grid fixes that: each card owns a cell in DOM order, so a height change
+ * affects that card's row and nothing else. `items-start` keeps a short card
+ * short rather than stretching it to match its neighbour.
+ *
+ * The heading is deliberately not a SectionCard — these are groups *of*
+ * SectionCards, and a second tinted strip would compete with the real ones.
+ */
+function SettingsGroup({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-stone-200 pb-1.5">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500">{title}</h2>
+        {hint && <p className="text-xs text-stone-400">{hint}</p>}
+      </div>
+      <div className="grid items-start gap-4 lg:grid-cols-2">{children}</div>
+    </section>
+  );
+}
+
 async function ApiSection({ tenantId, userId }: { tenantId: string; userId: string }) {
   const role = await getMemberRole(tenantId, userId);
   const isAdmin = role === "owner" || role === "admin";
@@ -283,9 +321,9 @@ async function HandbookSection({ tenantId, userId }: { tenantId: string; userId:
     return (
       <SectionCard title="Handbook">
         <p className="mb-3 text-sm text-stone-500">
-          Keep what your team knows — a client who wants a call about date changes, a vendor who
-          only covers one county, the brokerage that reviews documents before payment — beside the
-          work it applies to. Available on a paid plan.
+          The things you would tell someone new on their first day: a client who wants a call about
+          date changes, a vendor who only covers one county, the brokerage that reviews documents
+          before payment. Kept beside the work they apply to. Available on a paid plan.
         </p>
         <Link href="/pricing" className={btnGhost}>
           See plans
@@ -297,36 +335,88 @@ async function HandbookSection({ tenantId, userId }: { tenantId: string; userId:
   return (
     <SectionCard title="Handbook">
       <p className="mb-3 text-sm text-stone-500">
-        {org.handbookEnabled
-          ? "Notes your team keeps about clients, contacts, people and files show up wherever they apply."
-          : "The Handbook is off. Existing notes are kept, and come back if you turn it on again."}
+        Notes your team keeps about a client, a contact, a teammate or a file: the things you would
+        tell someone new on their first day. They show up beside the work they apply to, so nobody
+        has to be told twice. Each client and contact also carries an A to F grade for how the
+        working relationship is going.
       </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <form action={setHandbookEnabled}>
-          <input type="hidden" name="on" value={org.handbookEnabled ? "0" : "1"} />
-          <button type="submit" className={btnGhost}>
-            {org.handbookEnabled ? "Turn the Handbook off" : "Turn the Handbook on"}
-          </button>
-        </form>
+
+      {/* Each switch says what it turns off, in place. The recap in
+          particular was easy to mistake for the whole feature, so its row
+          spells out that notes and grades are untouched by it. */}
+      <ul className="flex flex-col divide-y divide-stone-100 border-t border-stone-100">
+        <SwitchRow
+          label="Handbook"
+          on={org.handbookEnabled}
+          whenOn="Notes and grades appear on clients, contacts, people and files."
+          whenOff="No notes or grades anywhere. The ones already written are kept, and come back if you turn this on again."
+          action={setHandbookEnabled}
+          onLabel="Turn the Handbook off"
+          offLabel="Turn the Handbook on"
+        />
         {org.handbookEnabled && (
-          <form action={setHandbookSummaryEnabled}>
-            <input type="hidden" name="on" value={org.handbookSummaryEnabled ? "0" : "1"} />
-            <button
-              type="submit"
-              className={btnGhost}
-              title="The short written recap at the top of Today. Notes and grades keep working either way."
-            >
-              {org.handbookSummaryEnabled ? "Turn the daily recap off" : "Turn the daily recap on"}
-            </button>
-          </form>
+          <SwitchRow
+            label="Daily recap"
+            on={org.handbookSummaryEnabled}
+            whenOn="A short written recap of the day sits at the top of Today."
+            whenOff="No recap on Today. Notes and grades carry on exactly as they are; this switch only affects that one paragraph."
+            action={setHandbookSummaryEnabled}
+            onLabel="Turn the daily recap off"
+            offLabel="Turn the daily recap on"
+          />
         )}
-      </div>
-      {org.handbookEnabled && !org.handbookSummaryEnabled && (
-        <p className="mt-2 text-xs text-stone-400">
-          Notes and grades are still on — only the written recap on Today is off.
-        </p>
-      )}
+      </ul>
     </SectionCard>
+  );
+}
+
+/**
+ * One switchable thing, with its current state and what turning it off costs
+ * spelled out rather than left to the button label.
+ *
+ * The Handbook has two switches whose names sound alike, and the narrow one
+ * (the recap) was being read as the whole feature. Saying "notes and grades
+ * carry on" next to the switch itself is the fix.
+ */
+function SwitchRow({
+  label,
+  on,
+  whenOn,
+  whenOff,
+  action,
+  onLabel,
+  offLabel,
+}: {
+  label: string;
+  on: boolean;
+  whenOn: string;
+  whenOff: string;
+  action: (formData: FormData) => void | Promise<void>;
+  onLabel: string;
+  offLabel: string;
+}) {
+  return (
+    <li className="flex flex-wrap items-start justify-between gap-3 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-2 text-sm font-medium text-stone-800">
+          {label}
+          <span
+            className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+              on ? "bg-emerald-100 text-emerald-800" : "bg-stone-200 text-stone-600"
+            }`}
+          >
+            {on ? "On" : "Off"}
+          </span>
+        </p>
+        <p className="mt-0.5 text-xs leading-relaxed text-stone-500">{on ? whenOn : whenOff}</p>
+      </div>
+      <form action={action} className="shrink-0">
+        <input type="hidden" name="on" value={on ? "0" : "1"} />
+        <button type="submit" className={btnGhost}>
+          {on ? onLabel : offLabel}
+        </button>
+      </form>
+    </li>
   );
 }
 
@@ -643,7 +733,11 @@ async function AuditSection({ tenantId, userId }: { tenantId: string; userId: st
     tx.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
   );
   return (
-    <SectionCard title="Audit trail">
+    // Full width and scrolled inside a bounded height. A hundred entries is
+    // roughly 3,500px of log; in a half-width cell it left a dead rectangle
+    // taller than the rest of the page beside it, and read as the end of the
+    // settings rather than one card among several.
+    <SectionCard title="Audit trail" className="lg:col-span-2">
       <p className="mb-3 text-sm text-stone-500">
         Who did what, newest first. Deletions, portal access changes, and other significant actions
         are recorded automatically. Last 100 entries.
@@ -651,7 +745,7 @@ async function AuditSection({ tenantId, userId }: { tenantId: string; userId: st
       {entries.length === 0 ? (
         <p className="text-sm text-stone-500">Nothing recorded yet.</p>
       ) : (
-        <ul className="flex flex-col">
+        <ul className="flex max-h-96 flex-col overflow-y-auto">
           {entries.map((e) => (
             <li
               key={e.id}
@@ -693,179 +787,219 @@ export default async function SettingsPage() {
           note about the install. */}
       <CloudPromptBanner tenantId={tenantId} userId={session.user.id} />
 
-      {/* Independent setting cards sit two-up on wide screens (kept to two so
-          each card — including the one with a table — stays comfortably wide). */}
-      <div className="columns-1 gap-6 lg:columns-2 [&>*]:mb-6 [&>*]:break-inside-avoid">
-        <SectionCard title="Workspace">
-          <p className="text-sm">
-            <span className="text-stone-500">Name:</span> {tenant?.name}
-          </p>
-          <p className="text-sm">
-            <span className="text-stone-500">Signed in as:</span> {session.user.email}
-          </p>
-        </SectionCard>
-
-        {isAdmin && (
-          <SectionCard title="Appearance">
-            <p className="mb-3 text-sm text-stone-500">
-              Brand the client portal with a colour theme and font, and colour-code task priorities
-              and row highlights across your dashboard.
+      {/* Grouped into bands rather than one wall of cards, and each band is a
+          grid so a card that changes height never displaces its neighbours.
+          See SettingsGroup for why that mattered. */}
+      <div className="flex flex-col gap-6">
+        <SettingsGroup title="Workspace" hint="What this workspace is called and how it looks.">
+          <SectionCard title="Workspace">
+            <p className="text-sm">
+              <span className="text-stone-500">Name:</span> {tenant?.name}
             </p>
-            <Link href="/dashboard/settings/appearance" className={btnGhost}>
-              Customize appearance
-            </Link>
+            <p className="text-sm">
+              <span className="text-stone-500">Signed in as:</span> {session.user.email}
+            </p>
           </SectionCard>
-        )}
 
-        {isAdmin && (
-          <SectionCard title="Client billing defaults">
+          {isAdmin && (
+            <SectionCard title="Appearance">
+              <p className="mb-3 text-sm text-stone-500">
+                Brand the client portal with a colour theme and font, and colour-code task
+                priorities and row highlights across your dashboard.
+              </p>
+              <Link href="/dashboard/settings/appearance" className={btnGhost}>
+                Customize appearance
+              </Link>
+            </SectionCard>
+          )}
+
+          <SectionCard title="Side wording">
             <p className="mb-3 text-sm text-stone-500">
-              How this workspace bills by default. Any client can override any of this on their
-              profile — these are the settings a client gets when you haven't said otherwise.
+              Different markets say it differently — sell side, sale side, list side. Whatever you
+              type here is used everywhere sides appear: transactions, portals, and intake forms.
             </p>
-            <form action={saveBillingDefaults} className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-end gap-3">
-                <label className={label}>
-                  Billing rhythm
-                  <select name="mode" defaultValue={billing.mode} className={input}>
-                    {BILLING_MODES.map((m) => (
-                      <option key={m.key} value={m.key}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className={label}>
-                  Standard fee ($ per file)
-                  <input
-                    name="defaultFee"
-                    inputMode="decimal"
-                    defaultValue={
-                      billing.defaultFeeCents == null
-                        ? ""
-                        : (billing.defaultFeeCents / 100).toFixed(2)
-                    }
-                    placeholder="350.00"
-                    className={`${input} w-32`}
-                  />
-                </label>
-                <label className={label}>
-                  Deposit %
-                  <input
-                    name="depositPercent"
-                    type="number"
-                    min={1}
-                    max={100}
-                    defaultValue={billing.depositPercent}
-                    className={`${input} w-24`}
-                  />
-                  <span className="text-xs font-normal text-stone-400">
-                    for “deposit up front” clients
-                  </span>
-                </label>
-              </div>
-              <div className="flex flex-wrap items-end gap-3 rounded-lg bg-stone-50 p-3">
-                <label className="flex items-center gap-2 pb-2 text-sm font-medium text-stone-700">
-                  <input
-                    type="checkbox"
-                    name="lateFeeEnabled"
-                    value="1"
-                    defaultChecked={billing.lateFee.enabled}
-                    className="accent-brand-600"
-                  />
-                  Charge late fees
-                </label>
-                <label className={label}>
-                  Type
-                  <select name="lateFeeType" defaultValue={billing.lateFee.type} className={input}>
-                    <option value="flat">Flat amount</option>
-                    <option value="percent">% of invoice</option>
-                  </select>
-                </label>
-                <label className={label}>
-                  Flat ($)
-                  <input
-                    name="lateFeeFlat"
-                    inputMode="decimal"
-                    defaultValue={(billing.lateFee.flatCents / 100).toFixed(2)}
-                    className={`${input} w-24`}
-                  />
-                </label>
-                <label className={label}>
-                  Percent
-                  <input
-                    name="lateFeePercent"
-                    type="number"
-                    step="0.1"
-                    min={0}
-                    max={100}
-                    defaultValue={billing.lateFee.percent}
-                    className={`${input} w-24`}
-                  />
-                </label>
-                <label className={label}>
-                  Grace (days)
-                  <input
-                    name="lateFeeGrace"
-                    type="number"
-                    min={0}
-                    max={365}
-                    defaultValue={billing.lateFee.graceDays}
-                    className={`${input} w-24`}
-                  />
-                </label>
-                <p className="w-full text-xs text-stone-400">
-                  Late fees are never added silently — an overdue invoice offers a one-click
-                  suggested line you approve.
-                </p>
-              </div>
-              <SaveButton className={`${btnGhost} self-start`} label="Save billing defaults" />
+            <form action={saveSideLabels} className="flex flex-wrap items-end gap-3">
+              <label className={label}>
+                Buy side is called
+                <input name="buyLabel" defaultValue={sideLabels.buy} className={input} />
+              </label>
+              <label className={label}>
+                Sell side is called
+                <input name="sellLabel" defaultValue={sideLabels.sell} className={input} />
+              </label>
+              <SaveButton className={btnGhost} label="Save wording" />
             </form>
           </SectionCard>
+        </SettingsGroup>
+
+        {isAdmin && (
+          <SettingsGroup
+            title="Clients and billing"
+            hint="Who you take on, what you charge them, and who can see them."
+          >
+            <ClientTypesSection tenantId={tenantId} userId={session.user.id} />
+            <ContactVisibilitySection tenantId={tenantId} userId={session.user.id} />
+            {/* The widest form on the page; a half-width cell would wrap it
+                into an unreadable stack of tiny fields. */}
+            <div className="lg:col-span-2">
+              {isAdmin && (
+                <SectionCard title="Client billing defaults">
+                  <p className="mb-3 text-sm text-stone-500">
+                    How this workspace bills by default. Any client can override any of this on
+                    their profile — these are the settings a client gets when you haven't said
+                    otherwise.
+                  </p>
+                  <form action={saveBillingDefaults} className="flex flex-col gap-3">
+                    <div className="flex flex-wrap items-end gap-3">
+                      <label className={label}>
+                        Billing rhythm
+                        <select name="mode" defaultValue={billing.mode} className={input}>
+                          {BILLING_MODES.map((m) => (
+                            <option key={m.key} value={m.key}>
+                              {m.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className={label}>
+                        Standard fee ($ per file)
+                        <input
+                          name="defaultFee"
+                          inputMode="decimal"
+                          defaultValue={
+                            billing.defaultFeeCents == null
+                              ? ""
+                              : (billing.defaultFeeCents / 100).toFixed(2)
+                          }
+                          placeholder="350.00"
+                          className={`${input} w-32`}
+                        />
+                      </label>
+                      <label className={label}>
+                        Deposit %
+                        <input
+                          name="depositPercent"
+                          type="number"
+                          min={1}
+                          max={100}
+                          defaultValue={billing.depositPercent}
+                          className={`${input} w-24`}
+                        />
+                        <span className="text-xs font-normal text-stone-400">
+                          for “deposit up front” clients
+                        </span>
+                      </label>
+                    </div>
+                    <div className="flex flex-wrap items-end gap-3 rounded-lg bg-stone-50 p-3">
+                      <label className="flex items-center gap-2 pb-2 text-sm font-medium text-stone-700">
+                        <input
+                          type="checkbox"
+                          name="lateFeeEnabled"
+                          value="1"
+                          defaultChecked={billing.lateFee.enabled}
+                          className="accent-brand-600"
+                        />
+                        Charge late fees
+                      </label>
+                      <label className={label}>
+                        Type
+                        <select
+                          name="lateFeeType"
+                          defaultValue={billing.lateFee.type}
+                          className={input}
+                        >
+                          <option value="flat">Flat amount</option>
+                          <option value="percent">% of invoice</option>
+                        </select>
+                      </label>
+                      <label className={label}>
+                        Flat ($)
+                        <input
+                          name="lateFeeFlat"
+                          inputMode="decimal"
+                          defaultValue={(billing.lateFee.flatCents / 100).toFixed(2)}
+                          className={`${input} w-24`}
+                        />
+                      </label>
+                      <label className={label}>
+                        Percent
+                        <input
+                          name="lateFeePercent"
+                          type="number"
+                          step="0.1"
+                          min={0}
+                          max={100}
+                          defaultValue={billing.lateFee.percent}
+                          className={`${input} w-24`}
+                        />
+                      </label>
+                      <label className={label}>
+                        Grace (days)
+                        <input
+                          name="lateFeeGrace"
+                          type="number"
+                          min={0}
+                          max={365}
+                          defaultValue={billing.lateFee.graceDays}
+                          className={`${input} w-24`}
+                        />
+                      </label>
+                      <p className="w-full text-xs text-stone-400">
+                        Late fees are never added silently — an overdue invoice offers a one-click
+                        suggested line you approve.
+                      </p>
+                    </div>
+                    <SaveButton
+                      className={`${btnGhost} self-start`}
+                      label="Save billing defaults"
+                    />
+                  </form>
+                </SectionCard>
+              )}
+            </div>
+          </SettingsGroup>
         )}
 
-        <SectionCard title="Two-factor authentication">
-          <TwoFactorSettings enabled={Boolean(session.user.twoFactorEnabled)} />
-        </SectionCard>
+        {isAdmin && (
+          <SettingsGroup
+            title="Coverage and dates"
+            hint="Where you are licensed to work, and the days your deadlines skip."
+          >
+            <OperatingStatesSection tenantId={tenantId} userId={session.user.id} />
+            <HolidayScheduleSection tenantId={tenantId} userId={session.user.id} />
+          </SettingsGroup>
+        )}
 
-        <OperatingStatesSection tenantId={tenantId} userId={session.user.id} />
+        {isAdmin && (
+          <SettingsGroup
+            title="Notes and tracking"
+            hint="Two things that run quietly in the background. Both can be switched off without losing what they already gathered."
+          >
+            <HandbookSection tenantId={tenantId} userId={session.user.id} />
+            <TimeTrackingSection tenantId={tenantId} userId={session.user.id} />
+          </SettingsGroup>
+        )}
 
-        <HolidayScheduleSection tenantId={tenantId} userId={session.user.id} />
+        <SettingsGroup
+          title="Security and access"
+          hint="Sign-in, keys, and the record of who did what."
+        >
+          <SectionCard title="Two-factor authentication">
+            <TwoFactorSettings enabled={Boolean(session.user.twoFactorEnabled)} />
+          </SectionCard>
 
-        <DirectorySection tenantId={tenantId} userId={session.user.id} />
+          <ApiSection tenantId={tenantId} userId={session.user.id} />
+          <AuditSection tenantId={tenantId} userId={session.user.id} />
+        </SettingsGroup>
 
-        <SectionCard title="Side wording">
-          <p className="mb-3 text-sm text-stone-500">
-            Different markets say it differently — sell side, sale side, list side. Whatever you
-            type here is used everywhere sides appear: transactions, portals, and intake forms.
-          </p>
-          <form action={saveSideLabels} className="flex flex-wrap items-end gap-3">
-            <label className={label}>
-              Buy side is called
-              <input name="buyLabel" defaultValue={sideLabels.buy} className={input} />
-            </label>
-            <label className={label}>
-              Sell side is called
-              <input name="sellLabel" defaultValue={sideLabels.sell} className={input} />
-            </label>
-            <SaveButton className={btnGhost} label="Save wording" />
-          </form>
-        </SectionCard>
-
-        <ApiSection tenantId={tenantId} userId={session.user.id} />
-
-        <HandbookSection tenantId={tenantId} userId={session.user.id} />
-        <ClientTypesSection tenantId={tenantId} userId={session.user.id} />
-        <TimeTrackingSection tenantId={tenantId} userId={session.user.id} />
-        <ContactVisibilitySection tenantId={tenantId} userId={session.user.id} />
-
-        <AuditSection tenantId={tenantId} userId={session.user.id} />
-
-        <SectionCard title="System health">
-          <p className="text-sm text-stone-500">
-            Version 0.0.1 (Stage 01). Include this page in self-host support requests.
-          </p>
-        </SectionCard>
+        <SettingsGroup title="This install">
+          <DirectorySection tenantId={tenantId} userId={session.user.id} />
+          <SectionCard title="System health">
+            <p className="text-sm text-stone-500">
+              Version 0.0.1 (Stage 01). Include this page in self-host support requests.
+            </p>
+          </SectionCard>
+        </SettingsGroup>
       </div>
     </div>
   );
