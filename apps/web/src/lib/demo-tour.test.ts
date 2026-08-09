@@ -5,6 +5,7 @@ import {
   stopsInChapter,
   TOUR_CHAPTERS,
   TOUR_STOPS,
+  tourBoot,
 } from "./demo-tour";
 import { INTEGRATION_CATALOG } from "./integration-catalog";
 
@@ -115,5 +116,39 @@ describe("the demo tour script", () => {
     for (const s of TOUR_STOPS) {
       for (const a of s.anchors) expect(a, s.id).toMatch(/^[a-z0-9-]+$/);
     }
+  });
+});
+
+describe("tourBoot", () => {
+  const saved = { phase: "running", index: 7, muted: true };
+
+  it("offers the tour on a wide screen", () => {
+    expect(tourBoot({ saved: null, wantsWelcome: true, wide: true })).toEqual({ kind: "welcome" });
+  });
+
+  it("withholds it on a narrow one", () => {
+    expect(tourBoot({ saved: null, wantsWelcome: true, wide: false })).toEqual({ kind: "narrow" });
+  });
+
+  it("resumes a tour that survived a reload", () => {
+    expect(tourBoot({ saved, wantsWelcome: false, wide: true })).toEqual({
+      kind: "resume",
+      index: 7,
+      muted: true,
+    });
+  });
+
+  it("refuses to resume a desktop tour on a phone", () => {
+    // The narration would start talking over a layout it cannot point at.
+    expect(tourBoot({ saved, wantsWelcome: false, wide: false })).toEqual({ kind: "narrow" });
+  });
+
+  it("ignores a finished tour", () => {
+    const done = { phase: "done", index: 12, muted: false };
+    expect(tourBoot({ saved: done, wantsWelcome: false, wide: true })).toEqual({ kind: "done" });
+  });
+
+  it("stays out of the way of an ordinary visit", () => {
+    expect(tourBoot({ saved: null, wantsWelcome: false, wide: true })).toEqual({ kind: "done" });
   });
 });

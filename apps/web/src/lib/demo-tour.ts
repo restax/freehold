@@ -351,3 +351,36 @@ export function chapterStartIndex(chapterId: string): number {
 
 /** The route a stop needs, with the transaction token left for the engine. */
 export const FIRST_TRANSACTION = "@firstTransaction";
+
+/** Below this the tour is not offered: it walks a sidebar that has collapsed
+ *  to an icon rail and highlights table columns that aren't on screen. Matches
+ *  Tailwind's lg, where the dashboard chrome opens up. */
+export const MIN_TOUR_WIDTH = 1024;
+
+/** What the tour should do on mount, given what it finds. */
+export type BootDecision =
+  | { kind: "resume"; index: number; muted: boolean }
+  | { kind: "welcome" }
+  | { kind: "narrow" }
+  | { kind: "done" };
+
+/**
+ * The mount-time decision, pure so the width rules are testable.
+ *
+ * The narrow cases are the reason this is worth extracting: a phone must
+ * neither be offered the tour nor pick up one a desktop left mid-flight, and
+ * getting the second wrong means a narrated walkthrough starts talking over a
+ * layout it cannot point at.
+ */
+export function tourBoot(opts: {
+  saved: { phase: string; index: number; muted: boolean } | null;
+  wantsWelcome: boolean;
+  wide: boolean;
+}): BootDecision {
+  const { saved, wantsWelcome, wide } = opts;
+  if (saved && saved.phase !== "done") {
+    return wide ? { kind: "resume", index: saved.index, muted: saved.muted } : { kind: "narrow" };
+  }
+  if (wantsWelcome) return wide ? { kind: "welcome" } : { kind: "narrow" };
+  return { kind: "done" };
+}

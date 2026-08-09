@@ -3,6 +3,7 @@
 import {
   CaretLeft,
   CaretRight,
+  DeviceMobile,
   ListBullets,
   Pause,
   Play,
@@ -16,9 +17,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   chapterStartIndex,
   FIRST_TRANSACTION,
+  MIN_TOUR_WIDTH,
   TOUR_CHAPTERS,
   TOUR_STOPS,
   type TourStop,
+  tourBoot,
 } from "@/lib/demo-tour";
 
 /**
@@ -47,7 +50,9 @@ const WORDS_PER_SECOND = 2.6;
 /** How long to wait for a stop's target to appear before giving up on it. */
 const TARGET_TIMEOUT_MS = 4000;
 
-type Phase = "welcome" | "running" | "done";
+/** "narrow" is the phone case: the tour is not offered and never plays,
+ *  because it drives a dense desktop dashboard and talks while it does it. */
+type Phase = "welcome" | "running" | "done" | "narrow";
 
 interface Saved {
   phase: Phase;
@@ -140,6 +145,9 @@ export function DemoTour() {
   const searchParams = useSearchParams();
 
   const [phase, setPhase] = useState<Phase | null>(null);
+  // null until measured, so nothing is decided (or autoplayed) during the
+  // first render on a screen we haven't looked at yet.
+  const [wide, setWide] = useState<boolean | null>(null);
   const [index, setIndex] = useState(0);
   const [muted, setMuted] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -152,29 +160,59 @@ export function DemoTour() {
   const stop: TourStop | undefined = TOUR_STOPS[index];
   const chapter = TOUR_CHAPTERS.find((c) => c.id === stop?.chapter);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    const read = () => setWide(root.clientWidth >= MIN_TOUR_WIDTH);
+    read();
+    // Rotating a tablet into portrait mid-tour should stop it, not leave a
+    // narrated walkthrough talking over a layout it can't point at.
+    //
+    // A ResizeObserver rather than window's "resize" or matchMedia's
+    // "change": both of those are window-level events, and a browser that
+    // emulates the viewport rather than really resizing the window delivers
+    // neither. The observer fires off layout, so it sees the new width
+    // however it arrived.
+    const ro = new ResizeObserver(read);
+    ro.observe(root);
+    return () => ro.disconnect();
+  }, []);
+
   // Boot: either the demo hand-off (?welcome=demo) or a tour already running
   // that survived a reload. The parameter is cleaned immediately so a later
   // router canonicalisation cannot restart the tour underneath itself.
   useEffect(() => {
-    if (phase !== null) return;
+    if (phase !== null || wide === null) return;
     const saved = load();
-    if (saved && saved.phase !== "done") {
-      txnHref.current = saved.txnHref ?? null;
-      setIndex(saved.index);
-      setMuted(saved.muted);
-      setPhase(saved.phase);
+    const wantsWelcome = searchParams.get("welcome") === "demo";
+    const decision = tourBoot({ saved, wantsWelcome, wide });
+    if (wantsWelcome) router.replace(pathname, { scroll: false });
+
+    if (decision.kind === "resume") {
+      txnHref.current = saved?.txnHref ?? null;
+      setIndex(decision.index);
+      setMuted(decision.muted);
+      setPhase(saved?.phase ?? "running");
       return;
     }
-    if (searchParams.get("welcome") === "demo") {
-      setPhase("welcome");
-      router.replace(pathname, { scroll: false });
-      return;
+    // A tour saved on a desktop must not be left lying around for a phone.
+    if (decision.kind === "narrow") clear();
+    setPhase(decision.kind === "welcome" ? "welcome" : decision.kind);
+  }, [phase, wide, searchParams, router, pathname]);
+
+  // Stop a running tour the moment the window narrows past the threshold.
+  useEffect(() => {
+    if (wide === false && (phase === "running" || phase === "welcome")) {
+      audioRef.current?.pause();
+      clear();
+      setPhase("narrow");
     }
-    setPhase("done");
-  }, [phase, searchParams, router, pathname]);
+  }, [wide, phase]);
 
   useEffect(() => {
-    if (phase === null || phase === "done") return;
+    // "narrow" is a dead end rather than a position in the tour, so it is not
+    // persisted: a phone visit must not leave state that a later desktop
+    // session tries to resume from.
+    if (phase === null || phase === "done" || phase === "narrow") return;
     save({ phase, index, muted, txnHref: txnHref.current ?? undefined });
   }, [phase, index, muted]);
 
@@ -335,6 +373,56 @@ export function DemoTour() {
   if (phase === null || phase === "done") {
     // biome-ignore lint/a11y/useMediaCaption: narration is captioned on screen in the tour bar, which is the same text this element speaks
     return <audio ref={audioRef} className="hidden" aria-hidden preload="none" />;
+  }
+
+  if (phase === "narrow") {
+    // The demo itself stays browsable on a phone; only the tour is withheld,
+    // so the dismiss button below is the whole point of this dialog.
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={finish}
+          className="absolute inset-0 cursor-default bg-stone-900/50"
+        />
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="demo-narrow-title"
+          className="relative w-full max-w-sm rounded-xl bg-white p-6 text-left shadow-xl"
+        >
+          <div className="flex size-10 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+            <DeviceMobile size={20} weight="duotone" />
+          </div>
+          <h2 id="demo-narrow-title" className="mt-3 font-display text-lg font-bold text-stone-900">
+            Best on a wider screen
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-stone-600">
+            The guided tour walks through a full closing on a desktop layout, so it does not play
+            here. Open the demo on a laptop or desktop to take it.
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-stone-600">
+            You are welcome to look around in the meantime.
+          </p>
+          <div className="mt-5 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={finish}
+              className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-[var(--color-brand-fg)] transition hover:bg-brand-700"
+            >
+              Look around anyway
+            </button>
+            <a
+              href="/"
+              className="rounded-lg px-4 py-2 text-center text-sm font-medium text-stone-600 transition hover:bg-stone-100 hover:text-stone-900"
+            >
+              Back to the site
+            </a>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (phase === "welcome") {

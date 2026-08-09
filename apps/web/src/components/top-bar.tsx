@@ -66,7 +66,7 @@ export function TopBar({
   return (
     <div
       ref={rootRef}
-      className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 bg-[var(--topbar)] px-3 text-[var(--topbar-fg)] sm:gap-3 sm:px-4"
+      className="sticky top-[var(--demo-bar,0rem)] z-30 flex h-14 shrink-0 items-center gap-2 bg-[var(--topbar)] px-3 text-[var(--topbar-fg)] sm:gap-3 sm:px-4"
     >
       {!isGuest && (
         <div className="relative shrink-0">

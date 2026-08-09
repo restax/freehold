@@ -4,6 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CriticalMessagesWidget } from "@/components/critical-messages-widget";
 import { DashboardNav } from "@/components/dashboard-nav";
+import { DemoBar } from "@/components/demo-bar";
 import { DemoTour } from "@/components/demo-tour";
 import { DemoWatermark } from "@/components/demo-watermark";
 import { Wordmark } from "@/components/marketing";
@@ -169,8 +170,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div
       className="flex min-h-screen flex-col"
-      style={{ ...themeVars, ...priorityVars(appearance) } as React.CSSProperties}
+      style={
+        {
+          ...themeVars,
+          ...priorityVars(appearance),
+          // How far the sticky chrome sits from the top. The demo bar is the
+          // only thing that ever occupies it, and both the top bar and the
+          // sidebar read this rather than each being told about the bar.
+          "--demo-bar": isDemoTenant ? "2.25rem" : "0rem",
+        } as React.CSSProperties
+      }
     >
+      {isDemoTenant && <DemoBar />}
       {isDemoTenant && <DemoWatermark />}
       {/* In the layout rather than a page: the tour walks a dozen routes, and
           a page-mounted tour would unmount (and stop talking) on the first
@@ -194,7 +205,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         alerts={supportUnread + formsPending + directoryNudge + cloudNudge + dueMessages.length}
       />
       <div className="flex min-h-0 flex-1">
-        <aside className="sticky top-14 flex h-[calc(100vh-3.5rem)] w-14 shrink-0 flex-col overflow-y-auto overflow-x-hidden border-r border-stone-200 bg-white px-2 py-6 lg:w-56 lg:px-4">
+        <aside className="sticky top-[calc(3.5rem+var(--demo-bar,0rem))] flex h-[calc(100vh-3.5rem-var(--demo-bar,0rem))] w-14 shrink-0 flex-col overflow-y-auto overflow-x-hidden border-r border-stone-200 bg-white px-2 py-6 lg:w-56 lg:px-4">
           {/* The workspace owns the top of the rail now — its name, and its
             logo when one has been uploaded. Freehold's own mark moved to the
             foot of the menu: whose software this is matters less, every
