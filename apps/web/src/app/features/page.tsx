@@ -58,7 +58,7 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ],
       [
         "Time on files",
-        "Minutes accrue automatically while a file is open — no timers — so you can see what each file costs against its fee, and which clients take the most and least time per deal.",
+        "Minutes accrue automatically while a file is open, with no timers to start, so you can see what each file costs against its fee, and which clients take the most and least time per deal.",
         "today",
       ],
     ],
@@ -552,7 +552,7 @@ export default function FeaturesPage() {
               </p>
               <p className="mt-3 max-w-md text-sm leading-relaxed text-stone-600">
                 That's the difference between a flat fee that feels right and one you can prove is
-                profitable — and it's the number to know before your first hire, when someone else's
+                profitable. It's the number to know before your first hire, when someone else's
                 salary depends on your margins being real.
               </p>
               <p className="mt-4 text-xs leading-relaxed text-stone-500">

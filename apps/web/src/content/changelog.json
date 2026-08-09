@@ -1,6 +1,10 @@
 [
   {
     "date": "2026-08-08",
+    "text": "Tasks now open their own screen where you can write a document, log a call, upload a file, and record what happened, without leaving the task."
+  },
+  {
+    "date": "2026-08-08",
     "text": "Freehold now shows what each file actually costs: time is recorded automatically while a file is open, and Today charts time against fee, your most time-consuming clients, and your most efficient ones."
   },
   {

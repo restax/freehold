@@ -2,6 +2,7 @@ import { ClientType, DateAnchor, PartyRole, withTenant } from "@freehold/db";
 import { instantiatePlan } from "@freehold/workflows";
 import { DEFAULT_EMAIL_TEMPLATES, EMAIL_PHASES, phaseOf } from "@/lib/default-email-templates";
 import { EMAIL_TEMPLATE_LIBRARY } from "@/lib/email-template-library";
+import { seedTimeEntries } from "@/lib/seed-time";
 import { ensureGroup } from "@/lib/starter-library-seed";
 
 const PHASE_LABEL = new Map(EMAIL_PHASES.map((p) => [p.key, p.label]));
@@ -281,6 +282,9 @@ export async function seedTenantData(tenantId: string, userId: string) {
         purchasePrice: 385000,
         contractDate,
         closeDate,
+        // Without a fee the "time on files" panel can't show an effective
+        // hourly, which is the number the feature exists to surface.
+        expectedFeeCents: 45000,
         isSample: true,
         parties: {
           create: [
@@ -293,7 +297,7 @@ export async function seedTenantData(tenantId: string, userId: string) {
       },
     });
 
-    await tx.transaction.create({
+    const listing = await tx.transaction.create({
       data: {
         tenantId,
         clientId: client.id,
@@ -302,6 +306,7 @@ export async function seedTenantData(tenantId: string, userId: string) {
         state: "IL",
         status: "ACTIVE",
         side: "SELL_SIDE",
+        expectedFeeCents: 40000,
         isSample: true,
       },
     });
@@ -375,5 +380,12 @@ Warm regards,
         },
       });
     }
+
+    // A little recorded time, so "Time on files" on Today has something to
+    // show on day one instead of three empty panels.
+    await seedTimeEntries(tx, tenantId, [
+      { transactionId: txn.id, userIds: [userId], weight: "normal" },
+      { transactionId: listing.id, userIds: [userId], weight: "light" },
+    ]);
   });
 }

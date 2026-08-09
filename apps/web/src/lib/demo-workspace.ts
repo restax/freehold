@@ -11,6 +11,7 @@ import {
 } from "@/lib/demo-dataset/data";
 import { mlsSheetPdf, purchaseAgreementPdf } from "@/lib/demo-dataset/pdf";
 import { addDaysUtc, utcToday } from "@/lib/seed-core";
+import { seedTimeEntries } from "@/lib/seed-time";
 
 /**
  * The operator demo dataset, loaded into one real workspace so training
@@ -329,6 +330,9 @@ export async function seedDemoWorkspace(orgId: string, ownerUserId: string): Pro
 
   let contractVariant = 0;
   const closedForInvoicing: Array<{ spec: DemoTransactionSpec; txnId: string }> = [];
+  // Collected for the time-on-files seed at the end: a file's recorded hours
+  // should track how much work it has actually seen.
+  const timeTargets: Array<{ txnId: string; status: string }> = [];
 
   for (const spec of DEMO_TRANSACTIONS) {
     const contractDate =
@@ -419,6 +423,10 @@ export async function seedDemoWorkspace(orgId: string, ownerUserId: string): Pro
           closeDate,
           listDate: contractDate ? addDaysUtc(contractDate, -21) : addDaysUtc(anchor, -12),
           onMarketDate: contractDate ? addDaysUtc(contractDate, -21) : addDaysUtc(anchor, -12),
+          // What this file is expected to bill. The three closed files carry
+          // their real invoice amount; the rest get the house rate, so the
+          // "time on files" panel can show an effective hourly on every row.
+          expectedFeeCents: (spec.invoice?.amount ?? 495) * 100,
           isSample: true,
         },
         select: { id: true },
@@ -578,6 +586,7 @@ export async function seedDemoWorkspace(orgId: string, ownerUserId: string): Pro
     });
 
     if (spec.invoice) closedForInvoicing.push({ spec, txnId });
+    timeTargets.push({ txnId, status: spec.status });
   }
 
   // ---- Invoices on the closed files ------------------------------------
@@ -640,6 +649,27 @@ export async function seedDemoWorkspace(orgId: string, ownerUserId: string): Pro
         });
       }
     }
+  });
+
+  // ---- Time on files ----------------------------------------------------
+  // Spread across the whole team, so "time by client" sums real cross-user
+  // totals rather than one person's day.
+  await withTenant(orgId, async (tx) => {
+    const team = [ownerUserId, ...Object.values(mates)];
+    await seedTimeEntries(
+      tx,
+      orgId,
+      timeTargets.map(({ txnId, status }) => ({
+        transactionId: txnId,
+        userIds: team,
+        weight:
+          status === "CLOSED" || status === "UNDER_CONTRACT"
+            ? ("heavy" as const)
+            : status === "PENDING" || status === "ACTIVE"
+              ? ("normal" as const)
+              : ("light" as const),
+      })),
+    );
   });
 
   await prisma.organization.update({
@@ -716,6 +746,18 @@ export async function redateDemoWorkspace(orgId: string): Promise<number> {
           scope.transactionIds,
         );
       }
+
+      // Recorded time shifts with everything else. Without this, a redated
+      // demo keeps its hours parked three weeks further back each time and
+      // the Today panels, which only look back 7/30/90 days, go empty.
+      await shift(
+        tx,
+        `UPDATE "transaction_time_entry"
+           SET day = day + ($1 || ' days')::interval,
+               last_ping_at = last_ping_at + ($1 || ' days')::interval
+           WHERE tenant_id = $2 AND transaction_id = ANY($3::text[])`,
+        scope.transactionIds,
+      );
     });
 
     await withTenant(orgId, async (tx) => {

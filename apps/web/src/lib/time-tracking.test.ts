@@ -6,6 +6,8 @@ import {
   fmtMinutes,
   shouldCountPing,
   timeByClient,
+  timeByPerson,
+  timeTotals,
   timeVsFee,
   utcDay,
 } from "./time-tracking";
@@ -103,5 +105,47 @@ describe("timeByClient / efficientClients", () => {
     const rows = efficientClients(files);
     expect(rows.map((r) => r.clientId)).toEqual(["c2", "c1"]);
     expect(rows[1].avgMinutesPerFile).toBe(150);
+  });
+});
+
+describe("timeByPerson", () => {
+  it("sums minutes per person and counts distinct files", () => {
+    const rows = timeByPerson([
+      { userId: "u1", name: "Alex", minutes: 60, transactionId: "a" },
+      { userId: "u1", name: "Alex", minutes: 30, transactionId: "a" },
+      { userId: "u1", name: "Alex", minutes: 45, transactionId: "b" },
+      { userId: "u2", name: "Priya", minutes: 200, transactionId: "c" },
+    ]);
+    expect(rows.map((r) => r.userId)).toEqual(["u2", "u1"]);
+    const alex = rows.find((r) => r.userId === "u1");
+    expect(alex?.minutes).toBe(135);
+    // Two rows on file "a" is still one file.
+    expect(alex?.files).toBe(2);
+  });
+});
+
+describe("timeTotals", () => {
+  const files = [
+    file({ transactionId: "a", minutes: 180, expectedFeeCents: 45_000 }),
+    file({ transactionId: "b", minutes: 60, expectedFeeCents: 15_000 }),
+    // No fee: counts toward hours, excluded from the blended rate.
+    file({ transactionId: "c", minutes: 120, expectedFeeCents: null }),
+    file({ transactionId: "d", minutes: 0, expectedFeeCents: 50_000 }),
+  ];
+
+  it("totals tracked files only", () => {
+    const t = timeTotals(files);
+    expect(t.files).toBe(3);
+    expect(t.minutes).toBe(360);
+    expect(t.avgMinutesPerFile).toBe(120);
+  });
+
+  it("blends the hourly across fee-bearing files only", () => {
+    // ($450 + $150) over 4 hours = $150/hr; the unpriced file is excluded.
+    expect(timeTotals(files).hourlyCents).toBe(15_000);
+  });
+
+  it("returns a null rate when nothing is priced", () => {
+    expect(timeTotals([file({ minutes: 60 })]).hourlyCents).toBeNull();
   });
 });

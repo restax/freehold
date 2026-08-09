@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { prisma, withTenant } from "@freehold/db";
 import { auth } from "@/lib/auth";
+import { seedDemoWorkspace, wipeDemoWorkspace } from "@/lib/demo-workspace";
 import { FREE_STARTING_CREDITS } from "@/lib/plans";
-import { seedDefaultEmailTemplates, seedTenantData } from "@/lib/seed-core";
+import { seedDefaultEmailTemplates } from "@/lib/seed-core";
 
 /**
  * The public shared demo: one fictional brokerage every visitor explores
@@ -133,6 +134,14 @@ export async function resetDemoData() {
     data: { aiCredits: FREE_STARTING_CREDITS },
   });
 
-  await seedTenantData(org.id, visitor.id);
+  // The full brokerage, not the thin onboarding sample: eight clients,
+  // fifteen files, real generated PDFs on each, and three teammates. The
+  // public demo is the product's shop window, and a one-client workspace with
+  // no documents in the library undersold every surface that reads them.
+  await wipeDemoWorkspace(org.id);
+  // Seeded against the visitor, not the owner: tasks the dataset assigns to
+  // "owner" land on whoever is signed in, so a visitor's "Assigned to you"
+  // has real work in it instead of being empty.
+  await seedDemoWorkspace(org.id, visitor.id);
   await seedDefaultEmailTemplates(org.id);
 }

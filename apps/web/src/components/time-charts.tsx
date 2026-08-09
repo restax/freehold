@@ -16,8 +16,8 @@ export function TimeVsFeeChart({ files }: { files: FileTimeRow[] }) {
   if (files.length === 0) {
     return (
       <p className="text-sm text-stone-400">
-        No time recorded yet. Minutes accrue automatically while a transaction page is open — open a
-        file and this fills in on its own.
+        No time recorded yet. Minutes accrue automatically while a transaction page is open, so
+        opening a file fills this in on its own.
       </p>
     );
   }

@@ -1,4 +1,4 @@
-import { ChartBar } from "@phosphor-icons/react/dist/ssr";
+import { ChartBar, Clock } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { SectionCard } from "@/components/section-card";
 import { requireTenant } from "@/lib/tenant";
@@ -23,6 +23,20 @@ export default async function ReportsPage() {
       </div>
 
       <SectionCard title="Available reports" bodyClassName="p-0">
+        <Link
+          href="/dashboard/reports/time"
+          className="flex items-center gap-3 border-b border-stone-100 p-4 transition-colors hover:bg-stone-50"
+        >
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
+            <Clock size={18} weight="fill" aria-hidden />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-medium">Time on files</span>
+            <span className="block text-xs text-stone-500">
+              Hours per file against the fee, per client, and per person, with an effective hourly
+            </span>
+          </span>
+        </Link>
         <Link
           href="/dashboard/reports/transactions"
           className="flex items-center gap-3 p-4 transition-colors hover:bg-stone-50"

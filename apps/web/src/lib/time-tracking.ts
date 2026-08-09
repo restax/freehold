@@ -107,3 +107,66 @@ export function efficientClients(files: FileTime[], limit = 5): ClientTime[] {
     .sort((a, b) => a.avgMinutesPerFile - b.avgMinutesPerFile)
     .slice(0, limit);
 }
+
+export interface PersonTime {
+  userId: string;
+  name: string;
+  minutes: number;
+  files: number;
+}
+
+/** Who spent the hours. Used only on the report, never on the dashboard: the
+ *  feature is sold as file-cost analytics, and a per-person column on the
+ *  Today page would quietly turn it into a scoreboard. On a report an owner
+ *  opened deliberately, capacity is a fair question. */
+export function timeByPerson(
+  rows: Array<{ userId: string; name: string; minutes: number; transactionId: string }>,
+  limit = 10,
+): PersonTime[] {
+  const byUser = new Map<string, PersonTime & { seen: Set<string> }>();
+  for (const r of rows) {
+    if (r.minutes <= 0) continue;
+    const cur = byUser.get(r.userId) ?? {
+      userId: r.userId,
+      name: r.name,
+      minutes: 0,
+      files: 0,
+      seen: new Set<string>(),
+    };
+    cur.minutes += r.minutes;
+    cur.seen.add(r.transactionId);
+    byUser.set(r.userId, cur);
+  }
+  return [...byUser.values()]
+    .map(({ seen, ...p }) => ({ ...p, files: seen.size }))
+    .sort((a, b) => b.minutes - a.minutes)
+    .slice(0, limit);
+}
+
+export interface TimeTotals {
+  minutes: number;
+  files: number;
+  feeCents: number;
+  /** Blended rate across every file that has both time and a fee. */
+  hourlyCents: number | null;
+  avgMinutesPerFile: number;
+}
+
+/** The headline row on the report: what the whole window came to. */
+export function timeTotals(files: FileTime[]): TimeTotals {
+  const tracked = files.filter((f) => f.minutes > 0);
+  const minutes = tracked.reduce((s, f) => s + f.minutes, 0);
+  // Only files carrying a fee count toward the blended rate; including a
+  // no-fee file would drag it toward zero and read as a pricing problem
+  // rather than a missing number.
+  const billable = tracked.filter((f) => (f.expectedFeeCents ?? 0) > 0);
+  const feeCents = billable.reduce((s, f) => s + (f.expectedFeeCents ?? 0), 0);
+  const billableMinutes = billable.reduce((s, f) => s + f.minutes, 0);
+  return {
+    minutes,
+    files: tracked.length,
+    feeCents,
+    hourlyCents: effectiveHourlyCents(feeCents, billableMinutes),
+    avgMinutesPerFile: tracked.length === 0 ? 0 : Math.round(minutes / tracked.length),
+  };
+}

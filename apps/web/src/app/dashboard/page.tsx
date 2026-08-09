@@ -8,6 +8,7 @@ import { RangeSwitch, TopClientsChart, VolumeChart } from "@/components/dashboar
 import { EmptyState } from "@/components/empty-state";
 import { HandbookGlance } from "@/components/handbook-glance";
 import { HubNews } from "@/components/hub-news";
+import { PanelJump } from "@/components/panel-jump";
 import { SectionCard } from "@/components/section-card";
 import { SideBadge } from "@/components/side-badge";
 import { EfficientClientsChart, TimeByClientChart, TimeVsFeeChart } from "@/components/time-charts";
@@ -1159,7 +1160,10 @@ export default async function DashboardPage({
             <>
               <SectionCard
                 title="Time on files"
-                tooltip="Minutes recorded while a file was open, against its expected fee. The $/hr is fee ÷ time — the number that says whether a file is paying for itself."
+                tooltip="Minutes recorded while a file was open, against its expected fee. The $/hr is fee ÷ time, the number that says whether a file is paying for itself."
+                action={
+                  <PanelJump href="/dashboard/reports/time" label="Open the full time report" />
+                }
               >
                 <TimeVsFeeChart files={timeVsFee(fileTimes)} />
               </SectionCard>
