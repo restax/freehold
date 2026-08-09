@@ -1928,6 +1928,13 @@ model Transaction {
   expectedFeeCents       Int?                    @map("expected_fee_cents")
   notes                  String?
   customFields           Json?                   @map("custom_fields")
+  /// The loan, on a private lending file: amount, rate, term, points, the
+  /// appraised value, and who is actually borrowing (an entity, usually, with
+  /// a person guaranteeing it). One JSON column rather than nine sparse
+  /// ones — only lending workspaces fill any of it, and the shape is still
+  /// settling. Parsed by parseLendingTerms in lib/lending.ts, which treats
+  /// the column as hostile. See TransactionSide.BORROWER.
+  lendingTerms           Json?                   @map("lending_terms")
   /// Parties pulled from the contract (buyer, seller, attorneys, title, agents)
   /// as a permanent, locked panel — an ordered array of { role, value }. Kept
   /// out of customFields so they can't be casually deleted, and distinct from

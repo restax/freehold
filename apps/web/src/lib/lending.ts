@@ -253,3 +253,173 @@ export function enforcedSide(opts: {
   if (privateLendingEnabled && clientType === "PRIVATE_LENDER") return LENDING_SIDE;
   return requested === LENDING_SIDE ? fallback : requested;
 }
+
+// --- The loan itself ---------------------------------------------------
+
+/** Why the money is being lent. Drives nothing yet; it is the first thing a
+ *  lender says about a file, so the screen leads with it. */
+export type LoanPurpose = "PURCHASE" | "REFINANCE" | "BRIDGE" | "CONSTRUCTION";
+
+export const LOAN_PURPOSE_LABEL: Record<LoanPurpose, string> = {
+  PURCHASE: "Purchase",
+  REFINANCE: "Refinance",
+  BRIDGE: "Bridge",
+  CONSTRUCTION: "Construction",
+};
+
+const PURPOSES: LoanPurpose[] = ["PURCHASE", "REFINANCE", "BRIDGE", "CONSTRUCTION"];
+
+/**
+ * The loan on a lending file.
+ *
+ * Every field is optional. A file is opened at the term-sheet stage and
+ * filled in as the package comes together, so a half-empty loan is the normal
+ * state for most of its life, not an error to guard against.
+ */
+export interface LendingTerms {
+  purpose: LoanPurpose | null;
+  loanAmountCents: number | null;
+  /** Annual rate as a percentage: 11.5 means 11.5%. */
+  ratePct: number | null;
+  termMonths: number | null;
+  /** Origination points, as a percentage of the loan. */
+  points: number | null;
+  /** What the appraisal came back at, which is what LTV is measured against. */
+  appraisedValueCents: number | null;
+  /** The borrowing entity. Hence the EIN letter and the articles. */
+  borrower: string;
+  /** The person standing behind the entity. */
+  guarantor: string;
+  /** Where the entity was formed, which decides what its good-standing
+   *  certificate is even called. */
+  entityState: string;
+}
+
+export const EMPTY_LENDING_TERMS: LendingTerms = {
+  purpose: null,
+  loanAmountCents: null,
+  ratePct: null,
+  termMonths: null,
+  points: null,
+  appraisedValueCents: null,
+  borrower: "",
+  guarantor: "",
+  entityState: "",
+};
+
+/** A non-negative finite number, or null. Rejects NaN, Infinity and strings
+ *  that only look numeric, so a hand-edited column can't produce an LTV of
+ *  Infinity on the screen. */
+function num(v: unknown, max: number): number | null {
+  if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > max) return null;
+  return v;
+}
+
+function text(v: unknown): string {
+  return typeof v === "string" ? v.trim().slice(0, 200) : "";
+}
+
+/**
+ * Read the lendingTerms column, treating it as hostile.
+ *
+ * Same posture as the address-search parser: remote or hand-edited JSON turns
+ * into empty terms, never a 500 and never a nonsense figure on screen.
+ */
+export function parseLendingTerms(raw: unknown): LendingTerms {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ...EMPTY_LENDING_TERMS };
+  const r = raw as Record<string, unknown>;
+  const purpose = PURPOSES.includes(r.purpose as LoanPurpose) ? (r.purpose as LoanPurpose) : null;
+  return {
+    purpose,
+    // A trillion-dollar cap and a 100% rate cap are not validation so much as
+    // a backstop against a stray keystroke rendering an absurd figure.
+    loanAmountCents: num(r.loanAmountCents, 1e14),
+    ratePct: num(r.ratePct, 100),
+    termMonths: num(r.termMonths, 600),
+    points: num(r.points, 100),
+    appraisedValueCents: num(r.appraisedValueCents, 1e14),
+    borrower: text(r.borrower),
+    guarantor: text(r.guarantor),
+    entityState: text(r.entityState).toUpperCase().slice(0, 2),
+  };
+}
+
+/** True once there is anything worth showing in the loan panel. */
+export function hasLoanTerms(t: LendingTerms): boolean {
+  return (
+    t.purpose != null ||
+    t.loanAmountCents != null ||
+    t.ratePct != null ||
+    t.termMonths != null ||
+    t.points != null ||
+    t.appraisedValueCents != null ||
+    t.borrower !== "" ||
+    t.guarantor !== "" ||
+    t.entityState !== ""
+  );
+}
+
+export interface LoanMetrics {
+  /** Loan against what the appraisal says the property is worth. The number a
+   *  private lender is actually underwriting to. */
+  ltvPct: number | null;
+  /** Loan against what the borrower is paying for it. Diverges from LTV when
+   *  the buy is under market, which is the whole thesis of most of these
+   *  deals, so both are worth showing. */
+  ltcPct: number | null;
+  /** Interest-only, which is what these loans almost always are. */
+  monthlyInterestCents: number | null;
+  originationFeeCents: number | null;
+  /** Interest over the full term if it runs to maturity, plus origination. */
+  totalCostCents: number | null;
+}
+
+/**
+ * The figures a lender reads off a file, derived rather than typed.
+ *
+ * Nothing is guessed: a metric whose inputs are missing comes back null and
+ * the panel shows a dash. Dividing by a zero appraisal returns null rather
+ * than Infinity.
+ */
+export function loanMetrics(
+  t: LendingTerms,
+  purchasePriceCents: number | null | undefined,
+): LoanMetrics {
+  const amount = t.loanAmountCents;
+  const pct = (part: number | null, whole: number | null | undefined) =>
+    part != null && whole != null && whole > 0 ? Math.round((part / whole) * 1000) / 10 : null;
+
+  const monthlyInterestCents =
+    amount != null && t.ratePct != null ? Math.round((amount * (t.ratePct / 100)) / 12) : null;
+  const originationFeeCents =
+    amount != null && t.points != null ? Math.round(amount * (t.points / 100)) : null;
+
+  return {
+    ltvPct: pct(amount, t.appraisedValueCents),
+    ltcPct: pct(amount, purchasePriceCents),
+    monthlyInterestCents,
+    originationFeeCents,
+    totalCostCents:
+      monthlyInterestCents != null && t.termMonths != null
+        ? monthlyInterestCents * t.termMonths + (originationFeeCents ?? 0)
+        : null,
+  };
+}
+
+/**
+ * When the loan comes due, from the closing date and the term.
+ *
+ * Clamped to the last day of the target month, so a twelve-month loan closing
+ * on the 31st matures on the 28th rather than silently rolling into March.
+ */
+export function maturityDate(
+  closeDate: Date | null | undefined,
+  termMonths: number | null,
+): Date | null {
+  if (!closeDate || termMonths == null || termMonths <= 0) return null;
+  const y = closeDate.getUTCFullYear();
+  const m = closeDate.getUTCMonth() + termMonths;
+  const day = closeDate.getUTCDate();
+  const lastOfTarget = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m, Math.min(day, lastOfTarget)));
+}

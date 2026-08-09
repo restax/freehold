@@ -29,7 +29,7 @@ import {
   KEY_DATE_LABELS,
   type KeyDateField,
 } from "@/lib/governed-dates";
-import { enforcedSide } from "@/lib/lending";
+import { enforcedSide, parseLendingTerms } from "@/lib/lending";
 import { gapForPending, gapMessage, licenseEnforcement } from "@/lib/licensing";
 import { parseFeeCents } from "@/lib/pay";
 import { transactionLimit } from "@/lib/plans";
@@ -907,4 +907,60 @@ export async function withdrawDateChange(formData: FormData) {
   });
   revalidatePath(`/dashboard/transactions/${id}`);
   revalidatePath("/dashboard");
+}
+
+/**
+ * Save the loan on a private lending file.
+ *
+ * The whole loan in one form rather than a field at a time: these numbers are
+ * read off a term sheet together, and an LTV that updates halfway through
+ * typing is worse than one that updates on save.
+ *
+ * Money arrives as dollars and is stored as cents, same as every other figure
+ * on a transaction. A blank field clears that value rather than holding the
+ * old one, so a term sheet that dropped the points genuinely drops them.
+ */
+export async function saveLendingTerms(formData: FormData) {
+  const { tenantId, session } = await requireTenant();
+  const id = str(formData, "id");
+  if (!id) return;
+
+  const cents = (name: string) => parseFeeCents(str(formData, name));
+  const decimal = (name: string) => {
+    const raw = str(formData, name).trim();
+    if (!raw) return null;
+    const n = Number.parseFloat(raw);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+
+  // Round-tripped through the parser so what lands in the column is exactly
+  // what the reader will accept. Anything out of range is dropped here rather
+  // than stored and silently ignored on the way out.
+  const terms = parseLendingTerms({
+    purpose: optStr(formData, "purpose"),
+    loanAmountCents: cents("loanAmount"),
+    ratePct: decimal("ratePct"),
+    termMonths: decimal("termMonths"),
+    points: decimal("points"),
+    appraisedValueCents: cents("appraisedValue"),
+    borrower: optStr(formData, "borrower"),
+    guarantor: optStr(formData, "guarantor"),
+    entityState: optStr(formData, "entityState"),
+  });
+
+  await withTenant(tenantId, (tx) =>
+    tx.transaction.update({
+      where: { id },
+      // biome-ignore lint/suspicious/noExplicitAny: Prisma's JSON input type doesn't accept a plain interface
+      data: { lendingTerms: terms as any },
+    }),
+  );
+  logActivity({
+    tenantId,
+    transactionId: id,
+    actor: session.user,
+    action: "transaction.updated",
+    summary: "Updated the loan terms",
+  });
+  revalidatePath(`/dashboard/transactions/${id}`);
 }

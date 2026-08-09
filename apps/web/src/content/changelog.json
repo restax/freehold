@@ -1,6 +1,10 @@
 [
   {
     "date": "2026-08-09",
+    "text": "Settings is now grouped into labelled sections, switching something off no longer shuffles other sections around the page, and the Handbook explains what each of its switches turns off."
+  },
+  {
+    "date": "2026-08-09",
     "text": "Workspaces that take private lending work now get a loan file with no buy or sell side, a one-click thirteen-document underwriting package, and a note of which invoices still come out of the closing."
   },
   {
@@ -18,9 +22,5 @@
   {
     "date": "2026-08-08",
     "text": "Freehold now shows what each file actually costs: time is recorded automatically while a file is open, and Today charts time against fee, your most time-consuming clients, and your most efficient ones."
-  },
-  {
-    "date": "2026-07-30",
-    "text": "Scheduled emails sent from your own inbox now show up on the file right away, and replies to them thread back automatically once they go out."
   }
 ]

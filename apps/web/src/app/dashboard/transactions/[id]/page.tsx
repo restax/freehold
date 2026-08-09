@@ -2,6 +2,7 @@ import { PartyRole, prisma, TransactionSide, withTenant } from "@freehold/db";
 import {
   Archive,
   ArrowSquareOut,
+  Bank,
   CalendarBlank,
   CalendarCheck,
   ChartPieSlice,
@@ -61,9 +62,11 @@ import { InvoiceStatusTracker } from "@/components/invoice-status-tracker";
 import { KeyDateRow } from "@/components/key-date-row";
 import { LinkPartyForm } from "@/components/link-party-form";
 import { ListingDetailRow } from "@/components/listing-detail-row";
+import { BorrowerCard, LoanCard } from "@/components/loan-card";
 import { PanelJump } from "@/components/panel-jump";
 import { ParticipantEditor } from "@/components/participant-editor";
 import { PendingButton } from "@/components/pending-button";
+import { SaveButton } from "@/components/save-button";
 import { ScrollToHash } from "@/components/scroll-to-hash";
 import { SectionCard } from "@/components/section-card";
 import { SideBadge } from "@/components/side-badge";
@@ -157,6 +160,7 @@ import {
   proposeDateChange,
   removeCustomField,
   removeTransactionParty,
+  saveLendingTerms,
   setCustomField,
   updateKeyDate,
   updateListingDetail,
@@ -207,10 +211,14 @@ import { poolForTransaction } from "@/lib/handbook";
 import { invoiceLabel, TERM_PRESETS } from "@/lib/invoicing";
 import {
   LENDING_SIDE,
+  LOAN_PURPOSE_LABEL,
+  loanMetrics,
+  maturityDate,
   PAYMENT_CHOICES,
   PAYMENT_LABEL,
   type PaymentStatus,
   packageWording,
+  parseLendingTerms,
   paymentRollup,
 } from "@/lib/lending";
 import { gapForTransaction, gapMessage } from "@/lib/licensing";
@@ -846,6 +854,28 @@ export default async function TransactionDetailPage({
     }) === "lending";
   const layout = lendingLayout ? "lending" : "standard";
   const wording = packageWording(layout === "lending" ? LENDING_SIDE : txn.side);
+  // The loan. Parsed on every read rather than trusted, so a hand-edited
+  // column can't put an Infinity LTV on the screen.
+  const loan = parseLendingTerms(txn.lendingTerms);
+  // purchasePrice is stored in whole dollars, unlike every *Cents column on
+  // the file. Converting here rather than passing it straight through, which
+  // made LTC read 8000%.
+  const purchasePriceCents = txn.purchasePrice == null ? null : txn.purchasePrice * 100;
+  const loanStats = loanMetrics(loan, purchasePriceCents);
+  const loanMatures = maturityDate(txn.closeDate, loan.termMonths);
+  // Assembling the package *is* the job on a lending file, so Underwriting
+  // moves up into the main tab row instead of sitting in the second row among
+  // the occasional ones. On a sale it stays where it has always been.
+  const primaryTabs = lendingLayout
+    ? ([
+        ...TXN_TABS_PRIMARY.slice(0, 1),
+        ["compliance", "Underwriting"],
+        ...TXN_TABS_PRIMARY.slice(1),
+      ] as ReadonlyArray<readonly [TxnTab, string]>)
+    : (TXN_TABS_PRIMARY as ReadonlyArray<readonly [TxnTab, string]>);
+  const secondaryTabs = (
+    lendingLayout ? TXN_TABS_SECONDARY.filter(([k]) => k !== "compliance") : TXN_TABS_SECONDARY
+  ) as ReadonlyArray<readonly [TxnTab, string]>;
   // What the file still owes at closing. Only lending checklists mark
   // invoices, so on a sale file this is empty and nothing renders.
   const payments = paymentRollup(
@@ -968,9 +998,23 @@ export default async function TransactionDetailPage({
           </h1>
           <p className="text-sm text-stone-500">
             {[txn.city, txn.state, txn.zip].filter(Boolean).join(", ") || "No location set"} ·{" "}
-            {sideLabel(txn.side, labels)} · contract {fmtMoney(txn.purchasePrice)}
-            {/* Nothing on a loan file was ever listed. */}
-            {!lendingLayout && <> · list {fmtMoney(txn.listPrice)}</>}
+            {lendingLayout ? (
+              // A lender opens a file to see the money. The contract price is
+              // still on the loan card as what LTC is measured against, but it
+              // is not the headline here the way it is on a sale.
+              <>
+                {loan.purpose ? LOAN_PURPOSE_LABEL[loan.purpose] : "Loan"}
+                {loan.loanAmountCents != null && <> · {fmtCents(loan.loanAmountCents)}</>}
+                {loan.ratePct != null && <> at {loan.ratePct}%</>}
+                {loan.termMonths != null && <> for {loan.termMonths} months</>}
+                {loan.borrower && <> · {loan.borrower}</>}
+              </>
+            ) : (
+              <>
+                {sideLabel(txn.side, labels)} · contract {fmtMoney(txn.purchasePrice)} · list{" "}
+                {fmtMoney(txn.listPrice)}
+              </>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1087,6 +1131,24 @@ export default async function TransactionDetailPage({
           <HandbookRecap notes={handbookPool} grades={handbookGrades} />
           {/* Can this file close? Answered on every tab, not just inside the
               Compliance one. */}
+          {/* On a lending file the loan comes first: it is what the rest of
+              the screen is about, and the package below is judged against it. */}
+          {lendingLayout && (
+            <>
+              <LoanCard
+                terms={loan}
+                metrics={loanStats}
+                maturity={loanMatures}
+                purchasePriceCents={purchasePriceCents}
+                editHref={`/dashboard/transactions/${txn.id}?tab=dates#loan`}
+              />
+              <BorrowerCard
+                terms={loan}
+                editHref={`/dashboard/transactions/${txn.id}?tab=dates#loan`}
+                missingEntity={loan.borrower === ""}
+              />
+            </>
+          )}
           <ComplianceProgressCard
             transactionId={txn.id}
             state={complianceState}
@@ -1122,10 +1184,22 @@ export default async function TransactionDetailPage({
                 // sold. A lending file is financing a purchase already under
                 // contract, so those rows would never be filled in and the
                 // dates that do matter get harder to find among them.
+                //
+                // Mortgage commitment goes too, for a different reason: it is
+                // the date the *buyer's* lender commits, and on this file our
+                // own client is the lender. Inspection and earnest money stay,
+                // because the underlying purchase still has both.
                 .filter(
                   ([field]) =>
                     !lendingLayout ||
-                    !(["listDate", "onMarketDate", "expireDate"] as string[]).includes(field),
+                    !(
+                      [
+                        "listDate",
+                        "onMarketDate",
+                        "expireDate",
+                        "mortgageCommitmentDate",
+                      ] as string[]
+                    ).includes(field),
                 )
                 .map(([field, d]) => (
                   <KeyDateRow
@@ -1176,57 +1250,51 @@ export default async function TransactionDetailPage({
               )}
             </ul>
           </SectionCard>
-          <SectionCard
-            title={lendingLayout ? "Purchase details" : "Listing details"}
-            icon={<Tag size={15} weight="fill" aria-hidden />}
-            action={
-              <PanelJump
-                href={`/dashboard/transactions/${txn.id}?tab=dates`}
-                label="Open the Details tab"
-              />
-            }
-            bodyClassName="p-3"
-          >
-            <dl className="flex flex-col gap-1.5 text-sm">
-              {/* An MLS id and a list price describe a property being
-                  marketed. A lending file is financing a purchase someone
-                  else already agreed, so both stay permanently blank there
-                  and only the contract price means anything. */}
-              {!lendingLayout && (
-                <>
-                  <ListingDetailRow
-                    action={updateListingDetail}
-                    transactionId={txn.id}
-                    field="mlsId"
-                    label="MLS ID"
-                    value={txn.mlsId ?? ""}
-                    display={txn.mlsId ?? "—"}
-                    placeholder="MLS-102938"
-                  />
-                  <ListingDetailRow
-                    action={updateListingDetail}
-                    transactionId={txn.id}
-                    field="listPrice"
-                    label="List price"
-                    value={txn.listPrice != null ? String(txn.listPrice) : ""}
-                    display={fmtMoney(txn.listPrice)}
-                    inputMode="numeric"
-                    placeholder="450000"
-                  />
-                </>
-              )}
-              <ListingDetailRow
-                action={updateListingDetail}
-                transactionId={txn.id}
-                field="purchasePrice"
-                label="Contract price"
-                value={txn.purchasePrice != null ? String(txn.purchasePrice) : ""}
-                display={fmtMoney(txn.purchasePrice)}
-                inputMode="numeric"
-                placeholder="450000"
-              />
-            </dl>
-          </SectionCard>
+          {!lendingLayout && (
+            <SectionCard
+              title="Listing details"
+              icon={<Tag size={15} weight="fill" aria-hidden />}
+              action={
+                <PanelJump
+                  href={`/dashboard/transactions/${txn.id}?tab=dates`}
+                  label="Open the Details tab"
+                />
+              }
+              bodyClassName="p-3"
+            >
+              <dl className="flex flex-col gap-1.5 text-sm">
+                <ListingDetailRow
+                  action={updateListingDetail}
+                  transactionId={txn.id}
+                  field="mlsId"
+                  label="MLS ID"
+                  value={txn.mlsId ?? ""}
+                  display={txn.mlsId ?? "—"}
+                  placeholder="MLS-102938"
+                />
+                <ListingDetailRow
+                  action={updateListingDetail}
+                  transactionId={txn.id}
+                  field="listPrice"
+                  label="List price"
+                  value={txn.listPrice != null ? String(txn.listPrice) : ""}
+                  display={fmtMoney(txn.listPrice)}
+                  inputMode="numeric"
+                  placeholder="450000"
+                />
+                <ListingDetailRow
+                  action={updateListingDetail}
+                  transactionId={txn.id}
+                  field="purchasePrice"
+                  label="Contract price"
+                  value={txn.purchasePrice != null ? String(txn.purchasePrice) : ""}
+                  display={fmtMoney(txn.purchasePrice)}
+                  inputMode="numeric"
+                  placeholder="450000"
+                />
+              </dl>
+            </SectionCard>
+          )}
           <SectionCard
             title="Participants"
             icon={<UsersThree size={15} weight="fill" aria-hidden />}
@@ -1320,7 +1388,7 @@ export default async function TransactionDetailPage({
               has to be answerable at a glance from across the row. */}
           <nav className="flex flex-col gap-1 border-b border-stone-200 pb-1.5">
             <div className="flex flex-wrap gap-1">
-              {TXN_TABS_PRIMARY.map(([key, labelText]) => (
+              {primaryTabs.map(([key, labelText]) => (
                 <Link
                   key={key}
                   href={`/dashboard/transactions/${txn.id}?tab=${key}`}
@@ -1331,13 +1399,14 @@ export default async function TransactionDetailPage({
                       : "border-transparent text-stone-600 hover:bg-stone-100 hover:text-stone-900"
                   }`}
                 >
-                  {labelText}
+                  {key === "compliance" ? wording.tab : labelText}
                 </Link>
               ))}
             </div>
             <div className="flex flex-wrap gap-1">
-              {TXN_TABS_SECONDARY.filter(([key]) => !(!billing.view && key === "billing")).map(
-                ([key, labelText]) => (
+              {secondaryTabs
+                .filter(([key]) => !(!billing.view && key === "billing"))
+                .map(([key, labelText]) => (
                   <Link
                     key={key}
                     href={`/dashboard/transactions/${txn.id}?tab=${key}`}
@@ -1350,8 +1419,7 @@ export default async function TransactionDetailPage({
                   >
                     {key === "compliance" ? wording.tab : labelText}
                   </Link>
-                ),
-              )}
+                ))}
             </div>
           </nav>
           {tab === "tasks" && (
@@ -3448,6 +3516,141 @@ export default async function TransactionDetailPage({
           )}
           {tab === "dates" && (
             <>
+              {/* The loan leads the Details tab on a lending file: it is the
+                  thing being coordinated, and every derived figure on the rail
+                  is typed in here. Anchored so the rail's edit links land on
+                  it rather than at the top of the tab. */}
+              {lendingLayout && (
+                <SectionCard title="Loan terms" icon={<Bank size={15} weight="fill" aria-hidden />}>
+                  {/* Keyed on the saved values: the fields are uncontrolled,
+                      so without a remount the selects and inputs keep the
+                      defaults they mounted with and a saved Purpose reads
+                      back as "Not set". Same fix as the action-plan grid. */}
+                  <form
+                    key={JSON.stringify(loan)}
+                    id="loan"
+                    action={saveLendingTerms}
+                    className="flex flex-col gap-4 scroll-mt-20"
+                  >
+                    <input type="hidden" name="id" value={txn.id} />
+                    <div className="flex flex-wrap items-end gap-3">
+                      <label className={label}>
+                        Purpose
+                        <select name="purpose" defaultValue={loan.purpose ?? ""} className={input}>
+                          <option value="">Not set</option>
+                          {(
+                            Object.keys(LOAN_PURPOSE_LABEL) as Array<
+                              keyof typeof LOAN_PURPOSE_LABEL
+                            >
+                          ).map((k) => (
+                            <option key={k} value={k}>
+                              {LOAN_PURPOSE_LABEL[k]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className={label}>
+                        Loan amount ($)
+                        <input
+                          name="loanAmount"
+                          inputMode="decimal"
+                          defaultValue={
+                            loan.loanAmountCents == null
+                              ? ""
+                              : (loan.loanAmountCents / 100).toFixed(2)
+                          }
+                          placeholder="500000.00"
+                          className={`${input} w-36`}
+                        />
+                      </label>
+                      <label className={label}>
+                        Rate (%)
+                        <input
+                          name="ratePct"
+                          inputMode="decimal"
+                          defaultValue={loan.ratePct ?? ""}
+                          placeholder="11.5"
+                          className={`${input} w-24`}
+                        />
+                      </label>
+                      <label className={label}>
+                        Term (months)
+                        <input
+                          name="termMonths"
+                          inputMode="numeric"
+                          defaultValue={loan.termMonths ?? ""}
+                          placeholder="12"
+                          className={`${input} w-28`}
+                        />
+                      </label>
+                      <label className={label}>
+                        Points
+                        <input
+                          name="points"
+                          inputMode="decimal"
+                          defaultValue={loan.points ?? ""}
+                          placeholder="2"
+                          className={`${input} w-20`}
+                        />
+                      </label>
+                      <label className={label}>
+                        Appraised value ($)
+                        <input
+                          name="appraisedValue"
+                          inputMode="decimal"
+                          defaultValue={
+                            loan.appraisedValueCents == null
+                              ? ""
+                              : (loan.appraisedValueCents / 100).toFixed(2)
+                          }
+                          placeholder="800000.00"
+                          className={`${input} w-36`}
+                        />
+                        <span className="text-xs font-normal text-stone-400">
+                          what LTV is measured against
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="flex flex-wrap items-end gap-3 rounded-lg bg-stone-50 p-3">
+                      <label className={label}>
+                        Borrowing entity
+                        <input
+                          name="borrower"
+                          defaultValue={loan.borrower}
+                          placeholder="Ironworks Holdings LLC"
+                          className={`${input} w-64`}
+                        />
+                      </label>
+                      <label className={label}>
+                        Guarantor
+                        <input
+                          name="guarantor"
+                          defaultValue={loan.guarantor}
+                          placeholder="The person behind the entity"
+                          className={`${input} w-56`}
+                        />
+                      </label>
+                      <label className={label}>
+                        Formed in
+                        <input
+                          name="entityState"
+                          maxLength={2}
+                          defaultValue={loan.entityState}
+                          placeholder="DE"
+                          className={`${input} w-20 uppercase`}
+                        />
+                      </label>
+                      <p className="w-full text-xs text-stone-400">
+                        The EIN letter, the articles and the good-standing certificate all have to
+                        match this entity, and the state decides what that last one is called.
+                      </p>
+                    </div>
+
+                    <SaveButton className={`${btn} self-start`} label="Save loan terms" />
+                  </form>
+                </SectionCard>
+              )}
               <SectionCard
                 title="Contract-governed dates"
                 icon={<CalendarCheck size={15} weight="fill" aria-hidden />}
