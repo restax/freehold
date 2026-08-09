@@ -151,3 +151,30 @@ describe("complianceProgress", () => {
     expect(p.percent).toBe(100);
   });
 });
+
+describe("sides on a lending file", () => {
+  it("keeps a workspace's catch-all sale list off a loan", () => {
+    // BOTH means "any sale side". A lending file asking a generic sale
+    // checklist for a listing agreement is the one pairing worth warning on.
+    expect(sideFits("BOTH", "BORROWER")).toBe(false);
+    expect(sideFits("BORROWER", "BORROWER")).toBe(true);
+  });
+
+  it("keeps a lending list off a sale", () => {
+    expect(sideFits("BORROWER", "BUY_SIDE")).toBe(false);
+    expect(sideFits("BORROWER", "DUAL")).toBe(false);
+  });
+
+  it("gives a lending file the client's general assignment, not the dual one", () => {
+    // BORROWER has no per-side column; falling through to DUAL would hand a
+    // loan file whatever sale checklist the client uses for dual agency.
+    expect(
+      checklistForSide("BORROWER", {
+        complianceBuyId: "buy",
+        complianceSellId: "sell",
+        complianceDualId: "dual",
+        complianceChecklistId: "general",
+      }),
+    ).toBe("general");
+  });
+});

@@ -1,12 +1,17 @@
-import { ComplianceSlotStatus, ComplianceStatus, withTenant } from "@freehold/db";
+import { ComplianceSlotStatus, ComplianceStatus, prisma, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { Badge } from "@/components/badges";
 import { BulkSelectSummary } from "@/components/bulk-select-summary";
 import { EmptyState } from "@/components/empty-state";
 import { SectionCard } from "@/components/section-card";
-import { createChecklist, deleteChecklists } from "@/lib/actions/compliance";
+import {
+  createChecklist,
+  createLendingChecklist,
+  deleteChecklists,
+} from "@/lib/actions/compliance";
 import { SIDE_LABEL, STATUS_LABEL, STATUS_TONE } from "@/lib/compliance";
 import { fmtDayMonth } from "@/lib/format";
+import { LENDING_DOCUMENTS } from "@/lib/lending";
 import { requireTenant } from "@/lib/tenant";
 import { btn, btnAdd, btnGhost, card, input, label, tableWrap, td, th, trHover } from "@/lib/ui";
 
@@ -17,6 +22,11 @@ const BULK_FORM_ID = "checklists-bulk";
 
 export default async function CompliancePage() {
   const { tenantId } = await requireTenant();
+  const org = await prisma.organization.findUnique({
+    where: { id: tenantId },
+    select: { privateLendingEnabled: true },
+  });
+  const lendingOn = org?.privateLendingEnabled ?? false;
   const { checklists, clients, queue } = await withTenant(tenantId, async (tx) => ({
     checklists: await tx.complianceChecklist.findMany({
       orderBy: { name: "asc" },
@@ -64,6 +74,8 @@ export default async function CompliancePage() {
       },
     }),
   }));
+
+  const hasLendingList = checklists.some((c) => c.side === "BORROWER");
 
   return (
     <div className="flex flex-col gap-4">
@@ -231,26 +243,54 @@ export default async function CompliancePage() {
           </div>
         )}
 
-        <details>
-          <summary className={`${btnAdd} w-fit cursor-pointer list-none`}>+ New checklist</summary>
-          <form action={createChecklist} className={`${card} mt-3 flex flex-wrap items-end gap-3`}>
-            <label className={label}>
-              Name
-              <input name="name" required className={input} placeholder="Buy-side file, Texas" />
-            </label>
-            <label className={`${label} min-w-64 flex-1`}>
-              Description
-              <input
-                name="description"
-                className={input}
-                placeholder="What this checklist covers"
-              />
-            </label>
-            <button type="submit" className={btn}>
-              Create checklist
-            </button>
-          </form>
-        </details>
+        <div className="flex flex-wrap items-center gap-2">
+          <details>
+            <summary className={`${btnAdd} w-fit cursor-pointer list-none`}>
+              + New checklist
+            </summary>
+            <form
+              action={createChecklist}
+              className={`${card} mt-3 flex flex-wrap items-end gap-3`}
+            >
+              <label className={label}>
+                Name
+                <input name="name" required className={input} placeholder="Buy-side file, Texas" />
+              </label>
+              <label className={`${label} min-w-64 flex-1`}>
+                Description
+                <input
+                  name="description"
+                  className={input}
+                  placeholder="What this checklist covers"
+                />
+              </label>
+              <label className={label}>
+                Applies to
+                <select name="side" defaultValue="BOTH" className={input}>
+                  <option value="BOTH">{SIDE_LABEL.BOTH}</option>
+                  <option value="BUY_SIDE">{SIDE_LABEL.BUY_SIDE}</option>
+                  <option value="SELL_SIDE">{SIDE_LABEL.SELL_SIDE}</option>
+                  <option value="DUAL">{SIDE_LABEL.DUAL}</option>
+                  {lendingOn && <option value="BORROWER">{SIDE_LABEL.BORROWER}</option>}
+                </select>
+              </label>
+              <button type="submit" className={btn}>
+                Create checklist
+              </button>
+            </form>
+          </details>
+
+          {/* Thirteen documents is a lot to type, and a missing one surfaces
+              at underwriting rather than here. Only offered while the
+              workspace hasn't got a lending list yet. */}
+          {lendingOn && !hasLendingList && (
+            <form action={createLendingChecklist}>
+              <button type="submit" className={btnAdd}>
+                + Standard lending package ({LENDING_DOCUMENTS.length} documents)
+              </button>
+            </form>
+          )}
+        </div>
       </SectionCard>
 
       <SectionCard title="Who compliance applies to">

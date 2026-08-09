@@ -33,6 +33,11 @@ const SIDE_OPTIONS = [
   { value: TransactionSide.BUY_SIDE, label: "Buy side" },
   { value: TransactionSide.SELL_SIDE, label: "Sell side" },
   { value: TransactionSide.DUAL, label: "Dual" },
+  // Only offered to a workspace actually in private lending, so a broker-only
+  // workspace never meets the concept. Kept visible on an entry already
+  // scoped to it, otherwise switching lending off would hide a tick nobody
+  // can then untick.
+  { value: TransactionSide.BORROWER, label: "Lending" },
 ];
 
 const fieldInput =
@@ -93,6 +98,7 @@ export function ActionPlanTaskGrid({
   attachmentTemplates,
   dateTemplates,
   docTemplates,
+  lendingOn,
 }: {
   planId: string;
   tasks: ActionPlanTaskRow[];
@@ -100,6 +106,7 @@ export function ActionPlanTaskGrid({
   attachmentTemplates: NamedTemplate[];
   dateTemplates: NamedTemplate[];
   docTemplates: NamedTemplate[];
+  lendingOn: boolean;
 }) {
   const [trashedIds, setTrashedIds] = useState<Set<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
@@ -231,6 +238,7 @@ export function ActionPlanTaskGrid({
                     attachmentTemplates={attachmentTemplates}
                     dateTemplates={dateTemplates}
                     docTemplates={docTemplates}
+                    lendingOn={lendingOn}
                     submitLabel="Save task"
                   />
                 </div>
@@ -250,6 +258,7 @@ export function ActionPlanTaskGrid({
             planId={planId}
             task={null}
             siblings={activeTasks}
+            lendingOn={lendingOn}
             emailTemplates={emailTemplates}
             attachmentTemplates={attachmentTemplates}
             dateTemplates={dateTemplates}
@@ -333,6 +342,7 @@ function TaskEntryForm({
   attachmentTemplates,
   dateTemplates,
   docTemplates,
+  lendingOn,
   submitLabel,
   onCancel,
 }: {
@@ -344,6 +354,9 @@ function TaskEntryForm({
   attachmentTemplates: NamedTemplate[];
   dateTemplates: NamedTemplate[];
   docTemplates: NamedTemplate[];
+  /** Whether this workspace is in private lending, which is the only reason
+   *  to offer the lending side as a scope. */
+  lendingOn: boolean;
   submitLabel: string;
   onCancel?: () => void;
 }) {
@@ -553,7 +566,12 @@ function TaskEntryForm({
           Applies to
           <span className="ml-1 font-normal text-stone-400">(none ticked = every side)</span>
         </span>
-        {SIDE_OPTIONS.map((s) => (
+        {SIDE_OPTIONS.filter(
+          (s) =>
+            s.value !== TransactionSide.BORROWER ||
+            lendingOn ||
+            (task?.sides.includes(TransactionSide.BORROWER) ?? false),
+        ).map((s) => (
           <label key={s.value} className={checkLabel}>
             <input
               type="checkbox"

@@ -1,15 +1,16 @@
 "use server";
 
-import { ComplianceSlotStatus, withTenant } from "@freehold/db";
+import { ComplianceSlotStatus, prisma, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logAudit } from "@/lib/audit";
 import { effectiveTier, refreshComplianceStatus, startComplianceRound } from "@/lib/compliance";
 import { confirmed, intOr, oneOf, optStr, str } from "@/lib/forms";
+import { LENDING_CHECKLIST_NAME, LENDING_DOCUMENTS, PAYMENT_CHOICES } from "@/lib/lending";
 import { getMemberCompliance, requireAdminTenant, requireTenant } from "@/lib/tenant";
 
 /** The sides a checklist can be written for; mirrors the ComplianceSide enum. */
-const COMPLIANCE_SIDES = ["BUY_SIDE", "SELL_SIDE", "DUAL", "BOTH"] as const;
+const COMPLIANCE_SIDES = ["BUY_SIDE", "SELL_SIDE", "DUAL", "BOTH", "BORROWER"] as const;
 
 /**
  * Compliance checklists: the set of documents a file must carry to pass
@@ -24,9 +25,66 @@ export async function createChecklist(formData: FormData) {
   if (!name) return;
   const created = await withTenant(tenantId, (tx) =>
     tx.complianceChecklist.create({
-      data: { tenantId, name, description: optStr(formData, "description") },
+      data: {
+        tenantId,
+        name,
+        description: optStr(formData, "description"),
+        side: oneOf(formData, "side", COMPLIANCE_SIDES, "BOTH"),
+      },
     }),
   );
+  revalidatePath("/dashboard/compliance");
+  redirect(`/dashboard/compliance/${created.id}`);
+}
+
+/**
+ * Create the standard lending package as a checklist, ready to edit.
+ *
+ * Thirteen documents that every private lending file needs is a lot to type
+ * in by hand, and getting one of them wrong is the kind of mistake that
+ * surfaces at underwriting rather than here. So the list ships, the workspace
+ * owns it from the moment it's created, and anything that doesn't match how
+ * this lender works gets edited or deleted on the next screen.
+ *
+ * Gated on the workspace actually being in private lending — the whole
+ * feature is opt-in, and a sale-only workspace has no use for it.
+ */
+export async function createLendingChecklist() {
+  const { tenantId, session } = await requireTenant();
+  const org = await prisma.organization.findUnique({
+    where: { id: tenantId },
+    select: { privateLendingEnabled: true },
+  });
+  if (!org?.privateLendingEnabled) return;
+
+  const created = await withTenant(tenantId, (tx) =>
+    tx.complianceChecklist.create({
+      data: {
+        tenantId,
+        name: LENDING_CHECKLIST_NAME,
+        description: "What underwriting expects on a private lending file.",
+        side: "BORROWER",
+        items: {
+          create: LENDING_DOCUMENTS.map((d, i) => ({
+            tenantId,
+            name: d.name,
+            description: d.description ?? null,
+            required: d.required,
+            paymentTracked: d.paymentTracked ?? false,
+            sortOrder: i,
+          })),
+        },
+      },
+      select: { id: true },
+    }),
+  );
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "compliance.checklist_created",
+    summary: `Created the standard lending package (${LENDING_DOCUMENTS.length} documents)`,
+  });
   revalidatePath("/dashboard/compliance");
   redirect(`/dashboard/compliance/${created.id}`);
 }
@@ -105,6 +163,7 @@ export async function updateChecklistItem(formData: FormData) {
         name,
         description: optStr(formData, "description"),
         required: formData.get("required") === "on",
+        paymentTracked: formData.get("paymentTracked") === "on",
       },
     }),
   );
@@ -155,6 +214,7 @@ export async function addChecklistItem(formData: FormData) {
         description: optStr(formData, "description"),
         // Unchecked "required" means the document is tracked but never blocks.
         required: formData.get("required") === "on",
+        paymentTracked: formData.get("paymentTracked") === "on",
         sortOrder: (max._max.sortOrder ?? 0) + 1,
       },
     });
@@ -300,6 +360,37 @@ export async function attachSlotDocument(formData: FormData) {
     });
     await refreshComplianceStatus(tx, slot.complianceId);
   });
+  revalidatePath(`/dashboard/transactions/${transactionId}`);
+}
+
+/**
+ * Record where a tracked invoice stands.
+ *
+ * Separate from attaching the document because they are separate facts and
+ * arrive at separate times: the appraisal invoice is on the file long before
+ * anyone knows whether the borrower paid it COD. Clearing the answer is
+ * allowed and means "nobody has said", which is not the same as UNPAID.
+ *
+ * Deliberately not a review action. Payment is bookkeeping the processor
+ * owns; it never approves or returns a document, and it does not disturb the
+ * slot's review status.
+ */
+export async function setSlotPayment(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const slotId = str(formData, "slotId");
+  const transactionId = str(formData, "transactionId");
+  const raw = optStr(formData, "paymentStatus");
+  if (!slotId) return;
+  const paymentStatus = raw && (PAYMENT_CHOICES as string[]).includes(raw) ? raw : null;
+  // Scoped to slots that actually ask a payment question, so a hand-posted id
+  // naming an ordinary document writes nothing.
+  await withTenant(tenantId, (tx) =>
+    tx.complianceSlot.updateMany({
+      where: { id: slotId, paymentTracked: true },
+      // biome-ignore lint/suspicious/noExplicitAny: narrowed against PAYMENT_CHOICES above
+      data: { paymentStatus: paymentStatus as any },
+    }),
+  );
   revalidatePath(`/dashboard/transactions/${transactionId}`);
 }
 

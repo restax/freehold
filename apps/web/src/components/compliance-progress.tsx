@@ -1,6 +1,7 @@
 import { ShieldCheck } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import type { ComplianceProgress } from "@/lib/compliance";
+import { type PackageWording, SALE_WORDING } from "@/lib/lending";
 
 /**
  * Where a file stands on compliance, on every tab rather than only inside the
@@ -14,11 +15,16 @@ export function ComplianceProgressCard({
   transactionId,
   state,
   progress,
+  /** What this file calls its document package. A lending file sends one to
+   *  underwriting rather than passing a broker's compliance review, and the
+   *  card is on every tab, so it has to say the same word as the tab does. */
+  wording = SALE_WORDING,
 }: {
   transactionId: string;
   /** Why there's nothing to show, when there isn't. */
   state: "on" | "off" | "no-round" | "no-client";
   progress: ComplianceProgress | null;
+  wording?: PackageWording;
 }) {
   const href = `/dashboard/transactions/${transactionId}?tab=compliance`;
 
@@ -28,17 +34,17 @@ export function ComplianceProgressCard({
         ? "Compliance is off for this client. Nothing is required to close."
         : state === "no-client"
           ? "No client on this file, so no compliance rules apply."
-          : "No compliance round started yet.";
+          : wording.noRound;
     return (
       <div className="rounded-lg border border-stone-200/70 bg-white p-3">
         <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-400">
           <ShieldCheck size={13} weight="fill" aria-hidden />
-          Compliance
+          {wording.tab}
         </p>
         <p className="mt-1 text-sm text-stone-500">{copy}</p>
         {state === "no-round" && (
           <Link href={href} className="mt-1 inline-block text-xs text-brand-700 hover:underline">
-            Open compliance
+            Open {wording.tab.toLowerCase()}
           </Link>
         )}
       </div>
@@ -53,7 +59,7 @@ export function ComplianceProgressCard({
     >
       <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-400">
         <ShieldCheck size={13} weight="fill" aria-hidden />
-        Compliance
+        {wording.tab}
       </p>
       <p className={`mt-1 text-sm font-medium ${clear ? "text-emerald-700" : "text-stone-800"}`}>
         {clear

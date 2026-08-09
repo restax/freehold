@@ -107,6 +107,7 @@ import {
 import {
   attachSlotDocument,
   reviewSlot,
+  setSlotPayment,
   startRound,
   submitForReview,
 } from "@/lib/actions/compliance";
@@ -204,6 +205,14 @@ import { fmtDate, fmtDayMonth, fmtMoney, ROLE_LABEL } from "@/lib/format";
 import { isGovernedDateField, KEY_DATE_LABELS } from "@/lib/governed-dates";
 import { poolForTransaction } from "@/lib/handbook";
 import { invoiceLabel, TERM_PRESETS } from "@/lib/invoicing";
+import {
+  LENDING_SIDE,
+  PAYMENT_CHOICES,
+  PAYMENT_LABEL,
+  type PaymentStatus,
+  packageWording,
+  paymentRollup,
+} from "@/lib/lending";
 import { gapForTransaction, gapMessage } from "@/lib/licensing";
 import { GROUP_LABEL, groupPartiesBySide } from "@/lib/party-side";
 import { fmtCents } from "@/lib/pay";
@@ -826,13 +835,26 @@ export default async function TransactionDetailPage({
     where: { id: tenantId },
     select: { emailSettings: true, timeTrackingEnabled: true, privateLendingEnabled: true },
   });
-  // Which screen this file gets. A private lender's files are loans, so they
-  // are laid out differently; everything else keeps the sale screen. The
-  // lending layout itself is the next phase, so both currently render the
-  // standard body and only the header says which is in play.
-  const layout = transactionLayout(txn.client?.type, {
-    privateLendingEnabled: orgEmail?.privateLendingEnabled ?? false,
-  });
+  // Which screen this file gets, and it follows the client: a broker's or an
+  // individual agent's files keep the original sale screen untouched. Only a
+  // private lender's are loans, losing the buy/sell side entirely and sending
+  // their document package to underwriting rather than to a compliance
+  // reviewer. Everything below that differs is gated on this one flag.
+  const lendingLayout =
+    transactionLayout(txn.client?.type, {
+      privateLendingEnabled: orgEmail?.privateLendingEnabled ?? false,
+    }) === "lending";
+  const layout = lendingLayout ? "lending" : "standard";
+  const wording = packageWording(layout === "lending" ? LENDING_SIDE : txn.side);
+  // What the file still owes at closing. Only lending checklists mark
+  // invoices, so on a sale file this is empty and nothing renders.
+  const payments = paymentRollup(
+    (currentRound?.slots ?? []).map((sl) => ({
+      name: sl.name,
+      paymentTracked: sl.paymentTracked,
+      paymentStatus: sl.paymentStatus as PaymentStatus | null,
+    })),
+  );
   const ccEmail = parseEmailSettings(orgEmail?.emailSettings).cc ?? "";
 
   // The same signature-card context the real send builds, reused here so the
@@ -883,9 +905,13 @@ export default async function TransactionDetailPage({
   // side with nobody recorded (buyer or seller — real estate contracts always
   // have both), and a contract that isn't actually signed yet, which makes
   // every date and dollar figure on the file provisional.
-  const missingSides = (["BUYER", "SELLER"] as const).filter(
-    (role) => !txn.parties.some((p) => p.role === role),
-  );
+  //
+  // Not on a lending file. There is no buyer-and-seller pair to be missing on
+  // a loan, so the warning would fire permanently on every one of them and
+  // train people to ignore the strip it lives in.
+  const missingSides = lendingLayout
+    ? []
+    : (["BUYER", "SELLER"] as const).filter((role) => !txn.parties.some((p) => p.role === role));
   // Ours first, then the third parties, then the other side's people.
   const groupedParties = groupPartiesBySide(txn.parties, txn.side);
   /**
@@ -942,8 +968,9 @@ export default async function TransactionDetailPage({
           </h1>
           <p className="text-sm text-stone-500">
             {[txn.city, txn.state, txn.zip].filter(Boolean).join(", ") || "No location set"} ·{" "}
-            {sideLabel(txn.side, labels)} · contract {fmtMoney(txn.purchasePrice)} · list{" "}
-            {fmtMoney(txn.listPrice)}
+            {sideLabel(txn.side, labels)} · contract {fmtMoney(txn.purchasePrice)}
+            {/* Nothing on a loan file was ever listed. */}
+            {!lendingLayout && <> · list {fmtMoney(txn.listPrice)}</>}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1064,6 +1091,7 @@ export default async function TransactionDetailPage({
             transactionId={txn.id}
             state={complianceState}
             progress={complianceStats}
+            wording={wording}
           />
           <SectionCard
             tour="txn-key-dates"
@@ -1089,19 +1117,29 @@ export default async function TransactionDetailPage({
                   ["earnestMoneyDueDate", txn.earnestMoneyDueDate],
                   ["expireDate", txn.expireDate],
                 ] as const
-              ).map(([field, d]) => (
-                <KeyDateRow
-                  key={field}
-                  action={updateKeyDate}
-                  transactionId={txn.id}
-                  field={field}
-                  label={KEY_DATE_LABELS[field]}
-                  value={d ? d.toISOString().slice(0, 10) : ""}
-                  display={fmtDate(d)}
-                  governed={isGovernedDateField(field)}
-                  proposed={proposedDates[field] ?? null}
-                />
-              ))}
+              )
+                // Listing and marketing dates belong to a property being
+                // sold. A lending file is financing a purchase already under
+                // contract, so those rows would never be filled in and the
+                // dates that do matter get harder to find among them.
+                .filter(
+                  ([field]) =>
+                    !lendingLayout ||
+                    !(["listDate", "onMarketDate", "expireDate"] as string[]).includes(field),
+                )
+                .map(([field, d]) => (
+                  <KeyDateRow
+                    key={field}
+                    action={updateKeyDate}
+                    transactionId={txn.id}
+                    field={field}
+                    label={KEY_DATE_LABELS[field]}
+                    value={d ? d.toISOString().slice(0, 10) : ""}
+                    display={fmtDate(d)}
+                    governed={isGovernedDateField(field)}
+                    proposed={proposedDates[field] ?? null}
+                  />
+                ))}
             </dl>
           </SectionCard>
           <SectionCard
@@ -1139,7 +1177,7 @@ export default async function TransactionDetailPage({
             </ul>
           </SectionCard>
           <SectionCard
-            title="Listing details"
+            title={lendingLayout ? "Purchase details" : "Listing details"}
             icon={<Tag size={15} weight="fill" aria-hidden />}
             action={
               <PanelJump
@@ -1150,25 +1188,33 @@ export default async function TransactionDetailPage({
             bodyClassName="p-3"
           >
             <dl className="flex flex-col gap-1.5 text-sm">
-              <ListingDetailRow
-                action={updateListingDetail}
-                transactionId={txn.id}
-                field="mlsId"
-                label="MLS ID"
-                value={txn.mlsId ?? ""}
-                display={txn.mlsId ?? "—"}
-                placeholder="MLS-102938"
-              />
-              <ListingDetailRow
-                action={updateListingDetail}
-                transactionId={txn.id}
-                field="listPrice"
-                label="List price"
-                value={txn.listPrice != null ? String(txn.listPrice) : ""}
-                display={fmtMoney(txn.listPrice)}
-                inputMode="numeric"
-                placeholder="450000"
-              />
+              {/* An MLS id and a list price describe a property being
+                  marketed. A lending file is financing a purchase someone
+                  else already agreed, so both stay permanently blank there
+                  and only the contract price means anything. */}
+              {!lendingLayout && (
+                <>
+                  <ListingDetailRow
+                    action={updateListingDetail}
+                    transactionId={txn.id}
+                    field="mlsId"
+                    label="MLS ID"
+                    value={txn.mlsId ?? ""}
+                    display={txn.mlsId ?? "—"}
+                    placeholder="MLS-102938"
+                  />
+                  <ListingDetailRow
+                    action={updateListingDetail}
+                    transactionId={txn.id}
+                    field="listPrice"
+                    label="List price"
+                    value={txn.listPrice != null ? String(txn.listPrice) : ""}
+                    display={fmtMoney(txn.listPrice)}
+                    inputMode="numeric"
+                    placeholder="450000"
+                  />
+                </>
+              )}
               <ListingDetailRow
                 action={updateListingDetail}
                 transactionId={txn.id}
@@ -1302,7 +1348,7 @@ export default async function TransactionDetailPage({
                         : "border-transparent text-stone-500 hover:bg-stone-100 hover:text-stone-800"
                     }`}
                   >
-                    {labelText}
+                    {key === "compliance" ? wording.tab : labelText}
                   </Link>
                 ),
               )}
@@ -3108,7 +3154,7 @@ export default async function TransactionDetailPage({
           )}
           {tab === "compliance" && (
             <SectionCard
-              title="Compliance"
+              title={wording.title}
               icon={<ShieldCheck size={15} weight="fill" aria-hidden />}
               action={
                 currentRound ? (
@@ -3130,7 +3176,9 @@ export default async function TransactionDetailPage({
                   <p className="mb-3 text-sm text-stone-500">
                     {txn.client
                       ? txn.client.complianceEnabled
-                        ? "Start a compliance round to pull in this client's required documents and send the file up for review."
+                        ? layout === "lending"
+                          ? "Start the package to pull in the documents underwriting expects on this lender's files."
+                          : "Start a compliance round to pull in this client's required documents and send the file up for review."
                         : `Compliance is switched off for ${txn.client.name}. Turn it on from their profile to require documents on their files.`
                       : "Attach a client to this transaction to use their compliance checklist."}
                   </p>
@@ -3138,17 +3186,57 @@ export default async function TransactionDetailPage({
                     <form action={startRound}>
                       <input type="hidden" name="transactionId" value={txn.id} />
                       <button type="submit" className={btn}>
-                        Start compliance round
+                        {wording.startRound}
                       </button>
                     </form>
                   )}
                 </>
               ) : (
                 <>
-                  <p className="mb-4 text-sm text-stone-500">
-                    Attach a file to each required document, then submit the whole file for review.
-                    A reviewer approves each one or sends it back with a note.
-                  </p>
+                  <p className="mb-4 text-sm text-stone-500">{wording.intro}</p>
+
+                  {/* What still has to reach the settlement statement. Only
+                      lending checklists mark invoices, so this is absent on a
+                      sale file rather than showing an empty zero. */}
+                  {payments.tracked > 0 && (
+                    <div
+                      className={`mb-4 rounded-lg px-3 py-2 text-sm ${
+                        payments.atClosing.length > 0
+                          ? "bg-amber-50 text-amber-900"
+                          : "bg-emerald-50 text-emerald-900"
+                      }`}
+                    >
+                      {payments.atClosing.length > 0 ? (
+                        <>
+                          <span className="font-medium">
+                            {payments.atClosing.length} of {payments.tracked} invoice
+                            {payments.tracked === 1 ? "" : "s"}{" "}
+                            {payments.atClosing.length === 1 ? "comes" : "come"} out of the closing:
+                          </span>{" "}
+                          {payments.atClosing.join(", ")}. Put{" "}
+                          {payments.atClosing.length === 1 ? "it" : "them"} on the HUD.
+                          {/* Only worth saying when some invoices have an
+                              answer and others don't. When nothing has been
+                              recorded at all, it just repeats the list above. */}
+                          {payments.unanswered.length > 0 &&
+                            payments.unanswered.length < payments.atClosing.length && (
+                              <>
+                                {" "}
+                                Nobody has recorded where {payments.unanswered.join(" or ")} stands
+                                yet.
+                              </>
+                            )}
+                          {payments.unanswered.length === payments.tracked && (
+                            <> Nothing has been recorded yet, so all of them are assumed unpaid.</>
+                          )}
+                        </>
+                      ) : (
+                        <span className="font-medium">
+                          Every invoice on this file is paid. Nothing to carry to the HUD.
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <ul className="mb-4 flex flex-col">
                     {currentRound.slots.map((slot) => (
                       <li key={slot.id} className="border-b border-stone-100 py-2 last:border-0">
@@ -3177,6 +3265,22 @@ export default async function TransactionDetailPage({
                               level {slot.approvedTier}/{currentRound.approvalLevels} signed off —
                               awaiting level {slot.approvedTier + 1}
                             </span>
+                          )}
+                          {slot.paymentTracked && (
+                            <Badge
+                              tone={
+                                slot.paymentStatus === "PAID_IN_FULL" ||
+                                slot.paymentStatus === "PAID_COD"
+                                  ? "success"
+                                  : slot.paymentStatus === "DUE_AT_CLOSING"
+                                    ? "progress"
+                                    : "danger"
+                              }
+                            >
+                              {slot.paymentStatus
+                                ? PAYMENT_LABEL[slot.paymentStatus as PaymentStatus]
+                                : "payment not recorded"}
+                            </Badge>
                           )}
                           {slot.description && (
                             <span className="text-xs text-stone-400">{slot.description}</span>
@@ -3221,6 +3325,35 @@ export default async function TransactionDetailPage({
                             >
                               open {slot.document.filename}
                             </a>
+                          )}
+                          {/* Payment is bookkeeping the processor owns, and
+                              it arrives long after the invoice itself does,
+                              so it saves on its own and never touches the
+                              slot's review status. */}
+                          {slot.paymentTracked && (
+                            <form
+                              action={setSlotPayment}
+                              className="flex flex-wrap items-center gap-2"
+                            >
+                              <input type="hidden" name="slotId" value={slot.id} />
+                              <input type="hidden" name="transactionId" value={txn.id} />
+                              <select
+                                name="paymentStatus"
+                                defaultValue={slot.paymentStatus ?? ""}
+                                className={input}
+                                aria-label={`Payment for ${slot.name}`}
+                              >
+                                <option value="">— payment not recorded —</option>
+                                {PAYMENT_CHOICES.map((ps) => (
+                                  <option key={ps} value={ps}>
+                                    {PAYMENT_LABEL[ps]}
+                                  </option>
+                                ))}
+                              </select>
+                              <button type="submit" className={btnGhost}>
+                                Save payment
+                              </button>
+                            </form>
                           )}
                         </div>
 
@@ -3276,7 +3409,7 @@ export default async function TransactionDetailPage({
                         <input type="hidden" name="complianceId" value={currentRound.id} />
                         <input type="hidden" name="transactionId" value={txn.id} />
                         <button type="submit" className={btn}>
-                          Submit for review
+                          {wording.submit}
                         </button>
                       </form>
                     )}
@@ -3288,7 +3421,7 @@ export default async function TransactionDetailPage({
                     </form>
                     {currentRound.submittedAt && (
                       <span className="text-xs text-stone-400">
-                        Submitted {fmtDate(currentRound.submittedAt)}
+                        {wording.submitted} {fmtDate(currentRound.submittedAt)}
                       </span>
                     )}
                   </div>
@@ -3495,16 +3628,29 @@ export default async function TransactionDetailPage({
                     ZIP
                     <input name="zip" defaultValue={txn.zip ?? ""} className={input} />
                   </label>
-                  <label className={label}>
-                    Side
-                    <select name="side" defaultValue={txn.side} className={input}>
-                      {SIDES.map((s) => (
-                        <option key={s} value={s}>
-                          {sideLabel(s, labels)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  {/* A lending file has no side to pick: it is always the
+                      borrower, and the side follows the client. Shown as a
+                      read-only fact instead of a select nobody can change.
+                      The action re-derives it either way. */}
+                  {layout === "lending" ? (
+                    <div className={label}>
+                      Side
+                      <p className={`${input} bg-stone-50 text-stone-500`}>
+                        Borrower, because the client is a private lender
+                      </p>
+                    </div>
+                  ) : (
+                    <label className={label}>
+                      Side
+                      <select name="side" defaultValue={txn.side} className={input}>
+                        {SIDES.filter((sd) => sd !== "BORROWER").map((sd) => (
+                          <option key={sd} value={sd}>
+                            {sideLabel(sd, labels)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                   <label className={label}>
                     Expected fee ($)
                     <input

@@ -33,10 +33,20 @@ export function sideLabel(side: string, labels: SideLabels): string {
   if (side === "BUY_SIDE") return labels.buy;
   if (side === "SELL_SIDE") return labels.sell;
   if (side === "DUAL") return `Dual (${labels.buy} + ${labels.sell})`;
+  // Not tenant-worded: a lending file has exactly one side, so there is no
+  // house style to accommodate the way buy/sell has.
+  if (side === "BORROWER") return "Borrower";
   return side;
 }
 
-/** The three side choices for selects, in tenant wording. */
+/**
+ * The side choices for selects, in tenant wording.
+ *
+ * Borrower is deliberately absent. A file's side is not a free choice once a
+ * client is attached — a private lender's files are loans and everyone else's
+ * are sales — so the side is derived from the client rather than offered, and
+ * lib/actions/transactions.ts is where that is enforced.
+ */
 export function sideChoices(labels: SideLabels): Array<[value: string, label: string]> {
   return [
     ["BUY_SIDE", labels.buy],

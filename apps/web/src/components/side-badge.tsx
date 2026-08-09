@@ -3,7 +3,7 @@ import { THEMES } from "@/lib/theme";
 
 /**
  * Which side of the deal a file is worked from, as a single letter in a
- * circle: B, S, or D.
+ * circle: B, S, D, or L for a lending file.
  *
  * A TC's whole job is shaped by this — whose agent they answer to, whose
  * paperwork is theirs to chase — so it travels with the property address
@@ -30,6 +30,10 @@ const SIDE_STYLE: Record<string, { letter: string; color: string }> = {
   BUY_SIDE: { letter: "B", color: THEMES.cobalt.accent },
   SELL_SIDE: { letter: "S", color: THEMES.clay.accent },
   DUAL: { letter: "D", color: THEMES.lilac.accent },
+  // "L" for loan, not "B": B is buy side, and a lender's file sitting in the
+  // same list as sales needs to be told apart at a glance. Graphite keeps it
+  // outside the buy/sell/dual trio, which is the point — it isn't one of them.
+  BORROWER: { letter: "L", color: THEMES.slate.accent },
 };
 
 export function SideBadge({

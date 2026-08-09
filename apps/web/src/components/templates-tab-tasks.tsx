@@ -1,4 +1,4 @@
-import { withTenant } from "@freehold/db";
+import { prisma, withTenant } from "@freehold/db";
 import { ActionPlanDependencyTree } from "@/components/action-plan-dependency-tree";
 import { ActionPlanTaskGrid } from "@/components/action-plan-task-grid";
 import { Breadcrumbs } from "@/components/breadcrumbs";
@@ -28,6 +28,13 @@ export async function TemplatesTabTasks({
   planId?: string;
   folderParam?: string;
 }) {
+  // The lending side is only worth offering as a scope to a workspace that
+  // actually takes private lending work.
+  const org = await prisma.organization.findUnique({
+    where: { id: tenantId },
+    select: { privateLendingEnabled: true },
+  });
+  const lendingOn = org?.privateLendingEnabled ?? false;
   const [plans, groups] = await withTenant(tenantId, (tx) =>
     Promise.all([
       tx.actionPlan.findMany({
@@ -198,6 +205,7 @@ export async function TemplatesTabTasks({
                   attachmentTemplates={attachmentTemplates}
                   dateTemplates={dateTemplates}
                   docTemplates={docTemplates}
+                  lendingOn={lendingOn}
                 />
               </section>
 

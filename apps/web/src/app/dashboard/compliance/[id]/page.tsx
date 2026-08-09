@@ -1,4 +1,4 @@
-import { withTenant } from "@freehold/db";
+import { prisma, withTenant } from "@freehold/db";
 import { Plus } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -54,6 +54,12 @@ export default async function ComplianceChecklistPage({
     }),
   );
   if (!checklist) notFound();
+
+  const org = await prisma.organization.findUnique({
+    where: { id: tenantId },
+    select: { privateLendingEnabled: true },
+  });
+  const lendingOn = org?.privateLendingEnabled ?? false;
 
   const requiredCount = checklist.items.filter((i) => i.required).length;
   // A client can reach this list through any of four assignments; show each
@@ -124,10 +130,16 @@ export default async function ComplianceChecklistPage({
             <label className={label}>
               Applies to
               <select name="side" defaultValue={checklist.side} className={input}>
-                <option value="BOTH">Any side</option>
-                <option value="BUY_SIDE">Buy side</option>
-                <option value="SELL_SIDE">Sell side</option>
-                <option value="DUAL">Dual</option>
+                <option value="BOTH">{SIDE_LABEL.BOTH}</option>
+                <option value="BUY_SIDE">{SIDE_LABEL.BUY_SIDE}</option>
+                <option value="SELL_SIDE">{SIDE_LABEL.SELL_SIDE}</option>
+                <option value="DUAL">{SIDE_LABEL.DUAL}</option>
+                {/* Kept available on a list already set to it even when the
+                    workspace has since switched lending off, so the value
+                    isn't silently rewritten by the next save. */}
+                {(lendingOn || checklist.side === "BORROWER") && (
+                  <option value="BORROWER">{SIDE_LABEL.BORROWER}</option>
+                )}
               </select>
             </label>
             <label className={label}>
@@ -229,6 +241,18 @@ export default async function ComplianceChecklistPage({
                           />
                           Required
                         </label>
+                        <label
+                          className="flex items-center gap-1.5 pb-2 text-sm text-stone-700"
+                          title="This line is an invoice, so each file also records whether it has been paid or is coming out of the closing."
+                        >
+                          <input
+                            type="checkbox"
+                            name="paymentTracked"
+                            defaultChecked={item.paymentTracked}
+                            className="accent-brand-600"
+                          />
+                          Track payment
+                        </label>
                         <SaveButton className={btn} />
                         <Link
                           href={`/dashboard/compliance/${checklist.id}`}
@@ -265,11 +289,14 @@ export default async function ComplianceChecklistPage({
                       )}
                     </td>
                     <td className={td}>
-                      {item.required ? (
-                        <Badge tone="danger">required</Badge>
-                      ) : (
-                        <Badge tone="neutral">optional</Badge>
-                      )}
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        {item.required ? (
+                          <Badge tone="danger">required</Badge>
+                        ) : (
+                          <Badge tone="neutral">optional</Badge>
+                        )}
+                        {item.paymentTracked && <Badge tone="progress">invoice</Badge>}
+                      </span>
                     </td>
                     <td className={`${td} text-right`}>
                       <span className="flex items-center justify-end gap-3">
@@ -320,6 +347,13 @@ export default async function ComplianceChecklistPage({
             <label className="flex items-center gap-1.5 pb-2 text-sm text-stone-700">
               <input type="checkbox" name="required" defaultChecked className="accent-brand-600" />
               Required
+            </label>
+            <label
+              className="flex items-center gap-1.5 pb-2 text-sm text-stone-700"
+              title="This line is an invoice, so each file also records whether it has been paid or is coming out of the closing."
+            >
+              <input type="checkbox" name="paymentTracked" className="accent-brand-600" />
+              Track payment
             </label>
             <button type="submit" className={btn}>
               Add document

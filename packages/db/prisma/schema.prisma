@@ -1212,6 +1212,10 @@ enum TransactionSide {
   BUY_SIDE
   SELL_SIDE
   DUAL
+  /// A private lender's file. There is no buy or sell side on a loan — the
+  /// workspace represents the lender, and the party on the other end is the
+  /// borrower. Only reachable when Organization.privateLendingEnabled.
+  BORROWER
 }
 
 enum PartyRole {
@@ -2814,6 +2818,20 @@ enum ComplianceSide {
   SELL_SIDE
   DUAL
   BOTH
+  /// Written for a lending file. Deliberately not covered by BOTH: a
+  /// workspace's catch-all sale checklist has nothing to do with an
+  /// underwriting package, and sweeping it onto loan files would be wrong.
+  BORROWER
+}
+
+/// Whether an invoice on a lending file has been settled, and if not, that it
+/// is coming out of the closing. The distinction is the point: anything still
+/// due at closing has to appear on the settlement statement.
+enum CompliancePaymentStatus {
+  UNPAID
+  PAID_IN_FULL
+  PAID_COD
+  DUE_AT_CLOSING
 }
 
 model ComplianceChecklist {
@@ -2903,6 +2921,14 @@ model ComplianceSlot {
   name         String
   description  String?
   required     Boolean               @default(true)
+  /// Snapshotted from the checklist item, same as name and required, so a
+  /// later template edit never changes what a file already under review asks
+  /// for.
+  paymentTracked Boolean             @default(false) @map("payment_tracked")
+  /// Null until someone answers, which is different from UNPAID — "nobody has
+  /// said" and "confirmed not yet paid" are not the same fact to a processor
+  /// assembling a settlement statement.
+  paymentStatus CompliancePaymentStatus? @map("payment_status")
   sortOrder    Int                   @default(0) @map("sort_order")
   /// The document satisfying this slot; cleared if that document is deleted.
   documentId   String?               @map("document_id")
@@ -3240,6 +3266,11 @@ model ComplianceItem {
   description String?
   /// Optional items are tracked but never block a file from passing.
   required    Boolean             @default(true)
+  /// This line is an invoice, so the file also has to record whether it has
+  /// been paid or is coming out of the closing. Set on the insurance and
+  /// appraisal invoices of a lending checklist; off for an ordinary document,
+  /// where a payment question would be noise.
+  paymentTracked Boolean          @default(false) @map("payment_tracked")
   sortOrder   Int                 @default(0) @map("sort_order")
   createdAt   DateTime            @default(now())
 

@@ -29,6 +29,7 @@ import {
   KEY_DATE_LABELS,
   type KeyDateField,
 } from "@/lib/governed-dates";
+import { enforcedSide } from "@/lib/lending";
 import { gapForPending, gapMessage, licenseEnforcement } from "@/lib/licensing";
 import { parseFeeCents } from "@/lib/pay";
 import { transactionLimit } from "@/lib/plans";
@@ -42,7 +43,13 @@ const SIDES = Object.values(TransactionSide);
 function commonFields(formData: FormData) {
   return {
     status: oneOf(formData, "status", STATUSES, TransactionStatus.UNDER_CONTRACT),
-    side: oneOf(formData, "side", SIDES, TransactionSide.BUY_SIDE),
+    // Behind a presence check like the commission fields below: a form that
+    // doesn't show the side field must not reset the file to buy side. That
+    // matters more now that BORROWER exists, because the reset would also
+    // move a lending file onto the sale layout.
+    ...(formData.has("side")
+      ? { side: oneOf(formData, "side", SIDES, TransactionSide.BUY_SIDE) }
+      : {}),
     clientId: optStr(formData, "clientId"),
     city: optStr(formData, "city"),
     state: optStr(formData, "state"),
@@ -82,6 +89,39 @@ function commonFields(formData: FormData) {
       ? { commissionNote: optStr(formData, "commissionNote") }
       : {}),
   };
+}
+
+/**
+ * The side a file lands on, resolved from its client rather than the form.
+ *
+ * A private lender's files are loans and everyone else's are sales, so this
+ * is derived, not chosen — see enforcedSide in lib/lending.ts for both
+ * directions of the rule. Re-derived here on every save because the client
+ * type arrives from the browser as an id and nothing else re-checks it.
+ */
+async function sideForClient(
+  tenantId: string,
+  clientId: string | null | undefined,
+  requested: TransactionSide,
+  fallback?: TransactionSide,
+): Promise<TransactionSide> {
+  const [org, client] = await Promise.all([
+    prisma.organization.findUnique({
+      where: { id: tenantId },
+      select: { privateLendingEnabled: true },
+    }),
+    clientId
+      ? withTenant(tenantId, (tx) =>
+          tx.client.findUnique({ where: { id: clientId }, select: { type: true } }),
+        )
+      : null,
+  ]);
+  return enforcedSide({
+    requested,
+    clientType: client?.type,
+    privateLendingEnabled: org?.privateLendingEnabled ?? false,
+    fallback,
+  }) as TransactionSide;
 }
 
 /**
@@ -145,6 +185,11 @@ export async function createTransaction(formData: FormData) {
   // Two TC/assistant slots on the form; a workspace may only have one person.
   const assigneeIds = formData.getAll("assigneeIds").map(String).filter(Boolean);
   const fields = commonFields(formData);
+  const side = await sideForClient(
+    tenantId,
+    fields.clientId,
+    fields.side ?? TransactionSide.BUY_SIDE,
+  );
   const primaryAgentId = optStr(formData, "primaryAgentContactId");
   const coAgentId = optStr(formData, "coAgentContactId");
 
@@ -174,6 +219,7 @@ export async function createTransaction(formData: FormData) {
         tenantId,
         propertyAddress,
         ...fields,
+        side,
         expectedFeeCents,
         primaryAgentContactId: primaryAgentId ? (contacts[primaryAgentId] ?? null) : null,
         coAgentContactId: coAgentId ? (contacts[coAgentId] ?? null) : null,
@@ -369,6 +415,19 @@ export async function updateTransaction(formData: FormData) {
   if (!id) return;
   const propertyAddress = str(formData, "propertyAddress");
   const fields = commonFields(formData);
+  // The file's own side is the fallback: an edit form that doesn't carry the
+  // side field shouldn't quietly flip a sell-side file to buy side.
+  const priorSide = (
+    await withTenant(tenantId, (tx) =>
+      tx.transaction.findUnique({ where: { id }, select: { side: true } }),
+    )
+  )?.side;
+  const side = await sideForClient(
+    tenantId,
+    fields.clientId,
+    fields.side ?? priorSide ?? TransactionSide.BUY_SIDE,
+    priorSide,
+  );
 
   // Moving a file into a license-required state is the same decision as
   // creating one there, so it goes through the same gate.
@@ -407,6 +466,7 @@ export async function updateTransaction(formData: FormData) {
     const data: Record<string, unknown> = {
       ...(propertyAddress ? { propertyAddress } : {}),
       ...fields,
+      side,
     };
     // Our side's agents, only when the form carried them, and only after the
     // ids are confirmed to be this workspace's contacts.

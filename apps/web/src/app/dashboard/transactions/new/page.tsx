@@ -18,7 +18,11 @@ export const dynamic = "force-dynamic";
 // action and can take ~90s on a long PDF.
 export const maxDuration = 300;
 
-const SIDES = Object.values(TransactionSide);
+// Borrower is absent on purpose: a file's side follows its client, and
+// picking a private lender is what makes a file a loan. Offering it here
+// would be a choice the server immediately overrides either way — see
+// enforcedSide in lib/lending.ts.
+const SIDES = Object.values(TransactionSide).filter((s) => s !== TransactionSide.BORROWER);
 
 /**
  * Creating a file, on its own page.

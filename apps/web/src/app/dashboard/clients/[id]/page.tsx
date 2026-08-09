@@ -212,6 +212,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   );
 
   const kind = clientKind(client.type);
+  // A private lender's files are loans, which changes what compliance can
+  // usefully ask them: one checklist, no per-side split.
+  const isPrivateLender = client.type === "PRIVATE_LENDER";
   const billingContact = billingContactFrom(client.billingContact);
   const brokerage = brokerageInfoFrom(client.brokerageInfo);
   const TypeIcon = TYPE_ICON[client.type] ?? Storefront;
@@ -1069,26 +1072,32 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           </label>
           {/* Per-side overrides. Left on "use default", a side simply follows
               the checklist above, which is how every client behaved before
-              these existed. */}
-          {(
-            [
-              ["complianceBuyId", "Buy side", client.complianceBuyId],
-              ["complianceSellId", "Sell side", client.complianceSellId],
-              ["complianceDualId", "Dual", client.complianceDualId],
-            ] as const
-          ).map(([field, sideLabel, current]) => (
-            <label key={field} className={labelCls}>
-              {sideLabel}
-              <select name={field} defaultValue={current ?? ""} className={input}>
-                <option value="">Use default</option>
-                {checklists.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({SIDE_LABEL[c.side]})
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))}
+              these existed.
+
+              A private lender has none of these: their files are loans, all
+              the same shape, so there is no buy/sell/dual split for a
+              per-side default to distinguish. The one assignment above is
+              what every file for them gets. */}
+          {!isPrivateLender &&
+            (
+              [
+                ["complianceBuyId", "Buy side", client.complianceBuyId],
+                ["complianceSellId", "Sell side", client.complianceSellId],
+                ["complianceDualId", "Dual", client.complianceDualId],
+              ] as const
+            ).map(([field, sideLabelText, current]) => (
+              <label key={field} className={labelCls}>
+                {sideLabelText}
+                <select name={field} defaultValue={current ?? ""} className={input}>
+                  <option value="">Use default</option>
+                  {checklists.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({SIDE_LABEL[c.side]})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
           <label className="flex items-center gap-2 pb-2 text-sm font-medium text-stone-700">
             <input
               type="checkbox"

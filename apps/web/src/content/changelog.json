@@ -1,5 +1,13 @@
 [
   {
+    "date": "2026-08-09",
+    "text": "Compliance checklists can now be written for the buy side, sell side or a dual file, with a different default per client, and every transaction shows how close it is to closing-ready from any tab."
+  },
+  {
+    "date": "2026-08-09",
+    "text": "Reports now include a full time report: hours and effective hourly rate per file, per client and per person, over any window you pick."
+  },
+  {
     "date": "2026-08-08",
     "text": "Tasks now open their own screen where you can write a document, log a call, upload a file, and record what happened, without leaving the task."
   },

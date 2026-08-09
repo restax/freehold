@@ -31,19 +31,33 @@ export interface SideDefaults {
  * legitimate state (compliance on, no checklist chosen yet) and not an error.
  */
 export function checklistForSide(side: TransactionSide, defaults: SideDefaults): string | null {
+  // BORROWER has no per-side column on purpose: a private lender's files are
+  // all the same shape, so there is nothing for a buy/sell/dual split to
+  // distinguish. Their one assignment is the general one, and falling through
+  // to the DUAL column here would hand a lending file a sale checklist.
   const bySide =
     side === "BUY_SIDE"
       ? defaults.complianceBuyId
       : side === "SELL_SIDE"
         ? defaults.complianceSellId
-        : defaults.complianceDualId;
+        : side === "DUAL"
+          ? defaults.complianceDualId
+          : null;
   return bySide ?? defaults.complianceChecklistId ?? null;
 }
 
-/** Whether a checklist is a sensible choice for a given transaction side.
- *  BOTH fits anything; otherwise the sides have to line up. Advisory only:
- *  it drives a warning in the picker, never a refusal to save. */
+/**
+ * Whether a checklist is a sensible choice for a given transaction side.
+ *
+ * BOTH fits any *sale* side. It does not fit a lending file: a workspace's
+ * catch-all sale list would ask a loan for a listing agreement, which is the
+ * one pairing worth warning about rather than waving through. Advisory only —
+ * it drives a warning in the picker, never a refusal to save.
+ */
 export function sideFits(checklistSide: ComplianceSide, txnSide: TransactionSide): boolean {
+  if (txnSide === "BORROWER" || checklistSide === "BORROWER") {
+    return checklistSide === "BORROWER" && txnSide === "BORROWER";
+  }
   if (checklistSide === "BOTH") return true;
   return checklistSide === txnSide;
 }
@@ -53,6 +67,7 @@ export const SIDE_LABEL: Record<ComplianceSide, string> = {
   SELL_SIDE: "Sell side",
   DUAL: "Dual",
   BOTH: "Any side",
+  BORROWER: "Lending",
 };
 
 export interface RollupSlot {
@@ -194,6 +209,7 @@ export async function startComplianceRound(
           name: i.name,
           description: i.description,
           required: i.required,
+          paymentTracked: i.paymentTracked,
           sortOrder: i.sortOrder,
         })),
       },
