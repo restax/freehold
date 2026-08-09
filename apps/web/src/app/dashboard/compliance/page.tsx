@@ -1,22 +1,36 @@
 import { ComplianceSlotStatus, ComplianceStatus, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { Badge } from "@/components/badges";
+import { BulkSelectSummary } from "@/components/bulk-select-summary";
 import { EmptyState } from "@/components/empty-state";
 import { SectionCard } from "@/components/section-card";
-import { createChecklist } from "@/lib/actions/compliance";
-import { STATUS_LABEL, STATUS_TONE } from "@/lib/compliance";
-import { fmtDate } from "@/lib/format";
+import { createChecklist, deleteChecklists } from "@/lib/actions/compliance";
+import { SIDE_LABEL, STATUS_LABEL, STATUS_TONE } from "@/lib/compliance";
+import { fmtDayMonth } from "@/lib/format";
 import { requireTenant } from "@/lib/tenant";
-import { btn, btnAdd, card, input, label, tableWrap, td, th, trHover } from "@/lib/ui";
+import { btn, btnAdd, btnGhost, card, input, label, tableWrap, td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
+
+/** Bulk-delete target for the checklist rows. */
+const BULK_FORM_ID = "checklists-bulk";
 
 export default async function CompliancePage() {
   const { tenantId } = await requireTenant();
   const { checklists, clients, queue } = await withTenant(tenantId, async (tx) => ({
     checklists: await tx.complianceChecklist.findMany({
       orderBy: { name: "asc" },
-      include: { _count: { select: { items: true, clients: true } } },
+      include: {
+        _count: {
+          select: {
+            items: true,
+            clients: true,
+            clientsBuy: true,
+            clientsSell: true,
+            clientsDual: true,
+          },
+        },
+      },
     }),
     clients: await tx.client.findMany({
       orderBy: { name: "asc" },
@@ -118,7 +132,7 @@ export default async function CompliancePage() {
                       </td>
                       <td className={td}>
                         {r.submittedAt ? (
-                          fmtDate(r.submittedAt)
+                          fmtDayMonth(r.submittedAt)
                         ) : (
                           <span className="text-stone-300">—</span>
                         )}
@@ -132,42 +146,55 @@ export default async function CompliancePage() {
         )}
       </SectionCard>
 
-      <details>
-        <summary className={`${btnAdd} w-fit list-none`}>+ New checklist</summary>
-        <form action={createChecklist} className={`${card} mt-3 flex flex-wrap items-end gap-3`}>
-          <label className={label}>
-            Name *
-            <input name="name" required className={input} placeholder="Buy-side file — Texas" />
-          </label>
-          <label className={`${label} min-w-64 flex-1`}>
-            Description
-            <input name="description" className={input} placeholder="What this checklist covers" />
-          </label>
-          <button type="submit" className={btn}>
-            Create checklist
-          </button>
-        </form>
-      </details>
+      <SectionCard
+        title="Checklists"
+        count={checklists.length}
+        action={
+          checklists.length > 0 ? (
+            <div className="flex items-center gap-2">
+              <BulkSelectSummary formId={BULK_FORM_ID} name="ids" />
+              <button type="submit" form={BULK_FORM_ID} className={btnGhost}>
+                Delete selected
+              </button>
+            </div>
+          ) : null
+        }
+      >
+        {/* Kept outside the table: each row links out, and a form wrapping
+            the rows would swallow those. */}
+        <form action={deleteChecklists} id={BULK_FORM_ID} />
 
-      <SectionCard title="Checklists">
         {checklists.length === 0 ? (
           <EmptyState
             title="No compliance checklists yet"
-            hint="Create one above — list the documents every file needs, then assign it to the clients it applies to."
+            hint="Create one below: list the documents every file needs, then assign it to the clients it applies to."
           />
         ) : (
-          <div className={tableWrap}>
+          <div className={`${tableWrap} mb-4`}>
             <table className="w-full">
               <thead>
                 <tr>
+                  <th className={th} style={{ width: "2.25rem" }} aria-label="Select" />
                   <th className={th}>Name</th>
+                  <th className={th}>Applies to</th>
                   <th className={th}>Required documents</th>
                   <th className={th}>Clients using it</th>
+                  <th className={`${th} text-right`} style={{ width: "5rem" }} aria-label="Edit" />
                 </tr>
               </thead>
               <tbody>
                 {checklists.map((c) => (
                   <tr key={c.id} className={trHover}>
+                    <td className={td}>
+                      <input
+                        type="checkbox"
+                        name="ids"
+                        value={c.id}
+                        form={BULK_FORM_ID}
+                        aria-label={`Select ${c.name}`}
+                        className="accent-brand-600"
+                      />
+                    </td>
                     <td className={td}>
                       <Link
                         href={`/dashboard/compliance/${c.id}`}
@@ -179,14 +206,51 @@ export default async function CompliancePage() {
                         <span className="ml-2 text-xs text-stone-400">{c.description}</span>
                       )}
                     </td>
+                    <td className={td}>
+                      <Badge tone="neutral">{SIDE_LABEL[c.side]}</Badge>
+                    </td>
                     <td className={td}>{c._count.items}</td>
-                    <td className={td}>{c._count.clients}</td>
+                    <td className={td}>
+                      {c._count.clients +
+                        c._count.clientsBuy +
+                        c._count.clientsSell +
+                        c._count.clientsDual}
+                    </td>
+                    <td className={`${td} text-right`}>
+                      <Link
+                        href={`/dashboard/compliance/${c.id}`}
+                        className="text-xs text-stone-500 hover:text-brand-700"
+                      >
+                        Edit
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
+
+        <details>
+          <summary className={`${btnAdd} w-fit cursor-pointer list-none`}>+ New checklist</summary>
+          <form action={createChecklist} className={`${card} mt-3 flex flex-wrap items-end gap-3`}>
+            <label className={label}>
+              Name
+              <input name="name" required className={input} placeholder="Buy-side file, Texas" />
+            </label>
+            <label className={`${label} min-w-64 flex-1`}>
+              Description
+              <input
+                name="description"
+                className={input}
+                placeholder="What this checklist covers"
+              />
+            </label>
+            <button type="submit" className={btn}>
+              Create checklist
+            </button>
+          </form>
+        </details>
       </SectionCard>
 
       <SectionCard title="Who compliance applies to">

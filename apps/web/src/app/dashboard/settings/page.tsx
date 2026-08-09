@@ -14,6 +14,7 @@ import {
   revokeApiKey,
 } from "@/lib/actions/api-keys";
 import { saveBillingDefaults } from "@/lib/actions/billing-policy";
+import { setClientTypeEnabled } from "@/lib/actions/client-types";
 import { setCloudPromptOff, snoozeCloudPrompt } from "@/lib/actions/cloud-prompt";
 import { setContactVisibilityRestriction } from "@/lib/actions/contacts";
 import { setHandbookEnabled, setHandbookSummaryEnabled } from "@/lib/actions/handbook";
@@ -182,6 +183,64 @@ async function ApiSection({ tenantId, userId }: { tenantId: string; userId: stri
  * is: minutes accrue passively while a transaction page is open, summed per
  * file and per client — never shown per person on the dashboard.
  */
+/**
+ * Which lines of work the workspace is in.
+ *
+ * Private lending is the one that changes behaviour: a private lender's files
+ * get a lending screen rather than the sale screen. A line with clients under
+ * it can't be switched off, so nobody is orphaned by a settings change.
+ */
+async function ClientTypesSection({ tenantId, userId }: { tenantId: string; userId: string }) {
+  const role = await getMemberRole(tenantId, userId);
+  if (role !== "owner" && role !== "admin") return null;
+  const { clientTypeUsage } = await import("@/lib/client-type-usage");
+  const groups = await clientTypeUsage(tenantId);
+
+  return (
+    <SectionCard title="Client types">
+      <p className="mb-3 text-sm text-stone-500">
+        The kinds of client this workspace takes on. These are what the New client form offers.
+        Title companies, lenders and other counterparties are always available regardless.
+      </p>
+      <ul className="flex flex-col divide-y divide-stone-100">
+        {groups.map((g) => (
+          <li key={g.key} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-stone-800">{g.label}</p>
+              <p className="text-xs leading-relaxed text-stone-500">{g.hint}</p>
+              {g.inUse > 0 && (
+                <p className="mt-0.5 text-xs text-stone-400">
+                  {g.inUse} client{g.inUse === 1 ? "" : "s"} of this type
+                </p>
+              )}
+            </div>
+            {g.enabled && g.inUse > 0 ? (
+              <span
+                className="shrink-0 text-xs text-stone-400"
+                title="Switching this off would orphan the clients already filed under it."
+              >
+                On, in use
+              </span>
+            ) : (
+              <form action={setClientTypeEnabled} className="shrink-0">
+                <input type="hidden" name="group" value={g.key} />
+                <input type="hidden" name="on" value={g.enabled ? "0" : "1"} />
+                <button type="submit" className={btnGhost}>
+                  {g.enabled ? "Turn off" : "Turn on"}
+                </button>
+              </form>
+            )}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-xs text-stone-400">
+        Turning on private lending gives those clients' files a lending transaction screen instead
+        of the sale screen. Existing files are unaffected until their client is a private lender.
+      </p>
+    </SectionCard>
+  );
+}
+
 async function TimeTrackingSection({ tenantId, userId }: { tenantId: string; userId: string }) {
   const role = await getMemberRole(tenantId, userId);
   if (role !== "owner" && role !== "admin") return null;
@@ -195,7 +254,7 @@ async function TimeTrackingSection({ tenantId, userId }: { tenantId: string; use
     <SectionCard title="Time on files">
       <p className="mb-3 text-sm text-stone-500">
         {org.timeTrackingEnabled
-          ? "While a transaction page is open, minutes are recorded against that file automatically — no timers. Today shows the results: what each file costs against its fee, and which clients take the most and least time per deal."
+          ? "While a transaction page is open, minutes are recorded against that file automatically, with no timers to start. Today shows the results: what each file costs against its fee, and which clients take the most and least time per deal."
           : "Time on files is off. Nothing is being recorded, and the Today panels are hidden. What was already recorded is kept, and comes back if you turn it on again."}
       </p>
       <form action={setTimeTrackingEnabled}>
@@ -796,6 +855,7 @@ export default async function SettingsPage() {
         <ApiSection tenantId={tenantId} userId={session.user.id} />
 
         <HandbookSection tenantId={tenantId} userId={session.user.id} />
+        <ClientTypesSection tenantId={tenantId} userId={session.user.id} />
         <TimeTrackingSection tenantId={tenantId} userId={session.user.id} />
         <ContactVisibilitySection tenantId={tenantId} userId={session.user.id} />
 

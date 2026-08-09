@@ -5,8 +5,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logAudit } from "@/lib/audit";
 import { effectiveTier, refreshComplianceStatus, startComplianceRound } from "@/lib/compliance";
-import { confirmed, intOr, optStr, str } from "@/lib/forms";
+import { confirmed, intOr, oneOf, optStr, str } from "@/lib/forms";
 import { getMemberCompliance, requireAdminTenant, requireTenant } from "@/lib/tenant";
+
+/** The sides a checklist can be written for; mirrors the ComplianceSide enum. */
+const COMPLIANCE_SIDES = ["BUY_SIDE", "SELL_SIDE", "DUAL", "BOTH"] as const;
 
 /**
  * Compliance checklists: the set of documents a file must carry to pass
@@ -36,6 +39,102 @@ export async function deleteChecklist(formData: FormData) {
   await withTenant(tenantId, (tx) => tx.complianceChecklist.delete({ where: { id } }));
   revalidatePath("/dashboard/compliance");
   redirect("/dashboard/compliance");
+}
+
+/**
+ * Rename a checklist and set what it covers.
+ *
+ * A list created as "Buy-side file" and later reused for listings had no way
+ * to be corrected: create and delete were the only operations, so fixing a
+ * typo meant deleting the list and re-adding every item, which also detached
+ * every client pointing at it.
+ *
+ * Side is advisory metadata. It steers the per-side client defaults and warns
+ * on an odd pairing; it never refuses to apply a list to a file.
+ */
+export async function updateChecklist(formData: FormData) {
+  const { tenantId, isAdmin, session } = await requireAdminTenant();
+  if (!isAdmin) return;
+  const id = str(formData, "id");
+  const name = str(formData, "name");
+  if (!id || !name) return;
+  const side = oneOf(formData, "side", COMPLIANCE_SIDES, "BOTH");
+  const levels = intOr(formData, "approvalLevels", 1) ?? 1;
+
+  const before = await withTenant(tenantId, (tx) =>
+    tx.complianceChecklist.findUnique({ where: { id }, select: { name: true } }),
+  );
+  if (!before) return;
+  await withTenant(tenantId, (tx) =>
+    tx.complianceChecklist.update({
+      where: { id },
+      data: {
+        name,
+        description: optStr(formData, "description"),
+        side,
+        ...(levels >= 1 && levels <= 3 ? { approvalLevels: levels } : {}),
+      },
+    }),
+  );
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "compliance.checklist_updated",
+    summary:
+      before.name === name
+        ? `Updated checklist "${name}"`
+        : `Renamed checklist "${before.name}" to "${name}"`,
+  });
+  revalidatePath(`/dashboard/compliance/${id}`);
+  revalidatePath("/dashboard/compliance");
+}
+
+/** Edit one required document on a checklist: its name, note, and whether it
+ *  blocks a file from passing. */
+export async function updateChecklistItem(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const id = str(formData, "id");
+  const checklistId = str(formData, "checklistId");
+  const name = str(formData, "name");
+  if (!id || !checklistId || !name) return;
+  await withTenant(tenantId, (tx) =>
+    tx.complianceItem.update({
+      where: { id },
+      data: {
+        name,
+        description: optStr(formData, "description"),
+        required: formData.get("required") === "on",
+      },
+    }),
+  );
+  revalidatePath(`/dashboard/compliance/${checklistId}`);
+}
+
+/** Remove several documents at once from the checklist's own screen. */
+export async function deleteChecklistItems(formData: FormData) {
+  const { tenantId } = await requireTenant();
+  const checklistId = str(formData, "checklistId");
+  const ids = formData.getAll("ids").filter((v): v is string => typeof v === "string" && v !== "");
+  if (!checklistId || ids.length === 0) return;
+  // Scoped to this checklist as well as the tenant: an id from another list
+  // arriving in the form array shouldn't delete anything.
+  await withTenant(tenantId, (tx) =>
+    tx.complianceItem.deleteMany({ where: { id: { in: ids }, checklistId } }),
+  );
+  revalidatePath(`/dashboard/compliance/${checklistId}`);
+}
+
+/** Delete several checklists from the index. */
+export async function deleteChecklists(formData: FormData) {
+  const { tenantId, isAdmin } = await requireAdminTenant();
+  if (!isAdmin) return;
+  const ids = formData.getAll("ids").filter((v): v is string => typeof v === "string" && v !== "");
+  if (ids.length === 0) return;
+  await withTenant(tenantId, (tx) =>
+    tx.complianceChecklist.deleteMany({ where: { id: { in: ids } } }),
+  );
+  revalidatePath("/dashboard/compliance");
 }
 
 export async function addChecklistItem(formData: FormData) {
@@ -84,11 +183,22 @@ export async function setClientCompliance(formData: FormData) {
   if (!clientId) return;
   const enabled = formData.get("enabled") === "on";
   const checklistId = optStr(formData, "checklistId");
+  // Per-side defaults. Left blank, a side simply falls back to the general
+  // assignment above; see checklistForSide.
+  const buyId = optStr(formData, "complianceBuyId");
+  const sellId = optStr(formData, "complianceSellId");
+  const dualId = optStr(formData, "complianceDualId");
 
   const client = await withTenant(tenantId, (tx) =>
     tx.client.update({
       where: { id: clientId },
-      data: { complianceEnabled: enabled, complianceChecklistId: checklistId },
+      data: {
+        complianceEnabled: enabled,
+        complianceChecklistId: checklistId,
+        complianceBuyId: buyId,
+        complianceSellId: sellId,
+        complianceDualId: dualId,
+      },
       select: { name: true, complianceChecklist: { select: { name: true } } },
     }),
   );

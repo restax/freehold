@@ -1,4 +1,10 @@
-import { ComplianceSlotStatus, ComplianceStatus, type TenantTx } from "@freehold/db";
+import {
+  type ComplianceSide,
+  ComplianceSlotStatus,
+  ComplianceStatus,
+  type TenantTx,
+  type TransactionSide,
+} from "@freehold/db";
 
 /**
  * Compliance rounds. A transaction under a compliance-enabled client carries a
@@ -7,6 +13,47 @@ import { ComplianceSlotStatus, ComplianceStatus, type TenantTx } from "@freehold
  * status rolls up from its slots. Snapshotting means editing a template never
  * rewrites a file already under review; a new round is a new version.
  */
+
+/** How a transaction's side maps onto the client's per-side defaults. */
+export interface SideDefaults {
+  complianceBuyId: string | null;
+  complianceSellId: string | null;
+  complianceDualId: string | null;
+  /** The original single assignment, used when no side-specific one is set. */
+  complianceChecklistId: string | null;
+}
+
+/**
+ * Which checklist a file should get, given its side.
+ *
+ * Most specific wins: the matching side's default, then the client's general
+ * fallback. Returning null means this client has nothing to apply, which is a
+ * legitimate state (compliance on, no checklist chosen yet) and not an error.
+ */
+export function checklistForSide(side: TransactionSide, defaults: SideDefaults): string | null {
+  const bySide =
+    side === "BUY_SIDE"
+      ? defaults.complianceBuyId
+      : side === "SELL_SIDE"
+        ? defaults.complianceSellId
+        : defaults.complianceDualId;
+  return bySide ?? defaults.complianceChecklistId ?? null;
+}
+
+/** Whether a checklist is a sensible choice for a given transaction side.
+ *  BOTH fits anything; otherwise the sides have to line up. Advisory only:
+ *  it drives a warning in the picker, never a refusal to save. */
+export function sideFits(checklistSide: ComplianceSide, txnSide: TransactionSide): boolean {
+  if (checklistSide === "BOTH") return true;
+  return checklistSide === txnSide;
+}
+
+export const SIDE_LABEL: Record<ComplianceSide, string> = {
+  BUY_SIDE: "Buy side",
+  SELL_SIDE: "Sell side",
+  DUAL: "Dual",
+  BOTH: "Any side",
+};
 
 export interface RollupSlot {
   required: boolean;
@@ -92,24 +139,33 @@ export async function startComplianceRound(
   const txn = await tx.transaction.findUnique({
     where: { id: transactionId },
     select: {
+      side: true,
       client: {
         select: {
           complianceEnabled: true,
-          complianceChecklist: {
-            select: {
-              id: true,
-              name: true,
-              approvalLevels: true,
-              items: { orderBy: { sortOrder: "asc" } },
-            },
-          },
+          complianceChecklistId: true,
+          complianceBuyId: true,
+          complianceSellId: true,
+          complianceDualId: true,
         },
       },
     },
   });
   if (!txn?.client) return { ok: false, reason: "no-client" };
   if (!txn.client.complianceEnabled) return { ok: false, reason: "compliance-off" };
-  const checklist = txn.client.complianceChecklist;
+  // The file's side decides which of the client's defaults applies, falling
+  // back to their general assignment. See checklistForSide.
+  const checklistId = checklistForSide(txn.side, txn.client);
+  if (!checklistId) return { ok: false, reason: "no-checklist" };
+  const checklist = await tx.complianceChecklist.findUnique({
+    where: { id: checklistId },
+    select: {
+      id: true,
+      name: true,
+      approvalLevels: true,
+      items: { orderBy: { sortOrder: "asc" } },
+    },
+  });
   if (!checklist) return { ok: false, reason: "no-checklist" };
 
   const prior = await tx.transactionCompliance.findFirst({
@@ -170,3 +226,40 @@ export const STATUS_TONE: Record<ComplianceStatus, "success" | "danger" | "progr
     CHANGES_REQUESTED: "danger",
     APPROVED: "success",
   };
+
+export interface CompliancePprogressInput {
+  required: boolean;
+  status: ComplianceSlotStatus;
+}
+
+export interface ComplianceProgress {
+  /** Required slots that have cleared review. */
+  done: number;
+  /** Required slots in total; optional ones never gate a file. */
+  total: number;
+  remaining: number;
+  /** 0-100, for the bar. 100 when there is nothing required. */
+  percent: number;
+  /** Required slots a reviewer sent back, which need action before anything else. */
+  returned: number;
+}
+
+/**
+ * "4 of 10 required documents remaining", as shown on the transaction.
+ *
+ * Only required slots count. An optional document sitting unattached should
+ * never make a file look incomplete, because it can't block the close.
+ */
+export function complianceProgress(slots: CompliancePprogressInput[]): ComplianceProgress {
+  const required = slots.filter((s) => s.required);
+  const done = required.filter((s) => s.status === ComplianceSlotStatus.APPROVED).length;
+  const returned = required.filter((s) => s.status === ComplianceSlotStatus.RETURNED).length;
+  const total = required.length;
+  return {
+    done,
+    total,
+    remaining: total - done,
+    percent: total === 0 ? 100 : Math.round((done / total) * 100),
+    returned,
+  };
+}

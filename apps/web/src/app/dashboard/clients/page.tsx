@@ -1,5 +1,12 @@
 import { ClientType, EsignProvider, prisma, withTenant } from "@freehold/db";
-import { Buildings, Storefront, User, UserPlus, UsersThree } from "@phosphor-icons/react/dist/ssr";
+import {
+  Bank,
+  Buildings,
+  Storefront,
+  User,
+  UserPlus,
+  UsersThree,
+} from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { Fragment } from "react";
 import { AddressAutocomplete } from "@/components/address-autocomplete";
@@ -36,6 +43,7 @@ const TYPE_ICON: Record<string, typeof Buildings> = {
   TEAM: UsersThree,
   TITLE: Storefront,
   LENDER: Storefront,
+  PRIVATE_LENDER: Bank,
   OTHER: Storefront,
 };
 
@@ -75,6 +83,12 @@ const PATHS = [
     blurb: "An office with its own agents and a billing contact.",
   },
   {
+    key: "lender",
+    icon: Bank,
+    title: "Private lender",
+    blurb: "A private or hard-money lender. Their files are loans, not sales.",
+  },
+  {
     key: "company",
     icon: Storefront,
     title: "Other company",
@@ -108,6 +122,26 @@ export default async function ClientsPage({
   const { tenantId } = await requireTenant();
   const { new: newParam } = await searchParams;
   const path: PathKey | null = PATHS.some((p) => p.key === newParam) ? (newParam as PathKey) : null;
+
+  // Which lines of work this workspace is in, so the picker only offers what
+  // it actually takes on. See Settings → Client types.
+  const org = await prisma.organization.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: {
+      clientTypeAgentEnabled: true,
+      clientTypeOfficeEnabled: true,
+      privateLendingEnabled: true,
+    },
+  });
+  const paths = PATHS.filter((p) =>
+    p.key === "agent"
+      ? org.clientTypeAgentEnabled
+      : p.key === "office"
+        ? org.clientTypeOfficeEnabled
+        : p.key === "lender"
+          ? org.privateLendingEnabled
+          : true,
+  );
 
   const clients = await withTenant(tenantId, (tx) =>
     tx.client.findMany({
@@ -160,7 +194,7 @@ export default async function ClientsPage({
           <p className="mb-3 text-sm text-stone-500">Who is this client?</p>
 
           <div className="grid gap-2 sm:grid-cols-3">
-            {PATHS.map((p) => {
+            {paths.map((p) => {
               const active = p.key === path;
               const Icon = p.icon;
               return (
@@ -297,6 +331,39 @@ export default async function ClientsPage({
                   <UsersThree size={14} />
                   You'll add the individual agents on the office's page next.
                 </span>
+              </div>
+            </form>
+          )}
+
+          {path === "lender" && (
+            <form action={createClient} className="mt-4 flex flex-col gap-4">
+              {/* The lending screen itself comes next; this is the client
+                  record it hangs off. */}
+              <input type="hidden" name="type" value={ClientType.PRIVATE_LENDER} />
+              <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+                <label className={label}>
+                  Name *
+                  <input
+                    name="name"
+                    required
+                    className={input}
+                    placeholder="Cascade Capital Partners"
+                  />
+                </label>
+                <label className={label}>
+                  Email
+                  <input name="email" type="email" className={input} />
+                </label>
+                <label className={label}>
+                  Phone
+                  <PhoneInput name="phone" className={input} />
+                </label>
+                <EsignField />
+              </div>
+              <div className="border-t border-stone-100 pt-3">
+                <button type="submit" className={btn}>
+                  Create private lender
+                </button>
               </div>
             </form>
           )}

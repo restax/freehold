@@ -47,6 +47,7 @@ import {
   type MarkerKind,
 } from "@/components/closing-date-calendar";
 import { ColumnPicker } from "@/components/column-picker";
+import { ComplianceProgressCard } from "@/components/compliance-progress";
 import { DangerDelete } from "@/components/danger-delete";
 import { DocumentDropZone } from "@/components/document-drop-zone";
 import { EmailPortalLinkForm } from "@/components/email-portal-link-form";
@@ -187,10 +188,12 @@ import {
   transactionBilling,
 } from "@/lib/billing";
 import { assigneePayout, filePayoutTotals, formatPercentBp } from "@/lib/billing-payouts";
+import { transactionLayout } from "@/lib/client-types";
 import {
   SLOT_LABEL as COMPLIANCE_SLOT_LABEL,
   STATUS_LABEL as COMPLIANCE_STATUS_LABEL,
   STATUS_TONE as COMPLIANCE_STATUS_TONE,
+  complianceProgress,
   effectiveTier,
 } from "@/lib/compliance";
 import { readContactPoints } from "@/lib/contact-points";
@@ -653,6 +656,16 @@ export default async function TransactionDetailPage({
 
   // Compliance: the current round drives the tab; older rounds stay as history.
   const currentRound = txn.compliance.find((c) => c.isCurrent) ?? null;
+  // Feeds the side-rail card. "off" and "no-client" are legitimate states with
+  // their own copy, not failures to show a number.
+  const complianceState: "on" | "off" | "no-round" | "no-client" = !txn.client
+    ? "no-client"
+    : !txn.client.complianceEnabled
+      ? "off"
+      : currentRound
+        ? "on"
+        : "no-round";
+  const complianceStats = currentRound ? complianceProgress(currentRound.slots) : null;
   const priorRounds = txn.compliance.filter((c) => !c.isCurrent);
   const member = await getMemberCompliance(tenantId, session.user.id);
   const reviewerTier = currentRound
@@ -811,7 +824,14 @@ export default async function TransactionDetailPage({
   // Workspace CC address (copy-to-clipboard pill in the header).
   const orgEmail = await prisma.organization.findUnique({
     where: { id: tenantId },
-    select: { emailSettings: true, timeTrackingEnabled: true },
+    select: { emailSettings: true, timeTrackingEnabled: true, privateLendingEnabled: true },
+  });
+  // Which screen this file gets. A private lender's files are loans, so they
+  // are laid out differently; everything else keeps the sale screen. The
+  // lending layout itself is the next phase, so both currently render the
+  // standard body and only the header says which is in play.
+  const layout = transactionLayout(txn.client?.type, {
+    privateLendingEnabled: orgEmail?.privateLendingEnabled ?? false,
   });
   const ccEmail = parseEmailSettings(orgEmail?.emailSettings).cc ?? "";
 
@@ -918,6 +938,7 @@ export default async function TransactionDetailPage({
           <h1 data-tour="txn-header" className="flex items-center gap-2 text-xl font-semibold">
             <SideBadge side={txn.side} labels={labels} size="md" />
             {txn.propertyAddress}
+            {layout === "lending" && <Badge tone="neutral">Private lending</Badge>}
           </h1>
           <p className="text-sm text-stone-500">
             {[txn.city, txn.state, txn.zip].filter(Boolean).join(", ") || "No location set"} ·{" "}
@@ -1037,6 +1058,13 @@ export default async function TransactionDetailPage({
               down gets scrolled past. Renders nothing when there is nothing
               to say, so it never becomes furniture people learn to ignore. */}
           <HandbookRecap notes={handbookPool} grades={handbookGrades} />
+          {/* Can this file close? Answered on every tab, not just inside the
+              Compliance one. */}
+          <ComplianceProgressCard
+            transactionId={txn.id}
+            state={complianceState}
+            progress={complianceStats}
+          />
           <SectionCard
             tour="txn-key-dates"
             title="Key dates"

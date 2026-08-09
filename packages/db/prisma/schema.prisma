@@ -829,6 +829,14 @@ model Organization {
   /// pings while a transaction page is open. Off = no pings recorded, no
   /// charts shown. Data already recorded is kept, same policy as the Handbook.
   timeTrackingEnabled       Boolean                    @default(true) @map("time_tracking_enabled")
+  /// Which kinds of client this workspace takes on. Agents and offices are
+  /// the default TC business; private lending is a different line of work and
+  /// is off until switched on, because turning it on changes what a
+  /// transaction screen looks like. A type already in use can't be switched
+  /// off — see lib/actions/client-types.ts.
+  clientTypeAgentEnabled    Boolean                    @default(true) @map("client_type_agent_enabled")
+  clientTypeOfficeEnabled   Boolean                    @default(true) @map("client_type_office_enabled")
+  privateLendingEnabled     Boolean                    @default(false) @map("private_lending_enabled")
   handbookEnabled           Boolean                    @default(true) @map("handbook_enabled")
   /// The AI-written "Today at a glance" paragraph. Off leaves notes, pooling
   /// and grades working exactly as before, with no model call anywhere.
@@ -1083,7 +1091,15 @@ enum ClientType {
   /// billing contact, roster of agents); it exists so the list can say "Team".
   TEAM
   TITLE
+  /// A lender the workspace *works with* on a normal sale — the mortgage
+  /// company on the other side of a file. Distinct from PRIVATE_LENDER, who
+  /// is the client paying you, and whose files are loans rather than sales.
   LENDER
+  /// A private/hard-money lender who hires the workspace to coordinate their
+  /// lending. Their transactions are a different shape (a loan, not a
+  /// purchase), which is why the type exists rather than reusing LENDER.
+  /// Opt-in per workspace — see Organization.privateLendingEnabled.
+  PRIVATE_LENDER
   OTHER
 }
 
@@ -1140,8 +1156,17 @@ model Client {
   /// checklist. Switch complianceEnabled off to exempt the client entirely
   /// (leaving no checklist assigned is also inert).
   complianceEnabled     Boolean              @default(true) @map("compliance_enabled")
+  /// The fallback checklist, used when no side-specific default is set. This
+  /// is the original single assignment; the per-side columns below were added
+  /// later and win when they match the file's side.
   complianceChecklistId String?              @map("compliance_checklist_id")
   complianceChecklist   ComplianceChecklist? @relation(fields: [complianceChecklistId], references: [id], onDelete: SetNull)
+  complianceBuyId       String?              @map("compliance_buy_id")
+  complianceBuy         ComplianceChecklist? @relation("ClientComplianceBuy", fields: [complianceBuyId], references: [id], onDelete: SetNull)
+  complianceSellId      String?              @map("compliance_sell_id")
+  complianceSell        ComplianceChecklist? @relation("ClientComplianceSell", fields: [complianceSellId], references: [id], onDelete: SetNull)
+  complianceDualId      String?              @map("compliance_dual_id")
+  complianceDual        ComplianceChecklist? @relation("ClientComplianceDual", fields: [complianceDualId], references: [id], onDelete: SetNull)
   isSample              Boolean              @default(false)
   transactions          Transaction[]
   credentials           VaultCredential[]
@@ -2781,18 +2806,34 @@ model DateTemplateItem {
 /// (standard compliance checklist). Distinct from ActionPlan, which produces
 /// dated *tasks*; this defines required *documents*. Assigned per Client, so
 /// every file for that client inherits the same rules.
+/// Which side of a deal a checklist covers. BOTH is the catch-all a
+/// workspace uses when one list serves every file; the per-side client
+/// defaults pick the most specific match first.
+enum ComplianceSide {
+  BUY_SIDE
+  SELL_SIDE
+  DUAL
+  BOTH
+}
+
 model ComplianceChecklist {
   id             String                  @id @default(uuid())
   tenantId       String                  @map("tenant_id")
   tenant         Organization            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name           String
   description    String?
+  /// Which side this list is written for. Existing lists default to BOTH,
+  /// which is what they effectively were before the field existed.
+  side           ComplianceSide          @default(BOTH)
   /// How many levels of reviewer sign-off each document needs (1 = a single
   /// reviewer approves; 2+ = it climbs the ladder).
   approvalLevels Int                     @default(1) @map("approval_levels")
   isSample       Boolean                 @default(false)
   items          ComplianceItem[]
   clients        Client[]
+  clientsBuy     Client[]                @relation("ClientComplianceBuy")
+  clientsSell    Client[]                @relation("ClientComplianceSell")
+  clientsDual    Client[]                @relation("ClientComplianceDual")
   instances      TransactionCompliance[]
   createdAt      DateTime                @default(now())
   updatedAt      DateTime                @updatedAt

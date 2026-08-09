@@ -15,14 +15,21 @@ import { useEffect, useState } from "react";
  * It reads the DOM rather than owning the state, so the checkboxes stay
  * usable (and the bulk bar stays truthful) even if this never hydrates.
  */
-export function BulkSelectSummary({ formId }: { formId: string }) {
+export function BulkSelectSummary({
+  formId,
+  name = "rowIds",
+}: {
+  formId: string;
+  /** The checkbox field being counted. Defaults to the Attachments tab's. */
+  name?: string;
+}) {
   const [count, setCount] = useState(0);
   const [bytes, setBytes] = useState(0);
 
   const boxes = () =>
     Array.from(
       document.querySelectorAll<HTMLInputElement>(
-        `input[type="checkbox"][form="${formId}"][name="rowIds"]`,
+        `input[type="checkbox"][form="${formId}"][name="${name}"]`,
       ),
     );
 

@@ -46,6 +46,7 @@ import {
   CLIENT_TYPE_LABEL,
   clientKind,
 } from "@/lib/client-profile";
+import { SIDE_LABEL } from "@/lib/compliance";
 import { parseEmailPrefs } from "@/lib/email-prefs";
 import { FORM_KIND_LABEL } from "@/lib/form-schema";
 import { fmtDate, fmtMoney } from "@/lib/format";
@@ -135,7 +136,10 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
     : [];
 
   const checklists = await withTenant(tenantId, (tx) =>
-    tx.complianceChecklist.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    tx.complianceChecklist.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, side: true },
+    }),
   );
   // Forms this client could be given their own version of, and any they
   // already have. A private variant wins over the shared form for them.
@@ -1049,20 +1053,42 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         <form action={setClientCompliance} className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="clientId" value={client.id} />
           <label className={labelCls}>
-            Checklist
+            Default checklist
             <select
               name="checklistId"
               defaultValue={client.complianceChecklistId ?? ""}
               className={input}
             >
-              <option value="">— none —</option>
+              <option value="">None</option>
               {checklists.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name}
+                  {c.name} ({SIDE_LABEL[c.side]})
                 </option>
               ))}
             </select>
           </label>
+          {/* Per-side overrides. Left on "use default", a side simply follows
+              the checklist above, which is how every client behaved before
+              these existed. */}
+          {(
+            [
+              ["complianceBuyId", "Buy side", client.complianceBuyId],
+              ["complianceSellId", "Sell side", client.complianceSellId],
+              ["complianceDualId", "Dual", client.complianceDualId],
+            ] as const
+          ).map(([field, sideLabel, current]) => (
+            <label key={field} className={labelCls}>
+              {sideLabel}
+              <select name={field} defaultValue={current ?? ""} className={input}>
+                <option value="">Use default</option>
+                {checklists.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({SIDE_LABEL[c.side]})
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
           <label className="flex items-center gap-2 pb-2 text-sm font-medium text-stone-700">
             <input
               type="checkbox"

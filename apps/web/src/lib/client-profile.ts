@@ -27,6 +27,7 @@ export const CLIENT_TYPE_LABEL: Record<string, string> = {
   TEAM: "Team",
   TITLE: "Title company",
   LENDER: "Lender",
+  PRIVATE_LENDER: "Private lender",
   OTHER: "Other",
 };
 
