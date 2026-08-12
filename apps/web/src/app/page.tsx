@@ -305,6 +305,39 @@ export default async function LandingPage() {
         </div>
       </div>
 
+      {/* Claude connector promo. High on the page on purpose: it is the thing
+          people are surprised is already working. Full copy lives on /mcp. */}
+      <section className="border-b border-stone-200/70 bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+          <Link
+            href="/mcp"
+            className="group flex flex-col gap-5 rounded-xl border border-brand-600/20 bg-brand-50/60 p-6 transition-colors hover:border-brand-600/40 hover:bg-brand-50 sm:p-8 lg:flex-row lg:items-center lg:justify-between lg:gap-10"
+          >
+            <div className="min-w-0">
+              <p className="flex flex-wrap items-center gap-2.5 text-xs font-semibold uppercase tracking-wide">
+                <span className="rounded-full bg-brand-700 px-2 py-0.5 text-white">New</span>
+                <span className="text-brand-700">Working today</span>
+              </p>
+              <h2 className="font-display mt-3 text-2xl font-bold tracking-tight md:text-3xl">
+                Connect Claude straight to your closings.
+              </h2>
+              <p className="mt-2.5 max-w-2xl leading-relaxed text-stone-600">
+                Already use Claude? Point it at Freehold and ask what&apos;s closing this week,
+                what&apos;s overdue, or who the lender is on a file. Give it write access and it
+                adds tasks, logs notes, and moves a status for you, all under permissions you set.
+                Included with every plan.
+              </p>
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1.5 font-medium text-brand-700 transition-colors group-hover:text-brand-600">
+              See how it works
+              <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
+                →
+              </span>
+            </span>
+          </Link>
+        </div>
+      </section>
+
       {/* Voice demo */}
       <section className="border-b border-stone-200/70 bg-white">
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:gap-16">

@@ -116,6 +116,11 @@ export function MarketingFooter() {
               </Link>
             </li>
             <li>
+              <Link href="/mcp" className="transition-colors hover:text-stone-900">
+                Claude connector
+              </Link>
+            </li>
+            <li>
               <Link href="/pricing" className="transition-colors hover:text-stone-900">
                 Pricing
               </Link>

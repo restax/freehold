@@ -34,9 +34,9 @@ const LIVE: Integration[] = [
     "opensign",
   ],
   [
-    "Claude AI & the Claude connector",
+    "Claude AI",
     "AI",
-    "Reads contracts with page-cited extraction, powers the site assistant, and answers your spoken questions in voice search. Connect Freehold to Claude Desktop or Claude Code as an MCP connector and ask about your pipeline, deadlines, and contacts. With write access turned on, it can also create tasks, log notes, and update transaction status straight from Claude.",
+    "Reads contracts with page-cited extraction, powers the site assistant, and answers your spoken questions in voice search. The Claude connector, above, puts your whole workspace behind the assistant as well.",
   ],
   [
     "ElevenLabs & LiveKit",
@@ -176,6 +176,82 @@ export default async function IntegrationsPage() {
           Freehold is the system of record; everything else plugs in. Here's what's connected today
           and what's on the way, in the order working TCs ask for it.
         </p>
+
+        {/* The Claude connector sits above the grid rather than inside it: it
+            is the integration people are most surprised already works, and a
+            letter tile in a row of fifteen buries it. Full page at /mcp. */}
+        <div className="mt-12 overflow-hidden rounded-xl border border-brand-600/20 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_10px_rgb(41_37_36/0.05)]">
+          <div className="grid gap-0 md:grid-cols-[1.1fr_1fr]">
+            <div className="p-6 sm:p-8">
+              <p className="flex flex-wrap items-center gap-2.5 text-xs font-semibold uppercase tracking-wide">
+                <span className="rounded-full bg-brand-700 px-2 py-0.5 text-white">New</span>
+                <span className="text-brand-700">Working today</span>
+              </p>
+              <h2 className="mt-3 font-display text-2xl font-bold tracking-tight">
+                The Claude connector
+              </h2>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-stone-600">
+                Point Claude at Freehold and ask what&apos;s closing this week, what&apos;s overdue,
+                or who the lender is on a file. Give it write access and it adds tasks, logs notes,
+                and moves a status for you. Copy one address out of your dashboard, paste it into
+                Claude, sign in, and you are done. Included with every plan, and we recommend it.
+              </p>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-stone-600">
+                Claude on the web, the desktop and mobile apps, and Claude Code all work. Freehold
+                speaks the open connector standard, so other assistants that support custom
+                connectors can use the same address, and Claude is what we test on every release.
+              </p>
+              <p className="mt-4">
+                <Link
+                  href="/mcp"
+                  className="text-sm font-medium text-brand-700 underline decoration-brand-600/40 underline-offset-4 transition-colors hover:text-brand-600"
+                >
+                  How to connect it, and everything it can reach →
+                </Link>
+              </p>
+            </div>
+
+            <div className="border-t border-stone-200/70 bg-stone-50 p-6 sm:p-8 md:border-l md:border-t-0">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
+                In Claude
+              </p>
+              <div className="mt-2 overflow-hidden rounded-xl border border-stone-200 bg-white">
+                <div className="flex items-center justify-between border-b border-stone-200/80 bg-[var(--section-header)] px-3 py-2">
+                  <p className="text-sm font-semibold text-stone-800">Freehold</p>
+                  <span className="flex items-center gap-1.5 text-[11px] text-stone-600">
+                    <span className="h-1.5 w-1.5 rounded-full bg-brand-600" aria-hidden />
+                    Connected
+                  </span>
+                </div>
+                <div className="flex flex-col gap-3 p-3">
+                  <p className="ml-auto max-w-[90%] rounded-2xl rounded-br-md bg-brand-700 px-3 py-1.5 text-sm text-white">
+                    What&apos;s closing this week?
+                  </p>
+                  <div className="text-sm leading-snug text-stone-700">
+                    <p>Three files:</p>
+                    <ul className="mt-1 flex flex-col gap-1">
+                      <li>
+                        <span className="font-medium">412 Maple Avenue</span>, Wednesday, everything
+                        done
+                      </li>
+                      <li>
+                        <span className="font-medium">88 Harbor Lane</span>, Thursday, survey still
+                        out
+                      </li>
+                      <li>
+                        <span className="font-medium">17 Cedar Court</span>, Friday, waiting on the
+                        lender
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-stone-500">
+                Answered from your own files, under your own permissions.
+              </p>
+            </div>
+          </div>
+        </div>
 
         <h2 className="font-display mt-12 text-2xl font-bold tracking-tight">Working today</h2>
         <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-3">

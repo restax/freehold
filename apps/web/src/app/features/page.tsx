@@ -17,6 +17,11 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
     "Only in Freehold",
     [
       [
+        "Talk to your workspace from Claude",
+        "Connect Freehold to Claude on the web, desktop, mobile, or Claude Code, and ask about closings this week, upcoming deadlines, or a specific client. With write access turned on it also creates tasks, logs notes, and moves a status. Working today, on every plan.",
+        "today",
+      ],
+      [
         "AI contract extraction",
         "Upload the purchase agreement and every date, dollar, and party is extracted with a page citation.",
         "today",
@@ -39,11 +44,6 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       [
         "No affiliate program",
         "Nobody is paid a commission to recommend Freehold, so every recommendation is a real one.",
-        "today",
-      ],
-      [
-        "Talk to your workspace from Claude",
-        "Connect Freehold to Claude Desktop or Claude Code as an MCP connector: ask about closings this week, upcoming deadlines, or a specific client, and with write access turned on, create tasks, log notes, or update a transaction's status without opening the dashboard.",
         "today",
       ],
       [
@@ -460,10 +460,82 @@ export default function FeaturesPage() {
           </span>
         </div>
 
+        {/* The Claude connector, first of the highlights: it is the newest
+            thing here and the one nobody expects to already work. The page
+            behind it, /mcp, carries the setup steps and the full tool list. */}
+        <div className="mt-14 overflow-hidden rounded-xl border border-brand-600/20 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_10px_rgb(41_37_36/0.05)]">
+          <div className="grid gap-0 md:grid-cols-[1.1fr_1fr]">
+            <div className="p-6 sm:p-8">
+              <p className="flex flex-wrap items-center gap-2.5 text-xs font-semibold uppercase tracking-wide">
+                <span className="rounded-full bg-brand-700 px-2 py-0.5 text-white">New</span>
+                <span className="text-brand-700">Claude connector</span>
+              </p>
+              <h2 className="mt-3 font-display text-2xl font-bold tracking-tight">
+                Ask Claude about your closings
+              </h2>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-stone-600">
+                Working today, on every plan. Paste one address into Claude, sign in with your
+                Freehold account, and your assistant can search your files, tell you what&apos;s
+                due, and look up anyone on a deal. Give it write access and it adds tasks, logs
+                notes, and moves a status without you opening the dashboard.
+              </p>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-stone-600">
+                It works in Claude on the web, the desktop and mobile apps, and Claude Code. Every
+                change it makes lands on the file&apos;s activity trail under your own name, and one
+                switch turns it off for everyone.
+              </p>
+              <p className="mt-4">
+                <Link
+                  href="/mcp"
+                  className="text-sm font-medium text-brand-700 underline decoration-brand-600/40 underline-offset-4 transition-colors hover:text-brand-600"
+                >
+                  How to connect it, and everything it can reach →
+                </Link>
+              </p>
+            </div>
+
+            <div className="border-t border-stone-200/70 bg-stone-50 p-6 sm:p-8 md:border-l md:border-t-0">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
+                In Claude
+              </p>
+              <div className="mt-2 overflow-hidden rounded-xl border border-stone-200 bg-white">
+                <div className="flex items-center justify-between border-b border-stone-200/80 bg-[var(--section-header)] px-3 py-2">
+                  <p className="text-sm font-semibold text-stone-800">Freehold</p>
+                  <span className="flex items-center gap-1.5 text-[11px] text-stone-600">
+                    <span className="h-1.5 w-1.5 rounded-full bg-brand-600" aria-hidden />
+                    Connected
+                  </span>
+                </div>
+                <div className="flex flex-col gap-3 p-3">
+                  <p className="ml-auto max-w-[90%] rounded-2xl rounded-br-md bg-brand-700 px-3 py-1.5 text-sm text-white">
+                    Anything overdue this morning?
+                  </p>
+                  <div className="text-sm leading-snug text-stone-700">
+                    <p>Two things:</p>
+                    <ul className="mt-1 flex flex-col gap-1">
+                      <li>
+                        <span className="font-medium">88 Harbor Lane</span>, survey ordered six days
+                        ago, nothing back
+                      </li>
+                      <li>
+                        <span className="font-medium">17 Cedar Court</span>, walkthrough still
+                        unscheduled, closes Friday
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-stone-500">
+                Answered from your own files, not from the internet.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* The Handbook. Sold as the problem it solves — the knowledge that
             currently lives in one person's head — with no mention of how it
             works. Nobody buys "persistent context". */}
-        <div className="mt-14 overflow-hidden rounded-xl border border-brand-600/20 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_10px_rgb(41_37_36/0.05)]">
+        <div className="mt-10 overflow-hidden rounded-xl border border-brand-600/20 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_10px_rgb(41_37_36/0.05)]">
           <div className="grid gap-0 md:grid-cols-[1.1fr_1fr]">
             <div className="p-6 sm:p-8">
               <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">
