@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { mapboxForwardUrl, parseMapboxFeatures, shouldSearch } from "@/lib/address-search";
+import {
+  mapboxForwardUrl,
+  parseMapboxFeatures,
+  proximityFromHeaders,
+  shouldSearch,
+} from "@/lib/address-search";
 import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -27,8 +32,13 @@ export async function GET(req: Request) {
   // plain text box rather than erroring, so a transaction can still be typed.
   if (!token) return NextResponse.json({ suggestions: [] });
 
+  // Ranking hint only, and absent everywhere the edge doesn't geolocate —
+  // see proximityFromHeaders. It never filters, so a coordinator working a
+  // file in another state gets the same results, just ordered worse.
+  const proximity = proximityFromHeaders(req.headers);
+
   try {
-    const res = await fetch(mapboxForwardUrl(query, token), {
+    const res = await fetch(mapboxForwardUrl(query, token, { proximity }), {
       // Mapbox is a hard dependency of one input, not of the page: a slow or
       // failing geocoder must never hang a coordinator mid-address.
       signal: AbortSignal.timeout(4000),

@@ -40,14 +40,54 @@ export function shouldSearch(query: string): boolean {
   return query.trim().length >= MIN_QUERY_LENGTH;
 }
 
+/** Roughly where the person typing is, for ranking only. */
+export interface Proximity {
+  lng: number;
+  lat: number;
+}
+
+/**
+ * The searcher's approximate location, from the edge's own geolocation of the
+ * request.
+ *
+ * Without it Mapbox ranks a bare street number by nothing in particular, so
+ * "1600 Pennsylvania Ave" offers Lorain, Ohio before anywhere a given
+ * coordinator has ever worked. A TC's files cluster around one metro, so the
+ * request's own city is the cheapest good hint available: no schema, no
+ * second lookup, no per-workspace setting to maintain.
+ *
+ * Headers only — a client can't set these, the edge overwrites them, and
+ * anywhere they're absent (local dev, a self-host behind another proxy) this
+ * returns null and ranking goes back to what it is today.
+ */
+export function proximityFromHeaders(headers: Headers): Proximity | null {
+  const lng = Number(headers.get("x-vercel-ip-longitude"));
+  const lat = Number(headers.get("x-vercel-ip-latitude"));
+  // Number("") is 0, which is a real coordinate in the Atlantic. Requiring
+  // both headers to be present is what keeps a missing one from biasing
+  // every search towards the Gulf of Guinea.
+  if (!headers.get("x-vercel-ip-longitude") || !headers.get("x-vercel-ip-latitude")) return null;
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+  if (Math.abs(lng) > 180 || Math.abs(lat) > 90) return null;
+  return { lng, lat };
+}
+
 /**
  * Forward-geocode URL for a partial address.
  *
  * `autocomplete` matches on prefixes (the user is still typing), `types=address`
  * keeps whole cities and countries out of a street-address picker, and the
  * token stays server-side — this URL is only ever built in the route handler.
+ *
+ * `proximity` biases the ranking without filtering: an exact match two states
+ * away still comes back, it just stops outranking the one down the road.
  */
-export function mapboxForwardUrl(query: string, token: string, limit = 6): string {
+export function mapboxForwardUrl(
+  query: string,
+  token: string,
+  opts: { limit?: number; proximity?: Proximity | null } = {},
+): string {
+  const { limit = 6, proximity = null } = opts;
   const params = new URLSearchParams({
     q: query.trim(),
     access_token: token,
@@ -56,6 +96,13 @@ export function mapboxForwardUrl(query: string, token: string, limit = 6): strin
     types: "address",
     limit: String(limit),
   });
+  if (proximity) {
+    // Three decimals is about 100m: enough to name the right town, coarse
+    // enough that we aren't handing Mapbox a doorstep, and repeatable across
+    // keystrokes so their cache can do its job.
+    const round = (n: number) => Number(n.toFixed(3));
+    params.set("proximity", `${round(proximity.lng)},${round(proximity.lat)}`);
+  }
   return `${ENDPOINT}?${params}`;
 }
 
