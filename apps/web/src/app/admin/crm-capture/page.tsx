@@ -19,6 +19,25 @@ export const dynamic = "force-dynamic";
 
 const CRM_SOURCE_ORG_SLUG = "acme-brokers-inc";
 
+/**
+ * What the save couldn't carry across, said in one sentence.
+ *
+ * Built here rather than pieced together in JSX: the person is already in the
+ * CRM by the time this shows, so the only job left is telling the operator
+ * precisely what to add by hand.
+ */
+function missedMessage(missed: string[]): string {
+  const company = missed.includes("company");
+  const phone = missed.includes("phone");
+  if (company && phone) {
+    return "The person was saved, but their company couldn't be linked and Twenty wouldn't accept their phone number. Add both by hand in Twenty.";
+  }
+  if (company) {
+    return "The person was saved, but their company couldn't be linked. Add it by hand in Twenty.";
+  }
+  return "The person was saved, but Twenty wouldn't accept their phone number. Add it by hand in Twenty.";
+}
+
 const ERROR_MESSAGE: Record<string, string> = {
   nofile: "Paste or choose a screenshot first.",
   toobig: "That image is over 10 MB. Crop it or save it smaller.",
@@ -45,6 +64,7 @@ export default async function CrmCapturePage({
   searchParams: Promise<{
     found?: string;
     saved?: string;
+    missed?: string;
     error?: string;
     dup?: string;
     firstName?: string;
@@ -80,6 +100,9 @@ export default async function CrmCapturePage({
   }
   const hasDupes = (dupes?.matches.length ?? 0) > 0;
   const dupeCheckFailed = dupes !== null && !dupes.ok;
+  // What the save couldn't carry across: "company", "phone", or both. Absent
+  // when everything landed, which is what keeps the success banner plain.
+  const missed = sp.missed ? sp.missed.split("-") : null;
 
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-10 sm:px-6">
@@ -101,15 +124,20 @@ export default async function CrmCapturePage({
         </p>
       )}
 
-      {sp.saved === "1" && (
+      {sp.saved === "1" && !missed && (
         <p className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-800">
           Saved to Twenty.
         </p>
       )}
-      {sp.saved === "partial" && (
-        <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          The person was saved, but their company couldn't be linked. Add it by hand in Twenty.
-        </p>
+      {sp.saved === "1" && missed && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <p>{missedMessage(missed)}</p>
+          {missed.includes("phone") && sp.phone && (
+            <p className="mt-1">
+              The number was <code className="rounded bg-white/70 px-1">{sp.phone}</code>.
+            </p>
+          )}
+        </div>
       )}
       {sp.error && ERROR_MESSAGE[sp.error] && (
         <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">

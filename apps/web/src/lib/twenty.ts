@@ -1,6 +1,7 @@
 import { prisma } from "@freehold/db";
 import { decryptSecret, type EncryptedSecret, loadMasterKey } from "@freehold/vault";
 import { looseEquals, samePhone } from "@/lib/ai/lead-capture";
+import { type TwentyPhoneFields, twentyPhone, twentyPhoneShapes } from "@/lib/twenty-phone";
 
 /**
  * Twenty CRM connection, per tenant. Twenty is the open-source CRM — cloud
@@ -114,38 +115,68 @@ export async function fetchTwentyPeople(
   return people.slice(0, max);
 }
 
+/** Whether a Twenty error body is the phone validator refusing the number. */
+function isPhoneRejection(status: number, body: string): boolean {
+  return status === 400 && /INVALID_PHONE_NUMBER|phone number is invalid/i.test(body);
+}
+
 /**
  * Create a person in Twenty — used to push website leads across, and the
  * recommend-a-friend admin form. Returns the created person's id (needed to
  * attach a note) alongside the plain ok/fail the website-lead path already
  * relies on.
+ *
+ * The phone is walked through the shapes in twenty-phone.ts, best first, and
+ * a rejection of the number alone falls through to the next spelling and
+ * finally to saving without it. A contact is worth more than the formatting
+ * of one field, and `phoneDropped` is the honest half of that: the number
+ * doesn't disappear quietly, the caller is told to add it by hand.
  */
 export async function sendTwentyLead(
   conn: TwentyConnection,
   lead: { name: string; email?: string | null; phone?: string | null },
-): Promise<{ ok: boolean; id?: string }> {
+): Promise<{ ok: boolean; id?: string; phoneDropped?: boolean }> {
   const [firstName, ...rest_] = lead.name.split(" ");
-  try {
-    const res = await fetch(`${rest(conn.url)}/people`, {
+  // The trailing null is "no phone at all", always the last thing tried, so a
+  // number nothing accepts still leaves a person in the CRM.
+  const attempts: Array<TwentyPhoneFields | null> = [...twentyPhoneShapes(lead.phone), null];
+
+  const post = (phones: TwentyPhoneFields | null) =>
+    fetch(`${rest(conn.url)}/people`, {
       method: "POST",
       headers: headers(conn.apiKey),
       body: JSON.stringify({
         name: { firstName, lastName: rest_.join(" ") || undefined },
         ...(lead.email ? { emails: { primaryEmail: lead.email } } : {}),
-        ...(lead.phone ? { phones: { primaryPhoneNumber: lead.phone } } : {}),
+        ...(phones ? { phones } : {}),
       }),
       signal: AbortSignal.timeout(10_000),
     });
-    if (!res.ok) {
+
+  try {
+    for (const [i, phones] of attempts.entries()) {
+      const res = await post(phones);
+      if (res.ok) {
+        const body = (await res.json()) as { data?: { createPerson?: { id?: string } } };
+        return {
+          ok: true,
+          id: body.data?.createPerson?.id,
+          // Dropped when this attempt carried no phone but a phone was given.
+          phoneDropped: Boolean(lead.phone) && !phones,
+        };
+      }
+
+      const text = await res.text().catch(() => "");
       console.error(
-        "sendTwentyLead: non-ok response",
+        `sendTwentyLead: non-ok response (attempt ${i + 1}/${attempts.length})`,
         res.status,
-        await res.text().catch(() => ""),
+        text,
       );
-      return { ok: false };
+      // Only a complaint about the number itself is worth another attempt.
+      // Anything else — a bad key, a schema mismatch — repeats identically.
+      if (!isPhoneRejection(res.status, text)) return { ok: false };
     }
-    const body = (await res.json()) as { data?: { createPerson?: { id?: string } } };
-    return { ok: true, id: body.data?.createPerson?.id };
+    return { ok: false };
   } catch (err) {
     console.error("sendTwentyLead: threw", err);
     return { ok: false };
@@ -244,19 +275,24 @@ export async function findTwentyDuplicates(
   }
 
   if (lead.phone) {
-    // No server-side phone filter: stored formatting varies too much for eq
-    // to be trustworthy, so candidates already gathered are checked, plus an
-    // exact-string attempt for the case where formatting does happen to match.
+    // No general server-side phone filter: stored formatting varies too much
+    // for eq to be trustworthy, so candidates already gathered are checked in
+    // memory. The exact-string attempts cover the two spellings that do match:
+    // the normalized digits we now write, and the raw string as typed, for
+    // rows that were saved with their formatting intact.
     for (const p of found.values()) {
       if (samePhone(p.phones?.primaryPhoneNumber, lead.phone)) found.set(p.id, p);
     }
-    const r = await queryTwenty<TwentyPerson>(
-      conn,
-      "people",
-      `phones.primaryPhoneNumber[eq]:${lead.phone}`,
-    );
-    ok &&= r.ok;
-    for (const p of r.rows) if (p.id) found.set(p.id, p);
+    const spellings = new Set([twentyPhone(lead.phone), lead.phone].filter(Boolean) as string[]);
+    for (const spelling of spellings) {
+      const r = await queryTwenty<TwentyPerson>(
+        conn,
+        "people",
+        `phones.primaryPhoneNumber[eq]:${spelling}`,
+      );
+      ok &&= r.ok;
+      for (const p of r.rows) if (p.id) found.set(p.id, p);
+    }
   }
 
   return { ok, matches: [...found.values()] };

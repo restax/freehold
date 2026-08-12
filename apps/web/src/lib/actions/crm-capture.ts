@@ -141,6 +141,17 @@ export async function saveLeadToCrm(formData: FormData) {
     if (co) companyLinked = await linkTwentyPersonToCompany(conn, person.id, co.id);
   }
 
-  const saved = company && !companyLinked ? "partial" : "1";
-  redirect(`/admin/crm-capture?saved=${saved}`);
+  // What went in, and what didn't. Both are best-effort next to the person
+  // record itself, and both have to be said out loud rather than assumed.
+  const missed = [
+    company && !companyLinked ? "company" : null,
+    person.phoneDropped ? "phone" : null,
+  ].filter(Boolean);
+
+  const done = new URLSearchParams({ saved: "1" });
+  if (missed.length > 0) done.set("missed", missed.join("-"));
+  // The phone Twenty refused travels back so it can be shown, and copied,
+  // without the operator having to find the screenshot again.
+  if (person.phoneDropped && phone) done.set("phone", phone);
+  redirect(`/admin/crm-capture?${done.toString()}`);
 }
