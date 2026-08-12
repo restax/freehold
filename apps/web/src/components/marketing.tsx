@@ -66,6 +66,9 @@ export function MarketingNav() {
           <Link href="/pricing" className="transition-colors hover:text-stone-900">
             Pricing
           </Link>
+          <Link href="/blog" className="transition-colors hover:text-stone-900">
+            Blog
+          </Link>
           <Link href="/compare" className="transition-colors hover:text-stone-900">
             Self-host
           </Link>
@@ -118,6 +121,11 @@ export function MarketingFooter() {
             <li>
               <Link href="/mcp" className="transition-colors hover:text-stone-900">
                 Claude connector
+              </Link>
+            </li>
+            <li>
+              <Link href="/blog" className="transition-colors hover:text-stone-900">
+                Blog
               </Link>
             </li>
             <li>
