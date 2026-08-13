@@ -38,6 +38,23 @@ export async function requireTenant(opts: { allowGuest?: boolean } = {}) {
   return { session, tenantId, userId: session.user.id, isGuest };
 }
 
+/**
+ * The workspace this request is operating in, or null — the same resolution
+ * requireTenant does, without the redirects.
+ *
+ * For the handful of signed-in surfaces that legitimately have no workspace:
+ * a vendor, somebody mid-onboarding. Those callers want to do a little less,
+ * not to be sent somewhere else, so a missing workspace is a value here
+ * rather than control flow.
+ */
+export async function optionalTenantId(): Promise<string | null> {
+  const session = await getSession();
+  if (!session) return null;
+  const tenants = await listTenants();
+  if (tenants.length === 0) return null;
+  return tenants.find((t) => t.id === session.session.activeOrganizationId)?.id ?? tenants[0].id;
+}
+
 /** The caller's role in the active tenant ("owner" | "admin" | "member" | "guest"). */
 export async function getMemberRole(tenantId: string, userId: string): Promise<string> {
   const member = await prisma.member.findFirst({

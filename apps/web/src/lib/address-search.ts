@@ -40,36 +40,23 @@ export function shouldSearch(query: string): boolean {
   return query.trim().length >= MIN_QUERY_LENGTH;
 }
 
-/** Roughly where the person typing is, for ranking only. */
+/**
+ * Roughly where to rank from, for ranking only.
+ *
+ * Without it Mapbox has nothing to order a bare street number by, so
+ * "1600 Pennsylvania Ave" offers Lorain, Ohio before anywhere a given
+ * coordinator has ever worked.
+ *
+ * This is deliberately *not* the searcher's own location. The first version
+ * of this used the request's IP geolocation, which follows the person rather
+ * than the market: a Texas coordinator working a file from a hotel in another
+ * country got biased towards whatever US addresses were nearest their hotel.
+ * The workspace's operating states describe the market, and they don't move
+ * when the coordinator does.
+ */
 export interface Proximity {
   lng: number;
   lat: number;
-}
-
-/**
- * The searcher's approximate location, from the edge's own geolocation of the
- * request.
- *
- * Without it Mapbox ranks a bare street number by nothing in particular, so
- * "1600 Pennsylvania Ave" offers Lorain, Ohio before anywhere a given
- * coordinator has ever worked. A TC's files cluster around one metro, so the
- * request's own city is the cheapest good hint available: no schema, no
- * second lookup, no per-workspace setting to maintain.
- *
- * Headers only — a client can't set these, the edge overwrites them, and
- * anywhere they're absent (local dev, a self-host behind another proxy) this
- * returns null and ranking goes back to what it is today.
- */
-export function proximityFromHeaders(headers: Headers): Proximity | null {
-  const lng = Number(headers.get("x-vercel-ip-longitude"));
-  const lat = Number(headers.get("x-vercel-ip-latitude"));
-  // Number("") is 0, which is a real coordinate in the Atlantic. Requiring
-  // both headers to be present is what keeps a missing one from biasing
-  // every search towards the Gulf of Guinea.
-  if (!headers.get("x-vercel-ip-longitude") || !headers.get("x-vercel-ip-latitude")) return null;
-  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
-  if (Math.abs(lng) > 180 || Math.abs(lat) > 90) return null;
-  return { lng, lat };
 }
 
 /**

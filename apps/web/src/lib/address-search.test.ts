@@ -3,7 +3,6 @@ import {
   MIN_QUERY_LENGTH,
   mapboxForwardUrl,
   parseMapboxFeatures,
-  proximityFromHeaders,
   shouldSearch,
 } from "./address-search";
 
@@ -54,56 +53,13 @@ describe("mapboxForwardUrl", () => {
     expect(url.searchParams.get("proximity")).toBeNull();
   });
 
-  it("biases towards the searcher, lng first and rounded to the town", () => {
+  it("biases towards the given point, lng first and rounded to the town", () => {
     const url = new URL(
       mapboxForwardUrl("15 Talmuth", "tok", { proximity: { lng: -71.0776234, lat: 42.7762111 } }),
     );
     // Mapbox takes lng,lat in that order — reversed, every search would bias
     // to a point in the sea off Somalia rather than to Massachusetts.
     expect(url.searchParams.get("proximity")).toBe("-71.078,42.776");
-  });
-});
-
-describe("proximityFromHeaders", () => {
-  const headers = (h: Record<string, string>) => new Headers(h);
-
-  it("reads the edge's geolocation of the request", () => {
-    expect(
-      proximityFromHeaders(
-        headers({ "x-vercel-ip-longitude": "-96.7969", "x-vercel-ip-latitude": "32.7767" }),
-      ),
-    ).toEqual({ lng: -96.7969, lat: 32.7767 });
-  });
-
-  it("returns nothing where the edge doesn't geolocate", () => {
-    // Local dev and self-hosts behind another proxy: no headers, no bias,
-    // exactly the ranking this had before.
-    expect(proximityFromHeaders(headers({}))).toBeNull();
-  });
-
-  it("refuses a half-present pair instead of reading it as zero", () => {
-    // Number("") is 0, and 0,0 is a real place in the Gulf of Guinea. Biasing
-    // every US address search towards it would be worse than no bias at all.
-    expect(proximityFromHeaders(headers({ "x-vercel-ip-longitude": "-96.7969" }))).toBeNull();
-    expect(proximityFromHeaders(headers({ "x-vercel-ip-latitude": "32.7767" }))).toBeNull();
-  });
-
-  it("refuses values that aren't coordinates", () => {
-    expect(
-      proximityFromHeaders(
-        headers({ "x-vercel-ip-longitude": "unknown", "x-vercel-ip-latitude": "32.7767" }),
-      ),
-    ).toBeNull();
-    expect(
-      proximityFromHeaders(
-        headers({ "x-vercel-ip-longitude": "-999", "x-vercel-ip-latitude": "32.7767" }),
-      ),
-    ).toBeNull();
-    expect(
-      proximityFromHeaders(
-        headers({ "x-vercel-ip-longitude": "-96.7969", "x-vercel-ip-latitude": "91" }),
-      ),
-    ).toBeNull();
   });
 });
 

@@ -1,13 +1,47 @@
+import { prisma } from "@freehold/db";
 import { NextResponse } from "next/server";
 import {
   mapboxForwardUrl,
+  type Proximity,
   parseMapboxFeatures,
-  proximityFromHeaders,
   shouldSearch,
 } from "@/lib/address-search";
 import { getSession } from "@/lib/session";
+import { optionalTenantId } from "@/lib/tenant";
+import { stateCentroid } from "@/lib/us-state-centroids";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Which state to rank results from: the first one this workspace added to its
+ * operating states.
+ *
+ * Ordered by when it was added rather than alphabetically, because the state
+ * a workspace sets up first is in practice the one it works most, and
+ * alphabetical would hand a Texas-and-Arizona business Arizona for no reason.
+ * A workspace covering nothing yet, a vendor, somebody mid-onboarding: all
+ * return null and search exactly as it did before any of this existed.
+ *
+ * Nothing in here is allowed to throw. Everything else in this route already
+ * degrades to a plain text box — a missing key, a slow geocoder, a hostile
+ * response — and it would be a poor trade to let the lookup that only decides
+ * *ordering* be the one thing that can take the input down.
+ */
+async function workspaceProximity(): Promise<Proximity | null> {
+  try {
+    const tenantId = await optionalTenantId();
+    if (!tenantId) return null;
+    const home = await prisma.tenantState.findFirst({
+      where: { tenantId },
+      orderBy: { createdAt: "asc" },
+      select: { state: true },
+    });
+    return stateCentroid(home?.state);
+  } catch (err) {
+    console.error("address-search: could not resolve operating states, searching unbiased", err);
+    return null;
+  }
+}
 
 /**
  * Address suggestions for the address picker.
@@ -18,7 +52,8 @@ export const dynamic = "force-dynamic";
  * else. And the route requires a session, so this isn't an open geocoding
  * relay billed to our account: anyone wanting free lookups has to sign up
  * first. It deliberately doesn't require a *tenant* — a signed-in vendor or a
- * user mid-onboarding types addresses too, and no tenant data is touched here.
+ * user mid-onboarding types addresses too, and no tenant data is touched here
+ * beyond the operating states used to rank the results.
  */
 export async function GET(req: Request) {
   const session = await getSession();
@@ -32,10 +67,10 @@ export async function GET(req: Request) {
   // plain text box rather than erroring, so a transaction can still be typed.
   if (!token) return NextResponse.json({ suggestions: [] });
 
-  // Ranking hint only, and absent everywhere the edge doesn't geolocate —
-  // see proximityFromHeaders. It never filters, so a coordinator working a
-  // file in another state gets the same results, just ordered worse.
-  const proximity = proximityFromHeaders(req.headers);
+  // Ranking hint only. It never filters, so a coordinator working a file two
+  // states away still gets it — the nearby one just stops losing to it.
+  // Looked up after the cheap exits above so a too-short query costs nothing.
+  const proximity = await workspaceProximity();
 
   try {
     const res = await fetch(mapboxForwardUrl(query, token, { proximity }), {
