@@ -1,6 +1,6 @@
 "use server";
 
-import { PaymentRequestStatus, withTenant } from "@freehold/db";
+import { PaymentRequestStatus, type TenantTx, withTenant } from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/lib/audit";
 import { type AttributableInvoice, transactionBilling } from "@/lib/billing";
@@ -76,6 +76,60 @@ export async function setAssigneeFee(formData: FormData) {
   revalidatePath("/dashboard/profile");
 }
 
+/** One assignment eligible to go onto a pay request. */
+interface PayableRow {
+  id: string;
+  feeCents: number | null;
+  feePercentBp: number | null;
+  transactionId: string;
+  transaction: { propertyAddress: string };
+}
+
+/**
+ * Freeze what each assignment is worth today. A flat fee is already a number;
+ * a percentage is resolved against the file's *collected* revenue at this
+ * moment, because that's the share actually in the door. Rows worth nothing
+ * yet are dropped — a percent of nothing-collected isn't payable.
+ */
+async function freezePayable(
+  tx: TenantTx,
+  rows: PayableRow[],
+): Promise<{ row: PayableRow; cents: number }[]> {
+  const pctFiles = [
+    ...new Set(rows.filter((r) => r.feePercentBp != null).map((r) => r.transactionId)),
+  ];
+  const invoices: AttributableInvoice[] =
+    pctFiles.length > 0
+      ? await tx.invoice.findMany({
+          where: {
+            OR: [
+              { transactionId: { in: pctFiles } },
+              { lines: { some: { transactionId: { in: pctFiles } } } },
+            ],
+          },
+          select: {
+            status: true,
+            provider: true,
+            transactionId: true,
+            amountCents: true,
+            lines: { select: { transactionId: true, amountCents: true } },
+            payments: { select: { amountCents: true } },
+          },
+        })
+      : [];
+  return rows
+    .map((row) => ({
+      row,
+      cents:
+        row.feeCents ??
+        payoutCents(
+          { feeCents: null, feePercentBp: row.feePercentBp },
+          transactionBilling(row.transactionId, invoices).paidCents,
+        ),
+    }))
+    .filter((f) => f.cents > 0);
+}
+
 /**
  * The signed-in user submits their unbilled fees for payment. Whether a fee is
  * due at order time or at closing is the tenant's policy, so this never gates
@@ -106,41 +160,7 @@ export async function requestPayment(formData: FormData) {
     });
     if (rows.length === 0) return null;
 
-    // Percentage payouts freeze at today's collected figure — the share of
-    // money actually in the door, per the workspace's payout policy.
-    const pctFiles = [
-      ...new Set(rows.filter((r) => r.feePercentBp != null).map((r) => r.transactionId)),
-    ];
-    const invoices: AttributableInvoice[] =
-      pctFiles.length > 0
-        ? await tx.invoice.findMany({
-            where: {
-              OR: [
-                { transactionId: { in: pctFiles } },
-                { lines: { some: { transactionId: { in: pctFiles } } } },
-              ],
-            },
-            select: {
-              status: true,
-              provider: true,
-              transactionId: true,
-              amountCents: true,
-              lines: { select: { transactionId: true, amountCents: true } },
-              payments: { select: { amountCents: true } },
-            },
-          })
-        : [];
-    const frozen = rows.map((r) => ({
-      row: r,
-      cents:
-        r.feeCents ??
-        payoutCents(
-          { feeCents: null, feePercentBp: r.feePercentBp },
-          transactionBilling(r.transactionId, invoices).paidCents,
-        ),
-    }));
-    // A percent share of nothing-collected is not requestable yet.
-    const payable = frozen.filter((f) => f.cents > 0);
+    const payable = await freezePayable(tx, rows);
     if (payable.length === 0) return null;
 
     return tx.paymentRequest.create({
@@ -176,6 +196,75 @@ export async function requestPayment(formData: FormData) {
   revalidatePath("/dashboard/invoices");
 }
 
+/**
+ * Admin: approve one person's payout on one file without waiting for them to
+ * ask. Same freeze rules as a self-submitted request — the amount is fixed at
+ * today's figure and the assignment locks — so a payout approved from the file
+ * and one requested from a profile produce an identical statement. The pay
+ * request is raised in the teammate's name, because they are who gets paid.
+ */
+export async function approveAssigneePayout(formData: FormData) {
+  const { tenantId, isAdmin, session } = await requireAdminTenant();
+  if (!isAdmin) return;
+  const id = str(formData, "id");
+  const transactionId = str(formData, "transactionId");
+  if (!id) return;
+
+  const created = await withTenant(tenantId, async (tx) => {
+    const row = await tx.transactionAssignee.findFirst({
+      where: {
+        id,
+        OR: [{ feeCents: { not: null } }, { feePercentBp: { not: null } }],
+        paymentItem: { is: null },
+      },
+      select: {
+        id: true,
+        userId: true,
+        feeCents: true,
+        feePercentBp: true,
+        transactionId: true,
+        transaction: { select: { propertyAddress: true } },
+        user: { select: { name: true } },
+      },
+    });
+    if (!row) return null;
+
+    const payable = await freezePayable(tx, [row]);
+    if (payable.length === 0) return null;
+
+    const request = await tx.paymentRequest.create({
+      data: {
+        tenantId,
+        userId: row.userId,
+        note: optStr(formData, "note"),
+        items: {
+          create: payable.map(({ row: r, cents }) => ({
+            tenantId,
+            assigneeId: r.id,
+            transactionId: r.transactionId,
+            address: r.transaction.propertyAddress,
+            feeCents: cents,
+          })),
+        },
+      },
+      select: { id: true, items: { select: { feeCents: true } } },
+    });
+    return { request, name: row.user.name, address: row.transaction.propertyAddress };
+  });
+  if (!created) return;
+
+  logAudit({
+    tenantId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "pay.requested",
+    summary: `Approved ${created.name}'s ${fmtCents(totalCents(created.request.items))} payout on ${created.address}`,
+  });
+  if (transactionId) revalidatePath(`/dashboard/transactions/${transactionId}`);
+  revalidatePath("/dashboard/profile");
+  revalidatePath("/dashboard/invoices");
+}
+
 /** Admin: record that a request has been paid, however it was settled. */
 export async function markPaymentRequestPaid(formData: FormData) {
   const { tenantId, isAdmin, session } = await requireAdminTenant();
@@ -189,7 +278,7 @@ export async function markPaymentRequestPaid(formData: FormData) {
       select: {
         status: true,
         user: { select: { name: true } },
-        items: { select: { feeCents: true } },
+        items: { select: { feeCents: true, transactionId: true } },
       },
     });
     if (!req || req.status === PaymentRequestStatus.PAID) return null;
@@ -213,6 +302,11 @@ export async function markPaymentRequestPaid(formData: FormData) {
     action: "pay.marked_paid",
     summary: `Marked ${paid.user.name}'s ${fmtCents(totalCents(paid.items))} payment request paid`,
   });
+  // A request can span files; refresh every one it touched, so the payout
+  // line on each of those pages stops saying "requested".
+  for (const fileId of new Set(paid.items.map((i) => i.transactionId).filter(Boolean))) {
+    revalidatePath(`/dashboard/transactions/${fileId}`);
+  }
   revalidatePath("/dashboard/invoices");
   revalidatePath("/dashboard/profile");
 }

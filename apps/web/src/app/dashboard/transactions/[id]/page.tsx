@@ -134,7 +134,7 @@ import {
   markInvoicePaid,
 } from "@/lib/actions/invoices";
 import { addParty, linkExtractedParty, removeParty } from "@/lib/actions/parties";
-import { setAssigneeFee } from "@/lib/actions/pay";
+import { approveAssigneePayout, markPaymentRequestPaid, setAssigneeFee } from "@/lib/actions/pay";
 import { combineDocuments, splitDocument } from "@/lib/actions/pdf-tools";
 import {
   createPortalLink,
@@ -289,8 +289,13 @@ const TXN_TABS_SECONDARY = [
   ["vendors", "Vendors"],
   ["team", "Team"],
   ["compliance", "Compliance"],
-  ["billing", "Billing"],
-  ["payout", "Payout"],
+  // The two directions money moves on a file, kept apart the way a ledger
+  // keeps them apart: Invoicing is what the client owes us, Payouts is what
+  // we owe the people who worked it. Naming them for the counterparty is the
+  // whole point — a tab called "Payout" that held an invoice form did not
+  // survive first contact with anyone reading it.
+  ["billing", "Invoicing"],
+  ["payout", "Payouts"],
   ["misc", "Portals & misc"],
 ] as const;
 
@@ -432,7 +437,12 @@ export default async function TransactionDetailPage({
           include: {
             user: { select: { id: true, name: true, image: true } },
             // Present once billed — the fee then locks, since it's on a statement.
-            paymentItem: { select: { feeCents: true, request: { select: { status: true } } } },
+            paymentItem: {
+              select: {
+                feeCents: true,
+                request: { select: { id: true, status: true, paidAt: true, paidNote: true } },
+              },
+            },
           },
         },
         portalLinks: { orderBy: { createdAt: "desc" } },
@@ -1032,7 +1042,7 @@ export default async function TransactionDetailPage({
           {billing.view && (
             <Link
               href={`/dashboard/transactions/${txn.id}?tab=billing`}
-              title="Billing for this file"
+              title="What the client owes on this file"
               className="flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm shadow-xs transition hover:border-stone-300 hover:bg-stone-50"
             >
               {fileMoney.billedCents > 0 ? (
@@ -1051,7 +1061,7 @@ export default async function TransactionDetailPage({
                   )}
                 </>
               ) : txn.expectedFeeCents == null ? (
-                <span className="text-stone-400">Billing — fee not set</span>
+                <span className="text-stone-400">Fee not set</span>
               ) : txn.expectedFeeCents === 0 ? (
                 <span className="text-stone-400">No charge</span>
               ) : (
@@ -1405,7 +1415,10 @@ export default async function TransactionDetailPage({
             </div>
             <div className="flex flex-wrap gap-1">
               {secondaryTabs
-                .filter(([key]) => !(!billing.view && key === "billing"))
+                // A tab nobody can open shouldn't advertise itself: Invoicing
+                // needs the money grant, Payouts the compensation one.
+                .filter(([key]) => (key === "billing" ? billing.view : true))
+                .filter(([key]) => (key === "payout" ? billing.comp : true))
                 .map(([key, labelText]) => (
                   <Link
                     key={key}
@@ -2769,7 +2782,7 @@ export default async function TransactionDetailPage({
           {tab === "billing" && billing.view && (
             <div className="flex flex-col gap-3">
               <SectionCard
-                title="Billing"
+                title="Invoicing"
                 icon={<CurrencyDollar size={15} weight="fill" aria-hidden />}
                 action={
                   <Link
@@ -3038,129 +3051,15 @@ export default async function TransactionDetailPage({
                 </p>
               </SectionCard>
 
-              {billing.comp && (
-                <SectionCard
-                  title="Payout & net"
-                  icon={<ChartPieSlice size={15} weight="fill" aria-hidden />}
-                >
-                  {txn.assignees.filter((a) => a.feeCents != null || a.feePercentBp != null)
-                    .length === 0 ? (
-                    <p className="text-sm text-stone-500">
-                      Nobody has a payout on this file yet — set a flat fee or a % share per person
-                      under{" "}
-                      <Link
-                        href={`/dashboard/transactions/${txn.id}?tab=team`}
-                        className="text-brand-700 hover:underline"
-                      >
-                        Team
-                      </Link>
-                      .
-                    </p>
-                  ) : (
-                    (() => {
-                      const withBasis = txn.assignees.filter(
-                        (a) => a.feeCents != null || a.feePercentBp != null,
-                      );
-                      const totals = filePayoutTotals(
-                        withBasis,
-                        fileMoney.billedCents,
-                        fileMoney.paidCents,
-                      );
-                      return (
-                        <>
-                          <ul className="mb-3 flex flex-col divide-y divide-stone-100">
-                            {withBasis.map((a) => {
-                              const p = assigneePayout(
-                                a,
-                                fileMoney.billedCents,
-                                fileMoney.paidCents,
-                              );
-                              return (
-                                <li
-                                  key={a.id}
-                                  className="flex flex-col gap-1 py-1.5 text-sm lg:flex-row lg:items-baseline lg:justify-between lg:gap-4"
-                                >
-                                  <span className="flex min-w-0 flex-wrap items-baseline gap-x-3">
-                                    <span className="font-medium">{a.user.name}</span>
-                                    <span className="text-xs text-stone-400">
-                                      {a.feePercentBp != null
-                                        ? `${formatPercentBp(a.feePercentBp)} of fee revenue`
-                                        : "flat"}
-                                    </span>
-                                    {a.paymentItem && (
-                                      <span className="text-xs text-stone-400">
-                                        {a.paymentItem.request.status === "PAID"
-                                          ? `paid ${fmtCents(a.paymentItem.feeCents)}`
-                                          : `requested ${fmtCents(a.paymentItem.feeCents)}`}
-                                      </span>
-                                    )}
-                                  </span>
-                                  <span className="grid shrink-0 grid-cols-[7rem_7rem] gap-x-4 text-xs tabular-nums">
-                                    <span className="text-right text-stone-600">
-                                      earned {fmtCents(p.earnedCents)}
-                                    </span>
-                                    <span
-                                      className={
-                                        p.payableCents > 0
-                                          ? "text-right text-brand-700"
-                                          : "text-right text-stone-400"
-                                      }
-                                    >
-                                      payable {fmtCents(p.payableCents)}
-                                    </span>
-                                  </span>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                          <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-stone-100 pt-2">
-                            {(
-                              [
-                                ["Payouts earned", fmtCents(totals.earnedCents), "text-stone-800"],
-                                ["Payable now", fmtCents(totals.payableCents), "text-stone-800"],
-                                [
-                                  "Net (billed − earned)",
-                                  fmtCents(totals.netBilledCents),
-                                  totals.netBilledCents >= 0 ? "text-brand-700" : "text-red-700",
-                                ],
-                                [
-                                  "Net collected",
-                                  fmtCents(totals.netCollectedCents),
-                                  totals.netCollectedCents >= 0 ? "text-brand-700" : "text-red-700",
-                                ],
-                              ] as const
-                            ).map(([labelText, value, tone], i) => (
-                              <div
-                                key={labelText}
-                                className={`flex flex-col ${i === 0 ? "" : "border-l border-stone-200 pl-6"}`}
-                              >
-                                <span className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
-                                  {labelText}
-                                </span>
-                                <span className={`tabular-nums text-sm font-semibold ${tone}`}>
-                                  {value}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                          <p className="mt-2 text-xs text-stone-400">
-                            {`Percent payouts are earned against what's billed and payable against what's collected; a pay request freezes the payable figure of the day.`}
-                          </p>
-                        </>
-                      );
-                    })()
-                  )}
-                </SectionCard>
-              )}
-
               {billing.manage && (
                 <SectionCard
-                  title="Add a charge"
+                  title="Add a charge to the draft"
                   icon={<PlusCircle size={15} weight="fill" aria-hidden />}
                 >
                   <p className="mb-3 text-sm text-stone-500">
-                    Lands on this file's draft invoice (one is created if none is open) — review and
-                    issue when ready. Extra work, deposits, adjustments.
+                    Builds the bill up a line at a time — extra work, deposits, adjustments. It
+                    lands on this file's draft invoice (one is started if none is open), and the
+                    client sees nothing until you issue it above.
                   </p>
                   {remainingToDraftCents != null && remainingToDraftCents > 0 && (
                     <form action={addTransactionCharge} className="mb-3">
@@ -3216,6 +3115,68 @@ export default async function TransactionDetailPage({
                       Add charge
                     </PendingButton>
                   </form>
+                </SectionCard>
+              )}
+
+              {billing.manage && (
+                <SectionCard
+                  title="Bill the client now"
+                  icon={<Receipt size={15} weight="fill" aria-hidden />}
+                >
+                  <p className="mb-3 text-sm text-stone-500">
+                    Skips the draft — writes the invoice and issues it in one step, for a file
+                    that's just the one fee. They pay however they pay (check, Zelle, wire, closing
+                    proceeds), and a follow-up task stays open until you mark it paid.
+                  </p>
+                  {txn.client ? (
+                    <form action={createInvoice} className="flex flex-wrap items-end gap-3">
+                      <input type="hidden" name="clientId" value={txn.client.id} />
+                      <input type="hidden" name="transactionId" value={txn.id} />
+                      <label className={label}>
+                        Amount (USD) *
+                        <input
+                          name="amount"
+                          inputMode="decimal"
+                          required
+                          placeholder="350.00"
+                          className={`${input} w-28`}
+                        />
+                      </label>
+                      <label className={`${label} min-w-56 flex-1`}>
+                        Description
+                        <input
+                          name="description"
+                          defaultValue={`Transaction coordination: ${txn.propertyAddress}`}
+                          className={input}
+                        />
+                      </label>
+                      <label className={label}>
+                        Payment terms
+                        <input
+                          name="paymentTerms"
+                          list="txn-term-presets"
+                          placeholder="Due at closing"
+                          className={input}
+                        />
+                        <datalist id="txn-term-presets">
+                          {TERM_PRESETS.map((t) => (
+                            <option key={t} value={t} />
+                          ))}
+                        </datalist>
+                      </label>
+                      <label className={label}>
+                        Due
+                        <input name="dueDate" type="date" className={input} />
+                      </label>
+                      <PendingButton pendingLabel="Issuing…" className={btnGhost}>
+                        Issue invoice to {txn.client.name}
+                      </PendingButton>
+                    </form>
+                  ) : (
+                    <p className="text-sm text-stone-400">
+                      Attach a client to this transaction to invoice them.
+                    </p>
+                  )}
                 </SectionCard>
               )}
             </div>
@@ -4150,7 +4111,19 @@ export default async function TransactionDetailPage({
                 Who in the workspace works this file — not the buyer, seller, or other outside
                 contacts (see the Participants tab for those). Filter the transactions list to
                 "Assigned to me" to see your own.
-                {canSetFees && " Set what each person is paid; they request it when it's due."}
+                {billing.comp && (
+                  <>
+                    {" "}
+                    What each person is paid for it lives on the{" "}
+                    <Link
+                      href={`/dashboard/transactions/${txn.id}?tab=payout`}
+                      className="text-brand-700 hover:underline"
+                    >
+                      Payouts
+                    </Link>{" "}
+                    tab.
+                  </>
+                )}
               </p>
               {txn.assignees.length === 0 ? (
                 <p className="mb-3 text-sm text-stone-400">Nobody assigned yet.</p>
@@ -4161,59 +4134,22 @@ export default async function TransactionDetailPage({
                       <Avatar user={a.user} size={28} />
                       <span className="font-medium">{a.user.name}</span>
                       {a.roleLabel && <span className="text-stone-500">{a.roleLabel}</span>}
-                      {canSetFees && !a.paymentItem && (
-                        <form action={setAssigneeFee} className="flex items-center gap-1">
-                          <input type="hidden" name="id" value={a.id} />
-                          <input type="hidden" name="transactionId" value={txn.id} />
-                          <select
-                            name="feeMode"
-                            defaultValue={a.feePercentBp != null ? "percent" : "flat"}
-                            className={`${input} px-1.5 py-1 text-xs`}
-                            title="Flat amount, or a share of this file's fee revenue"
-                          >
-                            <option value="flat">fee $</option>
-                            <option value="percent">% of fee</option>
-                          </select>
-                          <input
-                            name="feeCents"
-                            defaultValue={a.feeCents == null ? "" : (a.feeCents / 100).toFixed(2)}
-                            placeholder="350.00"
-                            className={`${input} w-20 px-2 py-1 text-xs`}
-                          />
-                          <input
-                            name="feePercent"
-                            defaultValue={
-                              a.feePercentBp == null ? "" : String(a.feePercentBp / 100)
-                            }
-                            placeholder="70%"
-                            className={`${input} w-14 px-2 py-1 text-xs`}
-                          />
-                          <button type="submit" className={`${btnGhost} px-2 py-1 text-xs`}>
-                            Save
-                          </button>
-                        </form>
-                      )}
-                      {!a.paymentItem && a.feePercentBp != null && (
-                        <span className="text-xs text-stone-500">
-                          {formatPercentBp(a.feePercentBp)} · earned{" "}
-                          {fmtCents(
-                            assigneePayout(a, fileMoney.billedCents, fileMoney.paidCents)
-                              .earnedCents,
-                          )}{" "}
-                          · payable{" "}
-                          {fmtCents(
-                            assigneePayout(a, fileMoney.billedCents, fileMoney.paidCents)
-                              .payableCents,
-                          )}
-                        </span>
-                      )}
-                      {a.paymentItem && (
+                      {/* Read-only here on purpose: the rate is set and
+                          approved on the Payouts tab, so there's one place a
+                          number can be changed rather than two that can
+                          disagree. */}
+                      {billing.comp && a.paymentItem && (
                         <span className="text-xs text-stone-500">
                           {fmtCents(a.paymentItem.feeCents)} ·{" "}
-                          {a.paymentItem.request.status === "PAID" ? "paid" : "payment requested"}
+                          {a.paymentItem.request.status === "PAID" ? "paid" : "approved, unpaid"}
                         </span>
                       )}
-                      {!canSetFees && !a.paymentItem && a.feeCents != null && (
+                      {billing.comp && !a.paymentItem && a.feePercentBp != null && (
+                        <span className="text-xs text-stone-500">
+                          {formatPercentBp(a.feePercentBp)} of the fee
+                        </span>
+                      )}
+                      {billing.comp && !a.paymentItem && a.feeCents != null && (
                         <span className="text-xs text-stone-500">{fmtCents(a.feeCents)}</span>
                       )}
                       <form action={unassignUser} className="ml-auto">
@@ -4590,108 +4526,328 @@ export default async function TransactionDetailPage({
               </p>
             </SectionCard>
           )}
-          {tab === "payout" && canSetFees && (
-            <SectionCard title="Invoices" icon={<Receipt size={15} weight="fill" aria-hidden />}>
-              <p className="mb-3 text-sm text-stone-500">
-                Bill the client for this file — they pay however they pay (check, Zelle, wire,
-                closing proceeds). A follow-up task stays open until you mark it paid.
-              </p>
-              {txn.invoices.length > 0 && (
-                <ul className="mb-4 flex flex-col">
-                  {txn.invoices.map((inv) => (
-                    <li
-                      key={inv.id}
-                      className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 text-sm last:border-0"
-                    >
-                      <span className="font-medium">{invoiceLabel(inv.number)}</span>
-                      <span className="tabular-nums">{fmtCents(inv.amountCents)}</span>
-                      {inv.paymentTerms && (
-                        <span className="text-xs text-stone-400">{inv.paymentTerms}</span>
-                      )}
-                      <Badge
-                        tone={
-                          inv.status === "PAID"
-                            ? "success"
-                            : inv.status === "VOID"
-                              ? "neutral"
-                              : "progress"
+          {/* The payable side of the file. Deliberately the mirror of the
+              Invoicing tab: same five-number strip, same row shape, opposite
+              direction of money. Earned → payable → approved → paid is the
+              order an accounts-payable ledger walks, and each stage here is a
+              real row in the database rather than a label. */}
+          {tab === "payout" &&
+            billing.comp &&
+            (() => {
+              const withBasis = txn.assignees.filter(
+                (a) => a.feeCents != null || a.feePercentBp != null,
+              );
+              const totals = filePayoutTotals(
+                withBasis,
+                fileMoney.billedCents,
+                fileMoney.paidCents,
+              );
+              const approvedCents = withBasis.reduce(
+                (t, a) => t + (a.paymentItem?.feeCents ?? 0),
+                0,
+              );
+              const paidOutCents = withBasis.reduce(
+                (t, a) =>
+                  t + (a.paymentItem?.request.status === "PAID" ? a.paymentItem.feeCents : 0),
+                0,
+              );
+              const awaitingCents = approvedCents - paidOutCents;
+              return (
+                <div className="flex flex-col gap-3">
+                  <SectionCard
+                    title="Payouts"
+                    icon={<ChartPieSlice size={15} weight="fill" aria-hidden />}
+                  >
+                    <p className="mb-3 text-sm text-stone-500">
+                      What the workspace owes the people who worked this file. The other side of the
+                      ledger from{" "}
+                      <Link
+                        href={`/dashboard/transactions/${txn.id}?tab=billing`}
+                        className="text-brand-700 hover:underline"
+                      >
+                        Invoicing
+                      </Link>
+                      , which is what the client owes you. No money moves through Freehold — this is
+                      the record, and the statement each person keeps for their own books.
+                    </p>
+                    <div className="flex flex-wrap gap-x-6 gap-y-2">
+                      {(
+                        [
+                          ["Earned", fmtCents(totals.earnedCents), "text-stone-800"],
+                          [
+                            "Payable now",
+                            fmtCents(totals.payableCents),
+                            totals.payableCents > 0 ? "text-stone-800" : "text-stone-500",
+                          ],
+                          ["Approved", fmtCents(approvedCents), "text-stone-800"],
+                          [
+                            "Paid out",
+                            fmtCents(paidOutCents),
+                            paidOutCents > 0 ? "text-brand-700" : "text-stone-800",
+                          ],
+                          [
+                            "Awaiting payment",
+                            fmtCents(Math.max(0, awaitingCents)),
+                            awaitingCents > 0 ? "text-amber-700" : "text-stone-800",
+                          ],
+                        ] as const
+                      ).map(([labelText, value, tone], i) => (
+                        <div
+                          key={labelText}
+                          className={`flex flex-col ${i === 0 ? "" : "border-l border-stone-200 pl-6"}`}
+                        >
+                          <span className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
+                            {labelText}
+                          </span>
+                          <span className={`tabular-nums text-lg font-semibold ${tone}`}>
+                            {value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-3 text-xs text-stone-400">
+                      Keeps{" "}
+                      <span
+                        className={
+                          totals.netBilledCents >= 0
+                            ? "font-medium text-brand-700"
+                            : "font-medium text-red-700"
                         }
                       >
-                        {inv.status === "SENT"
-                          ? "Outstanding"
-                          : inv.status === "PAID"
-                            ? "Paid"
-                            : "Void"}
-                      </Badge>
-                      <a
-                        href={`/api/invoices/${inv.id}/pdf`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs text-brand-600 hover:underline"
+                        {fmtCents(totals.netBilledCents)}
+                      </span>{" "}
+                      of the {fmtCents(fileMoney.billedCents)} invoiced ·{" "}
+                      <span
+                        className={
+                          totals.netCollectedCents >= 0
+                            ? "font-medium text-brand-700"
+                            : "font-medium text-red-700"
+                        }
                       >
-                        PDF
-                      </a>
+                        {fmtCents(totals.netCollectedCents)}
+                      </span>{" "}
+                      of the {fmtCents(fileMoney.paidCents)} collected. A share set as a percentage
+                      is earned against what's invoiced and payable against what's collected, so you
+                      never approve a payout on money that hasn't arrived.
+                    </p>
+                  </SectionCard>
+
+                  <SectionCard
+                    title="Who gets paid"
+                    icon={<UserCircle size={15} weight="fill" aria-hidden />}
+                    count={withBasis.length}
+                    action={
                       <Link
-                        href="/dashboard/invoices"
-                        className="ml-auto text-xs text-stone-400 hover:underline"
+                        href={`/dashboard/transactions/${txn.id}?tab=team`}
+                        className="text-xs text-brand-700 hover:underline"
                       >
-                        manage →
+                        Add someone to the file →
                       </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {txn.client ? (
-                <form action={createInvoice} className="flex flex-wrap items-end gap-3">
-                  <input type="hidden" name="clientId" value={txn.client.id} />
-                  <input type="hidden" name="transactionId" value={txn.id} />
-                  <label className={label}>
-                    Amount (USD) *
-                    <input
-                      name="amount"
-                      inputMode="decimal"
-                      required
-                      placeholder="350.00"
-                      className={`${input} w-28`}
-                    />
-                  </label>
-                  <label className={`${label} min-w-56 flex-1`}>
-                    Description
-                    <input
-                      name="description"
-                      defaultValue={`Transaction coordination: ${txn.propertyAddress}`}
-                      className={input}
-                    />
-                  </label>
-                  <label className={label}>
-                    Payment terms
-                    <input
-                      name="paymentTerms"
-                      list="txn-term-presets"
-                      placeholder="Due at closing"
-                      className={input}
-                    />
-                    <datalist id="txn-term-presets">
-                      {TERM_PRESETS.map((t) => (
-                        <option key={t} value={t} />
-                      ))}
-                    </datalist>
-                  </label>
-                  <label className={label}>
-                    Due
-                    <input name="dueDate" type="date" className={input} />
-                  </label>
-                  <button type="submit" className={btnGhost}>
-                    Issue invoice to {txn.client.name}
-                  </button>
-                </form>
-              ) : (
-                <p className="text-sm text-stone-400">
-                  Attach a client to this transaction to invoice them.
-                </p>
-              )}
-            </SectionCard>
-          )}
+                    }
+                  >
+                    {txn.assignees.length === 0 ? (
+                      <p className="text-sm text-stone-500">
+                        Nobody is on this file yet. Assign someone under Team, then set what they're
+                        paid here.
+                      </p>
+                    ) : (
+                      <ul className="flex flex-col divide-y divide-stone-100">
+                        {txn.assignees.map((a) => {
+                          const hasBasis = a.feeCents != null || a.feePercentBp != null;
+                          const item = a.paymentItem;
+                          const paid = item?.request.status === "PAID";
+                          const p = assigneePayout(a, fileMoney.billedCents, fileMoney.paidCents);
+                          const [tone, stage]: ["success" | "progress" | "neutral", string] = paid
+                            ? ["success", "Paid"]
+                            : item
+                              ? ["progress", "Approved, unpaid"]
+                              : hasBasis
+                                ? ["neutral", "Not approved yet"]
+                                : ["neutral", "No payout set"];
+                          return (
+                            <li key={a.id} className="py-2.5 first:pt-0 last:pb-0">
+                              <div className="flex flex-col gap-1 lg:flex-row lg:items-baseline lg:justify-between lg:gap-4">
+                                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                                  <Avatar user={a.user} size={24} />
+                                  <span className="text-sm font-medium">{a.user.name}</span>
+                                  {a.roleLabel && (
+                                    <span className="text-xs text-stone-500">{a.roleLabel}</span>
+                                  )}
+                                  <Badge tone={tone}>{stage}</Badge>
+                                  {hasBasis && (
+                                    <span className="text-xs text-stone-400">
+                                      {a.feePercentBp != null
+                                        ? `${formatPercentBp(a.feePercentBp)} of the fee`
+                                        : "flat fee"}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="grid shrink-0 grid-cols-[7rem_7rem] items-baseline gap-x-4 text-xs tabular-nums">
+                                  {item ? (
+                                    <>
+                                      <span className="text-right font-medium text-stone-800">
+                                        {fmtCents(item.feeCents)}
+                                      </span>
+                                      <span
+                                        className={
+                                          paid
+                                            ? "text-right text-brand-700"
+                                            : "text-right text-amber-700"
+                                        }
+                                      >
+                                        {paid
+                                          ? `paid ${fmtDayMonth(item.request.paidAt)}`
+                                          : "unpaid"}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="text-right text-stone-600">
+                                        {hasBasis ? `earned ${fmtCents(p.earnedCents)}` : "—"}
+                                      </span>
+                                      <span
+                                        className={
+                                          p.payableCents > 0
+                                            ? "text-right text-brand-700"
+                                            : "text-right text-stone-300"
+                                        }
+                                      >
+                                        {hasBasis ? `payable ${fmtCents(p.payableCents)}` : "—"}
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+
+                              {canSetFees && (
+                                <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+                                  {/* The rate locks the moment it's approved —
+                                      it's on a statement by then, and editing
+                                      it would rewrite what someone was told
+                                      they'd be paid. */}
+                                  {!item && (
+                                    <form
+                                      action={setAssigneeFee}
+                                      className="flex flex-wrap items-center gap-1"
+                                    >
+                                      <input type="hidden" name="id" value={a.id} />
+                                      <input type="hidden" name="transactionId" value={txn.id} />
+                                      <select
+                                        name="feeMode"
+                                        defaultValue={a.feePercentBp != null ? "percent" : "flat"}
+                                        aria-label={`How ${a.user.name} is paid on this file`}
+                                        className={`${input} px-1.5 py-1 text-xs`}
+                                      >
+                                        <option value="flat">flat $</option>
+                                        <option value="percent">% of the fee</option>
+                                      </select>
+                                      <input
+                                        name="feeCents"
+                                        aria-label={`Flat amount for ${a.user.name}`}
+                                        defaultValue={
+                                          a.feeCents == null ? "" : (a.feeCents / 100).toFixed(2)
+                                        }
+                                        placeholder="350.00"
+                                        className={`${input} w-20 px-2 py-1 text-xs`}
+                                      />
+                                      <input
+                                        name="feePercent"
+                                        aria-label={`Percentage share for ${a.user.name}`}
+                                        defaultValue={
+                                          a.feePercentBp == null ? "" : String(a.feePercentBp / 100)
+                                        }
+                                        placeholder="70%"
+                                        className={`${input} w-14 px-2 py-1 text-xs`}
+                                      />
+                                      <PendingButton
+                                        pendingLabel="Saving…"
+                                        className={`${btnGhost} px-2 py-1 text-xs`}
+                                      >
+                                        Save rate
+                                      </PendingButton>
+                                    </form>
+                                  )}
+                                  {!item && hasBasis && p.payableCents > 0 && (
+                                    <form
+                                      action={approveAssigneePayout}
+                                      className="flex flex-wrap items-center gap-1.5"
+                                    >
+                                      <input type="hidden" name="id" value={a.id} />
+                                      <input type="hidden" name="transactionId" value={txn.id} />
+                                      <input
+                                        name="note"
+                                        aria-label={`Note on ${a.user.name}'s payout`}
+                                        placeholder="note (optional)"
+                                        className={`${input} w-32 px-2 py-1 text-xs`}
+                                      />
+                                      <PendingButton
+                                        pendingLabel="Approving…"
+                                        className={`${btnGhost} px-2 py-1 text-xs`}
+                                      >
+                                        Approve {fmtCents(p.payableCents)}
+                                      </PendingButton>
+                                    </form>
+                                  )}
+                                  {!item && hasBasis && p.payableCents === 0 && (
+                                    <span className="text-xs text-stone-400">
+                                      Nothing collected on this file yet, so there's nothing to
+                                      approve.
+                                    </span>
+                                  )}
+                                  {item && !paid && (
+                                    <form
+                                      action={markPaymentRequestPaid}
+                                      className="flex flex-wrap items-center gap-1.5"
+                                    >
+                                      <input type="hidden" name="id" value={item.request.id} />
+                                      <input
+                                        name="paidNote"
+                                        aria-label={`How ${a.user.name} was paid`}
+                                        placeholder="check #1042"
+                                        className={`${input} w-28 px-2 py-1 text-xs`}
+                                      />
+                                      <PendingButton
+                                        pendingLabel="Recording…"
+                                        className={`${btnGhost} px-2 py-1 text-xs`}
+                                      >
+                                        Mark paid
+                                      </PendingButton>
+                                    </form>
+                                  )}
+                                  {item && paid && item.request.paidNote && (
+                                    <span className="text-xs text-stone-500">
+                                      {item.request.paidNote}
+                                    </span>
+                                  )}
+                                  {item && (
+                                    <a
+                                      href={`/api/pay-requests/${item.request.id}/statement`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-xs font-medium text-brand-700 hover:text-brand-600"
+                                    >
+                                      Statement
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                    <p className="mt-2 text-xs text-stone-400">
+                      Approving raises a pay request in that person's name and freezes the amount,
+                      the same as when they submit it themselves from their profile. Every request
+                      across every file —{" "}
+                      <Link href="/dashboard/invoices" className="text-brand-700 hover:underline">
+                        on the Invoices page →
+                      </Link>
+                    </p>
+                  </SectionCard>
+                </div>
+              );
+            })()}
           {tab === "misc" && (
             <>
               {txn.intakeSubmissions.length > 0 && (

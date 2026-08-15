@@ -221,7 +221,7 @@ export function TopBar({
                   title="Plan, seats, and payment for this workspace"
                   className={itemCls}
                 >
-                  Billing
+                  Plan &amp; billing
                 </Link>
               )}
               <button
