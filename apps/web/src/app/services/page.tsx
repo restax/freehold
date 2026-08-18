@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MarketingFooter, MarketingNav } from "@/components/marketing";
 
 export const metadata = {
+  alternates: { canonical: "/services" },
   title: "Setup & IT services | Freehold",
   description:
     "We install, migrate, and configure Freehold for you: self-hosted setup, DocuSign and e-signature connections, data migration from legacy TC platforms, email and domains.",

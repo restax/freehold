@@ -1,7 +1,10 @@
 import { Wordmark } from "@/components/marketing";
 import { TERMS_LAST_UPDATED } from "@/lib/terms";
 
-export const metadata = { title: "Terms of service · Freehold" };
+export const metadata = {
+  title: "Terms of service · Freehold",
+  alternates: { canonical: "/terms" },
+};
 
 export default function TermsPage() {
   return (

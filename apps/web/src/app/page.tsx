@@ -16,7 +16,6 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import Image from "next/image";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { LaunchBanner } from "@/components/launch-banner";
 import {
   CloudWordmark,
@@ -26,7 +25,6 @@ import {
 } from "@/components/marketing";
 import { ScreenshotFigure } from "@/components/screenshot-figure";
 import { VoiceDemo } from "@/components/voice-demo";
-import { getSession } from "@/lib/session";
 import brokerageDusk from "../../public/marketing/brokerage-dusk.jpg";
 import closingKeys from "../../public/marketing/closing-keys.jpg";
 import movingDay from "../../public/marketing/moving-day.jpg";
@@ -39,7 +37,17 @@ import shotTransactions from "../../public/marketing/shots/shot-transactions.png
 import shotVoice from "../../public/marketing/shots/shot-voice.png";
 import tcAtWork from "../../public/marketing/tc-at-work.jpg";
 
+/**
+ * Rebuilt hourly rather than per request. The launch banner reads its coupon
+ * env at render time, so this page can't be frozen at build time — but it also
+ * has no per-visitor content, and serving it dynamically meant every crawl and
+ * every first-time visitor waited on an origin render. Signed-in visitors are
+ * sent to /dashboard by middleware, before this page is reached.
+ */
+export const revalidate = 3600;
+
 export const metadata = {
+  alternates: { canonical: "/" },
   title: "Transaction Coordination & Management Software | Freehold",
   description:
     "The TC platform clients love: AI contract reading, client portals, built-in e-signature. Cloud hosted or self-host free forever. Start free, no credit card.",
@@ -244,10 +252,7 @@ function OrderEmailCard() {
   );
 }
 
-export default async function LandingPage() {
-  const session = await getSession();
-  if (session) redirect("/dashboard");
-
+export default function LandingPage() {
   return (
     <main className="bg-stone-50 text-stone-900">
       <script

@@ -14,6 +14,35 @@ import { getOpinlyClient, opinlyEnabled } from "@/lib/opinly";
 
 export const revalidate = 3600;
 
+/**
+ * Prerender the index and every post at build time.
+ *
+ * Without this the optional catch-all has no known params, so Next classifies
+ * the whole route as dynamic and Vercel serves it `no-store` — the blog and
+ * every post were rendered at the origin on every request, including every
+ * crawl, while the flat marketing pages next to them were served from the CDN.
+ *
+ * `dynamicParams` stays at its default, so categories, authors, tags, and any
+ * post published since the last deploy still render on demand and are then
+ * cached by the `revalidate` above. That also makes this safe to fail: a build
+ * without an Opinly key, or one where the API is down, prerenders nothing and
+ * gets exactly the behaviour this route had before.
+ *
+ * 100 is the API's own ceiling on `limit` — asking for more is a 400, not a
+ * truncated list, and the catch below would have turned that into an empty
+ * build with no visible symptom. Post 101 onwards renders on demand.
+ */
+export async function generateStaticParams() {
+  if (!opinlyEnabled()) return [];
+  try {
+    const posts = await getOpinlyClient().posts({ limit: 100 });
+    return [{ slug: [] as string[] }, ...posts.data.map((post) => ({ slug: [post.slug] }))];
+  } catch (err) {
+    console.error("blog: opinly posts unavailable, prerendering nothing", err);
+    return [];
+  }
+}
+
 const categoryPrefix = opinlyConfig.categoryPrefix ?? "category";
 const authorPrefix = opinlyConfig.authorPrefix ?? "authors";
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MarketingFooter, MarketingNav } from "@/components/marketing";
 
 export const metadata = {
+  alternates: { canonical: "/docs/zapier" },
   title: "Zapier | Freehold docs",
   description:
     "Connect Freehold to DocuSign, Dotloop, and 7,000+ apps with Zapier: instant triggers from signed webhooks, actions through the REST API. No approvals, your own accounts.",

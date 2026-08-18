@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MarketingFooter, MarketingNav } from "@/components/marketing";
 
 export const metadata = {
+  alternates: { canonical: "/docs/api" },
   title: "API reference | Freehold",
   description:
     "The Freehold REST API: API keys, transactions, contacts, tasks, and signed webhooks. Read and write everything in your workspace.",

@@ -14,15 +14,18 @@ import { fmtPrice, LAUNCH_OFFER, launchOfferActive, launchPrice } from "@/lib/la
 import { PAYMENTS_PAUSED } from "@/lib/payments-paused";
 
 export const metadata = {
+  alternates: { canonical: "/pricing" },
   title: "Pricing | Freehold",
   description:
     "Simple pricing with one honest free tier. Cloud from $0, Pro $50 and Business $80 a month. Every new signup gets a 14-day full-Pro trial with no card. Enterprise for standalone installs, self-hosting free forever.",
 };
 
-// Rendered per request so the launch offer reflects the current coupon env and
-// deadline — a prerendered page would freeze the offer at build time (and not
-// self-retire after the deadline).
-export const dynamic = "force-dynamic";
+// Rebuilt hourly so the launch offer reflects the current coupon env and
+// deadline: a page prerendered once at build time would freeze the offer and
+// never self-retire after the deadline, while rendering it per request meant
+// the pricing page could not be cached at the CDN at all. An hour is well
+// inside the tolerance for a deadline measured in days.
+export const revalidate = 3600;
 
 const ENTERPRISE_EMAIL = "hello@freeholdtc.dev";
 

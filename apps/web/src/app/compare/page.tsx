@@ -6,6 +6,7 @@ import closingKeys from "../../../public/marketing/closing-keys.jpg";
 import movingDay from "../../../public/marketing/moving-day.jpg";
 
 export const metadata = {
+  alternates: { canonical: "/compare" },
   title: "Cloud vs self-hosting: the honest comparison | Freehold",
   description:
     "Three honest ways to run Freehold: Cloud, your own server, or your IT provider setting it up on servers you control. Same source-available software either way.",

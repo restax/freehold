@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MarketingFooter, MarketingNav } from "@/components/marketing";
 
 export const metadata = {
+  alternates: { canonical: "/docs/followupboss" },
   title: "Follow Up Boss | Freehold docs",
   description:
     "Connect Follow Up Boss to Freehold with your API key: website leads flow into your FUB automations, and your people import into Freehold contacts.",

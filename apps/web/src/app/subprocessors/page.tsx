@@ -1,6 +1,7 @@
 import { Wordmark } from "@/components/marketing";
 
 export const metadata = {
+  alternates: { canonical: "/subprocessors" },
   title: "Subprocessors · Freehold",
   description:
     "Every third party Freehold Cloud sends data to, what they do, and what they see. Updated as our infrastructure changes.",

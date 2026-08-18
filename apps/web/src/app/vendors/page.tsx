@@ -6,6 +6,7 @@ import { SponsoredAds } from "@/components/sponsored-ads";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
+  alternates: { canonical: "/vendors" },
   title: "For vendors | Freehold",
   description:
     "Title companies, inspectors, photographers, sign installers, and law offices: register once, connect to any coordinator, and take orders without the email back-and-forth.",

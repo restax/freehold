@@ -17,6 +17,7 @@ import { MarketingFooter, MarketingNav } from "@/components/marketing";
 import { mcpResourceUrl } from "@/lib/mcp";
 
 export const metadata = {
+  alternates: { canonical: "/mcp" },
   title: "Connect Claude to your transactions | Freehold",
   description:
     "Connect Freehold to Claude and ask about your closings, deadlines, and contacts in plain language. Working today, included with every plan, with permissions you control.",

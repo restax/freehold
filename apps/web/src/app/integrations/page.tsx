@@ -3,6 +3,7 @@ import Link from "next/link";
 import { MarketingFooter, MarketingNav } from "@/components/marketing";
 
 export const metadata = {
+  alternates: { canonical: "/integrations" },
   title: "Integrations | Freehold",
   description:
     "Everything Freehold connects to: e-signature, email, CRMs, legacy TC platforms, payments, and automation. Live integrations and the ones on the way.",

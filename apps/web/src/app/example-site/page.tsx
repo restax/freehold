@@ -13,6 +13,7 @@ import type { TenantSiteConfig } from "@/lib/site-config";
 const DEMO_INTAKE = FORM_TEMPLATES.find((t) => t.id === "basic_client");
 
 export const metadata = {
+  alternates: { canonical: "/example-site" },
   title: "Example tenant website | Freehold",
   description:
     "A live example of the promotional website every Freehold workspace gets on its own subdomain, with new-client registration that lands as a lead.",

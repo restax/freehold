@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MarketingFooter, MarketingNav } from "@/components/marketing";
 
 export const metadata = {
+  alternates: { canonical: "/docs/twenty" },
   title: "Twenty CRM | Freehold docs",
   description:
     "Connect Twenty, the open-source CRM, to Freehold: website leads land in Twenty as people, and your Twenty people import into Freehold contacts.",

@@ -3,6 +3,7 @@ import { MarketingFooter, MarketingNav } from "@/components/marketing";
 import { sendRecommendation } from "@/lib/actions/recommend";
 
 export const metadata = {
+  alternates: { canonical: "/recommend" },
   title: "Recommend Freehold | Freehold",
   description:
     "Freehold pays no affiliate commissions: recommendations are earned or they don't happen. If we've earned yours, here's where it helps most.",

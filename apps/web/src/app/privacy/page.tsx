@@ -1,6 +1,9 @@
 import { Wordmark } from "@/components/marketing";
 
-export const metadata = { title: "Privacy policy · Freehold" };
+export const metadata = {
+  title: "Privacy policy · Freehold",
+  alternates: { canonical: "/privacy" },
+};
 
 type Row = [category: string, examples: string, source: string, purpose: string];
 

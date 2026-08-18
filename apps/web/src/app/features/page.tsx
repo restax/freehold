@@ -5,6 +5,7 @@ import { LiveThemeSwitcher } from "@/components/live-theme-switcher";
 import { MarketingFooter, MarketingNav } from "@/components/marketing";
 
 export const metadata = {
+  alternates: { canonical: "/features" },
   title: "Features | Freehold",
   description:
     "Every feature in Freehold, honestly labeled: what works today and what we build on request. No feature-page fiction.",

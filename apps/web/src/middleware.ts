@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { routeForHost } from "@/lib/host-routing";
+import { hasSessionCookie } from "@/lib/session-cookie";
 
 /**
  * Host-based routing. The rules live in lib/host-routing.ts (pure, unit
@@ -35,6 +36,16 @@ export function middleware(req: NextRequest) {
       return NextResponse.redirect(`${protocol}//${root}${pathname}${search}`, 308);
     }
     default:
+      // The landing page used to call getSession() and redirect itself, which
+      // made it render per request and stopped Vercel caching it at all. The
+      // decision lives here now so the page can be static for everyone who
+      // isn't already signed in — every visitor arriving from a search result.
+      if (
+        req.nextUrl.pathname === "/" &&
+        hasSessionCookie(req.cookies.getAll().map((c) => c.name))
+      ) {
+        return NextResponse.redirect(new URL("/dashboard", req.nextUrl));
+      }
       return NextResponse.next();
   }
 }

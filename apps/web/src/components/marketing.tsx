@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ChatWidget } from "@/components/chat-widget";
+import { FooterBlogLinks } from "@/components/footer-blog-links";
 import { StripeTrust } from "@/components/stripe-trust";
 
 /* Shared brand chrome: wordmark, nav, footer, and the extraction review card. */
@@ -99,6 +100,7 @@ export function MarketingFooter() {
             The source-available, all-in-one platform for real estate transaction management and
             CRM.
           </p>
+          <FooterBlogLinks />
         </div>
         <nav aria-label="Product">
           <h3 className="text-sm font-medium">Product</h3>
