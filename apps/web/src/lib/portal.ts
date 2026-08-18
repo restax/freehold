@@ -98,16 +98,19 @@ export async function resolvePortal(token: string) {
 }
 
 /**
- * Resolve a managed-agent portal token: the client record plus every one of
- * their transactions (pipeline, history) and a recent-activity feed drawn
- * from the audit trail and task completions.
+ * Everything an agent client can see of their own book: their transactions,
+ * what is coming up, and what has moved lately.
+ *
+ * Keyed on ids rather than a portal token because two different things ask
+ * it. The portal resolves a token and calls this; the clients' Claude
+ * connector resolves an OAuth identity to the same pair and calls this too.
+ * One implementation, so "what may this agent see" cannot answer differently
+ * depending on which door the question arrived through — the same reason the
+ * staff connector routes its reads through the voice tools rather than
+ * growing a second copy of them.
  */
-export async function resolveAgentPortal(token: string) {
-  const link = await liveLink(token);
-  if (link?.audience !== "AGENT" || !link.clientId) return null;
-  const clientId = link.clientId;
-
-  const data = await withTenant(link.tenantId, async (tx) => {
+export async function agentClientData(tenantId: string, clientId: string) {
+  return withTenant(tenantId, async (tx) => {
     const client = await tx.client.findUnique({
       where: { id: clientId },
       select: { id: true, name: true, type: true },
@@ -181,6 +184,18 @@ export async function resolveAgentPortal(token: string) {
     });
     return { client, transactions, recentTasks, recentDocs, upcoming };
   });
+}
+
+/**
+ * Resolve a managed-agent portal token: the client record plus every one of
+ * their transactions (pipeline, history) and a recent-activity feed drawn
+ * from the audit trail and task completions.
+ */
+export async function resolveAgentPortal(token: string) {
+  const link = await liveLink(token);
+  if (link?.audience !== "AGENT" || !link.clientId) return null;
+
+  const data = await agentClientData(link.tenantId, link.clientId);
   if (!data) return null;
   return { link, ...data, tenantName: await tenantName(link.tenantId) };
 }

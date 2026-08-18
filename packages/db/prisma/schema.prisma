@@ -20,65 +20,78 @@ datasource db {
 // --- Better Auth core ---
 
 model User {
-  id                      String                @id
-  name                    String
-  email                   String                @unique
-  emailVerified           Boolean               @default(false)
+  id                         String                      @id
+  name                       String
+  email                      String                      @unique
+  emailVerified              Boolean                     @default(false)
   /// Unique login handle that doubles as the user's subdomain, so it lives in
   /// the same *.freeholdtc.dev namespace as workspace slugs and reserved
   /// subdomains. Lowercase, URL-safe. displayUsername keeps the as-typed form.
-  username                String?               @unique
-  displayUsername         String?
+  username                   String?                     @unique
+  displayUsername            String?
   /// The coordinator's own contact number, shown on the signature card of
   /// every email they send and available to templates as {{tc_phone}}. On the
   /// user rather than the membership: it's the person's number, and a
   /// coordinator working two workspaces answers the same phone in both.
-  phone                   String?
-  image                   String?
+  phone                      String?
+  image                      String?
   /// Profile photo bytes, stored inline (photos are small and user-global, so
   /// they never route to a tenant's bucket). Served by /api/users/[id]/avatar;
   /// `image` holds that path so anything reading the auth user renders it.
-  avatarData              Bytes?                @map("avatar_data")
-  avatarType              String?               @map("avatar_type")
-  createdAt               DateTime              @default(now())
-  updatedAt               DateTime              @updatedAt
-  twoFactorEnabled        Boolean?              @map("two_factor_enabled")
+  avatarData                 Bytes?                      @map("avatar_data")
+  avatarType                 String?                     @map("avatar_type")
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  twoFactorEnabled           Boolean?                    @map("two_factor_enabled")
   /// Lifetime count of "signed in from a different location" kicks (Free/Pro
   /// concurrent-desktop-session limit only — never incremented on Business).
   /// No reset window by design; purely a display metric until it earns
   /// enforcement — at 10, the dashboard shows an at-risk banner.
-  sessionKickCount        Int                   @default(0) @map("session_kick_count")
+  sessionKickCount           Int                         @default(0) @map("session_kick_count")
   /// Dismiss for the "30 day onboarding" ad widget in the left nav. On the
   /// person, not the membership: the ad shows their own phone number
   /// (User.phone), not anything workspace-specific, so closing it once holds
   /// across every workspace they belong to.
-  onboardingAdDismissedAt DateTime?             @map("onboarding_ad_dismissed_at")
+  onboardingAdDismissedAt    DateTime?                   @map("onboarding_ad_dismissed_at")
   /// Stamped server-side by the user.create hook in auth.ts, never accepted
   /// as client input, so it can't be spoofed. Non-null means this account
   /// accepted the terms of service that were live at signup; termsVersion
   /// (lib/terms.ts's TERMS_VERSION) records exactly which version that was.
-  termsAcceptedAt         DateTime?             @map("terms_accepted_at")
-  termsVersion            String?               @map("terms_version")
-  twoFactors              TwoFactor[]
-  sessions                Session[]
-  accounts                Account[]
-  members                 Member[]
-  invitations             Invitation[]
-  ownedContacts           ContactOwner[]        @relation("ContactOwner")
-  assignedTasks           Task[]                @relation("TaskAssignee")
-  licenses                UserLicense[]
-  transactionAssignments  TransactionAssignee[]
-  paymentRequests         PaymentRequest[]
-  guestEngagements        Engagement[]
-  supportTickets          SupportTicket[]
-  vendorUsers             VendorUser[]
-  clientReviews           ClientReview[]
-  transactionTimeEntries  TransactionTimeEntry[]
-  nylasGrant              NylasGrant?
-  oauthApplications       OauthApplication[]
-  oauthAccessTokens       OauthAccessToken[]
-  oauthConsents           OauthConsent[]
-  mcpConnections          McpConnection[]
+  termsAcceptedAt            DateTime?                   @map("terms_accepted_at")
+  termsVersion               String?                     @map("terms_version")
+  /// This account exists only so an outside agent can connect their own
+  /// Claude to the files a coordinator already shares with them. It is not a
+  /// coordinator account: it holds no membership, and the surfaces that
+  /// assume one (onboarding, the dashboard, the member consent screen) check
+  /// this rather than inferring from "has no workspaces yet", which is also
+  /// true of a real coordinator on their first morning.
+  ///
+  /// Declared in auth.ts's user.additionalFields as well — better-auth strips
+  /// any field it doesn't know about, even a real column.
+  isClientIdentity           Boolean                     @default(false) @map("is_client_identity")
+  clientConnectorConnections ClientConnectorConnection[]
+  clientConnectorReviews     ClientConnectorRequest[]    @relation("ClientConnectorRequestReviewer")
+  clientConnectorGrants      ClientConnectorGrant[]
+  twoFactors                 TwoFactor[]
+  sessions                   Session[]
+  accounts                   Account[]
+  members                    Member[]
+  invitations                Invitation[]
+  ownedContacts              ContactOwner[]              @relation("ContactOwner")
+  assignedTasks              Task[]                      @relation("TaskAssignee")
+  licenses                   UserLicense[]
+  transactionAssignments     TransactionAssignee[]
+  paymentRequests            PaymentRequest[]
+  guestEngagements           Engagement[]
+  supportTickets             SupportTicket[]
+  vendorUsers                VendorUser[]
+  clientReviews              ClientReview[]
+  transactionTimeEntries     TransactionTimeEntry[]
+  nylasGrant                 NylasGrant?
+  oauthApplications          OauthApplication[]
+  oauthAccessTokens          OauthAccessToken[]
+  oauthConsents              OauthConsent[]
+  mcpConnections             McpConnection[]
 
   @@map("user")
 }
@@ -758,6 +771,161 @@ model McpConnection {
   @@map("mcp_connection")
 }
 
+/// What one of the tenant's own clients — an outside agent or brokerage — may
+/// do through their own Claude. Set per client by the coordinator, on the
+/// client's page.
+///
+/// Deliberately not the member ladder: a member's grant answers "how much of
+/// this workspace", while a client's answers "how much of their own corner of
+/// it", and the middle rung has no member equivalent at all.
+enum ClientConnectorLevel {
+  /// The default. Nothing connects, nothing resolves.
+  NONE
+  /// Their own files, answered. No writes of any kind.
+  READ
+  /// Reads, plus asks that land as a request the coordinator approves. The
+  /// asking never changes a record — that is the whole point of the rung.
+  APPROVE
+  /// Reads, plus scheduling a task on their own file directly. A brand-new
+  /// file is still a request even here: creating one fires an automated email
+  /// at the client and drafts an invoice, which nobody wants happening
+  /// unreviewed.
+  FULL
+}
+
+/// One client's live Claude connection.
+///
+/// The sibling of McpConnection, and separate from it on purpose: that table
+/// binds a *member* to a workspace and reads its authority from the Member
+/// row, which a client has no equivalent of. Keeping them apart means the
+/// member path is untouched by anything here, and a context built from one
+/// can never be mistaken for the other.
+///
+/// Same no-RLS reasoning as McpConnection, api_key and portal_link: resolving
+/// this row is what establishes the tenant, so it has to be readable before
+/// any tenant context exists. Every read is keyed on the userId the bearer
+/// token proved.
+///
+/// One binding per (user, OAuth client), matching McpConnection: a connection
+/// is one token, and a token that answered for two tenants would make every
+/// zero-parameter tool ambiguous about whose files it meant.
+/// One outside agent's proven claim on one client record, written when they
+/// redeem the offer in their portal and read again when Claude sends them to
+/// the consent screen.
+///
+/// Exists because `client` carries forced row-level security: the consent
+/// screen knows who the person is but has no tenant context, so "which client
+/// is this?" cannot be a search. This table turns it into a lookup.
+model ClientConnectorGrant {
+  id         String       @id @default(uuid())
+  tenantId   String       @map("tenant_id")
+  tenant     Organization @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId   String       @map("client_id")
+  client     Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId     String       @map("user_id")
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The address the claim was proved against. Consent re-checks it against
+  /// the client record's current email, so correcting that field to a
+  /// different agent retires this grant without anyone touching this table.
+  boundEmail String       @map("bound_email")
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  @@unique([userId, clientId])
+  @@index([tenantId, clientId])
+  @@map("client_connector_grant")
+}
+
+model ClientConnectorConnection {
+  id              String                   @id @default(uuid())
+  tenantId        String                   @map("tenant_id")
+  tenant          Organization             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// The lightweight identity the outside agent signed in with. Their account
+  /// exists only to hold this connection — see User.isClientIdentity.
+  userId          String                   @map("user_id")
+  user            User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Which of the tenant's clients this connection speaks for. Everything the
+  /// connection may read or write is scoped to this row.
+  clientId        String                   @map("client_id")
+  client          Client                   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// The OAuth client ("Claude"). Not a foreign key to oauth_application, for
+  /// the same reason McpConnection isn't: pruned registrations must not take
+  /// the audit trail with them. Named oauthClientId rather than clientId
+  /// because on this table `clientId` already means the real-estate client.
+  oauthClientId   String                   @map("oauth_client_id")
+  oauthClientName String                   @map("oauth_client_name")
+  /// The address that was proven at sign-in, snapshotted. Re-checked against
+  /// the client's current addresses on every call: a coordinator correcting a
+  /// typo'd client email is how a coordinator cuts off the wrong person, and
+  /// it has to bite immediately rather than at token expiry.
+  boundEmail      String                   @map("bound_email")
+  createdAt       DateTime                 @default(now()) @map("created_at")
+  lastUsedAt      DateTime?                @map("last_used_at")
+  revokedAt       DateTime?                @map("revoked_at")
+  requests        ClientConnectorRequest[]
+
+  @@unique([userId, oauthClientId])
+  @@index([tenantId])
+  @@index([tenantId, clientId])
+  @@map("client_connector_connection")
+}
+
+/// What a client asked for through their Claude, waiting on a coordinator.
+///
+/// Its own table rather than a Task with a flag, following FormSubmission:
+/// an unreviewed request is not work, and a Task defaults to visible in both
+/// portals — an ask would echo straight back to the person who made it,
+/// looking like it had already been scheduled.
+model ClientConnectorRequest {
+  id             String                       @id @default(uuid())
+  tenantId       String                       @map("tenant_id")
+  tenant         Organization                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId       String                       @map("client_id")
+  client         Client                       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// SetNull rather than Cascade: a request outlives the connection that made
+  /// it, the same way a statement outlives the assignment behind it.
+  connectionId   String?                      @map("connection_id")
+  connection     ClientConnectorConnection?   @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  kind           ClientConnectorRequestKind
+  /// The ask itself, validated and length-capped at creation and rendered as
+  /// plain text everywhere. Free text written by an outside party's assistant
+  /// is never trusted markup.
+  payload        Json
+  /// Set on TASK requests. Re-verified against the client at approve time,
+  /// not just at request time — a file can change hands in between.
+  transactionId  String?                      @map("transaction_id")
+  transaction    Transaction?                 @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  status         ClientConnectorRequestStatus @default(NEW)
+  /// What the coordinator said when they approved or declined. Goes back to
+  /// the client's assistant, so "already scheduled for Tuesday" closes the
+  /// loop instead of becoming a phone call.
+  resolutionNote String?                      @map("resolution_note")
+  reviewedAt     DateTime?                    @map("reviewed_at")
+  reviewedById   String?                      @map("reviewed_by_id")
+  reviewedBy     User?                        @relation("ClientConnectorRequestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  /// The task this became, once approved.
+  createdTaskId  String?                      @map("created_task_id")
+  createdAt      DateTime                     @default(now()) @map("created_at")
+  updatedAt      DateTime                     @updatedAt @map("updated_at")
+
+  @@index([tenantId, status])
+  @@index([tenantId, clientId])
+  @@index([transactionId])
+  @@map("client_connector_request")
+}
+
+enum ClientConnectorRequestKind {
+  /// Put a task on a file they already have.
+  TASK
+  /// Start a new file altogether.
+  NEW_TRANSACTION
+}
+
+enum ClientConnectorRequestStatus {
+  NEW
+  APPROVED
+  DECLINED
+}
+
 // --- Better Auth organization plugin (Organization = Freehold tenant) ---
 
 /// Cloud plan tier. Self-hosted installs stay on FREE semantics-wise but are
@@ -769,36 +937,36 @@ enum PlanTier {
 }
 
 model Organization {
-  id                        String                     @id
-  name                      String
-  slug                      String                     @unique
-  logo                      String?
-  metadata                  String?
-  planTier                  PlanTier                   @default(FREE) @map("plan_tier")
-  seatLimit                 Int                        @default(2) @map("seat_limit")
-  aiExtractionsUsed         Int                        @default(0) @map("ai_extractions_used")
+  id                         String                      @id
+  name                       String
+  slug                       String                      @unique
+  logo                       String?
+  metadata                   String?
+  planTier                   PlanTier                    @default(FREE) @map("plan_tier")
+  seatLimit                  Int                         @default(2) @map("seat_limit")
+  aiExtractionsUsed          Int                         @default(0) @map("ai_extractions_used")
   /// Voice-search sessions started this billing month. Unlike the lifetime
   /// extraction credits, voice recurs, so the window rolls: once
   /// voiceQuotaResetAt is in the past the counter starts over.
-  voiceSessionsUsed         Int                        @default(0) @map("voice_sessions_used")
-  voiceQuotaResetAt         DateTime?                  @map("voice_quota_reset_at")
+  voiceSessionsUsed          Int                         @default(0) @map("voice_sessions_used")
+  voiceQuotaResetAt          DateTime?                   @map("voice_quota_reset_at")
   /// Prepaid AI credits (Cloud Free only). Spending one credit permanently
   /// unlocks pro AI features on a single transaction. Paid tiers ignore this —
   /// their AI is unmetered. New workspaces start with 0 — Free carries no
   /// included AI; topped up only by purchase or coupon. The balance of
   /// record; every change is mirrored to CreditLedger.
-  aiCredits                 Int                        @default(0) @map("ai_credits")
+  aiCredits                  Int                         @default(0) @map("ai_credits")
   /// Operator override for this tenant's contract-extraction model. When set,
   /// heavy or costly workspaces run extraction on a cheaper model instead of
   /// the default. Null = platform default (FREEHOLD_AI_MODEL / Opus).
-  aiModelOverride           String?                    @map("ai_model_override")
+  aiModelOverride            String?                     @map("ai_model_override")
   /// Admin setting: when true, members only see contacts they own.
-  restrictContactsToOwner   Boolean                    @default(false) @map("restrict_contacts_to_owner")
+  restrictContactsToOwner    Boolean                     @default(false) @map("restrict_contacts_to_owner")
   /// Admin setting: when true, any member can create/edit/delete signature
   /// blocks. Off (the default) keeps that to owners/admins only — a
   /// coordinator's title and phone number on outgoing mail isn't something
   /// every new hire should be able to rewrite on day one.
-  membersCanEditSignatures  Boolean                    @default(false) @map("members_can_edit_signatures")
+  membersCanEditSignatures   Boolean                     @default(false) @map("members_can_edit_signatures")
   /// Whether this workspace currently has any seeded sample rows, across the
   /// 10 isSample-flagged models (Client, Contact, Transaction, Task,
   /// ActionPlan, AttachmentTemplate, DateTemplate, ComplianceChecklist,
@@ -813,14 +981,14 @@ model Organization {
   /// the create flows must stay hidden. Those rows are still isSample so the
   /// demo wipe can find them, and because nothing there is real. Any OTHER
   /// new write site must maintain this flag or it will drift.
-  hasSampleData             Boolean                    @default(false) @map("has_sample_data")
+  hasSampleData              Boolean                     @default(false) @map("has_sample_data")
   /// When the demo dataset (lib/demo-workspace.ts) was last seeded into this
   /// workspace, or null if it never was. Every demo date is stored as an
   /// offset from this anchor, so "re-date to today" is a single delta shift
   /// rather than a re-derivation — that is the whole reason it is persisted
   /// rather than inferred from the data.
-  demoSeededAt              DateTime?                  @map("demo_seeded_at")
-  emailSignatures           EmailSignature[]
+  demoSeededAt               DateTime?                   @map("demo_seeded_at")
+  emailSignatures            EmailSignature[]
   /// The Handbook: the notes a team keeps about clients, contacts, people and
   /// files. Two switches, not one, because the halves are separable — someone
   /// who wants nothing to do with AI can still keep notes, which is the more
@@ -828,185 +996,198 @@ model Organization {
   /// "Time on files": passive per-file time analytics, built from presence
   /// pings while a transaction page is open. Off = no pings recorded, no
   /// charts shown. Data already recorded is kept, same policy as the Handbook.
-  timeTrackingEnabled       Boolean                    @default(true) @map("time_tracking_enabled")
+  timeTrackingEnabled        Boolean                     @default(true) @map("time_tracking_enabled")
   /// Which kinds of client this workspace takes on. Agents and offices are
   /// the default TC business; private lending is a different line of work and
   /// is off until switched on, because turning it on changes what a
   /// transaction screen looks like. A type already in use can't be switched
   /// off — see lib/actions/client-types.ts.
-  clientTypeAgentEnabled    Boolean                    @default(true) @map("client_type_agent_enabled")
-  clientTypeOfficeEnabled   Boolean                    @default(true) @map("client_type_office_enabled")
-  privateLendingEnabled     Boolean                    @default(false) @map("private_lending_enabled")
-  handbookEnabled           Boolean                    @default(true) @map("handbook_enabled")
+  clientTypeAgentEnabled     Boolean                     @default(true) @map("client_type_agent_enabled")
+  clientTypeOfficeEnabled    Boolean                     @default(true) @map("client_type_office_enabled")
+  privateLendingEnabled      Boolean                     @default(false) @map("private_lending_enabled")
+  handbookEnabled            Boolean                     @default(true) @map("handbook_enabled")
   /// The AI-written "Today at a glance" paragraph. Off leaves notes, pooling
   /// and grades working exactly as before, with no model call anywhere.
-  handbookSummaryEnabled    Boolean                    @default(true) @map("handbook_summary_enabled")
-  handbookNotes             HandbookNote[]
+  handbookSummaryEnabled     Boolean                     @default(true) @map("handbook_summary_enabled")
+  handbookNotes              HandbookNote[]
   /// Per-tenant Follow Up Boss connection: {enc:{...}, importedAt?, importedCount?}.
   /// API key encrypted with VAULT_MASTER_KEY.
-  fubConfig                 Json?                      @map("fub_config")
+  fubConfig                  Json?                       @map("fub_config")
   /// Per-tenant Twenty CRM connection: {url, enc:{...}, importedAt?, importedCount?}.
-  twentyConfig              Json?                      @map("twenty_config")
+  twentyConfig               Json?                       @map("twenty_config")
   /// Tenant wording for transaction sides: {buy, sell} — e.g. sell side vs list side.
-  sideLabels                Json?                      @map("side_labels")
+  sideLabels                 Json?                       @map("side_labels")
   /// Tenant overrides for automated email templates: {intro:{subject,body}, postClose:{subject,body}}.
-  emailTemplates            Json?                      @map("email_templates")
+  emailTemplates             Json?                       @map("email_templates")
   /// Workspace email signature + global footer: {signature, footer} —
   /// appended to every outgoing branded email.
-  emailSettings             Json?                      @map("email_settings")
+  emailSettings              Json?                       @map("email_settings")
   /// Tenant mini-site at <slug>.<root>: {published, tagline, about, phone, email,
   /// services, showRegistration, blocks}. `blocks` is the ordered page layout from
   /// the designer (lib/site-blocks.ts); the flat fields above are what sites made
   /// before the designer existed still render from.
-  siteConfig                Json?                      @map("site_config")
+  siteConfig                 Json?                       @map("site_config")
   /// Look-and-feel choices, all optional with sensible defaults:
   /// {theme, portalFont, priorityColors:{HIGH,CRITICAL}, rowHighlight:{scope,color}}.
   /// theme + portalFont style the client portal; priorityColors + rowHighlight
   /// tint the internal task lists. Null = Freehold defaults (forest/green).
-  appearanceConfig          Json?                      @map("appearance_config")
+  appearanceConfig           Json?                       @map("appearance_config")
   /// A domain the workspace owns, serving the same public surface as
   /// <slug>.<root>: the mini-site, public forms, and portal links. Unique
   /// because a hostname resolves to exactly one workspace — that uniqueness is
   /// what stops one workspace from claiming a domain another is already using.
   /// Stored lowercase and without a port; lib/host-routing.ts normalises before
   /// matching.
-  customDomain              String?                    @unique @map("custom_domain")
+  customDomain               String?                     @unique @map("custom_domain")
   /// "pending" (added, DNS not confirmed yet) | "active" (serving) | "error".
   /// Only "active" routes: an unconfirmed domain must not serve a workspace's
   /// page, or claiming someone else's hostname would be enough to sit on it.
-  customDomainStatus        String?                    @map("custom_domain_status")
+  customDomainStatus         String?                     @map("custom_domain_status")
   /// Last thing the domain provider told us — the DNS record still missing, or
   /// why verification failed. Shown verbatim to the admin, never parsed.
-  customDomainNote          String?                    @map("custom_domain_note")
+  customDomainNote           String?                     @map("custom_domain_note")
   /// Per-tenant Documenso connection: {url, enc:{ciphertext,iv,tag,wrappedKey,wrapIv,wrapTag,keyVersion}}.
   /// Token encrypted with VAULT_MASTER_KEY; null = use server-wide env default.
-  documensoConfig           Json?                      @map("documenso_config")
+  documensoConfig            Json?                       @map("documenso_config")
   /// Per-tenant OpenSign org, auto-provisioned on first send (not user-entered
   /// like documensoConfig): {orgId, sessionTokenEnc:{...}}. Freehold operates
   /// one shared OpenSign instance (FREEHOLD_OPENSIGN_URL); this is how each
   /// workspace gets its own isolated space inside it. Session token encrypted
   /// with VAULT_MASTER_KEY, same as documensoConfig's token.
-  openSignConfig            Json?                      @map("opensign_config")
+  openSignConfig             Json?                       @map("opensign_config")
   /// Per-tenant document storage: {provider:"S3", endpoint, region, bucket,
   /// accessKeyEnc:{...}, secretKeyEnc:{...}}. Keys encrypted with VAULT_MASTER_KEY.
   /// New documents route here; null = platform default (env S3) or Postgres bytes.
-  storageConfig             Json?                      @map("storage_config")
-  stripeCustomerId          String?                    @map("stripe_customer_id")
-  stripeSubscriptionId      String?                    @map("stripe_subscription_id")
+  storageConfig              Json?                       @map("storage_config")
+  stripeCustomerId           String?                     @map("stripe_customer_id")
+  stripeSubscriptionId       String?                     @map("stripe_subscription_id")
   /// Last-known Stripe subscription status (active, trialing, past_due, unpaid, canceled).
   /// Mirrored from webhooks for operator visibility; null = never had a paid sub.
-  subscriptionStatus        String?                    @map("subscription_status")
+  subscriptionStatus         String?                     @map("subscription_status")
   /// Set when the workspace is locked for a failed renewal. Data is preserved;
   /// the dashboard is gated until payment is updated. Cleared when Stripe reports paid again.
-  billingSuspendedAt        DateTime?                  @map("billing_suspended_at")
+  billingSuspendedAt         DateTime?                   @map("billing_suspended_at")
   /// Complimentary (comped) plan grant, independent of Stripe. When set (and not
   /// past compExpiresAt), it overrides planTier — a full plan with no checkout/charge.
-  compTier                  PlanTier?                  @map("comp_tier")
+  compTier                   PlanTier?                   @map("comp_tier")
   /// When the comp ends; null = no expiry (until an operator revokes it).
-  compExpiresAt             DateTime?                  @map("comp_expires_at")
-  createdAt                 DateTime                   @default(now())
-  members                   Member[]
-  invitations               Invitation[]
-  clients                   Client[]
-  contacts                  Contact[]
-  contactOwners             ContactOwner[]
-  transactions              Transaction[]
-  parties                   TransactionParty[]
-  tasks                     Task[]
-  actionPlans               ActionPlan[]
-  actionPlanTasks           ActionPlanTask[]
-  actionPlanDocuments       ActionPlanDocument[]
-  templateGroups            TemplateGroup[]
-  attachmentTemplates       AttachmentTemplate[]
-  attachmentTemplateItems   AttachmentTemplateItem[]
-  dateTemplates             DateTemplate[]
-  dateTemplateItems         DateTemplateItem[]
-  attachments               TransactionAttachment[]
-  attachmentFolders         AttachmentFolder[]
-  attachmentNotes           AttachmentNote[]
-  complianceChecklists      ComplianceChecklist[]
-  complianceItems           ComplianceItem[]
-  transactionCompliances    TransactionCompliance[]
-  complianceSlots           ComplianceSlot[]
-  userLicenses              UserLicense[]
-  transactionAssignees      TransactionAssignee[]
-  states                    TenantState[]
-  paymentRequests           PaymentRequest[]
-  paymentRequestItems       PaymentRequestItem[]
-  engagementsHired          Engagement[]               @relation("EngagementHirer")
-  engagementsProvided       Engagement[]               @relation("EngagementVendor")
-  supportTickets            SupportTicket[]
-  supportTicketReplies      SupportTicketReply[]
-  vendorConnections         VendorConnection[]
-  vendorOrders              VendorOrder[]
+  compExpiresAt              DateTime?                   @map("comp_expires_at")
+  createdAt                  DateTime                    @default(now())
+  members                    Member[]
+  invitations                Invitation[]
+  clients                    Client[]
+  contacts                   Contact[]
+  contactOwners              ContactOwner[]
+  transactions               Transaction[]
+  parties                    TransactionParty[]
+  tasks                      Task[]
+  actionPlans                ActionPlan[]
+  actionPlanTasks            ActionPlanTask[]
+  actionPlanDocuments        ActionPlanDocument[]
+  templateGroups             TemplateGroup[]
+  attachmentTemplates        AttachmentTemplate[]
+  attachmentTemplateItems    AttachmentTemplateItem[]
+  dateTemplates              DateTemplate[]
+  dateTemplateItems          DateTemplateItem[]
+  attachments                TransactionAttachment[]
+  attachmentFolders          AttachmentFolder[]
+  attachmentNotes            AttachmentNote[]
+  complianceChecklists       ComplianceChecklist[]
+  complianceItems            ComplianceItem[]
+  transactionCompliances     TransactionCompliance[]
+  complianceSlots            ComplianceSlot[]
+  userLicenses               UserLicense[]
+  transactionAssignees       TransactionAssignee[]
+  states                     TenantState[]
+  paymentRequests            PaymentRequest[]
+  paymentRequestItems        PaymentRequestItem[]
+  engagementsHired           Engagement[]                @relation("EngagementHirer")
+  engagementsProvided        Engagement[]                @relation("EngagementVendor")
+  supportTickets             SupportTicket[]
+  supportTicketReplies       SupportTicketReply[]
+  vendorConnections          VendorConnection[]
+  vendorOrders               VendorOrder[]
   /// What happens when a file sits in a license-required state with nobody
   /// licensed assigned: "warn" (save it, flag it everywhere) or "block"
   /// (refuse the write). Deliberately a tenant choice — TCs routinely open a
   /// file before deciding who runs it.
-  licenseEnforcement        String                     @default("warn") @map("license_enforcement")
+  licenseEnforcement         String                      @default("warn") @map("license_enforcement")
   /// Opt-in vendor-directory listing, published to other workspaces and to the
   /// public syndication feed: {listed, blurb, contactEmail, specializations[],
   /// software[], availability, pricingModel, yearsExperience, remote}. States
   /// covered come from TenantState. Null or listed:false = not listed anywhere.
-  directoryConfig           Json?                      @map("directory_config")
+  directoryConfig            Json?                       @map("directory_config")
   /// Per-tenant ERPNext connection: {url, itemCode, keyEnc:{...},
   /// secretEnc:{...}}. API key + secret encrypted with VAULT_MASTER_KEY.
   /// Null = client invoices are kept in Freehold only.
-  erpnextConfig             Json?                      @map("erpnext_config")
+  erpnextConfig              Json?                       @map("erpnext_config")
   /// Workspace billing policy: {mode, depositPercent, lateFee:{...},
   /// defaultFeeCents}. Every key overridable per client (Client.billingConfig).
   /// Parsed/validated by lib/billing-policy.ts; unset keys fall back there.
-  billingDefaults           Json?                      @map("billing_defaults")
+  billingDefaults            Json?                       @map("billing_defaults")
   /// Which US federal holidays count as non-business days for date-template
   /// calculators — array of the holiday keys in lib/date-calculators.ts.
   /// Null = the full default US federal set.
-  holidaySchedule           Json?                      @map("holiday_schedule")
+  holidaySchedule            Json?                       @map("holiday_schedule")
   /// This workspace's answer to the self-host Freehold Cloud prompt:
   /// `{off?: boolean, snoozedAt?: ISO string}`. Two different noes — "not
   /// now" (snoozed, back in a month) and "never" (off). Null = never
   /// answered, which is what makes a fresh install see it at all.
-  cloudPromptConfig         Json?                      @map("cloud_prompt_config")
-  documents                 Document[]
-  extractions               ContractExtraction[]
-  extractionFields          ExtractionField[]
-  templates                 DocTemplate[]
-  envelopes                 SignatureEnvelope[]
-  portalLinks               PortalLink[]
-  vaultCredentials          VaultCredential[]
-  vaultAccessLogs           VaultAccessLog[]
-  auditLogs                 AuditLog[]
-  transactionActivity       TransactionActivity[]
-  transactionTimeEntries    TransactionTimeEntry[]
-  contactNotes              ContactNote[]
-  clientNotes               ClientNote[]
-  clientAgents              ClientAgent[]
-  emailTemplatesLib         EmailTemplate[]
-  intakeSubmissions         IntakeSubmission[]
-  forms                     Form[]
-  formSubmissions           FormSubmission[]
-  formSubmissionFiles       FormSubmissionFile[]
-  formAccessLinks           FormAccessLink[]
-  formLookupAttempts        FormLookupAttempt[]
-  clientReviews             ClientReview[]
-  emails                    Email[]
-  apiKeys                   ApiKey[]
-  mcpConnections            McpConnection[]
+  cloudPromptConfig          Json?                       @map("cloud_prompt_config")
+  documents                  Document[]
+  extractions                ContractExtraction[]
+  extractionFields           ExtractionField[]
+  templates                  DocTemplate[]
+  envelopes                  SignatureEnvelope[]
+  portalLinks                PortalLink[]
+  vaultCredentials           VaultCredential[]
+  vaultAccessLogs            VaultAccessLog[]
+  auditLogs                  AuditLog[]
+  transactionActivity        TransactionActivity[]
+  transactionTimeEntries     TransactionTimeEntry[]
+  contactNotes               ContactNote[]
+  clientNotes                ClientNote[]
+  clientAgents               ClientAgent[]
+  emailTemplatesLib          EmailTemplate[]
+  intakeSubmissions          IntakeSubmission[]
+  forms                      Form[]
+  formSubmissions            FormSubmission[]
+  formSubmissionFiles        FormSubmissionFile[]
+  formAccessLinks            FormAccessLink[]
+  formLookupAttempts         FormLookupAttempt[]
+  clientReviews              ClientReview[]
+  emails                     Email[]
+  apiKeys                    ApiKey[]
+  mcpConnections             McpConnection[]
   /// Master switch for the Claude connector, owned by the subscriber.
   ///
   /// Off by default: connecting an AI assistant to a workspace full of client
   /// addresses and deal terms is a decision somebody should make on purpose,
   /// not discover they already made. Turning it off revokes every live
   /// connection in this workspace rather than merely hiding the setting.
-  mcpEnabled                Boolean                    @default(false) @map("mcp_enabled")
-  invoices                  Invoice[]
-  invoiceLines              InvoiceLine[]
-  invoicePayments           InvoicePayment[]
-  invoiceEmailLogs          InvoiceEmailLog[]
-  clientCreditEntries       ClientCreditEntry[]
-  webhookEndpoints          WebhookEndpoint[]
-  siteImages                SiteImage[]
-  criticalMessageDismissals CriticalMessageDismissal[]
-  messageShownAt            MessageShownAt[]
+  mcpEnabled                 Boolean                     @default(false) @map("mcp_enabled")
+  /// Master switch for the *clients'* connector — the outside agents this
+  /// workspace coordinates for, connecting their own Claude to their own
+  /// files.
+  ///
+  /// Separate from mcpEnabled on purpose. That switch's promise to the
+  /// subscriber is "turning it off disconnects everyone immediately", and the
+  /// everyone it means is the team. Sharing one flag would make a coordinator
+  /// pausing their staff's connector silently cut off every client too, and
+  /// nothing about the two decisions is the same decision.
+  clientConnectorEnabled     Boolean                     @default(false) @map("client_connector_enabled")
+  clientConnectorConnections ClientConnectorConnection[]
+  clientConnectorRequests    ClientConnectorRequest[]
+  clientConnectorGrants      ClientConnectorGrant[]
+  invoices                   Invoice[]
+  invoiceLines               InvoiceLine[]
+  invoicePayments            InvoicePayment[]
+  invoiceEmailLogs           InvoiceEmailLog[]
+  clientCreditEntries        ClientCreditEntry[]
+  webhookEndpoints           WebhookEndpoint[]
+  siteImages                 SiteImage[]
+  criticalMessageDismissals  CriticalMessageDismissal[]
+  messageShownAt             MessageShownAt[]
 
   @@map("organization")
 }
@@ -1107,10 +1288,10 @@ enum ClientType {
 /// serve. Transactions, vault credentials, portal branding, and invoicing all
 /// attach here in later stages.
 model Client {
-  id                    String               @id @default(uuid())
-  tenantId              String               @map("tenant_id")
-  tenant                Organization         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  type                  ClientType           @default(AGENT)
+  id                    String                      @id @default(uuid())
+  tenantId              String                      @map("tenant_id")
+  tenant                Organization                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type                  ClientType                  @default(AGENT)
   name                  String
   email                 String?
   phone                 String?
@@ -1119,62 +1300,62 @@ model Client {
   /// Who pays the bills at a brokerage or team: {name?, email?, phone?}.
   /// When the email is set, invoice emails go there instead of Client.email
   /// (lib/client-profile.ts resolves the recipient).
-  billingContact        Json?                @map("billing_contact")
+  billingContact        Json?                       @map("billing_contact")
   /// For AGENT clients: the brokerage they hang their license with — plain
   /// reference info ({name?, phone?, address?}), not a relation, because the
   /// agent's broker usually isn't a client of this workspace.
-  brokerageInfo         Json?                @map("brokerage_info")
+  brokerageInfo         Json?                       @map("brokerage_info")
   notes                 String?
   /// Per-client e-signature provider; null = tenant default (FREEHOLD_ESIGN_DEFAULT env, else MANUAL).
-  esignProvider         EsignProvider?       @map("esign_provider")
+  esignProvider         EsignProvider?              @map("esign_provider")
   /// Per-client automated-email switches: {intro?: boolean, postClose?: boolean}; missing = on.
-  emailPrefs            Json?                @map("email_prefs")
+  emailPrefs            Json?                       @map("email_prefs")
   /// This agent's own SkySlope API credentials, so their transactions can be
   /// read on their behalf: {accessKeyEnc:{...}, secretEnc:{...}, label?,
   /// connectedAt, verifiedAt?}. Envelope-encrypted with VAULT_MASTER_KEY.
   /// One per client because SkySlope issues AccessKey/Secret per user, not
   /// per brokerage. Null = not connected.
-  skyslopeConfig        Json?                @map("skyslope_config")
+  skyslopeConfig        Json?                       @map("skyslope_config")
   /// Per-client staleness thresholds, overriding the workspace defaults:
   /// {staleDays?, criticalWindowDays?, criticalStaleDays?}. Some clients want
   /// to hear about a quiet file sooner than others. Unset keys fall back to
   /// the defaults in lib/transaction-alerts.ts.
-  alertConfig           Json?                @map("alert_config")
+  alertConfig           Json?                       @map("alert_config")
   /// What this client is normally charged per file; auto-fills each new
   /// transaction's expectedFeeCents. Null = the workspace default fee.
-  defaultFeeCents       Int?                 @map("default_fee_cents")
+  defaultFeeCents       Int?                        @map("default_fee_cents")
   /// Per-client billing-policy overrides ({mode, lateFee, ...}); unset keys
   /// fall back to Organization.billingDefaults via lib/billing-policy.ts.
-  billingConfig         Json?                @map("billing_config")
+  billingConfig         Json?                       @map("billing_config")
   /// Read contracts that arrive through an intake form with AI, for this
   /// client only. Off by default and deliberately per-client: a stranger's
   /// upload is not something to spend a workspace's AI on by default, and
   /// some clients don't want their contracts machine-read at all. Pro
   /// feature — lib/intake-ai.ts is the gate.
-  intakeAiExtraction    Boolean              @default(false) @map("intake_ai_extraction")
+  intakeAiExtraction    Boolean                     @default(false) @map("intake_ai_extraction")
   /// Compliance: every transaction for this client follows the assigned
   /// checklist. Switch complianceEnabled off to exempt the client entirely
   /// (leaving no checklist assigned is also inert).
-  complianceEnabled     Boolean              @default(true) @map("compliance_enabled")
+  complianceEnabled     Boolean                     @default(true) @map("compliance_enabled")
   /// The fallback checklist, used when no side-specific default is set. This
   /// is the original single assignment; the per-side columns below were added
   /// later and win when they match the file's side.
-  complianceChecklistId String?              @map("compliance_checklist_id")
-  complianceChecklist   ComplianceChecklist? @relation(fields: [complianceChecklistId], references: [id], onDelete: SetNull)
-  complianceBuyId       String?              @map("compliance_buy_id")
-  complianceBuy         ComplianceChecklist? @relation("ClientComplianceBuy", fields: [complianceBuyId], references: [id], onDelete: SetNull)
-  complianceSellId      String?              @map("compliance_sell_id")
-  complianceSell        ComplianceChecklist? @relation("ClientComplianceSell", fields: [complianceSellId], references: [id], onDelete: SetNull)
-  complianceDualId      String?              @map("compliance_dual_id")
-  complianceDual        ComplianceChecklist? @relation("ClientComplianceDual", fields: [complianceDualId], references: [id], onDelete: SetNull)
-  isSample              Boolean              @default(false)
+  complianceChecklistId String?                     @map("compliance_checklist_id")
+  complianceChecklist   ComplianceChecklist?        @relation(fields: [complianceChecklistId], references: [id], onDelete: SetNull)
+  complianceBuyId       String?                     @map("compliance_buy_id")
+  complianceBuy         ComplianceChecklist?        @relation("ClientComplianceBuy", fields: [complianceBuyId], references: [id], onDelete: SetNull)
+  complianceSellId      String?                     @map("compliance_sell_id")
+  complianceSell        ComplianceChecklist?        @relation("ClientComplianceSell", fields: [complianceSellId], references: [id], onDelete: SetNull)
+  complianceDualId      String?                     @map("compliance_dual_id")
+  complianceDual        ComplianceChecklist?        @relation("ClientComplianceDual", fields: [complianceDualId], references: [id], onDelete: SetNull)
+  isSample              Boolean                     @default(false)
   transactions          Transaction[]
   credentials           VaultCredential[]
   portalLinks           PortalLink[]
   clientNotes           ClientNote[]
   agents                ClientAgent[]
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
   invoices              Invoice[]
   creditEntries         ClientCreditEntry[]
   forms                 Form[]
@@ -1184,11 +1365,17 @@ model Client {
   /// Working-relationship grade, set by hand from the client page. Columns
   /// rather than a HandbookNote because there is exactly one per client and
   /// it drives a badge, but it is the same feature to a user.
-  handbookGrade         HandbookGrade?       @map("handbook_grade")
+  handbookGrade         HandbookGrade?              @map("handbook_grade")
   /// Why the grade is what it is. The grade alone ages badly: "F" two years
   /// on tells a new coordinator nothing; "blamed us for a deal falling
   /// through, do not accept work" tells them everything.
-  handbookGradeNote     String?              @map("handbook_grade_note")
+  handbookGradeNote     String?                     @map("handbook_grade_note")
+  /// How much this client's own Claude may do. NONE means the feature does
+  /// not exist for them — no connection can even be offered, let alone bind.
+  connectorLevel        ClientConnectorLevel        @default(NONE) @map("connector_level")
+  connectorConnections  ClientConnectorConnection[]
+  connectorGrants       ClientConnectorGrant[]
+  connectorRequests     ClientConnectorRequest[]
 
   @@index([tenantId])
   @@map("client")
@@ -1864,90 +2051,90 @@ model ContactNote {
 /// The central object: one closing. Belongs to a tenant, optionally to the
 /// client (agent/brokerage) the tenant serves it for.
 model Transaction {
-  id                     String                  @id @default(uuid())
-  tenantId               String                  @map("tenant_id")
-  tenant                 Organization            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id                     String                   @id @default(uuid())
+  tenantId               String                   @map("tenant_id")
+  tenant                 Organization             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   clientId               String?
-  client                 Client?                 @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  status                 TransactionStatus       @default(UNDER_CONTRACT)
-  side                   TransactionSide         @default(BUY_SIDE)
-  propertyAddress        String                  @map("property_address")
+  client                 Client?                  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  status                 TransactionStatus        @default(UNDER_CONTRACT)
+  side                   TransactionSide          @default(BUY_SIDE)
+  propertyAddress        String                   @map("property_address")
   city                   String?
   state                  String?
   zip                    String?
-  purchasePrice          Int?                    @map("purchase_price")
-  listPrice              Int?                    @map("list_price")
-  listDate               DateTime?               @map("list_date") @db.Date
-  onMarketDate           DateTime?               @map("on_market_date") @db.Date
-  expireDate             DateTime?               @map("expire_date") @db.Date
-  mlsId                  String?                 @map("mls_id")
+  purchasePrice          Int?                     @map("purchase_price")
+  listPrice              Int?                     @map("list_price")
+  listDate               DateTime?                @map("list_date") @db.Date
+  onMarketDate           DateTime?                @map("on_market_date") @db.Date
+  expireDate             DateTime?                @map("expire_date") @db.Date
+  mlsId                  String?                  @map("mls_id")
   /// Our own side's agents on this file, as CRM contacts. Distinct from
   /// `parties` (which records both sides as read off the contract) and from
   /// `client` (who hired us — for a brokerage client the primary agent is one
   /// of their roster). Workspace users are assigned through
   /// TransactionAssignee rows, not here.
-  primaryAgentContactId  String?                 @map("primary_agent_contact_id")
-  primaryAgentContact    Contact?                @relation("TxnPrimaryAgent", fields: [primaryAgentContactId], references: [id], onDelete: SetNull)
-  coAgentContactId       String?                 @map("co_agent_contact_id")
-  coAgentContact         Contact?                @relation("TxnCoAgent", fields: [coAgentContactId], references: [id], onDelete: SetNull)
+  primaryAgentContactId  String?                  @map("primary_agent_contact_id")
+  primaryAgentContact    Contact?                 @relation("TxnPrimaryAgent", fields: [primaryAgentContactId], references: [id], onDelete: SetNull)
+  coAgentContactId       String?                  @map("co_agent_contact_id")
+  coAgentContact         Contact?                 @relation("TxnCoAgent", fields: [coAgentContactId], references: [id], onDelete: SetNull)
   /// What our client earns on this file, as a percentage of the contract
   /// price. One number, not a per-side split: the side is explicit on the
   /// file, so a second percentage only ever described the other party.
-  commissionPct          Float?                  @map("commission_pct")
+  commissionPct          Float?                   @map("commission_pct")
   /// Typed, not computed. A contract rarely states the gross, and the actual
   /// figure only exists once the broker pays the agent — the gap between the
   /// two is the thing worth chasing.
-  estimatedGrossCents    Int?                    @map("estimated_gross_cents")
-  actualGrossCents       Int?                    @map("actual_gross_cents")
-  commissionNote         String?                 @map("commission_note")
+  estimatedGrossCents    Int?                     @map("estimated_gross_cents")
+  actualGrossCents       Int?                     @map("actual_gross_cents")
+  commissionNote         String?                  @map("commission_note")
   assignees              TransactionAssignee[]
   review                 ClientReview?
   emails                 Email[]
   /// Contract-governed date changes awaiting an executed amendment:
   /// {closeDate?: "YYYY-MM-DD", contractDate?: "YYYY-MM-DD"}
-  proposedDates          Json?                   @map("proposed_dates")
-  contractDate           DateTime?               @map("contract_date") @db.Date
-  closeDate              DateTime?               @map("close_date") @db.Date
+  proposedDates          Json?                    @map("proposed_dates")
+  contractDate           DateTime?                @map("contract_date") @db.Date
+  closeDate              DateTime?                @map("close_date") @db.Date
   /// Critical dates, in escalation priority order: closing (above), then
   /// mortgage commitment, then the inspection deadline. Inside the alert
   /// window before any of these, a file is called stale far sooner — see
   /// lib/transaction-alerts.ts. Kept as first-class columns (not tasks) so
   /// the alert query never depends on task titles matching a phrase.
-  mortgageCommitmentDate DateTime?               @map("mortgage_commitment_date") @db.Date
-  inspectionDeadlineDate DateTime?               @map("inspection_deadline_date") @db.Date
+  mortgageCommitmentDate DateTime?                @map("mortgage_commitment_date") @db.Date
+  inspectionDeadlineDate DateTime?                @map("inspection_deadline_date") @db.Date
   /// When the earnest money / due-diligence fee is owed — usually a few
   /// business days after the contract date. A real column, not a task, for
   /// the same reason as the two above: it needs to be a date-template
   /// anchor and show on the key-dates calendar without depending on a task
   /// title.
-  earnestMoneyDueDate    DateTime?               @map("earnest_money_due_date") @db.Date
+  earnestMoneyDueDate    DateTime?                @map("earnest_money_due_date") @db.Date
   /// What the tenant expects to charge for this file — the anchor the trust
   /// surface compares actual billing against. Auto-filled from the client's
   /// default fee (else the workspace default) when the file is created;
   /// editable per file. 0 = deliberately no charge; null = never set.
-  expectedFeeCents       Int?                    @map("expected_fee_cents")
+  expectedFeeCents       Int?                     @map("expected_fee_cents")
   notes                  String?
-  customFields           Json?                   @map("custom_fields")
+  customFields           Json?                    @map("custom_fields")
   /// The loan, on a private lending file: amount, rate, term, points, the
   /// appraised value, and who is actually borrowing (an entity, usually, with
   /// a person guaranteeing it). One JSON column rather than nine sparse
   /// ones — only lending workspaces fill any of it, and the shape is still
   /// settling. Parsed by parseLendingTerms in lib/lending.ts, which treats
   /// the column as hostile. See TransactionSide.BORROWER.
-  lendingTerms           Json?                   @map("lending_terms")
+  lendingTerms           Json?                    @map("lending_terms")
   /// Parties pulled from the contract (buyer, seller, attorneys, title, agents)
   /// as a permanent, locked panel — an ordered array of { role, value }. Kept
   /// out of customFields so they can't be casually deleted, and distinct from
   /// the CRM-linked `parties` relation (this is text, no Contact rows).
-  contractParties        Json?                   @map("contract_parties")
+  contractParties        Json?                    @map("contract_parties")
   /// Per-transaction pro-AI unlock. A Free workspace spends one credit to turn
   /// this on for a single transaction; once on it stays on (contract
   /// extraction, AI classify, in-transaction dictation). Paid tiers are pro
   /// implicitly and never set this.
-  proFeaturesEnabled     Boolean                 @default(false) @map("pro_features_enabled")
-  proEnabledAt           DateTime?               @map("pro_enabled_at")
-  proEnabledBy           String?                 @map("pro_enabled_by")
-  isSample               Boolean                 @default(false)
+  proFeaturesEnabled     Boolean                  @default(false) @map("pro_features_enabled")
+  proEnabledAt           DateTime?                @map("pro_enabled_at")
+  proEnabledBy           String?                  @map("pro_enabled_by")
+  isSample               Boolean                  @default(false)
   parties                TransactionParty[]
   attachments            TransactionAttachment[]
   attachmentFolders      AttachmentFolder[]
@@ -1956,8 +2143,8 @@ model Transaction {
   extractions            ContractExtraction[]
   envelopes              SignatureEnvelope[]
   portalLinks            PortalLink[]
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
   invoices               Invoice[]
   invoiceLines           InvoiceLine[]
   intakeSubmissions      IntakeSubmission[]
@@ -1965,6 +2152,7 @@ model Transaction {
   vendorOrders           VendorOrder[]
   activity               TransactionActivity[]
   timeEntries            TransactionTimeEntry[]
+  connectorRequests      ClientConnectorRequest[]
 
   @@index([tenantId, status])
   @@map("transaction")
@@ -2560,57 +2748,66 @@ model TransactionParty {
 }
 
 model Task {
-  id               String        @id @default(uuid())
-  tenantId         String        @map("tenant_id")
-  tenant           Organization  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id               String                @id @default(uuid())
+  tenantId         String                @map("tenant_id")
+  tenant           Organization          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   transactionId    String?
-  transaction      Transaction?  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  transaction      Transaction?          @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   title            String
   notes            String?
-  dueDate          DateTime?     @map("due_date") @db.Date
-  status           TaskStatus    @default(OPEN)
-  priority         TaskPriority  @default(NORMAL)
-  kind             TaskKind      @default(TODO)
+  dueDate          DateTime?             @map("due_date") @db.Date
+  status           TaskStatus            @default(OPEN)
+  priority         TaskPriority          @default(NORMAL)
+  kind             TaskKind              @default(TODO)
   /// A milestone reads as a bigger deal on the calendar/timeline views —
   /// "closed & funded", not "update MLS status".
-  milestone        Boolean       @default(false)
+  milestone        Boolean               @default(false)
   /// Off hides a dated task from the calendar without deleting it — a
   /// reminder-only entry that would otherwise clutter the month view.
-  onCalendar       Boolean       @default(true) @map("on_calendar")
+  onCalendar       Boolean               @default(true) @map("on_calendar")
   /// The formal seat this task was assigned to, independent of whether that
   /// seat is currently filled (see AssigneeRole). AGENT tasks never get an
   /// `assigneeId` — there's no User to point at — this is what the row
   /// label reads instead.
-  assigneeRole     AssigneeRole? @map("assignee_role")
+  assigneeRole     AssigneeRole?         @map("assignee_role")
   /// Provenance for domino recomputation: tasks instantiated from an action
   /// plan keep their anchor + offset so a confirmed date change re-dates them.
   anchor           DateAnchor?
-  offsetDays       Int?          @map("offset_days")
+  offsetDays       Int?                  @map("offset_days")
   /// Dated off another task's completion instead of a transaction date
   /// (anchor = DEPENDENCY). Self-referencing so a chain of thank-you/invoice
   /// tasks can each depend on the one before it.
-  dependsOnTaskId  String?       @map("depends_on_task_id")
-  dependsOnTask    Task?         @relation("TaskDependency", fields: [dependsOnTaskId], references: [id], onDelete: SetNull)
-  dependents       Task[]        @relation("TaskDependency")
+  dependsOnTaskId  String?               @map("depends_on_task_id")
+  dependsOnTask    Task?                 @relation("TaskDependency", fields: [dependsOnTaskId], references: [id], onDelete: SetNull)
+  dependents       Task[]                @relation("TaskDependency")
   /// Manually re-dated tasks opt out of recomputation.
-  dueDateEdited    Boolean       @default(false) @map("due_date_edited")
+  dueDateEdited    Boolean               @default(false) @map("due_date_edited")
   /// Set when this task exists to get a date amendment executed ("closeDate"/"contractDate").
-  proposedFor      String?       @map("proposed_for")
+  proposedFor      String?               @map("proposed_for")
   /// Carried from the action-plan template task: default email template.
-  emailTemplateId  String?       @map("email_template_id")
-  autoSendEmail    Boolean       @default(false) @map("auto_send_email")
-  completedAt      DateTime?     @map("completed_at")
-  contactId        String?       @map("contact_id")
-  contact          Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  emailTemplateId  String?               @map("email_template_id")
+  autoSendEmail    Boolean               @default(false) @map("auto_send_email")
+  completedAt      DateTime?             @map("completed_at")
+  contactId        String?               @map("contact_id")
+  contact          Contact?              @relation(fields: [contactId], references: [id], onDelete: SetNull)
   /// Per-audience portal visibility, toggled from the transaction screen.
-  visibleToAgent   Boolean       @default(true) @map("visible_to_agent")
-  visibleToClient  Boolean       @default(true) @map("visible_to_client")
+  visibleToAgent   Boolean               @default(true) @map("visible_to_agent")
+  visibleToClient  Boolean               @default(true) @map("visible_to_client")
   assigneeId       String?
-  assignee         User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  sortOrder        Int           @default(0) @map("sort_order")
-  isSample         Boolean       @default(false)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  assignee         User?                 @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  sortOrder        Int                   @default(0) @map("sort_order")
+  /// Where this task came from, when it wasn't a coordinator typing it.
+  /// Null for everything the team creates by hand or from a template;
+  /// "client_connector" for one a client's Claude scheduled or asked for.
+  ///
+  /// A real column rather than the "(via Claude)" suffix the activity trail
+  /// uses, because provenance has to survive an edit and be queryable — you
+  /// filter and badge on this, and at revocation time it is how you find what
+  /// a connection put here.
+  source           String?
+  isSample         Boolean               @default(false)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
   invoiceFollowUps Invoice[]
   /// Files produced or collected while doing this task, and the task's own
   /// work log. Both SetNull on delete: the document and the record that the
@@ -2920,36 +3117,36 @@ model TransactionCompliance {
 /// One required document within a compliance round: which file satisfies it and
 /// where it stands in review.
 model ComplianceSlot {
-  id           String                @id @default(uuid())
-  tenantId     String                @map("tenant_id")
-  tenant       Organization          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  complianceId String                @map("compliance_id")
-  compliance   TransactionCompliance @relation(fields: [complianceId], references: [id], onDelete: Cascade)
-  name         String
-  description  String?
-  required     Boolean               @default(true)
+  id             String                   @id @default(uuid())
+  tenantId       String                   @map("tenant_id")
+  tenant         Organization             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  complianceId   String                   @map("compliance_id")
+  compliance     TransactionCompliance    @relation(fields: [complianceId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  required       Boolean                  @default(true)
   /// Snapshotted from the checklist item, same as name and required, so a
   /// later template edit never changes what a file already under review asks
   /// for.
-  paymentTracked Boolean             @default(false) @map("payment_tracked")
+  paymentTracked Boolean                  @default(false) @map("payment_tracked")
   /// Null until someone answers, which is different from UNPAID — "nobody has
   /// said" and "confirmed not yet paid" are not the same fact to a processor
   /// assembling a settlement statement.
-  paymentStatus CompliancePaymentStatus? @map("payment_status")
-  sortOrder    Int                   @default(0) @map("sort_order")
+  paymentStatus  CompliancePaymentStatus? @map("payment_status")
+  sortOrder      Int                      @default(0) @map("sort_order")
   /// The document satisfying this slot; cleared if that document is deleted.
-  documentId   String?               @map("document_id")
-  document     Document?             @relation(fields: [documentId], references: [id], onDelete: SetNull)
-  status       ComplianceSlotStatus  @default(MISSING)
+  documentId     String?                  @map("document_id")
+  document       Document?                @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  status         ComplianceSlotStatus     @default(MISSING)
   /// Highest review level that has signed off so far. APPROVED only once it
   /// reaches the round's approvalLevels; reset by a return or a file swap.
-  approvedTier Int                   @default(0) @map("approved_tier")
+  approvedTier   Int                      @default(0) @map("approved_tier")
   /// Why a reviewer sent it back.
-  reviewNote   String?               @map("review_note")
-  reviewedAt   DateTime?             @map("reviewed_at")
-  reviewedById String?               @map("reviewed_by_id")
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
+  reviewNote     String?                  @map("review_note")
+  reviewedAt     DateTime?                @map("reviewed_at")
+  reviewedById   String?                  @map("reviewed_by_id")
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
 
   @@index([tenantId])
   @@index([complianceId])
@@ -3264,22 +3461,22 @@ model UserLicense {
 
 /// One required document on a compliance checklist.
 model ComplianceItem {
-  id          String              @id @default(uuid())
-  tenantId    String              @map("tenant_id")
-  tenant      Organization        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  checklistId String              @map("checklist_id")
-  checklist   ComplianceChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
-  name        String
-  description String?
+  id             String              @id @default(uuid())
+  tenantId       String              @map("tenant_id")
+  tenant         Organization        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  checklistId    String              @map("checklist_id")
+  checklist      ComplianceChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
   /// Optional items are tracked but never block a file from passing.
-  required    Boolean             @default(true)
+  required       Boolean             @default(true)
   /// This line is an invoice, so the file also has to record whether it has
   /// been paid or is coming out of the closing. Set on the insurance and
   /// appraisal invoices of a lending checklist; off for an ordinary document,
   /// where a payment question would be noise.
-  paymentTracked Boolean          @default(false) @map("payment_tracked")
-  sortOrder   Int                 @default(0) @map("sort_order")
-  createdAt   DateTime            @default(now())
+  paymentTracked Boolean             @default(false) @map("payment_tracked")
+  sortOrder      Int                 @default(0) @map("sort_order")
+  createdAt      DateTime            @default(now())
 
   @@index([tenantId])
   @@index([checklistId])

@@ -11,6 +11,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { ClientConnectorPanel } from "@/components/client-connector-panel";
 import { McpConnectorPanel } from "@/components/mcp-connector-panel";
 import { SectionCard } from "@/components/section-card";
 import { connectErpnext, disconnectErpnext } from "@/lib/actions/erpnext";
@@ -83,9 +84,13 @@ export default async function IntegrationsPage({
   ]);
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: tenantId },
-    select: { slug: true, mcpEnabled: true },
+    select: { slug: true, mcpEnabled: true, clientConnectorEnabled: true },
   });
   const mcpEnabled = org.mcpEnabled;
+  const clientConnectorEnabled = org.clientConnectorEnabled;
+  const connectedClients = clientConnectorEnabled
+    ? await prisma.clientConnectorConnection.count({ where: { tenantId, revokedAt: null } })
+    : 0;
   const documenso = await documensoStatus(tenantId);
   const opensignAvailable = makeOpenSignAdapter().available().ok;
   const opensign = opensignAvailable ? await openSignStatus(tenantId) : { connected: false };
@@ -420,6 +425,20 @@ export default async function IntegrationsPage({
       status: mcpEnabled ? "On" : "Off",
       body: "Connect this workspace to Claude directly, so you can ask about your files in any Claude conversation without pasting anything. Each person signs in with their own account and sees only what their role already lets them see. Off until the workspace owner turns it on.",
       extra: <McpConnectorPanel tenantId={tenantId} userId={userId} isAdmin={isAdmin} />,
+    },
+    {
+      key: "client-connector",
+      name: "Claude for your clients",
+      category: "Developers & automation",
+      mono: "AI",
+      tone: clientConnectorEnabled ? "active" : "setup",
+      status: clientConnectorEnabled
+        ? connectedClients > 0
+          ? `${connectedClients} connected`
+          : "On"
+        : "Off",
+      body: "Lets the agents you work for ask Claude about their own files — what's closing, what's outstanding — instead of emailing you for it. They see only their own transactions, and you decide per client whether they can just look, send you requests to approve, or make changes themselves.",
+      extra: <ClientConnectorPanel tenantId={tenantId} isAdmin={isAdmin} />,
     },
     {
       key: "api",

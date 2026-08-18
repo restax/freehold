@@ -1,7 +1,9 @@
 import { prisma } from "@freehold/db";
 import { redirect } from "next/navigation";
 import { Wordmark } from "@/components/marketing";
+import { connectableClients } from "@/lib/client-connector-grant";
 import { getSession, listTenants } from "@/lib/session";
+import { ClientConsentForm } from "./client-consent-form";
 import { ConsentForm } from "./consent-form";
 
 export const dynamic = "force-dynamic";
@@ -40,9 +42,54 @@ export default async function McpConsentPage({
     listTenants(),
   ]);
 
-  // Someone with no workspace has nothing to connect. Sending them to
-  // onboarding is more useful than an empty picker.
-  if (tenants.length === 0) redirect("/onboarding");
+  // No workspace of their own does not mean nothing to connect. An outside
+  // agent whose coordinator turned this on has a lightweight account and one
+  // or more grants, earned by proving the address on their client record from
+  // inside their portal — see lib/client-connector-grant.ts.
+  //
+  // Checked only when they have no memberships, so a coordinator's own screen
+  // is exactly what it was. Someone who is both a coordinator here and an
+  // agent-client of another workspace therefore sees the staff screen; that is
+  // a real case and a later stage's problem, not a reason to blur the two
+  // screens now.
+  if (tenants.length === 0) {
+    const options = await connectableClients(session.user.id);
+    if (options.length === 0) redirect("/onboarding");
+
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center px-6 py-12">
+        <div className="mb-6">
+          <Wordmark />
+        </div>
+        <div className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
+          <h1 className="text-lg font-semibold">
+            Connect {client?.name ?? "Claude"} to your files
+          </h1>
+          <p className="mt-2 text-sm leading-relaxed text-stone-600">
+            {client?.name ?? "Claude"} is asking to see the transactions your coordinator handles
+            for you. It will see your own files and nothing belonging to anyone else they work with.
+          </p>
+
+          <ClientConsentForm
+            oauthClientId={clientId}
+            appName={client?.name ?? "Claude"}
+            consentCode={consentCode ?? null}
+            options={options.map((option) => ({
+              clientId: option.clientId,
+              clientName: option.clientName,
+              tenantName: option.tenantName,
+            }))}
+          />
+
+          <p className="mt-5 border-t border-stone-100 pt-4 text-xs leading-relaxed text-stone-500">
+            Your coordinator decides what this can do and can switch it off at any time. If they
+            change what you&rsquo;re allowed to do, what {client?.name ?? "Claude"} can do changes
+            with it.
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   const active = tenants.find((t) => t.id === session.session.activeOrganizationId);
 

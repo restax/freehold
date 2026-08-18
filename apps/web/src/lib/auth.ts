@@ -65,6 +65,16 @@ export const auth = betterAuth({
     additionalFields: {
       termsAcceptedAt: { type: "date", required: false, input: false },
       termsVersion: { type: "string", required: false, input: false },
+      // Marks the lightweight accounts an outside agent gets when they
+      // connect their own Claude to a coordinator's files. input: false for
+      // the same reason as the terms columns — nobody talks their way into
+      // (or out of) being a client identity by posting a field.
+      isClientIdentity: {
+        type: "boolean",
+        required: false,
+        defaultValue: false,
+        input: false,
+      },
     },
   },
   // Extra Session columns for the concurrent-desktop-session limit (see

@@ -1,5 +1,5 @@
 import { prisma, TaskStatus, TransactionStatus, withTenant } from "@freehold/db";
-import { CalendarCheck, CheckCircle, Sun, Warning } from "@phosphor-icons/react/dist/ssr";
+import { CalendarCheck, CheckCircle, Sparkle, Sun, Warning } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { after } from "next/server";
 import { AddressPill } from "@/components/address-pill";
@@ -185,6 +185,27 @@ export default async function DashboardPage({
   // Files that have gone quiet, worst first — same verdict the transaction
   // page and the daily briefing show.
   const needsAttention = rankAlerts(await transactionAlerts(tenantId, now));
+
+  // Everything the workspace's clients have asked for and nobody has answered.
+  // On the client's own page these are contextual; here they are the only
+  // reason a coordinator would know an ask exists at all — an agent who asks
+  // through their Claude has no other way of reaching this screen.
+  const waitingOnYou = await withTenant(tenantId, (tx) =>
+    tx.clientConnectorRequest.findMany({
+      where: { tenantId, status: "NEW" },
+      orderBy: { createdAt: "asc" },
+      take: 8,
+      select: {
+        id: true,
+        kind: true,
+        payload: true,
+        createdAt: true,
+        clientId: true,
+        client: { select: { name: true } },
+        transaction: { select: { propertyAddress: true } },
+      },
+    }),
+  );
 
   // The money strip, for anyone with billing access: what's owed, what's
   // overdue, what came in this month, and whether any closed file slipped
@@ -713,6 +734,50 @@ export default async function DashboardPage({
             </SectionCard>
           )}
         </div>
+      )}
+
+      {/* Oldest first, and deliberately above the fold: an ask nobody answers
+          becomes the phone call this feature exists to prevent. Answering
+          happens on the client's page, where the file and the history are. */}
+      {waitingOnYou.length > 0 && (
+        <SectionCard
+          title="Your clients asked for"
+          count={waitingOnYou.length}
+          icon={<Sparkle size={15} weight="fill" className="text-brand-600" aria-hidden />}
+        >
+          <p className="mb-3 text-sm text-stone-500">
+            Requests that came in through your clients&rsquo; own Claude. Nothing is scheduled until
+            you approve it.
+          </p>
+          <ul className="flex flex-col divide-y divide-stone-100">
+            {waitingOnYou.map((request) => {
+              const ask = (request.payload ?? {}) as { title?: string };
+              return (
+                <li
+                  key={request.id}
+                  className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2 text-sm"
+                >
+                  <Link
+                    href={`/dashboard/clients/${request.clientId}`}
+                    className="font-medium text-brand-700 hover:text-brand-600"
+                  >
+                    {request.client.name}
+                  </Link>
+                  <span className="min-w-0 text-stone-700">{ask.title ?? "(untitled)"}</span>
+                  {request.transaction && (
+                    <AddressPill href={`/dashboard/clients/${request.clientId}`}>
+                      {request.transaction.propertyAddress}
+                    </AddressPill>
+                  )}
+                  <span className="ml-auto shrink-0 text-xs text-stone-400">
+                    {request.kind === "NEW_TRANSACTION" ? "new file · " : ""}
+                    {fmtDayMonth(request.createdAt)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </SectionCard>
       )}
 
       {/* Two columns: the day's work on the left (Today runs long, so it's

@@ -23,6 +23,14 @@ import { RevealSkyslope } from "@/components/reveal-skyslope";
 import { SectionCard } from "@/components/section-card";
 import { saveClientBilling } from "@/lib/actions/billing-policy";
 import {
+  approveClientConnectorRequest,
+  declineClientConnectorRequest,
+} from "@/lib/actions/client-connector-requests";
+import {
+  revokeClientConnectorConnection,
+  setClientConnectorLevel,
+} from "@/lib/actions/client-connector-settings";
+import {
   addClientAgent,
   addClientAgentInline,
   addClientNote,
@@ -40,6 +48,7 @@ import { createAgentPortalLink, setPortalLinkActive } from "@/lib/actions/portal
 import { connectSkyslope, disconnectSkyslope } from "@/lib/actions/skyslope";
 import { createCredential } from "@/lib/actions/vault";
 import { BILLING_MODE_LABEL, BILLING_MODES, tenantBillingPolicy } from "@/lib/billing-policy";
+import { CLIENT_CONNECTOR_LEVEL_OPTIONS, clientConnectorLevelLabel } from "@/lib/client-connector";
 import {
   billingContactFrom,
   brokerageInfoFrom,
@@ -49,7 +58,7 @@ import {
 import { SIDE_LABEL } from "@/lib/compliance";
 import { parseEmailPrefs } from "@/lib/email-prefs";
 import { FORM_KIND_LABEL } from "@/lib/form-schema";
-import { fmtDate, fmtMoney } from "@/lib/format";
+import { fmtDate, fmtDayMonth, fmtMoney } from "@/lib/format";
 import { handbookState, transactionHasPro } from "@/lib/plans";
 import { portalOrigin } from "@/lib/portal";
 import { decodeSkyslopeConfig, maskKey, parseSkyslopeConfig, skyslopeState } from "@/lib/skyslope";
@@ -117,11 +126,46 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             orderBy: { updatedAt: "desc" },
             include: { portalLinks: { orderBy: { createdAt: "desc" } } },
           },
+          // Live connections only. A revoked one is history, and the page
+          // already has enough lists on it without one nobody acts on.
+          connectorConnections: {
+            where: { revokedAt: null },
+            orderBy: { createdAt: "desc" },
+            select: {
+              id: true,
+              boundEmail: true,
+              oauthClientName: true,
+              createdAt: true,
+              lastUsedAt: true,
+            },
+          },
+          // Only what is still waiting. A reviewed request is a record, not
+          // work, and belongs in the audit trail rather than on this page.
+          connectorRequests: {
+            where: { status: "NEW" },
+            orderBy: { createdAt: "asc" },
+            select: {
+              id: true,
+              kind: true,
+              payload: true,
+              createdAt: true,
+              transaction: { select: { propertyAddress: true } },
+            },
+          },
         },
       }),
       tx.contact.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     ]),
   );
+  // The subscriber's switch for the clients' connector. Read here rather than
+  // inside the section so the level picker can render the same "off for this
+  // workspace" state the resolver would enforce.
+  const org = await prisma.organization.findUnique({
+    where: { id: tenantId },
+    select: { clientConnectorEnabled: true },
+  });
+  const clientConnectorEnabled = org?.clientConnectorEnabled ?? false;
+
   // The Handbook's notes for this client, newest first. Fetched separately
   // rather than as an include because the panel is plan-gated and a locked
   // workspace shouldn't pay for the query.
@@ -933,6 +977,166 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           </ul>
         )}
       </section>
+
+      <SectionCard
+        title="Their Claude connector"
+        icon={<Sparkle size={15} weight="fill" aria-hidden />}
+        count={client.connectorConnections.length || undefined}
+      >
+        <p className="mb-3 text-sm text-stone-500">
+          Lets {client.name} ask Claude about their own files — what's closing, what's outstanding,
+          where a deal stands — without emailing you for it. They only ever see their own
+          transactions, never another client's, and never your internal notes.
+        </p>
+        {!clientConnectorEnabled ? (
+          <p className="text-sm text-stone-500">
+            Off for this workspace. Turn it on under{" "}
+            <Link href="/dashboard/integrations" className="text-brand-700 hover:underline">
+              Integrations
+            </Link>{" "}
+            before setting anyone's access.
+          </p>
+        ) : (
+          <>
+            {isAdmin ? (
+              <form action={setClientConnectorLevel} className="flex flex-wrap items-end gap-2">
+                <input type="hidden" name="clientId" value={client.id} />
+                <label className={labelCls}>
+                  What they can do
+                  <select
+                    name="level"
+                    defaultValue={client.connectorLevel}
+                    className={`${input} min-w-56`}
+                  >
+                    {CLIENT_CONNECTOR_LEVEL_OPTIONS.map(([value, labelText]) => (
+                      <option key={value} value={value}>
+                        {labelText}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button type="submit" className={`${btnGhost} px-2.5 py-1.5 text-xs`}>
+                  Save
+                </button>
+              </form>
+            ) : (
+              <p className="text-sm text-stone-500">
+                {clientConnectorLevelLabel(client.connectorLevel, clientConnectorEnabled)} — only an
+                admin can change this.
+              </p>
+            )}
+            <p className="mt-2 text-xs text-stone-400">
+              {client.connectorLevel === "NONE"
+                ? "Nothing is shared until you pick a level above."
+                : client.connectorLevel === "READ"
+                  ? "They can ask questions. Their assistant cannot change anything on a file."
+                  : client.connectorLevel === "APPROVE"
+                    ? "Anything they ask for — a task, a new file — comes to you as a request to approve first. Nothing changes until you say so."
+                    : "Their assistant can put a task on one of their own files directly. A brand-new file still comes to you as a request."}
+            </p>
+            {/* Narrowing the level disconnects them, so this list is only
+                ever what is live right now. */}
+            {client.connectorConnections.length > 0 && (
+              <div className="mt-3 flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-stone-500">Connected</span>
+                {client.connectorConnections.map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs"
+                  >
+                    <span className="font-medium text-stone-700">{c.oauthClientName}</span>
+                    <span className="text-stone-500">{c.boundEmail}</span>
+                    <span className="text-stone-400">
+                      connected {fmtDayMonth(c.createdAt)} · last used{" "}
+                      {c.lastUsedAt ? fmtDayMonth(c.lastUsedAt) : "never"}
+                    </span>
+                    {isAdmin && (
+                      <form action={revokeClientConnectorConnection} className="ml-auto">
+                        <input type="hidden" name="connectionId" value={c.id} />
+                        <button
+                          type="submit"
+                          className="text-stone-400 transition-colors hover:text-red-600"
+                        >
+                          disconnect
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </SectionCard>
+
+      {/* Oldest first: an ask that has waited longest is the one most likely
+          to have become a phone call already. */}
+      {client.connectorRequests.length > 0 && (
+        <SectionCard
+          title="Waiting on you"
+          icon={<Sparkle size={15} weight="fill" aria-hidden />}
+          count={client.connectorRequests.length}
+        >
+          <p className="mb-3 text-sm text-stone-500">
+            {client.name} asked for these through their own Claude. Nothing has been scheduled —
+            approving a task puts it on the file, and either way your note goes back to them.
+          </p>
+          <div className="flex flex-col gap-2">
+            {client.connectorRequests.map((request) => {
+              const ask = (request.payload ?? {}) as { title?: string; note?: string };
+              return (
+                <div key={request.id} className="rounded-lg border border-stone-200 px-3 py-2.5">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <span className="text-sm font-medium">{ask.title ?? "(untitled)"}</span>
+                    <Badge tone={request.kind === "NEW_TRANSACTION" ? "attention" : "neutral"}>
+                      {request.kind === "NEW_TRANSACTION" ? "New file" : "Task"}
+                    </Badge>
+                    {request.transaction && (
+                      <span className="text-xs text-stone-500">
+                        {request.transaction.propertyAddress}
+                      </span>
+                    )}
+                    <span className="ml-auto text-xs text-stone-400">
+                      {fmtDayMonth(request.createdAt)}
+                    </span>
+                  </div>
+                  {/* Free text from an outside party's assistant: rendered as
+                      plain text, never as markup. */}
+                  {ask.note && (
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-stone-600">{ask.note}</p>
+                  )}
+                  {isAdmin ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <form action={approveClientConnectorRequest} className="flex gap-2">
+                        <input type="hidden" name="requestId" value={request.id} />
+                        <input
+                          name="note"
+                          placeholder="Reply back (optional)"
+                          className={`${input} h-8 w-56 text-xs`}
+                        />
+                        <button type="submit" className={`${btnGhost} px-2.5 py-1.5 text-xs`}>
+                          {request.kind === "NEW_TRANSACTION" ? "Mark handled" : "Approve"}
+                        </button>
+                      </form>
+                      <form action={declineClientConnectorRequest}>
+                        <input type="hidden" name="requestId" value={request.id} />
+                        <button
+                          type="submit"
+                          className="text-xs text-stone-400 transition-colors hover:text-red-600"
+                        >
+                          Decline
+                        </button>
+                      </form>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-stone-400">Only an admin can answer this.</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </SectionCard>
+      )}
 
       <SectionCard title="Their forms">
         <p className="mb-3 text-sm text-stone-500">

@@ -1,6 +1,13 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "mcp-handler";
 import { auth } from "@/lib/auth";
+import { clientToolsFor } from "@/lib/client-connector";
+import {
+  type ClientConnectorContext,
+  resolveClientConnectorContext,
+} from "@/lib/client-connector-session";
+import { CLIENT_READ_TOOLS, type ClientToolDef } from "@/lib/client-connector-tools";
+import { CLIENT_WRITE_TOOLS } from "@/lib/client-connector-writes";
 import { type McpContext, resolveMcpContext } from "@/lib/mcp-session";
 import { type McpToolDef, READ_TOOLS, toolsFor } from "@/lib/mcp-tools";
 import { WRITE_TOOLS } from "@/lib/mcp-writes";
@@ -12,6 +19,13 @@ import { WRITE_TOOLS } from "@/lib/mcp-writes";
  * box. Everything it can reach is scoped to the one workspace they approved
  * on the consent screen, and to what their membership allows *right now* —
  * see lib/mcp-session.ts, which re-derives both on every call.
+ *
+ * It is also the URL an outside agent pastes, and deliberately the same one.
+ * A second endpoint would need a second protected-resource document with its
+ * own `resource` value, and Anthropic requires that field to equal the URL
+ * the user typed character for character — two documents to keep correct
+ * instead of one, for no gain. Which audience a token belongs to is decided
+ * below, from the connection rows, never from the request.
  */
 
 export const dynamic = "force-dynamic";
@@ -21,6 +35,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const ALL_TOOLS: McpToolDef[] = [...READ_TOOLS, ...WRITE_TOOLS];
+const ALL_CLIENT_TOOLS: ClientToolDef[] = [...CLIENT_READ_TOOLS, ...CLIENT_WRITE_TOOLS];
 
 /**
  * The 401 that starts the OAuth dance.
@@ -66,12 +81,27 @@ function forbidden() {
       error: {
         code: -32001,
         message:
-          "No access to that workspace. The connector may be switched off for the workspace, or your access may have been changed. Check Settings, or ask the workspace owner.",
+          "No access. The connector may be switched off, or what you're allowed to see may have changed. Check Settings if this is your own workspace, or ask your coordinator.",
       },
       id: null,
     },
     { status: 403 },
   );
+}
+
+function registerClient(server: McpServer, ctx: ClientConnectorContext) {
+  for (const tool of clientToolsFor(ctx.capability, ALL_CLIENT_TOOLS)) {
+    server.registerTool(
+      tool.name,
+      {
+        title: tool.title,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+        annotations: { readOnlyHint: tool.requires === "read" },
+      },
+      async (args: Record<string, unknown>) => tool.run(ctx, args ?? {}),
+    );
+  }
 }
 
 function register(server: McpServer, ctx: McpContext) {
@@ -101,14 +131,29 @@ async function handle(req: Request): Promise<Response> {
   // Step two: which workspace, and what may they do in it — both re-derived,
   // never taken from the request.
   const ctx = await resolveMcpContext(session.userId, session.clientId);
-  if (!ctx) return forbidden();
+
+  // Step three, only when step two found nothing: the same identity may be an
+  // outside agent rather than a member. The order matters and this way round
+  // is the safe one — a coordinator who is also someone else's client keeps
+  // their full workspace surface, and the narrower client surface is never
+  // silently substituted for it. Neither lookup can match the other's rows:
+  // they are different tables, each keyed on the pair the token proved.
+  const clientCtx = ctx
+    ? null
+    : await resolveClientConnectorContext(session.userId, session.clientId);
+
+  if (!ctx && !clientCtx) return forbidden();
 
   // The server is built per request so the tool list reflects this caller's
   // capability. Registering every tool once and checking permission inside
   // each would leak the shape of what they cannot do.
-  const handler = createMcpHandler((server) => register(server, ctx), {
-    serverInfo: { name: "Freehold", version: "1" },
-  });
+  const handler = createMcpHandler(
+    (server) => {
+      if (ctx) register(server, ctx);
+      else if (clientCtx) registerClient(server, clientCtx);
+    },
+    { serverInfo: { name: "Freehold", version: "1" } },
+  );
   return handler(req);
 }
 

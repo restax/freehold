@@ -14,9 +14,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/badges";
 import { FormBody } from "@/components/form-render";
+import { PortalConnectorOffer } from "@/components/portal-connector-offer";
 import { placeClientOrder } from "@/lib/actions/portal-orders";
 import { submitPortalForm } from "@/lib/actions/public-forms";
 import { type Appearance, portalVars, tenantAppearance } from "@/lib/appearance";
+import { portalConnectorOffer } from "@/lib/client-connector-grant";
 import { portalFormsFor, trimKnownClientFields } from "@/lib/form-resolve";
 import { parseLayout } from "@/lib/form-schema";
 import { fmtDate, fmtMoney, ROLE_LABEL } from "@/lib/format";
@@ -544,6 +546,7 @@ function AgentPortal(
   portal: NonNullable<Awaited<ReturnType<typeof resolveAgentPortal>>>,
   q: string,
   appearance: Appearance,
+  connectorOffer: { email: string; connectorUrl: string } | null,
 ) {
   const { link, client, transactions, recentTasks, recentDocs, tenantName } = portal;
 
@@ -744,6 +747,21 @@ function AgentPortal(
           )}
         </section>
 
+        {/* Only rendered when the coordinator has both switched the feature on
+            for the workspace and given this client a level above no access —
+            portalConnectorOffer re-checks both, so an agent is never shown an
+            offer that would resolve to nothing. */}
+        {connectorOffer ? (
+          <section className={cardCls}>
+            <h2 className="mb-3 flex items-center gap-2 font-medium">Your own Claude</h2>
+            <PortalConnectorOffer
+              token={link.token}
+              email={connectorOffer.email}
+              connectorUrl={connectorOffer.connectorUrl}
+            />
+          </section>
+        ) : null}
+
         <p className="text-center text-xs text-stone-400">
           <a
             href={`/portal/${link.token}/calendar.ics`}
@@ -806,8 +824,11 @@ export default async function PortalPage({
 
   const agentPortal = await resolveAgentPortal(token);
   if (agentPortal) {
-    const appearance = await tenantAppearance(agentPortal.link.tenantId);
-    return AgentPortal(agentPortal, q ?? "", appearance);
+    const [appearance, connectorOffer] = await Promise.all([
+      tenantAppearance(agentPortal.link.tenantId),
+      portalConnectorOffer(agentPortal.link.tenantId, agentPortal.client.id),
+    ]);
+    return AgentPortal(agentPortal, q ?? "", appearance, connectorOffer);
   }
 
   notFound();
