@@ -441,7 +441,7 @@ export default function FeaturesPage() {
 
       <section className="mx-auto max-w-6xl px-4 pb-20 pt-12 sm:px-6 lg:pt-16">
         <h1 className="font-display max-w-2xl text-3xl font-bold leading-[1.1] tracking-tight md:text-4xl">
-          Every feature, honestly labeled.
+          What Freehold does today.
         </h1>
         <p className="mt-5 max-w-xl leading-relaxed text-stone-600">
           Most feature pages are fiction. This one has two labels: things Freehold does today, and
@@ -680,10 +680,10 @@ export default function FeaturesPage() {
         {/* Real screens — actual product, demo-workspace data */}
         <div className="mt-14">
           <h2 className="font-display text-2xl font-bold tracking-tight">
-            Real screenshots, not mockups
+            Screens from the demo workspace
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-stone-600">
-            Straight from the live demo workspace: what you see is what ships.{" "}
+            Actual captures of the live product with sample data. What you see is what ships.{" "}
             <a href="/demo" className="font-medium text-brand-700 hover:text-brand-600">
               Click around it yourself →
             </a>
