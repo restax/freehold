@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "turbo run build",
+    "postbuild": "node scripts/trim-turbo-cache.mjs",
     "dev": "turbo run dev",
     "lint": "biome check .",
     "format": "biome check --write .",
