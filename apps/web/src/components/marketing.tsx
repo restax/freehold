@@ -136,6 +136,11 @@ export function MarketingFooter() {
               </Link>
             </li>
             <li>
+              <Link href="/free-tools" className="transition-colors hover:text-stone-900">
+                Free tools
+              </Link>
+            </li>
+            <li>
               <Link href="/services" className="transition-colors hover:text-stone-900">
                 Setup &amp; IT services
               </Link>
