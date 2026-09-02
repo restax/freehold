@@ -20,6 +20,12 @@ import { fmtCents, parseFeeCents } from "@/lib/pay";
 import { getTenantPlan, isCloud } from "@/lib/plans";
 import { renderTemplatePdf } from "@/lib/templates";
 import { getBillingAccess, requireAdminTenant, requireTenant } from "@/lib/tenant";
+import {
+  createWaveInvoice,
+  decodeWaveConfig,
+  fetchInvoiceStatus as fetchWaveInvoiceStatus,
+  parseWaveConfig,
+} from "@/lib/wave";
 
 /**
  * Client invoicing (tenant bills their client) with no payment processor.
@@ -48,6 +54,61 @@ async function loadErpnextConnection(tenantId: string) {
 /** Whether the ERPNext option should be offered at all. */
 export async function erpnextConnected(tenantId: string): Promise<boolean> {
   return (await loadErpnextConnection(tenantId)) !== null;
+}
+
+/** The tenant's decrypted Wave connection, or null when not connected. */
+async function loadWaveConnection(tenantId: string) {
+  const org = await prisma.organization.findUnique({
+    where: { id: tenantId },
+    select: { waveConfig: true },
+  });
+  const cfg = parseWaveConfig(org?.waveConfig);
+  return cfg ? decodeWaveConfig(cfg) : null;
+}
+
+/** Whether the Wave option should be offered at all. */
+export async function waveConnected(tenantId: string): Promise<boolean> {
+  return (await loadWaveConnection(tenantId)) !== null;
+}
+
+/**
+ * Pull the current status for every Wave-backed outstanding invoice — the
+ * same mirror as ERPNext's, against the tenant's Wave business instead. An
+ * invoice deleted in Wave comes back as a void here, which is the truth: the
+ * bill is gone from the record that owns it.
+ */
+export async function refreshWaveInvoices(_formData?: FormData) {
+  const { tenantId, isAdmin } = await requireAdminTenant();
+  if (!isAdmin) return;
+  const conn = await loadWaveConnection(tenantId);
+  if (!conn) return;
+
+  const open = await withTenant(tenantId, (tx) =>
+    tx.invoice.findMany({
+      where: { provider: "wave", status: "SENT", externalId: { not: null } },
+      select: { id: true, externalId: true, followUpTaskId: true },
+    }),
+  );
+  for (const inv of open) {
+    const remote = await fetchWaveInvoiceStatus(conn, inv.externalId as string);
+    if (!remote.ok || remote.status === "SENT") continue;
+    await withTenant(tenantId, async (tx) => {
+      await tx.invoice.update({
+        where: { id: inv.id },
+        data:
+          remote.status === "PAID"
+            ? { status: "PAID", paidAt: new Date(), paidNote: "Marked paid in Wave" }
+            : { status: "VOID" },
+      });
+      if (inv.followUpTaskId) {
+        await tx.task.updateMany({
+          where: { id: inv.followUpTaskId, status: TaskStatus.OPEN },
+          data: { status: TaskStatus.DONE, completedAt: new Date() },
+        });
+      }
+    });
+  }
+  revalidatePath("/dashboard/invoices");
 }
 
 /**
@@ -101,21 +162,24 @@ export async function createInvoice(formData: FormData) {
   const transactionId = optStr(formData, "transactionId");
   const paymentTerms = optStr(formData, "paymentTerms");
   const dueDate = dateOnly(formData, "dueDate");
-  const useErpnext = str(formData, "provider") === "erpnext";
+  const provider = str(formData, "provider");
+  const useErpnext = provider === "erpnext";
+  const useWave = provider === "wave";
 
   const created = await withTenant(tenantId, async (tx) => {
     const client = await tx.client.findUnique({
       where: { id: clientId },
-      select: { name: true },
+      select: { name: true, email: true, billingContact: true },
     });
     if (!client) return null;
 
     const number = await nextInvoiceNumber(tx, tenantId);
 
-    // Routed to the tenant's ERPNext: create it there first, and abandon the
-    // whole thing if their instance refuses — a Freehold row pointing at an
+    // Routed to the tenant's own books: create it there first, and abandon the
+    // whole thing if their provider refuses — a Freehold row pointing at an
     // invoice that doesn't exist would be worse than no invoice.
     let externalId: string | null = null;
+    let externalUrl: string | null = null;
     if (useErpnext) {
       const conn = await loadErpnextConnection(tenantId);
       if (!conn) return { failed: "ERPNext isn't connected." } as const;
@@ -128,6 +192,20 @@ export async function createInvoice(formData: FormData) {
       });
       if (!remote.ok) return { failed: remote.error } as const;
       externalId = remote.name;
+    } else if (useWave) {
+      const conn = await loadWaveConnection(tenantId);
+      if (!conn) return { failed: "Wave isn't connected." } as const;
+      const remote = await createWaveInvoice(conn, {
+        customerName: client.name,
+        customerEmail: invoiceRecipient(client),
+        description,
+        amountCents,
+        dueDate,
+        reference: invoiceLabel(number),
+      });
+      if (!remote.ok) return { failed: remote.error } as const;
+      externalId = remote.id;
+      externalUrl = remote.url;
     }
 
     // The nag: stays open until the invoice is resolved. Due when the
@@ -147,8 +225,9 @@ export async function createInvoice(formData: FormData) {
         clientId,
         transactionId,
         number,
-        provider: useErpnext ? "erpnext" : "freehold",
+        provider: useErpnext ? "erpnext" : useWave ? "wave" : "freehold",
         externalId,
+        externalUrl,
         description,
         amountCents,
         paymentTerms,
@@ -177,7 +256,11 @@ export async function createInvoice(formData: FormData) {
     action: "invoice.created",
     summary: `Issued ${invoiceLabel(created.invoice.number)} to ${created.clientName} — ${fmtCents(
       created.invoice.amountCents,
-    )}${created.invoice.externalId ? ` (ERPNext ${created.invoice.externalId})` : ""}`,
+    )}${
+      created.invoice.provider === "freehold"
+        ? ""
+        : ` (${created.invoice.provider === "wave" ? "Wave" : "ERPNext"} ${created.invoice.externalId})`
+    }`,
   });
   revalidatePath("/dashboard/invoices");
   if (transactionId) revalidatePath(`/dashboard/transactions/${transactionId}`);
@@ -584,7 +667,7 @@ export async function deleteDraftInvoice(formData: FormData) {
   if (removed.transactionId) revalidatePath(`/dashboard/transactions/${removed.transactionId}`);
 }
 
-/** The connected instance's base URL, for deep-linking invoice rows. */
+/** The connected ERPNext instance's base URL, for deep-linking invoice rows. */
 export async function erpnextBaseUrl(tenantId: string): Promise<string | null> {
   const conn = await loadErpnextConnection(tenantId);
   return conn?.url ?? null;

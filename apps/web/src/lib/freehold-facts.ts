@@ -40,14 +40,15 @@ transaction coordinators.
   scoped guest access), and per-transaction pay requests.
 - Invoicing: payment-agnostic — the invoice is a document plus a tracked
   follow-up task, marked paid however the client actually paid. Optional
-  per-tenant ERPNext connection creates the Sales Invoice there instead.
+  per-tenant ERPNext or Wave connection creates the invoice there instead.
   Stripe's only job is Freehold Cloud's own subscriptions.
 - Security: Postgres row-level security per workspace, envelope-encrypted
   documents and credential vault, full audit log, two-factor auth, signed
   revocable links, nightly encrypted offsite backups, bring-your-own S3
   storage, and one-click export of everything.
 - Integrations: Zapier (reaching Dotloop, DocuSign, thousands more), Follow Up
-  Boss, Twenty CRM, ERPNext, the FindTCPros directory, calendar feeds, a REST
+  Boss, Twenty CRM, ERPNext, Wave, the FindTCPros directory, calendar feeds, a
+  REST
   API with signed webhooks, and a Claude connector (OAuth — sign in with your
   own account, no key to paste).
 - E-signatures: included at no extra cost and nothing to connect, powered by

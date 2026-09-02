@@ -15,6 +15,7 @@ import {
   reissueInvoice,
   sendInvoice,
   voidInvoice,
+  waveConnected,
 } from "@/lib/actions/invoices";
 import { markPaymentRequestPaid } from "@/lib/actions/pay";
 import {
@@ -69,11 +70,12 @@ export default async function InvoicesPage({
 }) {
   const { tenantId, userId } = await requireTenant();
   const { invoiceError } = await searchParams;
-  const [allowed, access, canEmail, hasErpnext, org] = await Promise.all([
+  const [allowed, access, canEmail, hasErpnext, hasWave, org] = await Promise.all([
     invoicingAllowed(tenantId),
     getBillingAccess(tenantId, userId),
     Promise.resolve(emailEnabled()),
     erpnextConnected(tenantId),
+    waveConnected(tenantId),
     prisma.organization.findUniqueOrThrow({
       where: { id: tenantId },
       select: { billingDefaults: true },
@@ -699,12 +701,13 @@ export default async function InvoicesPage({
                 ))}
               </select>
             </label>
-            {hasErpnext && (
+            {(hasErpnext || hasWave) && (
               <label className={label}>
                 Create in
                 <select name="provider" className={input} defaultValue="freehold">
                   <option value="freehold">Freehold</option>
-                  <option value="erpnext">ERPNext</option>
+                  {hasErpnext && <option value="erpnext">ERPNext</option>}
+                  {hasWave && <option value="wave">Wave</option>}
                 </select>
               </label>
             )}
@@ -740,6 +743,13 @@ export default async function InvoicesPage({
                 const [tone, stateText] = STATE_BADGE[state];
                 const isOverdue = inv.status === "SENT" && agingBucket(inv.dueDate) === "overdue";
                 const isFreehold = inv.provider === "freehold";
+                // Where the row says the bill actually lives, when not here.
+                const providerName = inv.provider === "wave" ? "Wave" : "ERPNext";
+                const providerUrl =
+                  inv.externalUrl ??
+                  (inv.provider === "erpnext" && inv.externalId && erpnextUrl
+                    ? erpnextInvoiceUrl(erpnextUrl, inv.externalId)
+                    : null);
                 const paidShown =
                   !isFreehold && inv.status === "PAID" ? money.totalCents : money.paidCents;
                 const balanceShown = money.totalCents - paidShown;
@@ -843,7 +853,7 @@ export default async function InvoicesPage({
                             </p>
                             {!isFreehold ? (
                               <p className="text-xs text-stone-400">
-                                Managed in ERPNext — Freehold mirrors the status.
+                                Managed in {providerName} — Freehold mirrors the status.
                               </p>
                             ) : inv.payments.length === 0 ? (
                               <p className="text-xs text-stone-400">Nothing received yet.</p>
@@ -912,14 +922,14 @@ export default async function InvoicesPage({
 
                         <div className="flex flex-col gap-3">
                           <div className="flex flex-wrap items-center gap-3 text-xs">
-                            {!isFreehold && inv.externalId && erpnextUrl ? (
+                            {!isFreehold && providerUrl ? (
                               <a
-                                href={erpnextInvoiceUrl(erpnextUrl, inv.externalId)}
+                                href={providerUrl}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="font-medium text-brand-700 hover:text-brand-600"
                               >
-                                open in ERPNext →
+                                open in {providerName} →
                               </a>
                             ) : (
                               <a

@@ -1121,6 +1121,10 @@ model Organization {
   /// secretEnc:{...}}. API key + secret encrypted with VAULT_MASTER_KEY.
   /// Null = client invoices are kept in Freehold only.
   erpnextConfig              Json?                       @map("erpnext_config")
+  /// Per-tenant Wave (waveapps.com) connection: {businessId, businessName,
+  /// productId, productName, tokenEnc:{...}}. Full-access token encrypted with
+  /// VAULT_MASTER_KEY. Null = client invoices are kept in Freehold only.
+  waveConfig                 Json?                       @map("wave_config")
   /// Workspace billing policy: {mode, depositPercent, lateFee:{...},
   /// defaultFeeCents}. Every key overridable per client (Client.billingConfig).
   /// Parsed/validated by lib/billing-policy.ts; unset keys fall back there.
@@ -2435,11 +2439,17 @@ model Invoice {
   transaction    Transaction?        @relation(fields: [transactionId], references: [id], onDelete: SetNull)
   /// Per-tenant sequence, rendered as INV-0001.
   number         Int
-  /// Where this invoice actually lives: "freehold" (we are the record) or
-  /// "erpnext" (created in the tenant's ERP; status mirrored from there).
+  /// Where this invoice actually lives: "freehold" (we are the record),
+  /// "erpnext" or "wave" (created in the tenant's own books; status mirrored
+  /// from there).
   provider       String              @default("freehold")
-  /// The Sales Invoice name in their ERPNext, e.g. ACC-SINV-2026-00007.
+  /// The record's id in their books — an ERPNext Sales Invoice name such as
+  /// ACC-SINV-2026-00007, or a Wave invoice id.
   externalId     String?             @map("external_id")
+  /// Deep link into the provider's own UI, when the provider hands us one
+  /// rather than letting us derive it from the id (Wave does; ERPNext's is
+  /// built from the instance URL).
+  externalUrl    String?             @map("external_url")
   description    String
   /// Denormalized total: always sum(lines.amountCents), recomputed by the one
   /// writer in lib/actions whenever lines change. Kept as a column so list

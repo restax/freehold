@@ -25,6 +25,7 @@ export const INTEGRATION_CATALOG: IntegrationCatalogEntry[] = [
   { key: "fub", name: "Follow Up Boss", mono: "FB" },
   { key: "twenty", name: "Twenty CRM", mono: "Tw" },
   { key: "erpnext", name: "ERPNext", mono: "ER" },
+  { key: "wave", name: "Wave", mono: "Wv" },
   { key: "mcp", name: "Claude connector", mono: "AI" },
   { key: "api", name: "Freehold API", mono: "{}" },
   { key: "webhooks", name: "Signed webhooks", mono: "→" },

@@ -98,6 +98,12 @@ const LIVE: Integration[] = [
     "erpnext",
   ],
   [
+    "Wave",
+    "Wv",
+    "Working today: connect your Wave account and Freehold creates the invoice in your Wave business instead of just in Freehold. Wave stays the ledger, and paid status mirrors back automatically.",
+    "wave",
+  ],
+  [
     "FindTCPros directory",
     "Fp",
     "Working today: the coordinator directory pulls in FindTCPros's public listings alongside Freehold-enabled workspaces, so one search covers both, filtered by state, specialty, and software.",

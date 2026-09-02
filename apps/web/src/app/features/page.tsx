@@ -382,7 +382,7 @@ const GROUPS: Array<[string, Array<[string, string, Status]>]> = [
       ],
       [
         "Client invoicing without a payment processor",
-        "Bill a client for TC services as a document, not a charge: email it, track it as an open follow-up, mark it paid however they actually paid. Route it through your own ERPNext instead and status mirrors back automatically.",
+        "Bill a client for TC services as a document, not a charge: email it, track it as an open follow-up, mark it paid however they actually paid. Route it through your own ERPNext or Wave instead and status mirrors back automatically.",
         "today",
       ],
     ],

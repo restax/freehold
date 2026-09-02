@@ -17,9 +17,10 @@ import { SectionCard } from "@/components/section-card";
 import { connectErpnext, disconnectErpnext } from "@/lib/actions/erpnext";
 import { connectDocumenso, disconnectDocumenso } from "@/lib/actions/esign-config";
 import { connectFub, disconnectFub, importFubContacts } from "@/lib/actions/fub";
-import { refreshErpnextInvoices } from "@/lib/actions/invoices";
+import { refreshErpnextInvoices, refreshWaveInvoices } from "@/lib/actions/invoices";
 import { connectStorage, disconnectStorage } from "@/lib/actions/storage-config";
 import { connectTwenty, disconnectTwenty, importTwentyContacts } from "@/lib/actions/twenty";
+import { connectWave, disconnectWave } from "@/lib/actions/wave";
 import { emailEnabled } from "@/lib/email";
 import { parseErpnextConfig } from "@/lib/erpnext";
 import { documensoStatus } from "@/lib/esign-config";
@@ -29,6 +30,7 @@ import { storageStatus } from "@/lib/storage-config";
 import { requireAdminTenant } from "@/lib/tenant";
 import { twentyStatus } from "@/lib/twenty";
 import { btn, btnGhost, card, input, label as labelCls } from "@/lib/ui";
+import { parseWaveConfig } from "@/lib/wave";
 
 export const dynamic = "force-dynamic";
 
@@ -73,10 +75,15 @@ function StatusPill({ tone, label }: { tone: Tone; label: string }) {
 export default async function IntegrationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ storageOk?: string; storageError?: string; erpnextError?: string }>;
+  searchParams: Promise<{
+    storageOk?: string;
+    storageError?: string;
+    erpnextError?: string;
+    waveError?: string;
+  }>;
 }) {
   const { tenantId, isAdmin, userId } = await requireAdminTenant();
-  const { storageOk, storageError, erpnextError } = await searchParams;
+  const { storageOk, storageError, erpnextError, waveError } = await searchParams;
 
   const [apiKeys, webhooks] = await Promise.all([
     withTenant(tenantId, (tx) => tx.apiKey.count({ where: { revokedAt: null } })),
@@ -97,14 +104,12 @@ export default async function IntegrationsPage({
   const fub = await fubStatus(tenantId);
   const twenty = await twentyStatus(tenantId);
   const storage = await storageStatus(tenantId);
-  const erpnext = parseErpnextConfig(
-    (
-      await prisma.organization.findUniqueOrThrow({
-        where: { id: tenantId },
-        select: { erpnextConfig: true },
-      })
-    ).erpnextConfig,
-  );
+  const books = await prisma.organization.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: { erpnextConfig: true, waveConfig: true },
+  });
+  const erpnext = parseErpnextConfig(books.erpnextConfig);
+  const wave = parseWaveConfig(books.waveConfig);
 
   const branding = new Map((await prisma.integrationBranding.findMany()).map((b) => [b.key, b]));
 
@@ -409,6 +414,56 @@ export default async function IntegrationsPage({
           <label className={labelCls}>
             Item to bill
             <input name="itemCode" placeholder="TC Services" className={input} />
+          </label>
+          <button type="submit" className={`${btn} self-start`}>
+            Verify &amp; connect
+          </button>
+        </form>
+      ),
+    },
+    {
+      key: "wave",
+      name: "Wave",
+      category: "Money",
+      mono: "Wv",
+      tone: (wave ? "active" : "setup") as Tone,
+      status: wave ? "Connected" : "Optional",
+      body: wave
+        ? `Connected to the Wave business "${wave.businessName}", billing the product "${wave.productName}". Client invoices can be created in Wave instead of keeping them in Freehold, and their paid status mirrors back here.`
+        : "Keep your books in Wave? Connect it and you can issue client invoices there instead of keeping them in Freehold — Wave stays the accounting record. Needs a full-access token from your Wave developer portal app, and a product to bill against. Verified before saving.",
+      extra: wave ? (
+        <div className="mt-2 flex items-center gap-4">
+          <form action={refreshWaveInvoices}>
+            <button type="submit" className={`${btnGhost} px-2.5 py-1 text-xs`}>
+              Sync invoice statuses
+            </button>
+          </form>
+          <form action={disconnectWave}>
+            <button type="submit" className="text-xs text-stone-400 hover:text-red-600">
+              Disconnect
+            </button>
+          </form>
+        </div>
+      ) : (
+        <form action={connectWave} className="mt-3 flex flex-col gap-2">
+          {waveError && (
+            <p className="rounded-lg bg-red-50 px-2.5 py-1.5 text-xs text-red-800">{waveError}</p>
+          )}
+          <label className={labelCls}>
+            Full access token
+            <input name="token" type="password" required className={input} />
+          </label>
+          <label className={labelCls}>
+            Business
+            <input
+              name="businessName"
+              placeholder="Leave blank if you have only one"
+              className={input}
+            />
+          </label>
+          <label className={labelCls}>
+            Product to bill
+            <input name="productName" placeholder="TC Services" className={input} />
           </label>
           <button type="submit" className={`${btn} self-start`}>
             Verify &amp; connect

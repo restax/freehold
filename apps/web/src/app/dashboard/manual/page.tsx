@@ -539,6 +539,11 @@ const GROUPS: ManualGroup[] = [
                 invoices as ERPNext Sales Invoices instead, with a manual "sync statuses" button,
                 for a workspace that wants its ERP to stay the accounting record of truth.
               </li>
+              <li>
+                <strong>Wave</strong>: connect with a full-access token to issue client invoices in
+                your Wave business instead, with the same manual "sync statuses" button, for a
+                workspace that already keeps its books there.
+              </li>
             </ul>
             <p className={h3}>Storage & data</p>
             <ul className={ul}>

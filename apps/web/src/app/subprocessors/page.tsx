@@ -176,9 +176,9 @@ export default function SubprocessorsPage() {
           Two things not on this list on purpose. First, optional sign-in with Google or Microsoft:
           if you choose one of those at login, that provider only ever sees what any OAuth sign-in
           shares (your name and email), and only if you pick it. Second, any integration you connect
-          yourself (Follow Up Boss, Twenty CRM, Zapier, ERPNext, your own Documenso or DocuSign
-          account) is a relationship between you and that vendor. We send data there because you
-          told us to; we don't add a step of our own in between.
+          yourself (Follow Up Boss, Twenty CRM, Zapier, ERPNext, Wave, your own Documenso or
+          DocuSign account) is a relationship between you and that vendor. We send data there
+          because you told us to; we don't add a step of our own in between.
         </p>
         <p>
           We use Vercel Web Analytics (cookieless, aggregate page views, listed above), ship
