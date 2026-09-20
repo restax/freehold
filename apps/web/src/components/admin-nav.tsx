@@ -15,6 +15,7 @@ import {
   PlugsConnected,
   ShareNetwork,
   Tray,
+  UsersThree,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -39,7 +40,10 @@ interface AdminNavGroup {
 const GROUPS: AdminNavGroup[] = [
   {
     label: "Overview",
-    items: [{ href: "/admin", label: "Operator panel", icon: House }],
+    items: [
+      { href: "/admin", label: "Operator panel", icon: House },
+      { href: "/admin/signups", label: "Signups", icon: UsersThree },
+    ],
   },
   {
     label: "Growth",
