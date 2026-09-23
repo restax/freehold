@@ -3,9 +3,12 @@ import {
   CalendarCheck,
   Check,
   DownloadSimple,
+  FileText,
+  Handshake,
   ListChecks,
   MapPin,
   Star,
+  UsersThree,
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { MarketingFooter, MarketingNav } from "@/components/marketing";
@@ -14,7 +17,7 @@ export const metadata = {
   alternates: { canonical: "/free-tools" },
   title: "Free tools for new transaction coordinators | Freehold",
   description:
-    "Four free, downloadable spreadsheets for the first months of a TC business: a plan for zero clients, a plan for your first one or two, a simple task list, and a weekend hand-off checklist. Plus the single move that gets you found locally.",
+    "Four free, downloadable spreadsheets for the first months of a TC business: a plan for zero clients, a plan for your first one or two, a simple task list, and a weekend hand-off checklist. Two plain-English agreements for TC teams, one for subcontractor coordinators and one for the agents you work for. Plus the single move that gets you found locally.",
 };
 
 type XlsxTool = {
@@ -81,6 +84,41 @@ const TOOLS: XlsxTool[] = [
   },
 ];
 
+type Contract = {
+  slug: string;
+  title: string;
+  who: string;
+  contents: string[];
+  icon: Icon;
+};
+
+const CONTRACTS: Contract[] = [
+  {
+    slug: "subcontractor-tc-agreement",
+    title: "Subcontractor TC agreement",
+    who: "For a team that passes files to independent coordinators. Fair to both sides, so a good coordinator signs it without a second thought.",
+    contents: [
+      "Per-file pay, a cancelled-file rate, and a set payment window",
+      "An option to pay the coordinator whether or not the agent has paid you yet",
+      "Protects the team's agents, with a list for agents the coordinator brings and is happy to share",
+      "Client-data and wire-fraud rules, and a clean hand-off when either side moves on",
+    ],
+    icon: UsersThree,
+  },
+  {
+    slug: "agent-tc-services-agreement",
+    title: "Agent services agreement",
+    who: "For the agents your team works for. Written so an agent can pass it to their broker without it reading like a trap.",
+    contents: [
+      "Tick-box list of the services you provide, with fees per side",
+      "A clear line between what the team does and what stays with the licensed agent",
+      "Files belong to the agent and their broker, and come back complete at the end",
+      "Fee changes need 30 days' notice and never touch an open file",
+    ],
+    icon: Handshake,
+  },
+];
+
 export default function FreeToolsPage() {
   return (
     <main id="free-tools-root" className="bg-stone-50 text-stone-900">
@@ -93,18 +131,18 @@ export default function FreeToolsPage() {
         <div className="mx-auto max-w-6xl px-4 pb-14 pt-12 sm:px-6 lg:pt-16">
           <p className="inline-flex items-center gap-2 rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-700">
             <Star size={14} weight="fill" aria-hidden />
-            Start here — before the checklists
+            Start here, before the checklists
           </p>
           <div className="mt-6 grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
             <div>
               <h1 className="font-display max-w-xl text-3xl font-bold leading-[1.1] tracking-tight md:text-4xl">
-                Being findable in one town beats being invisible everywhere.
+                Get found by agents in your own town.
               </h1>
               <p className="mt-5 max-w-lg leading-relaxed text-stone-600">
                 A new TC's instinct is to build a website and post on social media for a wide
                 audience. The move that actually gets a local agent to trust you with their file is
                 smaller and slower: an office address and a Google Business Profile tied to the town
-                you actually work in.
+                you work in.
               </p>
               <p className="mt-4 max-w-lg leading-relaxed text-stone-600">
                 Google's own guidance for ranking local results is built around three things it
@@ -139,8 +177,8 @@ export default function FreeToolsPage() {
                 ))}
               </ul>
               <p className="mt-6 max-w-lg text-sm leading-relaxed text-stone-500">
-                This is why it's first on this page and not tool five. Everything below helps you
-                run the business once an agent finds you. This is what gets you found.
+                Everything below helps you run the business once an agent finds you. This comes
+                first because it happens before any of that.
               </p>
             </div>
 
@@ -155,7 +193,7 @@ export default function FreeToolsPage() {
                   </span>
                   <div>
                     <p className="text-sm font-medium">
-                      "Transaction coordinator, Dayton OH" — claimed profile
+                      "Transaction coordinator, Dayton OH" (claimed profile)
                     </p>
                     <p className="mt-1 text-xs leading-relaxed text-stone-500">
                       Address in Dayton, service area listed, 6 reviews mentioning local closings.
@@ -169,7 +207,7 @@ export default function FreeToolsPage() {
                   </span>
                   <div>
                     <p className="text-sm font-medium text-stone-500">
-                      "Nationwide TC services" — no address, no profile
+                      "Nationwide TC services" (no address, no profile)
                     </p>
                     <p className="mt-1 text-xs leading-relaxed text-stone-500">
                       No map presence, no local reviews, nothing tying the business to a place. A
@@ -249,6 +287,85 @@ export default function FreeToolsPage() {
         </div>
       </section>
 
+      {/* The two agreements. Offered as .docx to edit and as a fillable PDF
+          for teams who just want to type in the blanks and sign. */}
+      <section id="agreements" className="border-t border-stone-200/70 bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+          <h2 className="font-display max-w-xl text-2xl font-bold tracking-tight md:text-3xl">
+            Two agreements for TC teams
+          </h2>
+          <p className="mt-4 max-w-2xl leading-relaxed text-stone-600">
+            One for the coordinators who take files from your team, one for the agents your team
+            works for. Every blank sits in a Key Terms table on the first page, so you fill in the
+            numbers and leave the wording alone. Download the Word file to change anything, or the
+            fillable PDF to type straight into it.
+          </p>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-stone-500">
+            These are starting templates, not legal advice. Licensing, contractor, and
+            non-solicitation rules differ by state, so have a local real estate attorney look them
+            over before anyone signs.
+          </p>
+
+          <div className="mt-10 grid gap-6 md:grid-cols-2">
+            {CONTRACTS.map((doc) => {
+              const Icon = doc.icon;
+              return (
+                <div
+                  key={doc.slug}
+                  className="flex flex-col overflow-hidden rounded-xl border border-stone-200/70 bg-white shadow-[0_1px_2px_rgb(41_37_36/0.04),0_2px_10px_rgb(41_37_36/0.05)]"
+                >
+                  <div className="flex items-start gap-3 border-b border-stone-100 bg-[var(--section-header)] px-5 py-4">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-brand-700">
+                      <Icon size={18} weight="bold" aria-hidden />
+                    </span>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-700">
+                        Agreement
+                      </p>
+                      <h3 className="font-display text-lg font-bold tracking-tight">{doc.title}</h3>
+                    </div>
+                  </div>
+                  <div className="flex flex-1 flex-col p-5">
+                    <p className="text-sm leading-relaxed text-stone-600">{doc.who}</p>
+                    <ul className="mt-4 flex flex-col gap-2">
+                      {doc.contents.map((line) => (
+                        <li key={line} className="flex gap-2.5 text-sm text-stone-600">
+                          <Check
+                            size={15}
+                            weight="bold"
+                            aria-hidden
+                            className="mt-0.5 shrink-0 text-brand-600"
+                          />
+                          <span className="leading-relaxed">{line}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <a
+                        href={`/tools/${doc.slug}.docx`}
+                        download
+                        className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-xs transition hover:bg-brand-700 active:scale-[0.98]"
+                      >
+                        <DownloadSimple size={16} weight="bold" aria-hidden />
+                        Word (.docx)
+                      </a>
+                      <a
+                        href={`/tools/${doc.slug}.pdf`}
+                        download
+                        className="inline-flex items-center gap-2 rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400 active:scale-[0.98]"
+                      >
+                        <FileText size={16} weight="bold" aria-hidden />
+                        Fillable PDF
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
       {/* Bridge to the product, honest about the boundary between free tools
           and what needs software */}
       <section className="border-t border-stone-200/70 bg-white">
@@ -258,12 +375,13 @@ export default function FreeToolsPage() {
               When a spreadsheet stops being enough
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-stone-600">
-              These four tools cover a TC with a handful of files and one inbox. Somewhere around
-              your third or fourth active client, dates start living in more places than you can
-              track by hand, and a missed follow-up costs more than the spreadsheet ever will.
-              That's the point Freehold is built for: deadlines that compute themselves from the
-              contract, a client portal so "what's my status" stops being a phone call, and email
-              that comes back onto the file instead of your personal inbox.
+              The spreadsheets and templates on this page work well for one coordinator with a
+              handful of files. Growing usually looks different: bringing on a subcontractor
+              coordinator, taking on more agents, running a team instead of just your own inbox.
+              That's what Freehold is built for: assign any number of teammates to a file with no
+              two-person cap, set a per-file fee so a subcontractor can request payment when their
+              work is done, and let deadlines compute themselves from the contract instead of living
+              in a spreadsheet.
             </p>
             <div className="mt-5 flex flex-wrap gap-4">
               <Link
