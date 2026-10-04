@@ -158,7 +158,10 @@ export default async function AdminPage() {
                   </td>
                   <td className={td}>
                     {o.compTier ? (
-                      <span className="text-brand-700">{PLAN_INFO[o.compTier].label} · comp</span>
+                      <span className="text-brand-700">
+                        {PLAN_INFO[o.compTier].label} · comp
+                        {o.compExpiresAt ? ` until ${fmtDate(o.compExpiresAt)}` : ""}
+                      </span>
                     ) : (
                       PLAN_INFO[o.planTier].label
                     )}
@@ -206,15 +209,25 @@ export default async function AdminPage() {
                           Apply
                         </button>
                       </form>
-                    ) : o.compTier ? (
-                      <form action={adminRevokeComp}>
-                        <input type="hidden" name="tenantId" value={o.id} />
-                        <button type="submit" className={`${btnGhost} px-2 py-0.5 text-xs`}>
-                          Revoke comp
-                        </button>
-                      </form>
                     ) : (
-                      <span className="text-stone-300">—</span>
+                      <span className="flex items-center gap-1.5">
+                        <form action={adminGrantComp}>
+                          <input type="hidden" name="tenantId" value={o.id} />
+                          <input type="hidden" name="tier" value="BUSINESS" />
+                          <input type="hidden" name="durationMonths" value="1" />
+                          <button type="submit" className={`${btnGhost} px-2 py-0.5 text-xs`}>
+                            Unlimited, 1 month
+                          </button>
+                        </form>
+                        {o.compTier && (
+                          <form action={adminRevokeComp}>
+                            <input type="hidden" name="tenantId" value={o.id} />
+                            <button type="submit" className={`${btnGhost} px-2 py-0.5 text-xs`}>
+                              Revoke comp
+                            </button>
+                          </form>
+                        )}
+                      </span>
                     )}
                   </td>
                 </tr>
