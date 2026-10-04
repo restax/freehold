@@ -6,9 +6,10 @@ import { logAudit } from "@/lib/audit";
 import { str } from "@/lib/forms";
 import { adminAlert, postTicketAlert, postToSlackThread } from "@/lib/notify";
 import { isOperator } from "@/lib/operator";
+import { platformEmailEnabled, sendPlatformEmail } from "@/lib/platform-email";
 import { getSession } from "@/lib/session";
 import { putObject } from "@/lib/storage";
-import { acceptSupportFiles } from "@/lib/support-attachments";
+import { type AcceptedFile, acceptSupportFiles, neutralFilename } from "@/lib/support-attachments";
 import { getMemberRole, requireTenant } from "@/lib/tenant";
 
 /**
@@ -39,7 +40,7 @@ async function slackLinkFor(ticketId: string) {
 
 /**
  * Store the screenshots/PDFs that came with a ticket or reply and record them.
- * Returns how many were kept. Not exported: in a "use server" file every
+ * Returns the files kept. Not exported: in a "use server" file every
  * export is a callable endpoint, and this takes a tenantId.
  */
 async function saveAttachments(
@@ -47,9 +48,13 @@ async function saveAttachments(
   ticketId: string,
   replyId: string | null,
   formData: FormData,
-): Promise<number> {
-  const { accepted } = await acceptSupportFiles(formData.getAll("files"));
-  if (accepted.length === 0) return 0;
+  { neutralNames = false }: { neutralNames?: boolean } = {},
+): Promise<AcceptedFile[]> {
+  const found = await acceptSupportFiles(formData.getAll("files"));
+  const accepted = neutralNames
+    ? found.accepted.map((f, i) => ({ ...f, filename: neutralFilename(f.contentType, i) }))
+    : found.accepted;
+  if (accepted.length === 0) return [];
   const stored = await Promise.all(
     accepted.map((f) => putObject(tenantId, f.filename, f.bytes, f.contentType)),
   );
@@ -68,7 +73,82 @@ async function saveAttachments(
       })),
     }),
   );
-  return accepted.length;
+  return accepted;
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Tell the person who filed a ticket that support answered, with the reply
+ * text and any files attached, so they don't have to be watching the Support
+ * page. Best effort: a mail outage must not undo a reply that is already
+ * saved and visible in the app, and a self-hosted install with no mail set up
+ * simply skips it. Not exported, for the same reason as saveAttachments.
+ */
+async function emailTicketReply(
+  tenantId: string,
+  ticketId: string,
+  body: string,
+  files: AcceptedFile[],
+): Promise<void> {
+  if (!platformEmailEnabled()) return;
+  try {
+    const ticket = await withTenant(tenantId, (tx) =>
+      tx.supportTicket.findUnique({
+        where: { id: ticketId },
+        select: { subject: true, user: { select: { name: true, email: true } } },
+      }),
+    );
+    if (!ticket?.user?.email) return;
+
+    const base = (process.env.BETTER_AUTH_URL ?? "http://localhost:3000").replace(/\/$/, "");
+    const link = `${base}/dashboard/support`;
+    const first = ticket.user.name?.trim().split(/\s+/)[0];
+    const attachedLine =
+      files.length === 0
+        ? ""
+        : files.length === 1
+          ? "One file is attached."
+          : `${files.length} files are attached.`;
+
+    const text = [
+      first ? `Hi ${first},` : "Hi,",
+      "",
+      `Freehold support replied to your ticket "${ticket.subject}":`,
+      "",
+      body,
+      ...(attachedLine ? ["", attachedLine] : []),
+      "",
+      `To answer, open your ticket: ${link}`,
+      "",
+      "Freehold support",
+    ].join("\n");
+
+    const html = `<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#1c1917">
+<p>${first ? `Hi ${escapeHtml(first)},` : "Hi,"}</p>
+<p>Freehold support replied to your ticket <strong>${escapeHtml(ticket.subject)}</strong>:</p>
+<blockquote style="margin:0 0 16px;padding:8px 14px;border-left:3px solid #d6d3d1;white-space:pre-wrap">${escapeHtml(body)}</blockquote>
+${attachedLine ? `<p>${attachedLine}</p>` : ""}
+<p><a href="${link}">Open your ticket</a> to answer.</p>
+<p style="color:#78716c">Freehold support</p>
+</div>`;
+
+    await sendPlatformEmail(
+      ticket.user.email,
+      `Re: ${ticket.subject}`,
+      text,
+      html,
+      files.map((f) => ({ filename: f.filename, content: f.bytes })),
+    );
+  } catch (err) {
+    console.error("Support reply email failed", err);
+  }
 }
 
 /** " 📎 2 attachments" for the Slack echo, or nothing. */
@@ -98,7 +178,7 @@ export async function createTicket(formData: FormData) {
     }),
   );
 
-  const attached = await saveAttachments(tenantId, ticket.id, null, formData);
+  const attached = (await saveAttachments(tenantId, ticket.id, null, formData)).length;
 
   logAudit({
     tenantId,
@@ -156,7 +236,7 @@ export async function addTicketReply(formData: FormData) {
     return reply.id;
   });
   if (!replyId) return;
-  const attached = await saveAttachments(tenantId, ticketId, replyId, formData);
+  const attached = (await saveAttachments(tenantId, ticketId, replyId, formData)).length;
 
   const link = await slackLinkFor(ticketId);
   if (link) {
@@ -201,7 +281,13 @@ export async function adminReplyToTicket(formData: FormData) {
     return reply.id;
   });
   if (!replyId) return;
-  const attached = await saveAttachments(tenantId, ticketId, replyId, formData);
+  // Support's files get neutral names: the customer sees "Screenshot 1", not
+  // whatever the screenshot was called on the operator's machine.
+  const sent = await saveAttachments(tenantId, ticketId, replyId, formData, {
+    neutralNames: true,
+  });
+  const attached = sent.length;
+  await emailTicketReply(tenantId, ticketId, body, sent);
 
   // Mirror into the Slack thread so an operator answering from the admin
   // panel and one answering right in Slack both see the whole conversation.

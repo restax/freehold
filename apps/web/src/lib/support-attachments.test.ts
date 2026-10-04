@@ -5,6 +5,7 @@ import {
   cleanFilename,
   MAX_SUPPORT_FILE_BYTES,
   MAX_SUPPORT_FILES,
+  neutralFilename,
   sniffSupportType,
 } from "./support-attachments";
 
@@ -105,5 +106,14 @@ describe("cleanFilename", () => {
     expect(cleanFilename("../../etc/pass wd.png")).toBe("pass wd.png");
     expect(cleanFilename('a"b\r\nc.png')).toBe("a_b__c.png");
     expect(cleanFilename("")).toBe("attachment");
+  });
+});
+
+describe("neutralFilename", () => {
+  it("replaces the operator's own file name with a plain numbered one", () => {
+    expect(neutralFilename("image/png", 0)).toBe("Screenshot 1.png");
+    expect(neutralFilename("image/jpeg", 1)).toBe("Screenshot 2.jpg");
+    expect(neutralFilename("image/webp", 2)).toBe("Screenshot 3.webp");
+    expect(neutralFilename("application/pdf", 0)).toBe("Attachment 1.pdf");
   });
 });

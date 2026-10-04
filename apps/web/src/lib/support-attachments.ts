@@ -118,3 +118,19 @@ export async function acceptSupportFiles(
   }
   return { accepted, rejected };
 }
+
+/** The file extension a sniffed type goes by. */
+export function extensionFor(type: SupportFileType): string {
+  return type === "application/pdf" ? "pdf" : type === "image/jpeg" ? "jpg" : type.slice(6);
+}
+
+/**
+ * A neutral name for a file support sends. An operator's screenshot is named
+ * by their own machine ("Screenshot 2026-10-04 at 3.12.45 PM.png"), which says
+ * nothing useful to the customer and shows how support works, so what they see
+ * is just "Screenshot 1.png" or "Attachment 2.pdf".
+ */
+export function neutralFilename(type: SupportFileType, index: number): string {
+  const kind = type === "application/pdf" ? "Attachment" : "Screenshot";
+  return `${kind} ${index + 1}.${extensionFor(type)}`;
+}

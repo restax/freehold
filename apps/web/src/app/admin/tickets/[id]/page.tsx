@@ -86,7 +86,11 @@ export default async function AdminTicketPage({
       )}
 
       <section className={card}>
-        <h2 className="mb-2 font-medium">Reply</h2>
+        <h2 className="font-medium">Reply</h2>
+        <p className="mb-2 text-xs text-stone-500">
+          {ticket.user?.name ?? "They"} will get this by email, with any screenshots attached. File
+          names are replaced with "Screenshot 1" and so on.
+        </p>
         <form action={adminReplyToTicket} className="flex flex-col gap-2">
           <input type="hidden" name="tenantId" value={tenantId} />
           <input type="hidden" name="ticketId" value={ticket.id} />
