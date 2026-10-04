@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { SectionCard } from "@/components/section-card";
 import { fmtDayMonth } from "@/lib/format";
 import { isOperator } from "@/lib/operator";
-import { PLAN_INFO } from "@/lib/plans";
+import { effectiveTier, PLAN_INFO } from "@/lib/plans";
 import { td, th, trHover } from "@/lib/ui";
 
 export const dynamic = "force-dynamic";
@@ -74,7 +74,16 @@ export default async function SignupsPage({
       members: {
         select: {
           role: true,
-          organization: { select: { id: true, name: true, slug: true, planTier: true } },
+          organization: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              planTier: true,
+              compTier: true,
+              compExpiresAt: true,
+            },
+          },
         },
       },
       sessions: { orderBy: { updatedAt: "desc" }, take: 1, select: { updatedAt: true } },
@@ -203,7 +212,7 @@ export default async function SignupsPage({
                           <span key={o.id} className="mr-2">
                             {o.name}{" "}
                             <span className="text-xs text-stone-400">
-                              {PLAN_INFO[o.planTier].label}
+                              {PLAN_INFO[effectiveTier(o)].label}
                             </span>
                           </span>
                         ))

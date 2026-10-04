@@ -16,7 +16,7 @@ import { usageByFeature, usageByTenant } from "@/lib/ai/usage";
 import { listCreditCoupons } from "@/lib/credit-coupons";
 import { fmtDate } from "@/lib/format";
 import { isOperator } from "@/lib/operator";
-import { PLAN_INFO } from "@/lib/plans";
+import { effectiveTier, PLAN_INFO } from "@/lib/plans";
 import { btn, btnGhost, card, input, label as labelCls, td, th, trHover } from "@/lib/ui";
 
 /** Stripe subscription statuses that mean money didn't come in. */
@@ -86,7 +86,7 @@ export default async function AdminPage() {
   for (const o of orgs) {
     const u = aiUsage.get(o.id);
     if (!u) continue;
-    const bucket = planUsage[o.planTier];
+    const bucket = planUsage[effectiveTier(o)];
     bucket.input += u.inputTokens;
     bucket.output += u.outputTokens;
     bucket.calls += u.calls;
@@ -176,8 +176,8 @@ export default async function AdminPage() {
                   </td>
                   <td className={td}>
                     {activeCounts[i]}
-                    {PLAN_INFO[o.planTier].activeTransactionLimit != null
-                      ? ` / ${PLAN_INFO[o.planTier].activeTransactionLimit}`
+                    {PLAN_INFO[effectiveTier(o)].activeTransactionLimit != null
+                      ? ` / ${PLAN_INFO[effectiveTier(o)].activeTransactionLimit}`
                       : ""}
                   </td>
                   <td className={td}>{o.aiCredits}</td>
@@ -576,7 +576,7 @@ export default async function AdminPage() {
                     <td className={td}>
                       {o.name} <span className="text-xs text-stone-400">/{o.slug}</span>
                     </td>
-                    <td className={td}>{PLAN_INFO[o.planTier].label}</td>
+                    <td className={td}>{PLAN_INFO[effectiveTier(o)].label}</td>
                     <td className={td}>{(u?.inputTokens ?? 0).toLocaleString()}</td>
                     <td className={td}>{(u?.outputTokens ?? 0).toLocaleString()}</td>
                     <td className={td}>{u?.calls ?? 0}</td>
