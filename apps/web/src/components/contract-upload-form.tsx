@@ -1,7 +1,9 @@
 "use client";
 
 import { CircleNotch } from "@phosphor-icons/react";
+import { useState } from "react";
 import { useFormStatus } from "react-dom";
+import { NEW_CLIENT_VALUE } from "@/lib/new-client";
 import { btn, input, label } from "@/lib/ui";
 
 /**
@@ -27,7 +29,7 @@ export function ContractUploadForm({
 }
 
 const KINDS = [
-  { value: "purchase", label: "Purchase contract", hint: "A buyer's offer or a signed contract" },
+  { value: "purchase", label: "Purchase contract", hint: "An offer or a signed contract" },
   { value: "listing", label: "Listing agreement", hint: "Start from the listing, before an offer" },
 ] as const;
 
@@ -36,6 +38,7 @@ function UploadFields({ clients }: { clients: Array<{ id: string; name: string }
   // The pending branch replaces the inputs, so what was chosen is read back
   // from the submission rather than from state.
   const submittedKind = data?.get("documentKind");
+  const [clientChoice, setClientChoice] = useState("");
   const noun = submittedKind === "listing" ? "listing agreement" : "contract";
 
   if (pending) {
@@ -80,27 +83,40 @@ function UploadFields({ clients }: { clients: Array<{ id: string; name: string }
           </label>
         ))}
       </fieldset>
-      {clients.length > 0 && (
-        <label className={`${label} max-w-sm`}>
-          Whose file is this?
-          <select name="clientId" className={input} defaultValue="">
-            <option value="">Choose later</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          {/* Naming the client is what lets the extractor work out which side
-              of the deal is ours: it matches this client (and the agents on
-              their roster) against the buyer's agent and listing agent named
-              in the contract. Optional, because a brand-new client won't
-              exist yet — the side just gets left for you to pick. */}
-          <span className="text-xs font-normal text-stone-400">
-            Lets us work out which side you're on from the agents named in the contract.
-          </span>
-        </label>
-      )}
+      <label className={`${label} max-w-sm`}>
+        Whose file is this?
+        <select
+          name="clientId"
+          className={input}
+          value={clientChoice}
+          onChange={(e) => setClientChoice(e.target.value)}
+        >
+          <option value="">Choose later</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+          <option value={NEW_CLIENT_VALUE}>+ Add a new client</option>
+        </select>
+        {clientChoice === NEW_CLIENT_VALUE && (
+          <input
+            name="newClientName"
+            required
+            maxLength={120}
+            placeholder="Client name"
+            className={input}
+          />
+        )}
+        {/* Naming the client is what lets the extractor work out which side
+            of the deal is ours: it matches this client (and the agents on
+            their roster) against the buyer's agent and listing agent named
+            in the contract. Optional, and a brand-new client can be added
+            right here, so the side never has to wait on a trip to Clients. */}
+        <span className="text-xs font-normal text-stone-400">
+          Lets us work out which side you're on from the agents named in the contract.
+        </span>
+      </label>
       <div className="flex flex-wrap items-center gap-2">
         <input
           name="file"

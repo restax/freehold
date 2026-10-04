@@ -17,6 +17,7 @@ import {
 } from "@/lib/ai/contract-schema";
 import { completeExtraction, extractionModel } from "@/lib/ai/extraction-run";
 import { optStr, str } from "@/lib/forms";
+import { NEW_CLIENT_VALUE } from "@/lib/new-client";
 import {
   creditBalance,
   getTenantPlan,
@@ -99,7 +100,15 @@ export async function createFromContract(formData: FormData) {
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0 || file.size > MAX_BYTES) return;
   // Optional: naming the client here is what lets us work out the side below.
-  const clientId = optStr(formData, "clientId");
+  const clientChoice = optStr(formData, "clientId");
+  // "Add a new client" in the picker: the name typed beside it becomes a client
+  // created below, in the same step as the file, so there is no detour to the
+  // Clients page and back.
+  const newClientName =
+    clientChoice === NEW_CLIENT_VALUE
+      ? (optStr(formData, "newClientName") ?? "").slice(0, 120)
+      : "";
+  const clientId = clientChoice === NEW_CLIENT_VALUE ? null : clientChoice;
   // A coordinator on the listing side starts from the listing agreement, not a
   // purchase contract. The kind picks the prompt and schema, and it decides
   // what the new file starts as: a listing is on the market for sale on our
@@ -125,49 +134,59 @@ export async function createFromContract(formData: FormData) {
   const stored = await putObject(tenantId, filename, bytes, contentType);
   const model = await extractionModel(tenantId);
 
-  const { transaction, extraction, doc } = await withTenant(tenantId, async (tx) => {
-    const safeClientId = clientId
-      ? ((await tx.client.findUnique({ where: { id: clientId }, select: { id: true } }))?.id ??
-        null)
-      : null;
-    const transaction = await tx.transaction.create({
-      data: {
-        tenantId,
-        propertyAddress: provisionalAddress(filename),
-        status: isListing ? TransactionStatus.ACTIVE : TransactionStatus.UNDER_CONTRACT,
-        ...(isListing ? { side: TransactionSide.SELL_SIDE } : {}),
-        // Re-read under RLS rather than trusted from the form: a hand-posted
-        // clientId naming another tenant's client would otherwise pass the
-        // foreign-key check and link the file across workspaces.
-        ...(safeClientId ? { clientId: safeClientId } : {}),
-      },
-      select: { id: true },
-    });
-    const doc = await tx.document.create({
-      data: {
-        tenantId,
-        transactionId: transaction.id,
-        filename,
-        contentType,
-        sizeBytes: file.size,
-        data: stored.data,
-        storageKey: stored.storageKey,
-        storageProvider: stored.storageProvider,
-      },
-      select: { id: true, data: true, storageKey: true, storageProvider: true, tenantId: true },
-    });
-    const extraction = await tx.contractExtraction.create({
-      data: {
-        tenantId,
-        documentId: doc.id,
-        transactionId: transaction.id,
-        model,
-        status: ExtractionStatus.RUNNING,
-      },
-      select: { id: true },
-    });
-    return { transaction, extraction, doc };
-  });
+  const { transaction, extraction, doc, resolvedClientId } = await withTenant(
+    tenantId,
+    async (tx) => {
+      const safeClientId = newClientName
+        ? (
+            await tx.client.create({
+              data: { tenantId, name: newClientName },
+              select: { id: true },
+            })
+          ).id
+        : clientId
+          ? ((await tx.client.findUnique({ where: { id: clientId }, select: { id: true } }))?.id ??
+            null)
+          : null;
+      const transaction = await tx.transaction.create({
+        data: {
+          tenantId,
+          propertyAddress: provisionalAddress(filename),
+          status: isListing ? TransactionStatus.ACTIVE : TransactionStatus.UNDER_CONTRACT,
+          ...(isListing ? { side: TransactionSide.SELL_SIDE } : {}),
+          // Re-read under RLS rather than trusted from the form: a hand-posted
+          // clientId naming another tenant's client would otherwise pass the
+          // foreign-key check and link the file across workspaces.
+          ...(safeClientId ? { clientId: safeClientId } : {}),
+        },
+        select: { id: true },
+      });
+      const doc = await tx.document.create({
+        data: {
+          tenantId,
+          transactionId: transaction.id,
+          filename,
+          contentType,
+          sizeBytes: file.size,
+          data: stored.data,
+          storageKey: stored.storageKey,
+          storageProvider: stored.storageProvider,
+        },
+        select: { id: true, data: true, storageKey: true, storageProvider: true, tenantId: true },
+      });
+      const extraction = await tx.contractExtraction.create({
+        data: {
+          tenantId,
+          documentId: doc.id,
+          transactionId: transaction.id,
+          model,
+          status: ExtractionStatus.RUNNING,
+        },
+        select: { id: true },
+      });
+      return { transaction, extraction, doc, resolvedClientId: safeClientId };
+    },
+  );
 
   await emitWebhook(tenantId, "document.uploaded", {
     id: doc.id,
@@ -184,9 +203,10 @@ export async function createFromContract(formData: FormData) {
   await completeExtraction(tenantId, extraction.id, doc, model, transaction.id, kind);
   // A listing agreement is the seller side by definition; only a purchase
   // contract leaves the question open.
-  if (!isListing) await addDerivedSideField(tenantId, extraction.id, clientId);
+  if (!isListing) await addDerivedSideField(tenantId, extraction.id, resolvedClientId);
 
   revalidatePath("/dashboard/transactions");
+  if (newClientName) revalidatePath("/dashboard/clients");
   redirect(`/dashboard/transactions/${transaction.id}/extractions/${extraction.id}`);
 }
 
