@@ -7,6 +7,8 @@ import { str } from "@/lib/forms";
 import { adminAlert, postTicketAlert, postToSlackThread } from "@/lib/notify";
 import { isOperator } from "@/lib/operator";
 import { getSession } from "@/lib/session";
+import { putObject } from "@/lib/storage";
+import { acceptSupportFiles } from "@/lib/support-attachments";
 import { getMemberRole, requireTenant } from "@/lib/tenant";
 
 /**
@@ -35,6 +37,45 @@ async function slackLinkFor(ticketId: string) {
   });
 }
 
+/**
+ * Store the screenshots/PDFs that came with a ticket or reply and record them.
+ * Returns how many were kept. Not exported: in a "use server" file every
+ * export is a callable endpoint, and this takes a tenantId.
+ */
+async function saveAttachments(
+  tenantId: string,
+  ticketId: string,
+  replyId: string | null,
+  formData: FormData,
+): Promise<number> {
+  const { accepted } = await acceptSupportFiles(formData.getAll("files"));
+  if (accepted.length === 0) return 0;
+  const stored = await Promise.all(
+    accepted.map((f) => putObject(tenantId, f.filename, f.bytes, f.contentType)),
+  );
+  await withTenant(tenantId, (tx) =>
+    tx.supportAttachment.createMany({
+      data: accepted.map((f, i) => ({
+        tenantId,
+        ticketId,
+        replyId,
+        filename: f.filename,
+        contentType: f.contentType,
+        sizeBytes: f.bytes.length,
+        data: stored[i].data,
+        storageKey: stored[i].storageKey,
+        storageProvider: stored[i].storageProvider,
+      })),
+    }),
+  );
+  return accepted.length;
+}
+
+/** " 📎 2 attachments" for the Slack echo, or nothing. */
+function attachedNote(count: number): string {
+  return count > 0 ? ` 📎 ${count} attachment${count === 1 ? "" : "s"}` : "";
+}
+
 function deriveSubject(body: string): string {
   const flat = body.trim().replace(/\s+/g, " ");
   return flat.length > 60 ? `${flat.slice(0, 60)}…` : flat || "(no subject)";
@@ -57,6 +98,8 @@ export async function createTicket(formData: FormData) {
     }),
   );
 
+  const attached = await saveAttachments(tenantId, ticket.id, null, formData);
+
   logAudit({
     tenantId,
     actorId: userId,
@@ -69,7 +112,7 @@ export async function createTicket(formData: FormData) {
 
   const alertText = `🎫 New ticket from ${session.user.email} (${org?.name ?? tenantId})${
     pagePath ? ` on ${pagePath}` : ""
-  }\n> ${body.slice(0, 400)}`;
+  }${attachedNote(attached)}\n> ${body.slice(0, 400)}`;
   const posted = await postTicketAlert(alertText);
   if (posted) {
     await prisma.slackTicketLink.create({
@@ -96,10 +139,10 @@ export async function addTicketReply(formData: FormData) {
   const body = str(formData, "body");
   if (!ticketId || !body) return;
 
-  await withTenant(tenantId, async (tx) => {
+  const replyId = await withTenant(tenantId, async (tx) => {
     const ticket = await tx.supportTicket.findUnique({ where: { id: ticketId } });
-    if (!ticket) return;
-    await tx.supportTicketReply.create({
+    if (!ticket) return null;
+    const reply = await tx.supportTicketReply.create({
       data: { tenantId, ticketId, body, fromOperator: false, authorEmail: session.user.email },
     });
     // A reply from the tenant re-opens a closed or already-answered ticket —
@@ -110,17 +153,22 @@ export async function addTicketReply(formData: FormData) {
         data: { status: TicketStatus.OPEN },
       });
     }
+    return reply.id;
   });
+  if (!replyId) return;
+  const attached = await saveAttachments(tenantId, ticketId, replyId, formData);
 
   const link = await slackLinkFor(ticketId);
   if (link) {
     postToSlackThread(
       link.slackChannel,
       link.slackThreadTs,
-      `💬 ${session.user.email} replied in the app:\n> ${body.slice(0, 400)}`,
+      `💬 ${session.user.email} replied in the app:${attachedNote(attached)}\n> ${body.slice(0, 400)}`,
     );
   } else {
-    adminAlert(`🎫 Reply on a ticket from ${session.user.email}\n> ${body.slice(0, 400)}`);
+    adminAlert(
+      `🎫 Reply on a ticket from ${session.user.email}${attachedNote(attached)}\n> ${body.slice(0, 400)}`,
+    );
   }
   revalidatePath("/dashboard/support");
 }
@@ -134,8 +182,10 @@ export async function adminReplyToTicket(formData: FormData) {
   if (!tenantId || !ticketId || !body) return;
   const session = await getSession();
 
-  await withTenant(tenantId, async (tx) => {
-    await tx.supportTicketReply.create({
+  const replyId = await withTenant(tenantId, async (tx) => {
+    const ticket = await tx.supportTicket.findUnique({ where: { id: ticketId } });
+    if (!ticket) return null;
+    const reply = await tx.supportTicketReply.create({
       data: {
         tenantId,
         ticketId,
@@ -148,12 +198,16 @@ export async function adminReplyToTicket(formData: FormData) {
       where: { id: ticketId },
       data: { status: TicketStatus.ANSWERED },
     });
+    return reply.id;
   });
+  if (!replyId) return;
+  const attached = await saveAttachments(tenantId, ticketId, replyId, formData);
 
   // Mirror into the Slack thread so an operator answering from the admin
   // panel and one answering right in Slack both see the whole conversation.
   const link = await slackLinkFor(ticketId);
-  if (link) postToSlackThread(link.slackChannel, link.slackThreadTs, body);
+  if (link)
+    postToSlackThread(link.slackChannel, link.slackThreadTs, `${body}${attachedNote(attached)}`);
 
   revalidatePath("/admin/tickets");
   revalidatePath(`/admin/tickets/${ticketId}`);

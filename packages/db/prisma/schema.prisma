@@ -1105,6 +1105,7 @@ model Organization {
   engagementsProvided        Engagement[]                @relation("EngagementVendor")
   supportTickets             SupportTicket[]
   supportTicketReplies       SupportTicketReply[]
+  supportAttachments         SupportAttachment[]
   vendorConnections          VendorConnection[]
   vendorOrders               VendorOrder[]
   /// What happens when a file sits in a license-required state with nobody
@@ -3271,22 +3272,23 @@ enum TicketStatus {
 /// every tenant page (not the portal sites) captures the page it was opened
 /// from, so an operator knows what the person was looking at without asking.
 model SupportTicket {
-  id        String               @id @default(uuid())
-  tenantId  String               @map("tenant_id")
-  tenant    Organization         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  userId    String               @map("user_id")
-  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String               @id @default(uuid())
+  tenantId    String               @map("tenant_id")
+  tenant      Organization         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId      String               @map("user_id")
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// Auto-derived from the body (first ~60 chars) — the form is one textarea,
   /// on purpose, so filing a ticket is never more than "type and send".
-  subject   String
-  body      String
+  subject     String
+  body        String
   /// Raw pathname the widget was opened from, e.g. /dashboard/transactions/abc123.
-  pagePath  String?              @map("page_path")
-  status    TicketStatus         @default(OPEN)
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt
-  replies   SupportTicketReply[]
-  slackLink SlackTicketLink?
+  pagePath    String?              @map("page_path")
+  status      TicketStatus         @default(OPEN)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  replies     SupportTicketReply[]
+  slackLink   SlackTicketLink?
+  attachments SupportAttachment[]
 
   @@index([tenantId, status])
   @@map("support_ticket")
@@ -3297,18 +3299,45 @@ model SupportTicket {
 /// a User row in the tenant (an operator isn't necessarily a Member of every
 /// workspace they support), so the author is recorded as plain text.
 model SupportTicketReply {
-  id           String        @id @default(uuid())
-  tenantId     String        @map("tenant_id")
-  tenant       Organization  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ticketId     String        @map("ticket_id")
-  ticket       SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  id           String              @id @default(uuid())
+  tenantId     String              @map("tenant_id")
+  tenant       Organization        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticketId     String              @map("ticket_id")
+  ticket       SupportTicket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   body         String
-  fromOperator Boolean       @default(false) @map("from_operator")
-  authorEmail  String        @map("author_email")
-  createdAt    DateTime      @default(now())
+  fromOperator Boolean             @default(false) @map("from_operator")
+  authorEmail  String              @map("author_email")
+  createdAt    DateTime            @default(now())
+  attachments  SupportAttachment[]
 
   @@index([tenantId, ticketId])
   @@map("support_ticket_reply")
+}
+
+/// A screenshot, image or PDF sent with a ticket or one of its replies, by
+/// the customer or by support. `replyId` is null for files sent with the
+/// ticket itself. Bytes follow the same storage contract as Document
+/// (`data` inline or `storageKey` in a bucket, recorded in `storageProvider`).
+/// `contentType` is what the file's own bytes said it was, not what the
+/// browser claimed, because it is echoed back on download.
+model SupportAttachment {
+  id              String              @id @default(uuid())
+  tenantId        String              @map("tenant_id")
+  tenant          Organization        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticketId        String              @map("ticket_id")
+  ticket          SupportTicket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  replyId         String?             @map("reply_id")
+  reply           SupportTicketReply? @relation(fields: [replyId], references: [id], onDelete: Cascade)
+  filename        String
+  contentType     String              @map("content_type")
+  sizeBytes       Int                 @map("size_bytes")
+  data            Bytes?
+  storageKey      String?             @map("storage_key")
+  storageProvider String?             @map("storage_provider")
+  createdAt       DateTime            @default(now())
+
+  @@index([tenantId, ticketId])
+  @@map("support_attachment")
 }
 
 /// Links a ticket to the Slack thread its alert was posted into, so a

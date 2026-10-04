@@ -2,6 +2,7 @@ import { prisma, withTenant } from "@freehold/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TicketBadge } from "@/components/badges";
+import { AttachmentList, AttachmentPicker } from "@/components/support-attachments";
 import { adminReplyToTicket, adminSetTicketStatus } from "@/lib/actions/support";
 import { fmtDate } from "@/lib/format";
 import { isOperator } from "@/lib/operator";
@@ -29,6 +30,10 @@ export default async function AdminTicketPage({
         include: {
           user: { select: { name: true, email: true } },
           replies: { orderBy: { createdAt: "asc" } },
+          attachments: {
+            orderBy: { createdAt: "asc" },
+            select: { id: true, replyId: true, filename: true, contentType: true, sizeBytes: true },
+          },
         },
       }),
     ),
@@ -53,6 +58,10 @@ export default async function AdminTicketPage({
 
       <section className={card}>
         <p className="whitespace-pre-wrap text-sm text-stone-700">{ticket.body}</p>
+        <AttachmentList
+          tenantId={tenantId}
+          attachments={ticket.attachments.filter((a) => a.replyId === null)}
+        />
       </section>
 
       {ticket.replies.length > 0 && (
@@ -67,6 +76,10 @@ export default async function AdminTicketPage({
                 <span className="ml-1.5 font-normal text-stone-400">{fmtDate(r.createdAt)}</span>
               </p>
               <p className="mt-1 whitespace-pre-wrap text-sm text-stone-700">{r.body}</p>
+              <AttachmentList
+                tenantId={tenantId}
+                attachments={ticket.attachments.filter((a) => a.replyId === r.id)}
+              />
             </div>
           ))}
         </section>
@@ -78,6 +91,7 @@ export default async function AdminTicketPage({
           <input type="hidden" name="tenantId" value={tenantId} />
           <input type="hidden" name="ticketId" value={ticket.id} />
           <textarea name="body" required rows={4} className={input} />
+          <AttachmentPicker />
           <div>
             <button type="submit" className={btn}>
               Send reply

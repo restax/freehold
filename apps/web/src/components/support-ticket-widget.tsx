@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { AttachmentPicker } from "@/components/support-attachments";
 import { createTicket } from "@/lib/actions/support";
 
 /**
@@ -60,6 +61,7 @@ export function SupportTicketWidget() {
         placeholder="What's going wrong?"
         className="rounded-md border border-stone-300 bg-white px-2 py-1.5 text-xs outline-none focus:border-brand-500"
       />
+      <AttachmentPicker compact />
       <div className="flex items-center gap-2">
         <button
           type="submit"

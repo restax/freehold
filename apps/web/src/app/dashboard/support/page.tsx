@@ -3,6 +3,7 @@ import { Phone } from "@phosphor-icons/react/dist/ssr";
 import { after } from "next/server";
 import { TicketBadge } from "@/components/badges";
 import { PendingButton } from "@/components/pending-button";
+import { AttachmentList, AttachmentPicker } from "@/components/support-attachments";
 import { addTicketReply, createTicket, setTicketStatusSelf } from "@/lib/actions/support";
 import { fmtDate } from "@/lib/format";
 import { getPlatformSettings } from "@/lib/platform-settings";
@@ -36,6 +37,11 @@ export default async function SupportPage() {
         include: {
           user: { select: { name: true, email: true } },
           replies: { orderBy: { createdAt: "asc" } },
+          // Everything but the bytes: a list page must not load every file.
+          attachments: {
+            orderBy: { createdAt: "asc" },
+            select: { id: true, replyId: true, filename: true, contentType: true, sizeBytes: true },
+          },
         },
       }),
     ),
@@ -78,19 +84,22 @@ export default async function SupportPage() {
         <form
           data-tour="support-form"
           action={createTicket}
-          className="flex flex-col gap-2 border-t border-stone-100 px-3 py-3 sm:flex-row sm:items-end"
+          className="flex flex-col gap-2 border-t border-stone-100 px-3 py-3"
         >
           <input type="hidden" name="pagePath" value="/dashboard/support" />
-          <textarea
-            name="body"
-            required
-            rows={2}
-            placeholder="What's going wrong?"
-            className={`${input} flex-1 resize-y`}
-          />
-          <PendingButton pendingLabel="Sending…" className={`${btn} shrink-0`}>
-            Send
-          </PendingButton>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <textarea
+              name="body"
+              required
+              rows={2}
+              placeholder="What's going wrong?"
+              className={`${input} flex-1 resize-y`}
+            />
+            <PendingButton pendingLabel="Sending…" className={`${btn} shrink-0`}>
+              Send
+            </PendingButton>
+          </div>
+          <AttachmentPicker />
         </form>
       </details>
 
@@ -136,6 +145,13 @@ function TicketList({
       authorEmail: string;
       createdAt: Date;
     }>;
+    attachments: Array<{
+      id: string;
+      replyId: string | null;
+      filename: string;
+      contentType: string;
+      sizeBytes: number;
+    }>;
   }>;
   isAdmin: boolean;
   emptyText: string;
@@ -171,6 +187,7 @@ function TicketList({
             <div className="border-t border-stone-100 bg-stone-50 px-3 py-3">
               <p className="whitespace-pre-wrap text-sm text-stone-700">{t.body}</p>
               {t.pagePath && <p className="mt-1 text-xs text-stone-400">{t.pagePath}</p>}
+              <AttachmentList attachments={t.attachments.filter((a) => a.replyId === null)} />
 
               {t.replies.length > 0 && (
                 <ul className="mt-3 flex flex-col gap-2 border-t border-stone-200 pt-3">
@@ -183,23 +200,29 @@ function TicketList({
                         </span>
                       </p>
                       <p className="whitespace-pre-wrap text-stone-700">{r.body}</p>
+                      <AttachmentList
+                        attachments={t.attachments.filter((a) => a.replyId === r.id)}
+                      />
                     </li>
                   ))}
                 </ul>
               )}
 
               <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-stone-200 pt-3">
-                <form action={addTicketReply} className="flex flex-1 gap-2">
+                <form action={addTicketReply} className="flex flex-1 flex-col gap-2">
                   <input type="hidden" name="ticketId" value={t.id} />
-                  <input
-                    name="body"
-                    placeholder="Add a reply…"
-                    required
-                    className={`${input} flex-1`}
-                  />
-                  <PendingButton pendingLabel="Sending…" className={btn}>
-                    Reply
-                  </PendingButton>
+                  <div className="flex gap-2">
+                    <input
+                      name="body"
+                      placeholder="Add a reply…"
+                      required
+                      className={`${input} flex-1`}
+                    />
+                    <PendingButton pendingLabel="Sending…" className={btn}>
+                      Reply
+                    </PendingButton>
+                  </div>
+                  <AttachmentPicker compact />
                 </form>
                 <form action={setTicketStatusSelf}>
                   <input type="hidden" name="ticketId" value={t.id} />
