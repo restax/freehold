@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { CONTRACT_SCHEMA, type ContractExtractionResult } from "./contract-schema";
+import { type ContractExtractionResult, type DocumentKind, schemaFor } from "./contract-schema";
 import { type AiUsage, usageFrom } from "./usage";
 
 /**
@@ -20,6 +20,25 @@ Rules:
 - confidence: "high" = stated explicitly and unambiguously; "medium" = requires interpretation or computation; "low" = uncertain.
 - execution: decide whether this document is actually signed, and report it even when everything else is clear. Inspect the signature blocks: a handwritten or electronic signature, an e-sign certificate page, or initials on each page mean signed; empty signature lines, "DRAFT"/"UNEXECUTED" markings, or blanks left for names and dates mean unsigned. List every party the contract expects to sign — buyers and sellers individually, not as a couple — separating those who have from those who have not. Use "unclear" only when the signature pages are missing from the PDF or too poor to read, and say which in the quote. This is the one field to be conservative about in the other direction: if you cannot see a signature, do not assume one exists.`;
 
+/**
+ * The listing-agreement variant. Same grounding and signature rules as the
+ * purchase prompt; what differs is which facts exist. A listing agreement has
+ * no buyer, no purchase price and no closing date, so those are not asked for.
+ */
+const LISTING_PROMPT = `You are extracting structured data from a residential real estate listing agreement (the contract between a seller and a listing brokerage) on behalf of a transaction coordinator. The extracted values will be reviewed by a human before anything is saved, and every value you report must be verifiable against the document.
+
+Rules:
+- Only report a value you can ground in the document. If a value is absent or genuinely ambiguous, return null (for scalar fields) or omit it (for array items). Never guess.
+- Every value must carry the 1-based page number where it appears and a short verbatim quote (under 200 characters) containing or establishing it.
+- Dates must be formatted YYYY-MM-DD. When a date is relative ("180 days from the start date"), compute it, quote the clause, and mark confidence "medium".
+- list_price: the listing price, digits only (no currency symbols or commas).
+- list_date: the date the listing term begins. expire_date: the date the listing term ends.
+- commission_pct: the total commission the seller agrees to pay, as a bare percentage number such as 5.5. If the commission is a flat dollar amount, return null and put the amount in the quote.
+- deadlines: report other dated obligations stated in the agreement, such as a required go-live or "on market" date, photography or staging dates, or a protection period end. Do not repeat the listing start or expiration dates here.
+- parties: the sellers individually, the listing agent and brokerage, and anyone else named. There is normally no buyer.
+- confidence: "high" = stated explicitly and unambiguously; "medium" = requires interpretation or computation; "low" = uncertain.
+- execution: decide whether this document is actually signed, and report it even when everything else is clear. A handwritten or electronic signature, an e-sign certificate page, or initials on each page mean signed; empty signature lines or "DRAFT" markings mean unsigned. List every party expected to sign, sellers individually, separating those who have from those who have not. Use "unclear" only when the signature pages are missing or too poor to read. If you cannot see a signature, do not assume one exists.`;
+
 export interface ExtractionRun {
   result: ContractExtractionResult;
   usage: AiUsage;
@@ -28,6 +47,7 @@ export interface ExtractionRun {
 export async function extractContract(
   pdf: Buffer,
   model: string = EXTRACTION_MODEL,
+  kind: DocumentKind = "purchase",
 ): Promise<ExtractionRun> {
   // Zero-arg client: resolves ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, or a
   // stored `ant auth login` profile.
@@ -40,7 +60,7 @@ export async function extractContract(
     output_config: {
       format: {
         type: "json_schema",
-        schema: CONTRACT_SCHEMA as unknown as Record<string, unknown>,
+        schema: schemaFor(kind) as unknown as Record<string, unknown>,
       },
     },
     messages: [
@@ -55,7 +75,7 @@ export async function extractContract(
               data: pdf.toString("base64"),
             },
           },
-          { type: "text", text: EXTRACTION_PROMPT },
+          { type: "text", text: kind === "listing" ? LISTING_PROMPT : EXTRACTION_PROMPT },
         ],
       },
     ],

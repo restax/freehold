@@ -1,9 +1,20 @@
 "use server";
 
-import { ExtractionStatus, FieldTarget, TransactionStatus, withTenant } from "@freehold/db";
+import {
+  ExtractionStatus,
+  FieldTarget,
+  TransactionSide,
+  TransactionStatus,
+  withTenant,
+} from "@freehold/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { type ContractParty, transactionUpdateFor } from "@/lib/ai/contract-schema";
+import {
+  type ContractParty,
+  documentNoun,
+  parseDocumentKind,
+  transactionUpdateFor,
+} from "@/lib/ai/contract-schema";
 import { completeExtraction, extractionModel } from "@/lib/ai/extraction-run";
 import { optStr, str } from "@/lib/forms";
 import {
@@ -89,6 +100,12 @@ export async function createFromContract(formData: FormData) {
   if (!(file instanceof File) || file.size === 0 || file.size > MAX_BYTES) return;
   // Optional: naming the client here is what lets us work out the side below.
   const clientId = optStr(formData, "clientId");
+  // A coordinator on the listing side starts from the listing agreement, not a
+  // purchase contract. The kind picks the prompt and schema, and it decides
+  // what the new file starts as: a listing is on the market for sale on our
+  // seller's behalf, so its side is known and nothing has gone under contract.
+  const kind = parseDocumentKind(optStr(formData, "documentKind"));
+  const isListing = kind === "listing";
 
   // Plan cap first — never strand an upload against a full plan. Then, on Cloud
   // Free, upload-and-extract opts this brand-new transaction into pro AI (the
@@ -117,7 +134,8 @@ export async function createFromContract(formData: FormData) {
       data: {
         tenantId,
         propertyAddress: provisionalAddress(filename),
-        status: TransactionStatus.UNDER_CONTRACT,
+        status: isListing ? TransactionStatus.ACTIVE : TransactionStatus.UNDER_CONTRACT,
+        ...(isListing ? { side: TransactionSide.SELL_SIDE } : {}),
         // Re-read under RLS rather than trusted from the form: a hand-posted
         // clientId naming another tenant's client would otherwise pass the
         // foreign-key check and link the file across workspaces.
@@ -163,8 +181,10 @@ export async function createFromContract(formData: FormData) {
   // permanently. Paid/self-host skip this entirely.
   if (needsCredit) await spendCreditForTransaction(tenantId, transaction.id, userId);
 
-  await completeExtraction(tenantId, extraction.id, doc, model, transaction.id);
-  await addDerivedSideField(tenantId, extraction.id, clientId);
+  await completeExtraction(tenantId, extraction.id, doc, model, transaction.id, kind);
+  // A listing agreement is the seller side by definition; only a purchase
+  // contract leaves the question open.
+  if (!isListing) await addDerivedSideField(tenantId, extraction.id, clientId);
 
   revalidatePath("/dashboard/transactions");
   redirect(`/dashboard/transactions/${transaction.id}/extractions/${extraction.id}`);
@@ -317,6 +337,7 @@ export async function applyExtraction(formData: FormData) {
       }
     }
 
+    const fromListing = extraction.fields.some((f) => f.key === "list_price");
     const taskFields = chosen.filter((f) => f.target === FieldTarget.TASK);
     if (taskFields.length > 0) {
       const agg = await tx.task.aggregate({
@@ -332,7 +353,7 @@ export async function applyExtraction(formData: FormData) {
           return {
             tenantId,
             transactionId: extraction.transactionId,
-            title: `${f.label} (from contract)`,
+            title: `${f.label} (from ${documentNoun(fromListing ? "listing" : "purchase")})`,
             dueDate: due,
             sortOrder: maxSort + i + 1,
             assigneeId: userId,

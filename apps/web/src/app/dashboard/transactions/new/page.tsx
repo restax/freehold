@@ -117,10 +117,14 @@ export default async function NewTransactionPage({
           </p>
         ) : (
           <section className={`${card} border-brand-600/25 bg-brand-50/40`}>
-            <h2 className="font-medium text-stone-900">Start from a contract</h2>
+            <h2 className="font-medium text-stone-900">
+              Start from a contract or listing agreement
+            </h2>
             <p className="mt-1 text-sm text-stone-600">
-              Drop in the signed PDF — the AI reads the parties, price, and every deadline, each one
-              page-cited and confidence-scored. You confirm before anything is saved. No typing.
+              Drop in the signed PDF. A purchase contract gives the parties, price and every
+              deadline; a listing agreement gives the seller, list price, listing dates and
+              commission. Each value is page-cited and confidence-scored, and you confirm before
+              anything is saved.
             </p>
             <ContractUploadForm action={createFromContract} clients={clients} />
             <p className="mt-2 text-xs text-stone-400">

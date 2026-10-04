@@ -3,8 +3,10 @@ import {
   type ContractExtractionResult,
   executionNotice,
   flattenExtraction,
+  LISTING_SCHEMA,
   matchPartyRole,
   parseDateValue,
+  parseDocumentKind,
   parseMoneyValue,
   transactionUpdateFor,
 } from "./contract-schema";
@@ -211,5 +213,85 @@ describe("executionNotice", () => {
       missing_signatures: ["Can Chen (Buyer)", "  ", ""],
     });
     expect(n.missing).toEqual(["Can Chen (Buyer)"]);
+  });
+});
+
+describe("listing agreement extraction", () => {
+  const LISTING: ContractExtractionResult = {
+    property_address: cited("9 Birch Lane"),
+    city: cited("Ames"),
+    state: cited("IA"),
+    zip: cited("50010"),
+    purchase_price: null,
+    contract_date: null,
+    close_date: null,
+    list_price: cited("425,000"),
+    list_date: cited("2026-10-10"),
+    expire_date: cited("2027-04-10"),
+    commission_pct: cited("5.5%"),
+    deadlines: [],
+    parties: [
+      {
+        role: "seller",
+        name: "Dana Ortiz",
+        page: 1,
+        quote: "Dana Ortiz",
+        confidence: "high",
+      },
+    ],
+    execution: null,
+  };
+
+  it("flattens the listing facts and skips the purchase-only ones", () => {
+    const keys = flattenExtraction(LISTING, "listing").map((r) => r.key);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        "property_address",
+        "list_price",
+        "list_date",
+        "expire_date",
+        "commission_pct",
+        "party:seller",
+      ]),
+    );
+    expect(keys).not.toContain("purchase_price");
+    expect(keys).not.toContain("close_date");
+  });
+
+  it("names the source document in party labels", () => {
+    const party = flattenExtraction(LISTING, "listing").find((r) => r.key === "party:seller");
+    expect(party?.label).toBe("Seller (from listing agreement)");
+  });
+
+  it("maps listing rows onto the transaction's listing columns", () => {
+    expect(transactionUpdateFor("list_price", "425,000")).toEqual({ listPrice: 425000 });
+    expect(transactionUpdateFor("list_date", "2026-10-10")).toEqual({
+      listDate: new Date("2026-10-10T00:00:00.000Z"),
+    });
+    expect(transactionUpdateFor("expire_date", "2027-04-10")).toEqual({
+      expireDate: new Date("2027-04-10T00:00:00.000Z"),
+    });
+    expect(transactionUpdateFor("commission_pct", "5.5%")).toEqual({ commissionPct: 5.5 });
+  });
+
+  it("refuses a commission it cannot read rather than guessing", () => {
+    expect(transactionUpdateFor("commission_pct", "$12,000 flat")).toBeNull();
+    expect(transactionUpdateFor("commission_pct", "0")).toBeNull();
+    expect(transactionUpdateFor("list_price", "call for price")).toBeNull();
+  });
+
+  it("asks for no purchase price or closing date from a listing", () => {
+    expect(LISTING_SCHEMA.required).not.toContain("purchase_price");
+    expect(LISTING_SCHEMA.required).not.toContain("close_date");
+    expect(Object.keys(LISTING_SCHEMA.properties).sort()).toEqual(
+      [...LISTING_SCHEMA.required].sort(),
+    );
+  });
+
+  it("treats anything but 'listing' as a purchase contract", () => {
+    expect(parseDocumentKind("listing")).toBe("listing");
+    expect(parseDocumentKind("purchase")).toBe("purchase");
+    expect(parseDocumentKind(undefined)).toBe("purchase");
+    expect(parseDocumentKind("LISTING; DROP")).toBe("purchase");
   });
 });

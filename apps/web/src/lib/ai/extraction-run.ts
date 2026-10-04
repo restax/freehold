@@ -1,5 +1,5 @@
 import { ExtractionStatus, prisma, withTenant } from "@freehold/db";
-import { flattenExtraction } from "@/lib/ai/contract-schema";
+import { type DocumentKind, flattenExtraction } from "@/lib/ai/contract-schema";
 import { EXTRACTION_MODEL, extractContract } from "@/lib/ai/extract";
 import { logAiUsage, resolveModel } from "@/lib/ai/usage";
 import { getObjectBytes, type StoredBytes } from "@/lib/storage";
@@ -36,10 +36,11 @@ export async function completeExtraction(
   doc: StoredBytes,
   model: string,
   transactionId: string,
+  kind: DocumentKind = "purchase",
 ): Promise<void> {
   try {
-    const { result, usage } = await extractContract(await getObjectBytes(doc), model);
-    const rows = flattenExtraction(result);
+    const { result, usage } = await extractContract(await getObjectBytes(doc), model, kind);
+    const rows = flattenExtraction(result, kind);
     await withTenant(tenantId, async (tx) => {
       await tx.extractionField.createMany({
         data: rows.map((r) => ({

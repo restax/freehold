@@ -26,8 +26,17 @@ export function ContractUploadForm({
   );
 }
 
+const KINDS = [
+  { value: "purchase", label: "Purchase contract", hint: "A buyer's offer or a signed contract" },
+  { value: "listing", label: "Listing agreement", hint: "Start from the listing, before an offer" },
+] as const;
+
 function UploadFields({ clients }: { clients: Array<{ id: string; name: string }> }) {
-  const { pending } = useFormStatus();
+  const { pending, data } = useFormStatus();
+  // The pending branch replaces the inputs, so what was chosen is read back
+  // from the submission rather than from state.
+  const submittedKind = data?.get("documentKind");
+  const noun = submittedKind === "listing" ? "listing agreement" : "contract";
 
   if (pending) {
     return (
@@ -38,7 +47,7 @@ function UploadFields({ clients }: { clients: Array<{ id: string; name: string }
       >
         <CircleNotch size={20} className="animate-spin text-brand-600" aria-hidden />
         <div>
-          <p className="text-sm font-medium text-stone-800">Reading your contract…</p>
+          <p className="text-sm font-medium text-stone-800">Reading your {noun}…</p>
           <p className="text-xs text-stone-500">
             This can take up to 90 seconds. Keep this tab open — we'll bring you to the review
             screen automatically.
@@ -50,6 +59,27 @@ function UploadFields({ clients }: { clients: Array<{ id: string; name: string }
 
   return (
     <div className="flex flex-col gap-3">
+      <fieldset className="flex flex-wrap gap-2">
+        <legend className="sr-only">What are you uploading?</legend>
+        {KINDS.map((k, i) => (
+          <label
+            key={k.value}
+            className="flex min-w-48 cursor-pointer flex-col rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm has-[:checked]:border-brand-600 has-[:checked]:ring-1 has-[:checked]:ring-brand-600"
+          >
+            <span className="flex items-center gap-2 font-medium text-stone-800">
+              <input
+                type="radio"
+                name="documentKind"
+                value={k.value}
+                defaultChecked={i === 0}
+                className="accent-brand-600"
+              />
+              {k.label}
+            </span>
+            <span className="pl-6 text-xs text-stone-500">{k.hint}</span>
+          </label>
+        ))}
+      </fieldset>
       {clients.length > 0 && (
         <label className={`${label} max-w-sm`}>
           Whose file is this?

@@ -1,3 +1,5 @@
+import { parseCommissionPct } from "../commission";
+
 /**
  * Contract-extraction result shape + pure mapping helpers.
  *
@@ -54,6 +56,18 @@ export interface ExecutionCheck {
   confidence: Confidence;
 }
 
+/**
+ * What the uploaded PDF is. Most files start from a purchase contract, but a
+ * transaction coordinator working the listing side starts from the listing
+ * agreement, which carries different facts (list price, how long the listing
+ * runs, the commission) and no closing date yet.
+ */
+export type DocumentKind = "purchase" | "listing";
+
+export function parseDocumentKind(value: string | null | undefined): DocumentKind {
+  return value === "listing" ? "listing" : "purchase";
+}
+
 export interface ContractExtractionResult {
   property_address: CitedValue | null;
   city: CitedValue | null;
@@ -62,6 +76,11 @@ export interface ContractExtractionResult {
   purchase_price: CitedValue | null;
   contract_date: CitedValue | null;
   close_date: CitedValue | null;
+  /** Listing agreements only; absent from a purchase extraction. */
+  list_price?: CitedValue | null;
+  list_date?: CitedValue | null;
+  expire_date?: CitedValue | null;
+  commission_pct?: CitedValue | null;
   deadlines: DeadlineItem[];
   parties: PartyItem[];
   execution: ExecutionCheck | null;
@@ -181,6 +200,47 @@ export const CONTRACT_SCHEMA = {
   },
 } as const;
 
+/**
+ * The same shape for a listing agreement: the address and the parties carry
+ * over, the purchase price and closing dates are swapped for what a listing
+ * actually states. Derived from CONTRACT_SCHEMA so the shared pieces cannot
+ * drift apart.
+ */
+export const LISTING_SCHEMA = {
+  ...CONTRACT_SCHEMA,
+  required: [
+    "property_address",
+    "city",
+    "state",
+    "zip",
+    "list_price",
+    "list_date",
+    "expire_date",
+    "commission_pct",
+    "deadlines",
+    "parties",
+    "execution",
+  ],
+  properties: {
+    property_address: CONTRACT_SCHEMA.properties.property_address,
+    city: CONTRACT_SCHEMA.properties.city,
+    state: CONTRACT_SCHEMA.properties.state,
+    zip: CONTRACT_SCHEMA.properties.zip,
+    // Each is the same "cited value or null" shape the address uses.
+    list_price: CONTRACT_SCHEMA.properties.property_address,
+    list_date: CONTRACT_SCHEMA.properties.property_address,
+    expire_date: CONTRACT_SCHEMA.properties.property_address,
+    commission_pct: CONTRACT_SCHEMA.properties.property_address,
+    deadlines: CONTRACT_SCHEMA.properties.deadlines,
+    parties: CONTRACT_SCHEMA.properties.parties,
+    execution: CONTRACT_SCHEMA.properties.execution,
+  },
+} as const;
+
+export function schemaFor(kind: DocumentKind) {
+  return kind === "listing" ? LISTING_SCHEMA : CONTRACT_SCHEMA;
+}
+
 // --- Flattening model output into reviewable field rows ---
 
 export interface FlatField {
@@ -207,6 +267,10 @@ const SCALAR_DEFS: Array<{
   { key: "purchase_price", label: "Purchase price", valueType: "MONEY" },
   { key: "contract_date", label: "Contract (effective) date", valueType: "DATE" },
   { key: "close_date", label: "Closing date", valueType: "DATE" },
+  { key: "list_price", label: "List price", valueType: "MONEY" },
+  { key: "list_date", label: "Listing start date", valueType: "DATE" },
+  { key: "expire_date", label: "Listing expiration date", valueType: "DATE" },
+  { key: "commission_pct", label: "Commission (%)", valueType: "TEXT" },
 ];
 
 /** Friendly labels for the contract-party roles the model returns. Shared by
@@ -267,7 +331,15 @@ const CONF: Record<Confidence, FlatField["confidence"]> = {
   low: "LOW",
 };
 
-export function flattenExtraction(result: ContractExtractionResult): FlatField[] {
+/** What a field row's source document is called on screen. */
+export function documentNoun(kind: DocumentKind): string {
+  return kind === "listing" ? "listing agreement" : "contract";
+}
+
+export function flattenExtraction(
+  result: ContractExtractionResult,
+  kind: DocumentKind = "purchase",
+): FlatField[] {
   const rows: FlatField[] = [];
   let order = 0;
 
@@ -307,7 +379,7 @@ export function flattenExtraction(result: ContractExtractionResult): FlatField[]
     const label = PARTY_LABEL[p.role] ?? "Other party";
     rows.push({
       key: `party:${p.role}`,
-      label: `${label} (from contract)`,
+      label: `${label} (from ${documentNoun(kind)})`,
       value: p.name.trim(),
       valueType: "TEXT",
       page: p.page,
@@ -359,6 +431,22 @@ export function transactionUpdateFor(key: string, value: string): Record<string,
     case "close_date": {
       const d = parseDateValue(value);
       return d == null ? null : { closeDate: d };
+    }
+    case "list_price": {
+      const n = parseMoneyValue(value);
+      return n == null ? null : { listPrice: n };
+    }
+    case "list_date": {
+      const d = parseDateValue(value);
+      return d == null ? null : { listDate: d };
+    }
+    case "expire_date": {
+      const d = parseDateValue(value);
+      return d == null ? null : { expireDate: d };
+    }
+    case "commission_pct": {
+      const n = parseCommissionPct(value);
+      return n == null || n === 0 ? null : { commissionPct: n };
     }
     // Derived from the client named at upload, not read off the page — and
     // checked against the enum here because the reviewer can change it in a
