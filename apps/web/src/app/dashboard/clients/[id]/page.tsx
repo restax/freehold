@@ -483,6 +483,27 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         )}
       </SectionCard>
 
+      {!showAgents && (
+        <SectionCard title="Agent portal" icon={<LinkSimple size={15} aria-hidden />}>
+          <p className="mb-3 text-sm text-stone-500">
+            A private link for {client.name} to see their own transactions, deadlines and documents.
+            No sign-in: whoever has the link gets in, and you can switch it off at any time.
+          </p>
+          {legacyAgentLinks.length > 0 ? (
+            <ClientWideLinks links={legacyAgentLinks} portalBase={portalBase} />
+          ) : (
+            <p className="mb-3 text-sm text-stone-400">No portal link yet.</p>
+          )}
+          <form action={createAgentPortalLink} className="mt-3">
+            <input type="hidden" name="clientId" value={client.id} />
+            <input type="hidden" name="label" value={`${client.name} — portal`} />
+            <button type="submit" className={btnGhost}>
+              {legacyAgentLinks.length > 0 ? "Create another link" : "Create portal link"}
+            </button>
+          </form>
+        </SectionCard>
+      )}
+
       {showAgents && (
         <section className={card}>
           <h2 className="mb-1 flex items-center gap-2 font-medium">
@@ -696,54 +717,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-400">
                 Client-wide portal links
               </h3>
-              <ul className="flex flex-col">
-                {legacyAgentLinks.map((pl) => {
-                  const active = !pl.revokedAt;
-                  return (
-                    <li
-                      key={pl.id}
-                      className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 last:border-0"
-                    >
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
-                          active ? "bg-brand-50 text-brand-800" : "bg-stone-100 text-stone-500"
-                        }`}
-                      >
-                        <span
-                          aria-hidden
-                          className={`h-1.5 w-1.5 rounded-full ${active ? "bg-brand-500" : "bg-stone-400"}`}
-                        />
-                        {active ? "Active" : "Inactive"}
-                      </span>
-                      <span className="text-sm font-medium">{pl.label}</span>
-                      {pl.lastAccessedAt && (
-                        <span className="text-xs text-stone-400">
-                          last opened {fmtDate(pl.lastAccessedAt)}
-                        </span>
-                      )}
-                      <div className="ml-auto flex items-center gap-3">
-                        {active && (
-                          <a
-                            href={`${portalBase}/portal/${pl.token}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-xs font-medium text-brand-700 hover:underline"
-                          >
-                            View as agent
-                          </a>
-                        )}
-                        <form action={setPortalLinkActive}>
-                          <input type="hidden" name="id" value={pl.id} />
-                          <input type="hidden" name="active" value={active ? "0" : "1"} />
-                          <button type="submit" className={`${btnGhost} px-2.5 py-1 text-xs`}>
-                            {active ? "Deactivate" : "Activate"}
-                          </button>
-                        </form>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+              <ClientWideLinks links={legacyAgentLinks} portalBase={portalBase} />
             </div>
           )}
         </section>
@@ -1584,5 +1558,67 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         )}
       </SectionCard>
     </div>
+  );
+}
+
+type ClientWideLink = {
+  id: string;
+  token: string;
+  label: string;
+  revokedAt: Date | null;
+  lastAccessedAt: Date | null;
+};
+
+/** Portal links that belong to the client itself rather than to one agent on a roster. */
+function ClientWideLinks({ links, portalBase }: { links: ClientWideLink[]; portalBase: string }) {
+  return (
+    <ul className="flex flex-col">
+      {links.map((pl) => {
+        const active = !pl.revokedAt;
+        return (
+          <li
+            key={pl.id}
+            className="flex flex-wrap items-center gap-3 border-b border-stone-100 py-2 last:border-0"
+          >
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
+                active ? "bg-brand-50 text-brand-800" : "bg-stone-100 text-stone-500"
+              }`}
+            >
+              <span
+                aria-hidden
+                className={`h-1.5 w-1.5 rounded-full ${active ? "bg-brand-500" : "bg-stone-400"}`}
+              />
+              {active ? "Active" : "Inactive"}
+            </span>
+            <span className="text-sm font-medium">{pl.label}</span>
+            {pl.lastAccessedAt && (
+              <span className="text-xs text-stone-400">
+                last opened {fmtDate(pl.lastAccessedAt)}
+              </span>
+            )}
+            <div className="ml-auto flex items-center gap-3">
+              {active && (
+                <a
+                  href={`${portalBase}/portal/${pl.token}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs font-medium text-brand-700 hover:underline"
+                >
+                  View as agent
+                </a>
+              )}
+              <form action={setPortalLinkActive}>
+                <input type="hidden" name="id" value={pl.id} />
+                <input type="hidden" name="active" value={active ? "0" : "1"} />
+                <button type="submit" className={`${btnGhost} px-2.5 py-1 text-xs`}>
+                  {active ? "Deactivate" : "Activate"}
+                </button>
+              </form>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
