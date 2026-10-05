@@ -69,6 +69,23 @@ model User {
   /// Declared in auth.ts's user.additionalFields as well — better-auth strips
   /// any field it doesn't know about, even a real column.
   isClientIdentity           Boolean                     @default(false) @map("is_client_identity")
+  /// Where the account was created and where it last signed in from. Written
+  /// by the databaseHooks in auth.ts, never accepted as client input. The
+  /// operator panel reads them to spot the same address behind several
+  /// accounts. Accounts that predate this have no signupIp.
+  signupIp                   String?                     @map("signup_ip")
+  lastSignInIp               String?                     @map("last_sign_in_ip")
+  lastSignInAt               DateTime?                   @map("last_sign_in_at")
+  /// Operator flag for a suspicious account. While flaggedAt is set the
+  /// session.create hook refuses every sign-in (password, social, MCP) and
+  /// existing sessions are deleted at flag time. Cleared by a verified card
+  /// (/verify-account) or by the operator. Only the sha256 of the emailed
+  /// link token is stored, so a database read can't be turned into a clear.
+  flaggedAt                  DateTime?                   @map("flagged_at")
+  flagReason                 String?                     @map("flag_reason")
+  flagTokenHash              String?                     @map("flag_token_hash")
+  flagClearedAt              DateTime?                   @map("flag_cleared_at")
+  flagClearedVia             String?                     @map("flag_cleared_via")
   clientConnectorConnections ClientConnectorConnection[]
   clientConnectorReviews     ClientConnectorRequest[]    @relation("ClientConnectorRequestReviewer")
   clientConnectorGrants      ClientConnectorGrant[]
@@ -93,6 +110,8 @@ model User {
   oauthConsents              OauthConsent[]
   mcpConnections             McpConnection[]
 
+  @@index([signupIp])
+  @@index([lastSignInIp])
   @@map("user")
 }
 

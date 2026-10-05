@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { ACCOUNT_FLAGGED_CODE, ACCOUNT_FLAGGED_MESSAGE } from "@/lib/account-flag-copy";
 import { authClient } from "@/lib/auth-client";
 import { opinlyIdentify, opinlyTrack } from "@/lib/opinly-pixel";
 
@@ -43,6 +44,13 @@ function LoginForm() {
       ? await authClient.signIn.email({ email: id, password })
       : await authClient.signIn.username({ username: id.toLowerCase(), password });
     if (error) {
+      // Flagged accounts get the same 403 status as an unverified email, so
+      // the code has to be checked first.
+      if (error.code === ACCOUNT_FLAGGED_CODE) {
+        setError(ACCOUNT_FLAGGED_MESSAGE);
+        setBusy(false);
+        return;
+      }
       if (error.status === 403) {
         if (isEmail) {
           await authClient.emailOtp

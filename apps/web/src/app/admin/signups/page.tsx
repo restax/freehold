@@ -1,6 +1,7 @@
 import { prisma, withTenant } from "@freehold/db";
 import { notFound } from "next/navigation";
 import { SectionCard } from "@/components/section-card";
+import { adminClearFlag, adminFlagAccount, adminResendFlagEmail } from "@/lib/actions/account-flag";
 import { fmtDayMonth } from "@/lib/format";
 import { isOperator } from "@/lib/operator";
 import { effectiveTier, PLAN_INFO } from "@/lib/plans";
@@ -60,6 +61,8 @@ export default async function SignupsPage({
           OR: [
             { email: { contains: q, mode: "insensitive" } },
             { name: { contains: q, mode: "insensitive" } },
+            { signupIp: { contains: q } },
+            { lastSignInIp: { contains: q } },
           ],
         }
       : { createdAt: { gte: new Date(Date.now() - 60 * DAY) } },
@@ -71,6 +74,11 @@ export default async function SignupsPage({
       email: true,
       emailVerified: true,
       createdAt: true,
+      signupIp: true,
+      lastSignInIp: true,
+      lastSignInAt: true,
+      flaggedAt: true,
+      flagReason: true,
       members: {
         select: {
           role: true,
@@ -90,6 +98,22 @@ export default async function SignupsPage({
       _count: { select: { sessions: true } },
     },
   });
+
+  // How many other accounts share each address (signup or last sign-in), the
+  // quickest tell for one person behind several accounts.
+  const ips = [
+    ...new Set(users.flatMap((u) => [u.signupIp, u.lastSignInIp]).filter(Boolean)),
+  ] as string[];
+  const sharing = ips.length
+    ? await prisma.user.findMany({
+        where: { OR: [{ signupIp: { in: ips } }, { lastSignInIp: { in: ips } }] },
+        select: { id: true, signupIp: true, lastSignInIp: true },
+      })
+    : [];
+  const othersAt = (id: string, ip: string | null) =>
+    ip
+      ? sharing.filter((o) => o.id !== id && (o.signupIp === ip || o.lastSignInIp === ip)).length
+      : 0;
 
   const orgIds = [...new Set(users.flatMap((u) => u.members.map((m) => m.organization.id)))];
   const activity = new Map<string, WorkspaceActivity>();
@@ -130,7 +154,7 @@ export default async function SignupsPage({
             <input
               name="q"
               defaultValue={q}
-              placeholder="Search email or name"
+              placeholder="Search email, name or IP"
               className="w-56 rounded border border-stone-300 px-2 py-1 text-xs focus:border-brand-600 focus:outline-none"
             />
             <button
@@ -156,6 +180,8 @@ export default async function SignupsPage({
                 <th className={th}>Person</th>
                 <th className={th}>Workspace</th>
                 <th className={th}>Joined</th>
+                <th className={th}>Signup IP</th>
+                <th className={th}>Last sign-in</th>
                 <th className={th}>Last seen</th>
                 <th className={th}>Sign-ins</th>
                 <th className={th}>Transactions</th>
@@ -164,12 +190,13 @@ export default async function SignupsPage({
                 <th className={th}>Files</th>
                 <th className={th}>Actions</th>
                 <th className={th}>Last action</th>
+                <th className={th}>Account</th>
               </tr>
             </thead>
             <tbody>
               {users.length === 0 && (
                 <tr>
-                  <td className={`${td} text-stone-400`} colSpan={11}>
+                  <td className={`${td} text-stone-400`} colSpan={14}>
                     {q ? "No account matches that search." : "No signups in the last 60 days."}
                   </td>
                 </tr>
@@ -219,6 +246,15 @@ export default async function SignupsPage({
                       )}
                     </td>
                     <td className={td}>{fmtDayMonth(u.createdAt)}</td>
+                    <td className={td}>
+                      <IpCell ip={u.signupIp} others={othersAt(u.id, u.signupIp)} />
+                    </td>
+                    <td className={td}>
+                      <IpCell ip={u.lastSignInIp} others={othersAt(u.id, u.lastSignInIp)} />
+                      {u.lastSignInAt && (
+                        <span className="block text-xs text-stone-400">{ago(u.lastSignInAt)}</span>
+                      )}
+                    </td>
                     <td className={td}>{ago(u.sessions[0]?.updatedAt)}</td>
                     <td className={td}>{u._count.sessions}</td>
                     <td className={td}>{totals.transactions}</td>
@@ -227,6 +263,41 @@ export default async function SignupsPage({
                     <td className={td}>{totals.documents}</td>
                     <td className={td}>{totals.actions}</td>
                     <td className={td}>{ago(totals.lastAction)}</td>
+                    <td className={td}>
+                      {u.flaggedAt ? (
+                        <div className="flex flex-col gap-1">
+                          <span className="w-fit rounded bg-red-100 px-1.5 text-xs font-medium text-red-700">
+                            Flagged {ago(u.flaggedAt)}
+                          </span>
+                          {u.flagReason && (
+                            <span className="max-w-48 text-xs text-stone-500">{u.flagReason}</span>
+                          )}
+                          <div className="flex gap-1">
+                            <FlagButton action={adminClearFlag} userId={u.id} label="Clear" />
+                            <FlagButton
+                              action={adminResendFlagEmail}
+                              userId={u.id}
+                              label="Resend email"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <form action={adminFlagAccount} className="flex items-center gap-1">
+                          <input type="hidden" name="userId" value={u.id} />
+                          <input
+                            name="reason"
+                            placeholder="Note (optional)"
+                            className="w-28 rounded border border-stone-300 px-1.5 py-0.5 text-xs focus:border-brand-600 focus:outline-none"
+                          />
+                          <button
+                            type="submit"
+                            className="rounded border border-red-300 px-1.5 py-0.5 text-xs text-red-700 hover:bg-red-50"
+                          >
+                            Flag
+                          </button>
+                        </form>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -235,5 +306,47 @@ export default async function SignupsPage({
         </div>
       </SectionCard>
     </div>
+  );
+}
+
+/** An address that links to a search for every account that used it. */
+function IpCell({ ip, others }: { ip: string | null; others: number }) {
+  if (!ip) return <span className="text-stone-300">unknown</span>;
+  return (
+    <>
+      <a
+        href={`/admin/signups?q=${encodeURIComponent(ip)}`}
+        className="font-mono text-xs hover:underline"
+      >
+        {ip}
+      </a>
+      {others > 0 && (
+        <span className="ml-1.5 rounded bg-amber-100 px-1 text-xs text-amber-700">
+          +{others} more
+        </span>
+      )}
+    </>
+  );
+}
+
+function FlagButton({
+  action,
+  userId,
+  label,
+}: {
+  action: (formData: FormData) => Promise<void>;
+  userId: string;
+  label: string;
+}) {
+  return (
+    <form action={action}>
+      <input type="hidden" name="userId" value={userId} />
+      <button
+        type="submit"
+        className="rounded border border-stone-300 px-1.5 py-0.5 text-xs hover:bg-stone-50"
+      >
+        {label}
+      </button>
+    </form>
   );
 }

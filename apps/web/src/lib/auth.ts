@@ -3,6 +3,8 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError } from "better-auth/api";
 import { emailOTP, mcp, organization, twoFactor, username } from "better-auth/plugins";
+import { clientIp } from "@/lib/account-flag";
+import { ACCOUNT_FLAGGED_CODE, ACCOUNT_FLAGGED_MESSAGE } from "@/lib/account-flag-copy";
 import { MCP_SCOPES, mcpResourceUrl } from "@/lib/mcp";
 import { adminAlert } from "@/lib/notify";
 import { platformEmailEnabled, sendPlatformEmail } from "@/lib/platform-email";
@@ -69,6 +71,8 @@ export const auth = betterAuth({
       // connect their own Claude to a coordinator's files. input: false for
       // the same reason as the terms columns — nobody talks their way into
       // (or out of) being a client identity by posting a field.
+      // Written only by the user.create hook below (and by lib/account-flags).
+      signupIp: { type: "string", required: false, input: false },
       isClientIdentity: {
         type: "boolean",
         required: false,
@@ -149,7 +153,7 @@ export const auth = betterAuth({
         // Authoritative gate: a username can't collide with another user or a
         // workspace slug (shared subdomain namespace). The plugin already
         // rejects malformed handles; this closes the async gap.
-        before: async (user) => {
+        before: async (user, ctx) => {
           const handle = (user as { username?: unknown }).username;
           if (typeof handle === "string" && handle.length > 0) {
             const check = await checkUsernameAvailability(handle);
@@ -159,10 +163,18 @@ export const auth = betterAuth({
               });
             }
           }
-          return { data: { termsAcceptedAt: new Date(), termsVersion: TERMS_VERSION } };
+          // Where the account was created from, for the operator panel. Taken
+          // from the request here, never from a field the client could post.
+          const ip = clientIp(ctx?.request?.headers ?? ctx?.headers);
+          return {
+            data: { termsAcceptedAt: new Date(), termsVersion: TERMS_VERSION, signupIp: ip },
+          };
         },
-        after: async (user) => {
-          adminAlert(`🆕 New Freehold signup: ${user.name} <${user.email}>`);
+        after: async (user, ctx) => {
+          const ip = clientIp(ctx?.request?.headers ?? ctx?.headers);
+          adminAlert(
+            `🆕 New Freehold signup: ${user.name} <${user.email}>${ip ? ` from ${ip}` : ""}`,
+          );
         },
       },
     },
@@ -174,10 +186,29 @@ export const auth = betterAuth({
         // session for this user from a different IP. ipAddress/userAgent are
         // already resolved onto `session` by the time this runs.
         before: async (session) => {
+          // A flagged account can't sign in by any route (password, social,
+          // email code, MCP): every one of them mints a session here, after
+          // the credentials check, so a wrong password never learns whether
+          // an account is flagged.
+          const flagged = await prisma.user.findUnique({
+            where: { id: session.userId },
+            select: { flaggedAt: true },
+          });
+          if (flagged?.flaggedAt) {
+            throw new APIError("FORBIDDEN", {
+              message: ACCOUNT_FLAGGED_MESSAGE,
+              code: ACCOUNT_FLAGGED_CODE,
+            });
+          }
           const { deviceType } = await enforceSessionLimit({
             userId: session.userId,
             ipAddress: (session as { ipAddress?: string }).ipAddress ?? null,
             userAgent: (session as { userAgent?: string }).userAgent ?? null,
+          });
+          const ip = (session as { ipAddress?: string }).ipAddress ?? null;
+          await prisma.user.update({
+            where: { id: session.userId },
+            data: { lastSignInAt: new Date(), ...(ip ? { lastSignInIp: ip } : {}) },
           });
           return { data: { deviceType } };
         },

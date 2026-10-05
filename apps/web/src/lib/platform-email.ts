@@ -13,6 +13,7 @@ export async function sendPlatformEmail(
   text: string,
   html?: string,
   attachments?: Array<{ filename: string; content: Buffer }>,
+  options?: { replyTo?: string },
 ): Promise<void> {
   if (!platformEmailEnabled()) throw new Error("Platform email is not configured.");
   const res = await fetch("https://api.resend.com/emails", {
@@ -26,6 +27,7 @@ export async function sendPlatformEmail(
       to: [to],
       subject,
       text,
+      ...(options?.replyTo ? { reply_to: options.replyTo } : {}),
       ...(html ? { html } : {}),
       ...(attachments?.length
         ? {

@@ -255,6 +255,43 @@ export function adSubscriptionFromEvent(event: Stripe.Event): AdSubscriptionUpda
   };
 }
 
+// --- Card check for flagged accounts ---
+
+/**
+ * A no-charge card check: Checkout in setup mode saves a card and has the
+ * bank vouch for it (an authorization, not a payment). Used to let a flagged
+ * account prove it belongs to a real cardholder. `userId` rides in metadata so
+ * the return page can confirm the session is the one we started for them.
+ */
+export async function createCardCheck(input: {
+  userId: string;
+  email: string;
+  successUrl: string;
+  cancelUrl: string;
+}): Promise<{ url: string }> {
+  const session = await stripe().checkout.sessions.create({
+    mode: "setup",
+    payment_method_types: ["card"],
+    customer_email: input.email,
+    metadata: { cardCheckUserId: input.userId },
+    success_url: input.successUrl,
+    cancel_url: input.cancelUrl,
+  });
+  if (!session.url) throw new Error("Stripe did not return a checkout URL.");
+  return { url: session.url };
+}
+
+/** True only when this setup session finished, saved a card, and is ours. */
+export async function cardCheckPassed(sessionId: string, userId: string): Promise<boolean> {
+  const session = await stripe().checkout.sessions.retrieve(sessionId, {
+    expand: ["setup_intent"],
+  });
+  if (session.mode !== "setup" || session.status !== "complete") return false;
+  if (session.metadata?.cardCheckUserId !== userId) return false;
+  const intent = session.setup_intent;
+  return typeof intent === "object" && intent !== null && intent.status === "succeeded";
+}
+
 /** Customer Portal for self-service manage/cancel; returns the redirect URL. */
 export async function createPortalSession(customerId: string, baseUrl: string): Promise<string> {
   const session = await stripe().billingPortal.sessions.create({
