@@ -4150,3 +4150,35 @@ model HandbookNote {
   @@index([tenantId, subjectType, subjectId])
   @@map("handbook_note")
 }
+
+/// Errors a person ran into, with where they were and who they are, so the
+/// operator can find the cause and write back. Cross-tenant by design (like
+/// User, no RLS): only /admin reads it. Ids are plain strings, not relations,
+/// so deleting a user or workspace never loses the evidence.
+model ErrorLog {
+  id         String    @id @default(uuid())
+  createdAt  DateTime  @default(now())
+  /// "server" (caught by instrumentation or an explicit logError) | "client" (error boundary)
+  source     String
+  userId     String?   @map("user_id")
+  userEmail  String?   @map("user_email")
+  tenantId   String?   @map("tenant_id")
+  /// The page they were on.
+  path       String?
+  /// What they were doing, e.g. "Upload document" or "server action".
+  action     String?
+  message    String
+  stack      String?
+  /// Next's error digest: the same value appears on the server and client
+  /// record of one failure, which is how the two get matched up.
+  digest     String?
+  userAgent  String?   @map("user_agent")
+  detail     Json?
+  resolvedAt DateTime? @map("resolved_at")
+  note       String?
+
+  @@index([createdAt])
+  @@index([digest])
+  @@index([userId])
+  @@map("error_log")
+}

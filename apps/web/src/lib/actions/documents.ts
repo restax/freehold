@@ -5,12 +5,12 @@ import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/activity";
 import { createRowForDocument } from "@/lib/attachment-rows";
 import { logAudit } from "@/lib/audit";
+import { logError } from "@/lib/error-log";
 import { confirmed, str } from "@/lib/forms";
 import { deleteObject, putObject } from "@/lib/storage";
 import { guestMaySeeTransaction, requireTenant } from "@/lib/tenant";
+import { MAX_UPLOAD_BYTES as MAX_BYTES } from "@/lib/upload-limits";
 import { emitWebhook } from "@/lib/webhook-emit";
-
-const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
 export async function uploadDocument(formData: FormData) {
   // Guests upload to the files they cover — that's the work — but nowhere else.
@@ -23,13 +23,50 @@ export async function uploadDocument(formData: FormData) {
   // They're stored one at a time rather than in a single transaction: eleven
   // files landing plus one over the size limit should keep the eleven, not
   // reject the batch.
-  const files = formData
-    .getAll("file")
-    .filter((f): f is File => f instanceof File && f.size > 0 && f.size <= MAX_BYTES);
+  const all = formData.getAll("file").filter((f): f is File => f instanceof File);
+  const files = all.filter((f) => f.size > 0 && f.size <= MAX_BYTES);
+  const who = { userId: session.user.id, userEmail: session.user.email, tenantId };
+  const path = `/dashboard/transactions/${transactionId}`;
+  // These used to vanish without a trace, so "my upload did nothing" had no
+  // evidence behind it. Record them for /admin/errors.
+  for (const f of all.filter((f) => f.size === 0 || f.size > MAX_BYTES)) {
+    logError({
+      source: "server",
+      message:
+        f.size === 0
+          ? "Upload skipped: file was empty"
+          : `Upload skipped: file is ${(f.size / 1048576).toFixed(1)} MB, limit is ${MAX_BYTES / 1048576} MB`,
+      action: "Upload document",
+      path,
+      ...who,
+      detail: { filename: f.name, sizeBytes: f.size, contentType: f.type, maxBytes: MAX_BYTES },
+    });
+  }
   if (files.length === 0) return;
   const rowId = str(formData, "rowId");
   for (const file of files) {
-    await storeOneUpload({ tenantId, session, transactionId, file, rowId });
+    try {
+      await storeOneUpload({ tenantId, session, transactionId, file, rowId });
+    } catch (err) {
+      const e = err as Error & { alreadyLogged?: boolean };
+      logError({
+        source: "server",
+        message: e?.message ?? String(err),
+        stack: e?.stack,
+        action: "Upload document",
+        path,
+        ...who,
+        detail: {
+          filename: file.name,
+          sizeBytes: file.size,
+          contentType: file.type,
+          maxBytes: MAX_BYTES,
+        },
+      });
+      // Tell instrumentation's onRequestError this one is already on record.
+      if (e && typeof e === "object") e.alreadyLogged = true;
+      throw err;
+    }
   }
   revalidatePath(`/dashboard/transactions/${transactionId}`);
 }

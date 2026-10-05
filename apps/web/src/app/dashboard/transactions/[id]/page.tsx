@@ -76,6 +76,7 @@ import { StatusSelect } from "@/components/status-select";
 import { TaskTable } from "@/components/task-table";
 import { TemplateEditor } from "@/components/template-editor";
 import { TimeTrackingPing } from "@/components/time-tracking-ping";
+import { UploadFilesForm } from "@/components/upload-files-form";
 import { UploadOnChange } from "@/components/upload-on-change";
 import { VendorOrderTab } from "@/components/vendor-order-tab";
 import { VisibilityToggles } from "@/components/visibility-toggles";
@@ -2454,26 +2455,7 @@ export default async function TransactionDetailPage({
                         Add row
                       </button>
                     </form>
-                    <form action={uploadDocument} className="flex flex-wrap items-end gap-2">
-                      <input type="hidden" name="transactionId" value={txn.id} />
-                      <label className={`${label} min-w-56 flex-1`}>
-                        Upload files (PDF, max 10 MB each)
-                        <input
-                          name="file"
-                          type="file"
-                          accept="application/pdf,.pdf"
-                          multiple
-                          required
-                          className={input}
-                        />
-                      </label>
-                      <button type="submit" className={btnGhost}>
-                        Upload
-                      </button>
-                      <span className="pb-2 text-xs text-stone-400">
-                        Each file gets its own row.
-                      </span>
-                    </form>
+                    <UploadFilesForm action={uploadDocument} transactionId={txn.id} />
                     {/* One per line, because they arrive several at a time in
                         one email and a single-field form would be six round
                         trips. */}

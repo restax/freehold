@@ -16,6 +16,7 @@ import {
   ShareNetwork,
   Tray,
   UsersThree,
+  WarningCircle,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -67,6 +68,7 @@ const GROUPS: AdminNavGroup[] = [
     items: [
       { href: "/admin/tickets", label: "Support tickets", icon: Lifebuoy },
       { href: "/admin/inbound", label: "Unmatched inbound", icon: Tray },
+      { href: "/admin/errors", label: "Errors", icon: WarningCircle },
     ],
   },
   {
