@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Bell,
   Camera,
+  ChartLineUp,
   Flask,
   GearSix,
   House,
@@ -44,6 +45,7 @@ const GROUPS: AdminNavGroup[] = [
     items: [
       { href: "/admin", label: "Operator panel", icon: House },
       { href: "/admin/signups", label: "Signups", icon: UsersThree },
+      { href: "/admin/activity", label: "Daily activity", icon: ChartLineUp },
     ],
   },
   {
