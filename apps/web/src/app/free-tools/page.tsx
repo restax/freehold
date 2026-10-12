@@ -1,5 +1,6 @@
 import type { Icon } from "@phosphor-icons/react";
 import {
+  ArrowRight,
   CalendarCheck,
   Check,
   DownloadSimple,
@@ -7,6 +8,7 @@ import {
   Handshake,
   ListChecks,
   MapPin,
+  Scales,
   Star,
   UsersThree,
 } from "@phosphor-icons/react/dist/ssr";
@@ -362,6 +364,38 @@ export default function FreeToolsPage() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* Reference guide: a page, not a download */}
+      <section className="border-t border-stone-200/70 bg-stone-50">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+          <div className="flex flex-col gap-4 overflow-hidden rounded-xl border border-stone-200/70 bg-white lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-start gap-3 px-5 py-5">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
+                <Scales size={18} weight="bold" aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-700">
+                  Guide
+                </p>
+                <h2 className="font-display text-lg font-bold tracking-tight">
+                  State Rules for Paying Unlicensed Transaction Coordinators
+                </h2>
+                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-stone-600">
+                  A list of states that have rules or guidance on how an unlicensed assistant or
+                  coordinator can be paid. General information, not legal advice.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/free-tools/tc-pay-rules"
+              className="mx-5 mb-5 inline-flex w-fit shrink-0 items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-xs transition hover:bg-brand-700 active:scale-[0.98] lg:mb-0"
+            >
+              Read the guide
+              <ArrowRight size={14} weight="bold" aria-hidden />
+            </Link>
           </div>
         </div>
       </section>

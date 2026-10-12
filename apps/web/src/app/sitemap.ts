@@ -58,6 +58,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     page("/integrations", 0.8),
     page("/mcp", 0.8),
     page("/free-tools", 0.8),
+    page("/free-tools/tc-pay-rules", 0.7),
     page("/compare", 0.7),
     page("/services", 0.7),
     page("/vendors", 0.7),
