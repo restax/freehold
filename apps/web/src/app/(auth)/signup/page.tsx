@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { MIN_PASSWORD_SCORE, PasswordStrength } from "@/components/password-strength";
 import { authClient } from "@/lib/auth-client";
+import { isFullName } from "@/lib/full-name";
 import { opinlyIdentify, opinlyTrack } from "@/lib/opinly-pixel";
 
 type AvailState =
@@ -62,7 +63,7 @@ export default function SignupPage() {
   const passwordOk = password.length >= 8 && score >= MIN_PASSWORD_SCORE;
   const canSubmit =
     !busy &&
-    name.trim() !== "" &&
+    isFullName(name) &&
     email.trim() !== "" &&
     avail.status === "ok" &&
     passwordOk &&
@@ -97,13 +98,17 @@ export default function SignupPage() {
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <h1 className="text-lg font-semibold">Create your account</h1>
       <label className="flex flex-col gap-1 text-sm">
-        Your name
+        Your first and last name
         <input
           required
+          autoComplete="name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           className={inputCls}
         />
+        {name.trim() !== "" && !isFullName(name) && (
+          <span className="text-xs text-stone-500">Please include your last name.</span>
+        )}
       </label>
       <label className="flex flex-col gap-1 text-sm">
         Username

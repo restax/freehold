@@ -5,6 +5,7 @@ import { APIError } from "better-auth/api";
 import { emailOTP, mcp, organization, twoFactor, username } from "better-auth/plugins";
 import { clientIp } from "@/lib/account-flag";
 import { ACCOUNT_FLAGGED_CODE, ACCOUNT_FLAGGED_MESSAGE } from "@/lib/account-flag-copy";
+import { FULL_NAME_MESSAGE, isFullName } from "@/lib/full-name";
 import { MCP_SCOPES, mcpResourceUrl } from "@/lib/mcp";
 import { adminAlert } from "@/lib/notify";
 import { platformEmailEnabled, sendPlatformEmail } from "@/lib/platform-email";
@@ -154,6 +155,13 @@ export const auth = betterAuth({
         // workspace slug (shared subdomain namespace). The plugin already
         // rejects malformed handles; this closes the async gap.
         before: async (user, ctx) => {
+          // Coordinators sign up with a real first and last name. Checked here
+          // as well as in the form so a direct API post can't skip it; only the
+          // email sign-up route, since social and agent accounts arrive with
+          // whatever name their provider holds.
+          if (ctx?.path === "/sign-up/email" && !isFullName(user.name ?? "")) {
+            throw new APIError("BAD_REQUEST", { message: FULL_NAME_MESSAGE });
+          }
           const handle = (user as { username?: unknown }).username;
           if (typeof handle === "string" && handle.length > 0) {
             const check = await checkUsernameAvailability(handle);
