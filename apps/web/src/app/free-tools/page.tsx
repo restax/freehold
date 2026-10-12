@@ -17,6 +17,20 @@ import { MarketingFooter, MarketingNav } from "@/components/marketing";
 
 export const metadata = {
   alternates: { canonical: "/free-tools" },
+  openGraph: {
+    title: "Free tools for new transaction coordinators | Freehold",
+    description:
+      "Free spreadsheets, two plain-English agreements, and a local-search guide for the first months of a TC business. No signup.",
+    url: "https://freeholdtc.dev/free-tools",
+    siteName: "Freehold",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Free tools for new transaction coordinators | Freehold",
+    description:
+      "Free spreadsheets, two plain-English agreements, and a local-search guide for the first months of a TC business. No signup.",
+  },
   title: "Free tools for new transaction coordinators | Freehold",
   description:
     "Four free, downloadable spreadsheets for the first months of a TC business: a plan for zero clients, a plan for your first one or two, a simple task list, and a weekend hand-off checklist. Two plain-English agreements for TC teams, one for subcontractor coordinators and one for the agents you work for. Plus the single move that gets you found locally.",

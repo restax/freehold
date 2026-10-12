@@ -6,6 +6,20 @@ import { PayRulesExplorer } from "./pay-rules-explorer";
 
 export const metadata = {
   alternates: { canonical: "/free-tools/tc-pay-rules" },
+  openGraph: {
+    title: "State Rules for Paying Unlicensed Transaction Coordinators | Freehold",
+    description:
+      "A state-by-state list of the rules on paying an unlicensed assistant or transaction coordinator. General information, not legal advice.",
+    url: "https://freeholdtc.dev/free-tools/tc-pay-rules",
+    siteName: "Freehold",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "State Rules for Paying Unlicensed Transaction Coordinators | Freehold",
+    description:
+      "A state-by-state list of the rules on paying an unlicensed assistant or transaction coordinator. General information, not legal advice.",
+  },
   title: "State Rules for Paying Unlicensed Transaction Coordinators | Freehold",
   description:
     "A list of states that have rules or guidance on how an unlicensed assistant or transaction coordinator can be paid. This is general information and not legal advice.",
