@@ -1,6 +1,6 @@
 import { freeToolsShareImage, shareImageSize } from "../share-image";
 
-export const alt = "Freehold free tools for new transaction coordinators";
+export const alt = "FREE TOOLS";
 export const size = shareImageSize;
 export const contentType = "image/png";
 
