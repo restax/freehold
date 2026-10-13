@@ -1,7 +1,12 @@
 import { prisma, withTenant } from "@freehold/db";
 import { notFound } from "next/navigation";
 import { SectionCard } from "@/components/section-card";
-import { adminClearFlag, adminFlagAccount, adminResendFlagEmail } from "@/lib/actions/account-flag";
+import {
+  adminClearFlag,
+  adminDeleteAccount,
+  adminFlagAccount,
+  adminResendFlagEmail,
+} from "@/lib/actions/account-flag";
 import { fmtDayMonth } from "@/lib/format";
 import { isOperator } from "@/lib/operator";
 import { effectiveTier, PLAN_INFO } from "@/lib/plans";
@@ -297,6 +302,32 @@ export default async function SignupsPage({
                           </button>
                         </form>
                       )}
+                      <details className="mt-1.5">
+                        <summary className="w-fit cursor-pointer rounded border border-red-300 px-1.5 py-0.5 text-xs text-red-700 hover:bg-red-50">
+                          Delete account
+                        </summary>
+                        <form action={adminDeleteAccount} className="mt-1 flex flex-col gap-1">
+                          <input type="hidden" name="userId" value={u.id} />
+                          <span className="max-w-56 text-xs text-stone-500">
+                            Removes this person's sign-in for good.
+                            {orgs.length > 0 && " Their workspace and its records stay."} Retype{" "}
+                            {u.email} to confirm.
+                          </span>
+                          <input
+                            name="confirmEmail"
+                            required
+                            autoComplete="off"
+                            placeholder={u.email}
+                            className="w-56 rounded border border-stone-300 px-1.5 py-0.5 text-xs focus:border-red-500 focus:outline-none"
+                          />
+                          <button
+                            type="submit"
+                            className="w-fit rounded bg-red-700 px-1.5 py-0.5 text-xs text-white hover:bg-red-800"
+                          >
+                            Delete permanently
+                          </button>
+                        </form>
+                      </details>
                     </td>
                   </tr>
                 );
