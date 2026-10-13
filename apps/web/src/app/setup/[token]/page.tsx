@@ -79,19 +79,54 @@ export default async function SetupPage({
   const upcoming = invite.bookings.filter((b) => b.startsAt.getTime() > Date.now());
   const left = MAX_SESSIONS - invite.bookings.length;
   const first = invite.name.split(/\s+/)[0];
+  const confirming = pickedOk && picked !== null && left > 0;
 
   return shell(
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="text-xl font-semibold">Hi {first}, pick a time</h1>
-        <p className="mt-1 text-sm text-stone-600">
-          Thirty minutes, free, one on one. You have {left} of {MAX_SESSIONS} sessions left. All
-          times are Eastern.
-        </p>
+        {confirming ? (
+          <>
+            <h1 className="text-xl font-semibold">One more step, {first}</h1>
+            <p className="mt-1 text-sm text-stone-600">
+              Your time is <strong>not booked yet</strong>. Tap the button below to lock it in.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className="text-xl font-semibold">Hi {first}, pick a time</h1>
+            <p className="mt-1 text-sm text-stone-600">
+              Thirty minutes, free, one on one. You have {left} of {MAX_SESSIONS} sessions left. All
+              times are Eastern.
+            </p>
+          </>
+        )}
       </div>
 
       {r && NOTE[r] && (
         <p className="rounded bg-[#f4efe6] px-3 py-2 text-sm text-[#6b4a2b]">{NOTE[r]}</p>
+      )}
+
+      {confirming && picked && (
+        <form
+          action={bookSetupSession}
+          className="flex flex-col gap-4 rounded-lg border-2 border-[#9a5f33] bg-[#faf6ee] p-5"
+        >
+          <input type="hidden" name="token" value={token} />
+          <input type="hidden" name="at" value={picked.toISOString()} />
+          <p className="text-lg font-semibold text-[#33291f]">{slotFullLabel(picked)}</p>
+          <button
+            type="submit"
+            className="w-full rounded-lg bg-[#9a5f33] px-5 py-3.5 text-base font-semibold text-white hover:bg-[#85502a]"
+          >
+            Confirm this time
+          </button>
+          <a
+            href={`/setup/${encodeURIComponent(token)}`}
+            className="text-center text-sm text-stone-500 hover:underline"
+          >
+            Choose a different time
+          </a>
+        </form>
       )}
 
       {upcoming.length > 0 && (
@@ -123,26 +158,7 @@ export default async function SetupPage({
         </div>
       )}
 
-      {pickedOk && picked && left > 0 && (
-        <form
-          action={bookSetupSession}
-          className="flex flex-col gap-3 rounded border border-[#d3c3a8] bg-[#faf6ee] p-4"
-        >
-          <input type="hidden" name="token" value={token} />
-          <input type="hidden" name="at" value={picked.toISOString()} />
-          <p className="text-sm">
-            Book <strong>{slotFullLabel(picked)}</strong>?
-          </p>
-          <button
-            type="submit"
-            className="w-fit rounded bg-[#9a5f33] px-5 py-2 text-sm font-semibold text-white hover:bg-[#85502a]"
-          >
-            Confirm this time
-          </button>
-        </form>
-      )}
-
-      {left > 0 && (
+      {left > 0 && !confirming && (
         <div className="flex flex-col gap-4">
           <h2 className="text-sm font-semibold text-stone-700">Available times</h2>
           {open.length === 0 && (
