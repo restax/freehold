@@ -40,6 +40,17 @@ body {
    Lives in the base layer so utility classes (e.g. font-display on the
    marketing hero) can override it. */
 @layer base {
+  /* Tailwind 4 leaves buttons on the arrow cursor; anything clickable should
+     show the hand, and a disabled one should not. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  select:not(:disabled) {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
   h1 {
     font-family: var(--font-serif);
     letter-spacing: -0.015em;
