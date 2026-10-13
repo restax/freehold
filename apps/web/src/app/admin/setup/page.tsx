@@ -18,8 +18,13 @@ export const dynamic = "force-dynamic";
  * Operator view of the setup-session offer: who has been sent it, who has
  * booked, and the buttons to send. Flagged accounts and operators are left out.
  */
-export default async function SetupAdminPage() {
+export default async function SetupAdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ test?: string; to?: string; why?: string }>;
+}) {
   if (!(await isOperator())) notFound();
+  const { test, to, why } = await searchParams;
   const [users, invites, sends] = await Promise.all([
     prisma.user.findMany({
       where: { flaggedAt: null, email: { notIn: operatorEmails() } },
@@ -42,6 +47,16 @@ export default async function SetupAdminPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      {test === "ok" && (
+        <p className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          Test sent to {to}. It can take a minute, and may land in spam or Promotions.
+        </p>
+      )}
+      {test === "fail" && (
+        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          The test did not send: {why}
+        </p>
+      )}
       <SectionCard
         title="Upcoming setup sessions"
         count={upcoming.length}

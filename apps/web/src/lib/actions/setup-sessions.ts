@@ -50,10 +50,22 @@ export async function adminSendSetupOfferToAll() {
   revalidatePath("/admin/setup");
 }
 
-/** Operator: email yourself a working copy to click through. Not recorded as a send. */
+/**
+ * Operator: email yourself a working copy to click through. Not recorded as a
+ * send. Redirects back with the outcome, since a silent button reads as broken.
+ */
 export async function adminSendSetupTest() {
   if (!(await isOperator())) return;
   const session = await getSession();
-  if (session?.user.id) await sendSetupOffer(session.user.id, false, true).catch(() => false);
-  revalidatePath("/admin/setup");
+  const to = session?.user.email ?? "";
+  let outcome = `ok&to=${encodeURIComponent(to)}`;
+  try {
+    if (!session?.user.id) throw new Error("No signed-in user.");
+    const sent = await sendSetupOffer(session.user.id, false, true);
+    if (!sent) outcome = "fail&why=Platform%20email%20is%20not%20configured.";
+  } catch (e) {
+    const why = e instanceof Error ? e.message : "Unknown error";
+    outcome = `fail&why=${encodeURIComponent(why.slice(0, 200))}`;
+  }
+  redirect(`/admin/setup?test=${outcome}`);
 }
