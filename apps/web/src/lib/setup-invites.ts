@@ -30,7 +30,11 @@ export async function inviteForToken(token: string) {
  * Send (or re-send) the setup offer. Mints a fresh link each time, which
  * retires the earlier one; existing bookings stay attached to the invite.
  */
-export async function sendSetupOffer(userId: string, again = false): Promise<boolean> {
+export async function sendSetupOffer(
+  userId: string,
+  again = false,
+  test = false,
+): Promise<boolean> {
   if (!platformEmailEnabled()) return false;
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -38,7 +42,8 @@ export async function sendSetupOffer(userId: string, again = false): Promise<boo
   });
   if (!user) return false;
   // Once per person unless the operator deliberately sends it again.
-  if (!(await claimSend(userId, SETUP_OFFER_KEY, again))) return false;
+  // A test copy to the operator is never recorded as a real send.
+  if (!test && !(await claimSend(userId, SETUP_OFFER_KEY, again))) return false;
   try {
     const { token, hash } = newFlagToken();
     await prisma.setupInvite.upsert({
@@ -56,12 +61,19 @@ export async function sendSetupOffer(userId: string, again = false): Promise<boo
       pageUrl: `${setupBaseUrl()}/setup/${token}`,
       slots: offeredSlots().filter((s) => !taken.has(s.getTime())),
     });
-    await sendPlatformEmail(user.email, mail.subject, mail.text, mail.html, undefined, {
-      replyTo: operatorEmails()[0],
-    });
+    await sendPlatformEmail(
+      user.email,
+      test ? `[Test] ${mail.subject}` : mail.subject,
+      mail.text,
+      mail.html,
+      undefined,
+      {
+        replyTo: operatorEmails()[0],
+      },
+    );
     return true;
   } catch (e) {
-    await releaseSend(userId, SETUP_OFFER_KEY).catch(() => {});
+    if (!test) await releaseSend(userId, SETUP_OFFER_KEY).catch(() => {});
     throw e;
   }
 }

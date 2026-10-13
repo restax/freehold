@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { str } from "@/lib/forms";
 import { isOperator, operatorEmails } from "@/lib/operator";
 import { SETUP_OFFER_KEY } from "@/lib/outreach-emails";
+import { getSession } from "@/lib/session";
 import { bookSetupSlot, cancelSetupSlot, sendSetupOffer } from "@/lib/setup-invites";
 
 /** Public: the emailed link's token is the authority, no sign-in. */
@@ -46,5 +47,13 @@ export async function adminSendSetupOfferToAll() {
   for (const u of users) {
     if (!done.has(u.id)) await sendSetupOffer(u.id).catch(() => false);
   }
+  revalidatePath("/admin/setup");
+}
+
+/** Operator: email yourself a working copy to click through. Not recorded as a send. */
+export async function adminSendSetupTest() {
+  if (!(await isOperator())) return;
+  const session = await getSession();
+  if (session?.user.id) await sendSetupOffer(session.user.id, false, true).catch(() => false);
   revalidatePath("/admin/setup");
 }

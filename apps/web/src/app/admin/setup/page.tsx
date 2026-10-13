@@ -1,7 +1,11 @@
 import { prisma } from "@freehold/db";
 import { notFound } from "next/navigation";
 import { SectionCard } from "@/components/section-card";
-import { adminSendSetupOffer, adminSendSetupOfferToAll } from "@/lib/actions/setup-sessions";
+import {
+  adminSendSetupOffer,
+  adminSendSetupOfferToAll,
+  adminSendSetupTest,
+} from "@/lib/actions/setup-sessions";
 import { isOperator, operatorEmails } from "@/lib/operator";
 import { OUTREACH_EMAILS, SETUP_OFFER_KEY } from "@/lib/outreach-emails";
 import { platformEmailEnabled } from "@/lib/platform-email";
@@ -38,7 +42,23 @@ export default async function SetupAdminPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <SectionCard title="Upcoming setup sessions" count={upcoming.length} bodyClassName="">
+      <SectionCard
+        title="Upcoming setup sessions"
+        count={upcoming.length}
+        bodyClassName=""
+        action={
+          platformEmailEnabled() ? (
+            <form action={adminSendSetupTest}>
+              <button
+                type="submit"
+                className="rounded border border-stone-300 bg-white px-2 py-1 text-xs hover:bg-stone-50"
+              >
+                Send me a test
+              </button>
+            </form>
+          ) : undefined
+        }
+      >
         {upcoming.length === 0 ? (
           <p className="px-4 py-3 text-sm text-stone-400">Nothing booked yet.</p>
         ) : (
