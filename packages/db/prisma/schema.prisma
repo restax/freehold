@@ -4182,3 +4182,51 @@ model ErrorLog {
   @@index([userId])
   @@map("error_log")
 }
+
+/// A new account's standing offer of setup sessions. The emailed link carries
+/// a random token (only its hash is stored), which is the whole proof of who is
+/// booking, so a person can pick a time without signing in. Operator-facing and
+/// cross-tenant like ErrorLog: no tenant_id, no RLS. userId is a plain string so
+/// deleting the account leaves the history alone.
+model SetupInvite {
+  id        String         @id @default(uuid())
+  userId    String         @unique @map("user_id")
+  name      String
+  email     String
+  tokenHash String         @unique @map("token_hash")
+  sentAt    DateTime       @default(now()) @map("sent_at")
+  bookings  SetupBooking[]
+
+  @@map("setup_invite")
+}
+
+/// One booked 30 minute session. startsAt is unique: there is one host, so two
+/// people can never hold the same slot.
+model SetupBooking {
+  id        String      @id @default(uuid())
+  inviteId  String      @map("invite_id")
+  invite    SetupInvite @relation(fields: [inviteId], references: [id], onDelete: Cascade)
+  startsAt  DateTime    @unique @map("starts_at")
+  createdAt DateTime    @default(now())
+
+  @@index([inviteId])
+  @@map("setup_booking")
+}
+
+/// One row per person per operator email they have been sent (setup offer, and
+/// the numbered emails to come). The unique pair is what stops a send going out
+/// twice: a send claims its row first and only proceeds if the claim is new.
+/// Operator-facing and cross-tenant like ErrorLog, so no tenant_id and no RLS.
+model OutreachSend {
+  id       String   @id @default(uuid())
+  userId   String   @map("user_id")
+  /// Key from lib/outreach-emails.ts, e.g. "setup-offer".
+  emailKey String   @map("email_key")
+  sentAt   DateTime @default(now()) @map("sent_at")
+  /// Times it was deliberately sent again after the first.
+  resends  Int      @default(0)
+
+  @@unique([userId, emailKey])
+  @@index([emailKey])
+  @@map("outreach_send")
+}

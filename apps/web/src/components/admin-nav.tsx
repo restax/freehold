@@ -3,6 +3,7 @@
 import {
   ArrowLeft,
   Bell,
+  CalendarCheck,
   Camera,
   ChartLineUp,
   Flask,
@@ -45,6 +46,7 @@ const GROUPS: AdminNavGroup[] = [
     items: [
       { href: "/admin", label: "Operator panel", icon: House },
       { href: "/admin/signups", label: "Signups", icon: UsersThree },
+      { href: "/admin/setup", label: "Setup sessions", icon: CalendarCheck },
       { href: "/admin/activity", label: "Daily activity", icon: ChartLineUp },
     ],
   },
