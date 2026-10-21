@@ -203,11 +203,10 @@ export default function PricingPage() {
                       tier.featured ? "text-brand-100" : "text-brand-700"
                     }`}
                   >
-                    Launch price:{" "}
                     {fmtPrice(
                       launchTier === "PRO" ? LAUNCH_OFFER.pro.off : LAUNCH_OFFER.business.off,
                     )}{" "}
-                    off, locked in for good. Sign up by {LAUNCH_OFFER.deadlineLabel}.
+                    off through 2026.
                   </p>
                 )}
                 <ul className="mt-5 flex flex-col gap-2.5 text-sm">
